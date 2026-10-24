@@ -57,7 +57,7 @@ pub struct Plugin {
     pub instrument: bool,
     _handler: ComWrapper<Handler>,
     _host: ComWrapper<HostApp>,
-    _module: Module,
+    _module: Arc<Module>,
 }
 
 /// The processing half, owned by the audio thread.
@@ -102,7 +102,20 @@ impl Plugin {
         rate: f64,
         state: Option<&str>,
     ) -> Result<(Plugin, Audio), String> {
-        let module = Module::open(path)?;
+        crate::stage("loading its file");
+        let module = Arc::new(Module::open(path)?);
+        Plugin::load_from(module, cid, rate, state)
+    }
+
+    /// Loads `cid` from a module already open. Several plug-ins of one
+    /// bundle share its module: opening it again and closing that copy
+    /// would shut the plug-in's code down under the others.
+    pub fn load_from(
+        module: Arc<Module>,
+        cid: &str,
+        rate: f64,
+        state: Option<&str>,
+    ) -> Result<(Plugin, Audio), String> {
         let want = parse_cid(cid).ok_or("Bad plug-in id.")?;
         let host = ComWrapper::new(HostApp);
         let edits = Arc::new(Mutex::new(Vec::new()));
@@ -110,6 +123,7 @@ impl Plugin {
             edits: edits.clone(),
         });
         unsafe {
+            crate::stage("creating it");
             let mut obj: *mut c_void = ptr::null_mut();
             let r = module.factory().createInstance(
                 want.as_ptr() as *const _,
@@ -120,10 +134,12 @@ impl Plugin {
                 .then(|| ComPtr::<IComponent>::from_raw(obj as *mut IComponent))
                 .flatten()
                 .ok_or("The plug-in could not be created.")?;
+            crate::stage("starting it");
             if component.initialize(as_unknown(&host)) != kResultOk {
                 return Err("The plug-in would not start.".into());
             }
 
+            crate::stage("starting its controls");
             // The controller is either the same object or a second class.
             let mut separate = false;
             let controller = match component.cast::<IEditController>() {
@@ -160,6 +176,7 @@ impl Plugin {
                 }
             }
 
+            crate::stage("handing over its settings");
             // Saved settings, or the component's own state handed to the controller.
             let (comp_state, ctl_state) = match state.and_then(split_state) {
                 Some((c, e)) => (Some(c), Some(e)),
@@ -195,6 +212,7 @@ impl Plugin {
             let processor = component
                 .cast::<IAudioProcessor>()
                 .ok_or("This plug-in does not process audio.")?;
+            crate::stage("setting up its inputs and outputs");
             let (ins, outs, events) = setup_buses(&component, &processor);
             let instrument = events && ins.is_empty();
             let mut setup = ProcessSetup {
@@ -203,10 +221,13 @@ impl Plugin {
                 maxSamplesPerBlock: MAX_BLOCK as i32,
                 sampleRate: rate,
             };
+            crate::stage("setting up its audio");
             processor.setupProcessing(&mut setup);
+            crate::stage("switching it on");
             component.setActive(1);
             processor.setProcessing(1);
             let latency = processor.getLatencySamples();
+            crate::stage("reading its controls");
 
             let params = controller
                 .as_ref()

@@ -6,7 +6,8 @@
 // (https://github.com/coupler-rs/vst3-rs, MIT or Apache-2.0,
 // Copyright (c) Micah Johnston). Changes: a fixed 32-sample look-ahead,
 // a "Crash" control that aborts the process (to test that the editor
-// survives a crashing plug-in), saved settings, and a test instrument
+// survives a crashing plug-in), a crash on start when the environment
+// asks for one (to test the scan), saved settings, and a test instrument
 // ("Altered Test Synth") that plays notes as a steady level.
 
 #![allow(non_upper_case_globals)]
@@ -88,6 +89,10 @@ impl GainProcessor {
 
 impl IPluginBaseTrait for GainProcessor {
     unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+        // For the scan's crash test: die while starting, as a broken plug-in might.
+        if std::env::var_os("ALTERED_TESTPLUG_CRASH_ON_START").is_some() {
+            std::process::abort();
+        }
         kResultOk
     }
 

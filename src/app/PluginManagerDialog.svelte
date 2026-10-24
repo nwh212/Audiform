@@ -136,8 +136,8 @@
             <span role="columnheader">Name</span><span role="columnheader">Maker</span><span role="columnheader">Kind</span><span role="columnheader" title="Look-ahead the plug-in adds, compensated during playback and export">Delay</span><span role="columnheader">Window</span>
           </div>
           {#each shown as p (p.effect)}
-            <div class="tr" role="row" title={p.bundle}>
-              <span>{p.name}</span><span>{p.vendor}</span><span>{p.kind.replaceAll("|", ", ")}</span><span>{p.latency ? `${p.latency} smp` : "none"}</span><span>{p.hasWindow ? "yes" : "controls only"}</span>
+            <div class="tr" role="row" title={p.note ? `${p.bundle}\n${p.note}` : p.bundle}>
+              <span>{#if p.note}<span class="warn" title={p.note}>⚠</span> {/if}{p.name}</span><span>{p.vendor}</span><span>{p.kind.replaceAll("|", ", ")}</span><span>{p.latency ? `${p.latency} smp` : "none"}</span><span>{p.hasWindow ? "yes" : "controls only"}</span>
             </div>
           {/each}
         </div>
@@ -153,7 +153,8 @@
     </section>
 
     <p class="note">
-      Plug-ins appear in the Voice Chain's Add effect list under Plug-ins (VST3). Each runs in a process of its own, so one that crashes is bypassed and the
+      Effects appear in the Voice Chain's Add effect list under Plug-ins (VST3); instruments in MIDI track headers. ⚠ marks a plug-in that crashed while being read: it is
+      listed anyway, and hover it to see where it stopped. Each runs in a process of its own, so one that crashes is bypassed and the
       editor carries on. VST2 plug-ins are not supported.
     </p>
     <footer>
@@ -279,6 +280,10 @@
     background: var(--surface-3);
     color: var(--text-dim);
     font-weight: 600;
+  }
+  .warn {
+    color: var(--warning, #e0a030);
+    cursor: help;
   }
   .failed li {
     color: var(--text-dim);

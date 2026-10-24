@@ -44,6 +44,10 @@ pub struct ClassInfo {
     /// processing audio.
     #[serde(default)]
     pub instrument: bool,
+    /// Why it was not fully read, when the scan only got its name (its
+    /// controls and look-ahead are then learned when it runs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// A note starting or ending within a block.
@@ -75,6 +79,133 @@ pub struct ParamInfo {
 pub struct ScanResult {
     pub classes: Vec<ClassInfo>,
     pub error: Option<String>,
+}
+
+/// Scan mode prints one line per step, each this prefix and a
+/// [`ScanLine`] as JSON, so whatever it got through before a plug-in
+/// crashes it is kept, and anything else a plug-in prints is ignored.
+pub const SCAN_PREFIX: &str = "@@altered-scan ";
+
+/// Lines on stderr naming the step a plug-in is at, for a crash report.
+pub const STAGE_PREFIX: &str = "@@altered-stage ";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScanLine {
+    /// The bundle's plug-ins by name, before any is started.
+    Found(Vec<ClassInfo>),
+    /// One plug-in read in full.
+    Read(ClassInfo),
+    /// One plug-in that loaded but refused to start.
+    Failed {
+        cid: String,
+        error: String,
+    },
+    /// The bundle could not be opened at all.
+    Error(String),
+    Done,
+}
+
+/// What a crash exit code means, in words, if it is a known one.
+pub fn crash_reason(code: i32) -> Option<&'static str> {
+    Some(match code as u32 {
+        0xC000_0005 => "a memory access violation",
+        0xC000_0409 => "it stopped itself after a failed safety check",
+        0xC000_0374 => "it damaged its own memory",
+        0xC000_00FD => "a stack overflow",
+        0xC000_0135 => "a file it needs is missing (DLL not found)",
+        0xC000_0139 => "a file it needs is the wrong version (entry point not found)",
+        0xC000_007B => "it is not a 64-bit plug-in",
+        0xC000_001D => "an instruction this processor does not have",
+        0x8000_0003 => "a debug breakpoint left in the plug-in",
+        0xC000_0602 | 0xE06D_7363 => "an error it did not catch",
+        _ => return None,
+    })
+}
+
+/// How a scan process ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanExit {
+    /// It exited with this code.
+    Code(i32),
+    /// The system stopped it (a crash, on Linux and macOS).
+    Killed,
+    /// It took too long and was stopped.
+    TimedOut,
+}
+
+/// Puts a scan process's output back together. `stdout` and `stderr`
+/// are what it printed. Plug-ins found by name are listed even when the
+/// process died reading them, with a note saying so.
+pub fn parse_scan_output(stdout: &str, stderr: &str, exit: ScanExit) -> ScanResult {
+    let mut found: Vec<ClassInfo> = Vec::new();
+    let mut read: Vec<ClassInfo> = Vec::new();
+    let mut failed: Vec<(String, String)> = Vec::new();
+    let mut error = None;
+    let mut done = false;
+    for line in stdout.lines() {
+        let Some(json) = line.trim().strip_prefix(SCAN_PREFIX.trim_end()) else {
+            continue;
+        };
+        match serde_json::from_str::<ScanLine>(json.trim()) {
+            Ok(ScanLine::Found(c)) => found = c,
+            Ok(ScanLine::Read(c)) => read.push(c),
+            Ok(ScanLine::Failed { cid, error }) => failed.push((cid, error)),
+            Ok(ScanLine::Error(e)) => error = Some(e),
+            Ok(ScanLine::Done) => done = true,
+            Err(_) => {}
+        }
+    }
+    let stage = stderr
+        .lines()
+        .rev()
+        .find_map(|l| l.trim().strip_prefix(STAGE_PREFIX.trim_end()))
+        .map(str::trim);
+    // Why the process ended early, if it did.
+    let died = (!done).then(|| {
+        let at = stage.map(|s| format!(" while {s}")).unwrap_or_default();
+        match exit {
+            ScanExit::TimedOut => format!("It took too long{at} and was skipped."),
+            ScanExit::Killed => format!("It crashed{at}."),
+            ScanExit::Code(c) => match crash_reason(c) {
+                Some(why) => format!("It crashed{at}: {why} (code {:08X}).", c as u32),
+                None if c == 0 => format!("It closed without answering{at}."),
+                None => format!("It crashed{at} (code {:08X}).", c as u32),
+            },
+        }
+    });
+    let mut classes: Vec<ClassInfo> = Vec::new();
+    for c in found {
+        if let Some(r) = read.iter().find(|r| r.cid == c.cid) {
+            classes.push(r.clone());
+        } else if failed.iter().any(|f| f.0 == c.cid) {
+            continue;
+        } else if let Some(why) = &died {
+            // Never got to it, or died reading it: listed by name.
+            classes.push(ClassInfo {
+                note: Some(format!(
+                    "Not fully read. {why} It may still work; if it crashes when used, it is bypassed."
+                )),
+                ..c
+            });
+        }
+    }
+    for r in read {
+        if !classes.iter().any(|c| c.cid == r.cid) {
+            classes.push(r);
+        }
+    }
+    let mut errors: Vec<String> = failed.into_iter().map(|(_, e)| e).collect();
+    if classes.is_empty() {
+        if let Some(why) = died {
+            errors.push(why);
+        }
+    }
+    ScanResult {
+        error: error
+            .or_else(|| (classes.is_empty() && !errors.is_empty()).then(|| errors.join("; "))),
+        classes,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -296,6 +427,80 @@ pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn class(cid: &str) -> ClassInfo {
+        ClassInfo {
+            cid: cid.into(),
+            name: cid.into(),
+            vendor: String::new(),
+            version: String::new(),
+            sub_categories: String::new(),
+            params: Vec::new(),
+            latency: 0,
+            has_editor: true,
+            instrument: false,
+            note: None,
+        }
+    }
+
+    fn line(l: &ScanLine) -> String {
+        format!("{SCAN_PREFIX}{}\n", serde_json::to_string(l).unwrap())
+    }
+
+    #[test]
+    fn scan_output_survives_noise_and_crashes() {
+        let a = ClassInfo {
+            latency: 64,
+            ..class("A")
+        };
+        // Everything read, with a plug-in's own chatter around the lines.
+        let out = format!(
+            "Plugin v1.0 starting\n{}{}garbage \u{fffd}\n{}",
+            line(&ScanLine::Found(vec![class("A")])),
+            line(&ScanLine::Read(a.clone())),
+            line(&ScanLine::Done)
+        );
+        let r = parse_scan_output(&out, "", ScanExit::Code(0));
+        assert_eq!((r.classes, r.error), (vec![a.clone()], None));
+
+        // Died on the second: the first is kept, the second listed by name with why.
+        let out = format!(
+            "{}{}",
+            line(&ScanLine::Found(vec![class("A"), class("B")])),
+            line(&ScanLine::Read(a.clone()))
+        );
+        let err = format!("{STAGE_PREFIX}loading B\n{STAGE_PREFIX}switching it on\n");
+        let r = parse_scan_output(&out, &err, ScanExit::Code(0xC000_0005_u32 as i32));
+        assert_eq!(r.classes.len(), 2);
+        assert_eq!(r.classes[0], a);
+        let note = r.classes[1].note.clone().unwrap();
+        assert!(
+            note.contains(
+                "crashed while switching it on: a memory access violation (code C0000005)"
+            ),
+            "{note}"
+        );
+        assert_eq!(r.error, None);
+
+        // Died before naming anything: the bundle fails, with where.
+        let r = parse_scan_output(
+            "",
+            &format!("{STAGE_PREFIX}loading its file\n"),
+            ScanExit::Killed,
+        );
+        assert!(r.classes.is_empty());
+        assert_eq!(
+            r.error.as_deref(),
+            Some("It crashed while loading its file.")
+        );
+        let r = parse_scan_output("", "", ScanExit::Code(0xC000_0135_u32 as i32));
+        assert!(r.error.unwrap().contains("DLL not found"));
+        let r = parse_scan_output("", "", ScanExit::TimedOut);
+        assert_eq!(
+            r.error.as_deref(),
+            Some("It took too long and was skipped.")
+        );
+    }
 
     #[test]
     fn frames_and_audio_round_trip() {

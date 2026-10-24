@@ -55,6 +55,7 @@ impl Host {
             .arg("--plugin-host")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .spawn()
             .unwrap();
         let stdin = child.stdin.take().unwrap();
@@ -141,6 +142,19 @@ impl Drop for Host {
     }
 }
 
+/// Reads a scan process's output the way the editor does.
+fn scan_result(out: &std::process::Output) -> ScanResult {
+    let exit = match out.status.code() {
+        Some(c) => ScanExit::Code(c),
+        None => ScanExit::Killed,
+    };
+    parse_scan_output(
+        &String::from_utf8_lossy(&out.stdout),
+        &String::from_utf8_lossy(&out.stderr),
+        exit,
+    )
+}
+
 fn impulse(frames: usize, at: usize) -> Vec<f32> {
     let mut v = vec![0.0; frames * 2];
     v[at * 2] = 1.0;
@@ -165,7 +179,7 @@ fn scans_processes_saves_and_survives_a_crash() {
         .arg(&bundle)
         .output()
         .unwrap();
-    let scan: ScanResult = serde_json::from_slice(&out.stdout).expect("scan prints JSON");
+    let scan = scan_result(&out);
     assert_eq!(scan.error, None);
     assert_eq!(scan.classes.len(), 2);
     let c = &scan.classes[0];
@@ -192,8 +206,23 @@ fn scans_processes_saves_and_survives_a_crash() {
         .args(["--plugin-scan", "/no/such/Plugin.vst3"])
         .output()
         .unwrap();
-    let scan: ScanResult = serde_json::from_slice(&out.stdout).unwrap();
+    let scan = scan_result(&out);
     assert!(scan.error.is_some());
+
+    // A plug-in that crashes while starting: still listed by name, with where it died.
+    let out = Command::new(env!("CARGO_BIN_EXE_altered-plughost"))
+        .arg("--plugin-scan")
+        .arg(&bundle)
+        .env("ALTERED_TESTPLUG_CRASH_ON_START", "1")
+        .output()
+        .unwrap();
+    let scan = scan_result(&out);
+    assert_eq!(scan.classes.len(), 2, "{scan:?}");
+    let note = scan.classes[0]
+        .note
+        .clone()
+        .expect("a note on the crashed one");
+    assert!(note.contains("crashed while starting it"), "{note}");
 
     // Process: the impulse comes out 32 samples later, at full level.
     let mut h = Host::start();

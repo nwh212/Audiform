@@ -66,6 +66,8 @@ pub struct PluginView {
     pub has_window: bool,
     /// Plays notes on a MIDI track rather than sitting in a Voice Chain.
     pub instrument: bool,
+    /// Why it was only partly read, if it was.
+    pub note: Option<String>,
     pub controls: usize,
 }
 
@@ -117,6 +119,7 @@ fn view(reg: &Registry) -> RegistryView {
                 latency: p.info.latency,
                 has_window: p.info.has_editor,
                 instrument: p.info.instrument,
+                note: p.info.note.clone(),
                 controls: p.info.params.iter().filter(|x| !x.hidden).count(),
             })
             .collect(),

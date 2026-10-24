@@ -27,7 +27,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use altered_plughost::protocol::{ClassInfo, ScanResult};
+use altered_plughost::protocol::{parse_scan_output, ClassInfo, ScanExit, ScanResult};
 use serde::{Deserialize, Serialize};
 
 use crate::dsp::effects::EffectInfo;
@@ -44,8 +44,9 @@ const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 /// Bundles read at the same time.
 const SCAN_THREADS: usize = 4;
 
-/// Version of `plugins.json`. 2: instruments are listed too.
-const SCHEMA_VERSION: u32 = 2;
+/// Version of `plugins.json`. 2: instruments are listed too. 3: scans
+/// before it crashed on many plug-ins, so everything is read again.
+const SCHEMA_VERSION: u32 = 3;
 
 /// A plug-in the scan found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,7 +102,7 @@ pub fn load(config_dir: &Path) {
         .unwrap_or_default();
     let mut reg = reg;
     if reg.schema_version < SCHEMA_VERSION {
-        // Older scans left instruments out: the next scan reads every bundle again.
+        // Older scans left instruments out or failed: the next scan reads every bundle again.
         reg.stamps.clear();
     }
     if let Ok(mut f) = config_file().lock() {
@@ -259,40 +260,48 @@ pub fn scan_bundle(bundle: &Path) -> ScanResult {
         .arg(bundle)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(c) => c,
         Err(e) => return fail(format!("Could not start the plug-in host: {e}")),
     };
     // Read while it runs: a plug-in with many controls prints more than
-    // the pipe holds, and would otherwise wait on us forever.
-    let reader = child.stdout.take().map(|mut out| {
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut text = String::new();
-            let _ = out.read_to_string(&mut text);
-            text
+    // the pipe holds, and would otherwise wait on us forever. Plug-ins
+    // may print text of their own (not always UTF-8); that is skipped.
+    let drain = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        pipe.map(|mut p| {
+            std::thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = p.read_to_end(&mut bytes);
+                String::from_utf8_lossy(&bytes).into_owned()
+            })
         })
-    });
+    };
+    let out = drain(child.stdout.take().map(|p| Box::new(p) as _));
+    let err = drain(child.stderr.take().map(|p| Box::new(p) as _));
     let start = Instant::now();
-    loop {
+    let exit = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(status)) => {
+                break match status.code() {
+                    Some(c) => ScanExit::Code(c),
+                    None => ScanExit::Killed,
+                }
+            }
             Ok(None) if start.elapsed() > SCAN_TIMEOUT => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return fail("It took too long to load and was skipped.".into());
+                break ScanExit::TimedOut;
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(e) => return fail(e.to_string()),
         }
-    }
-    let text = reader.and_then(|r| r.join().ok()).unwrap_or_default();
-    match serde_json::from_str::<ScanResult>(text.trim()) {
-        Ok(r) => r,
-        Err(_) => fail("It crashed while loading, so it was skipped.".into()),
-    }
+    };
+    let text = |h: Option<std::thread::JoinHandle<String>>| {
+        h.and_then(|h| h.join().ok()).unwrap_or_default()
+    };
+    parse_scan_output(&text(out), &text(err), exit)
 }
 
 /// What a scan did.
@@ -324,7 +333,15 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
     let todo: Vec<(&PathBuf, u64)> = bundles
         .iter()
         .map(|b| (b, stamp(b)))
-        .filter(|(b, s)| all || reg.stamps.get(*b) != Some(s))
+        .filter(|(b, s)| {
+            // Bundles that failed, or were only partly read, are tried again every time.
+            let retry = reg.failed.iter().any(|f| &f.bundle == *b)
+                || reg
+                    .plugins
+                    .iter()
+                    .any(|p| &p.bundle == *b && p.info.note.is_some());
+            all || retry || reg.stamps.get(*b) != Some(s)
+        })
         .collect();
     let total = todo.len();
     progress(0, total, Path::new(""));
@@ -521,11 +538,27 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn reads_a_big_scan_without_waiting_on_it() {
+        use altered_plughost::protocol::{ScanLine, SCAN_PREFIX};
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
-        let vendor = "v".repeat(300_000);
+        let class = ClassInfo {
+            cid: "00".into(),
+            name: "Big".into(),
+            vendor: "v".repeat(300_000),
+            version: "1".into(),
+            sub_categories: "Fx".into(),
+            params: vec![],
+            latency: 0,
+            has_editor: false,
+            instrument: false,
+            note: None,
+        };
+        let line = |l: &ScanLine| format!("{SCAN_PREFIX}{}\n", serde_json::to_string(l).unwrap());
         let json = format!(
-            r#"{{"classes":[{{"cid":"00","name":"Big","vendor":"{vendor}","version":"1","sub_categories":"Fx","params":[],"latency":0,"has_editor":false}}],"error":null}}"#
+            "{}{}{}",
+            line(&ScanLine::Found(vec![class.clone()])),
+            line(&ScanLine::Read(class)),
+            line(&ScanLine::Done)
         );
         std::fs::write(dir.path().join("out.json"), json).unwrap();
         let script = dir.path().join("host.sh");
@@ -558,6 +591,7 @@ mod tests {
                 version: "1".into(),
                 sub_categories: "Fx".into(),
                 instrument: false,
+                note: None,
                 params: vec![
                     altered_plughost::protocol::ParamInfo {
                         id: 7,

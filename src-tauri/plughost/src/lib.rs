@@ -38,7 +38,7 @@ use std::time::Duration;
 use com::Edit;
 use editor::EditorWindow;
 use plugin::{Audio, Plugin, SendPtr};
-use protocol::{read_frame, write_frame, Message, Request, ScanResult, AUDIO, CONTROL};
+use protocol::{read_frame, write_frame, Message, Request, ScanLine, AUDIO, CONTROL};
 
 /// Runs a host or a scan when the command line asks for one. Returns the
 /// exit code, or None for a normal start of the editor.
@@ -321,51 +321,96 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
     let _ = io::stdout().flush();
 }
 
-/// Scan mode: prints what the bundle holds as JSON ([`ScanResult`]).
+/// Says on stderr which step a plug-in is at, so a crash can be told
+/// apart from a hang and placed (see [`protocol::parse_scan_output`]).
+pub fn stage(what: &str) {
+    let mut e = io::stderr();
+    let _ = writeln!(e, "{}{what}", protocol::STAGE_PREFIX);
+    let _ = e.flush();
+}
+
+fn scan_line(line: &ScanLine) {
+    let mut o = io::stdout();
+    let _ = writeln!(
+        o,
+        "{}{}",
+        protocol::SCAN_PREFIX,
+        serde_json::to_string(line).unwrap_or_default()
+    );
+    let _ = o.flush();
+}
+
+/// Scan mode: prints what the bundle holds, one [`ScanLine`] at a time:
+/// the plug-ins by name first, then each one as it is read, so a crash
+/// part way loses only what it had not reached.
 pub fn scan(bundle: &Path) -> i32 {
-    let result = match module::Module::open(bundle) {
-        Err(error) => ScanResult {
-            classes: Vec::new(),
-            error: Some(error),
-        },
-        Ok(m) => {
-            let mut classes = Vec::new();
-            let mut errors = Vec::new();
-            for c in m.classes() {
-                if c.category != module::AUDIO_CLASS {
-                    continue;
-                }
-                let subs = c.sub_categories.to_ascii_lowercase();
-                let named = subs.contains("instrument") && !subs.contains("fx");
-                let cid = module::cid_hex(&c.cid);
-                match Plugin::load(bundle, &cid, 48_000.0, None) {
-                    Ok((p, a)) => {
-                        drop(a);
-                        classes.push(protocol::ClassInfo {
-                            cid,
-                            name: c.name,
-                            vendor: c.vendor,
-                            version: c.version,
-                            sub_categories: c.sub_categories,
-                            params: p.params.clone(),
-                            latency: p.latency,
-                            has_editor: p.controller.is_some(),
-                            instrument: named || p.instrument,
-                        });
-                    }
-                    Err(e) => errors.push(format!("{}: {e}", c.name)),
-                }
-            }
-            ScanResult {
-                error: (classes.is_empty() && !errors.is_empty()).then(|| errors.join("; ")),
-                classes,
-            }
+    stage("loading its file");
+    let module = match module::Module::open(bundle) {
+        Ok(m) => Arc::new(m),
+        Err(e) => {
+            scan_line(&ScanLine::Error(e));
+            scan_line(&ScanLine::Done);
+            std::process::exit(0)
         }
     };
-    let text = serde_json::to_string(&result).unwrap_or_default();
-    let mut o = io::stdout();
-    let _ = writeln!(o, "{text}");
-    let _ = o.flush();
+    stage("listing what is inside");
+    let classes: Vec<_> = module
+        .classes()
+        .into_iter()
+        .filter(|c| c.category == module::AUDIO_CLASS)
+        .collect();
+    let named = |subs: &str| {
+        let s = subs.to_ascii_lowercase();
+        s.contains("instrument") && !s.contains("fx")
+    };
+    scan_line(&ScanLine::Found(
+        classes
+            .iter()
+            .map(|c| protocol::ClassInfo {
+                cid: module::cid_hex(&c.cid),
+                name: c.name.clone(),
+                vendor: c.vendor.clone(),
+                version: c.version.clone(),
+                sub_categories: c.sub_categories.clone(),
+                params: Vec::new(),
+                latency: 0,
+                // Unknown until it runs; the window button says so if there is none.
+                has_editor: true,
+                instrument: named(&c.sub_categories),
+                note: None,
+            })
+            .collect(),
+    ));
+    // Plug-ins stay alive until the process ends: closing one can take
+    // the bundle's shared code down with it in some plug-ins.
+    let mut keep = Vec::new();
+    for c in classes {
+        let cid = module::cid_hex(&c.cid);
+        stage(&format!("loading {}", c.name));
+        match Plugin::load_from(module.clone(), &cid, 48_000.0, None) {
+            Ok((p, a)) => {
+                scan_line(&ScanLine::Read(protocol::ClassInfo {
+                    cid,
+                    instrument: named(&c.sub_categories) || p.instrument,
+                    name: c.name,
+                    vendor: c.vendor,
+                    version: c.version,
+                    sub_categories: c.sub_categories,
+                    params: p.params.clone(),
+                    latency: p.latency,
+                    has_editor: p.controller.is_some(),
+                    note: None,
+                }));
+                keep.push((p, a));
+            }
+            Err(e) => scan_line(&ScanLine::Failed {
+                cid,
+                error: format!("{}: {e}", c.name),
+            }),
+        }
+    }
+    scan_line(&ScanLine::Done);
+    std::mem::forget(keep);
     // Plug-ins may leave threads behind; leave without waiting for them.
     std::process::exit(0)
 }
