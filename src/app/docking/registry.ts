@@ -177,7 +177,7 @@ export const PANELS: readonly PanelDef[] = [
     title: "Properties",
     inDefault: false,
     home: LEFT_TABS,
-    pending: "Not built yet.",
+    pending: null,
   },
   {
     id: "phase-wheel",

@@ -39,9 +39,11 @@
     /** Effect-setting envelopes, and which setting each clip shows. */
     showFx?: boolean;
     fxLanes?: Record<string, FxLane>;
+    /** Draw stretch handles in each clip's top corners. */
+    stretchHandles?: boolean;
   }
 
-  const { track, media, sessionRate, view, width, playhead, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {} }: Props = $props();
+  const { track, media, sessionRate, view, width, playhead, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {}, stretchHandles = false }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
 
@@ -179,8 +181,12 @@
       g.clip();
       const st = stretchOf(clip);
       // A stretched clip says so in its title, with the pitch mode.
-      const label = st === 1 ? clip.name : `${clip.name}  ${Math.round(st * 1000) / 10}%${clip.stretch?.keep_pitch === false ? " tape" : ""}`;
-      g.fillText(label, Math.max(x0, 0) + 4, 1 + titleH / 2);
+      const semis = clip.looped || !clip.stretch?.keep_pitch ? 0 : (clip.stretch.pitch ?? 0);
+      const pitchText = semis ? `  ${semis > 0 ? "+" : ""}${Math.round(semis * 100) / 100} st` : "";
+      const label = st === 1 && !semis ? clip.name : `${clip.name}  ${st === 1 ? "" : `${Math.round(st * 1000) / 10}%`}${clip.stretch?.keep_pitch === false ? " tape" : ""}${pitchText}`;
+      // Clear of the stretch handle in the corner, when shown.
+      const indent = stretchHandles && !clip.looped && !clip.locked && x1 - x0 > 26 ? 14 : 4;
+      g.fillText(label, Math.max(x0, 0) + indent, 1 + titleH / 2);
       g.restore();
 
       // Waveform.
@@ -337,6 +343,25 @@
           g.lineWidth = 1.5;
           g.strokeRect(Math.round(cx) - 5.25, hy + 0.75, 11.5, 11.5);
           g.lineWidth = 1;
+        }
+      }
+      // Stretch handles: a white triangle filling each top corner of the
+      // title bar (11 pixels, matching the Editor's hit test). Brighter on
+      // a clip that is already stretched.
+      if (stretchHandles && !clip.looped && !clip.locked && x1 - x0 > 26) {
+        const s = 11;
+        g.fillStyle = clip.stretch ? "#ffffff" : "rgba(255, 255, 255, 0.8)";
+        g.strokeStyle = "#0e0e10";
+        g.lineWidth = 1;
+        for (const [cx, dir] of [[x0 + 1, 1], [x1 - 1, -1]] as const) {
+          if (cx < -s || cx > width + s) continue;
+          g.beginPath();
+          g.moveTo(cx, 1);
+          g.lineTo(cx + dir * s, 1);
+          g.lineTo(cx, 1 + s);
+          g.closePath();
+          g.fill();
+          g.stroke();
         }
       }
       // Envelope chip: which envelope lines show; click it to change.

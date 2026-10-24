@@ -39,6 +39,7 @@
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
   import { peaks, session, transport } from "../stores/open-session";
   import PhaseWheelPanel from "../panels/phase/PhaseWheelPanel.svelte";
+  import PropertiesPanel from "../panels/properties/PropertiesPanel.svelte";
   import LevelsPanel from "../panels/levels/LevelsPanel.svelte";
   import { PreviewMeter } from "../stores/preview-meter";
   import QuickPassPanel from "../panels/quickpass/QuickPassPanel.svelte";
@@ -1595,6 +1596,8 @@
             onError: showError,
           },
         };
+      case "properties":
+        return { component: asComponent(PropertiesPanel), props: { session, onEdit: editClips, onError: showError } };
       case "playlist":
         return {
           component: asComponent(PlaylistPanel),
@@ -3937,6 +3940,12 @@
       actions.register({
         id: "clip.gain",
         run: () => clipGain(),
+        enabled: () => editor.current().selectedClips.size > 0,
+        reason: () => "Select a clip first.",
+      }),
+      actions.register({
+        id: "clip.properties",
+        run: () => dock.show("properties"),
         enabled: () => editor.current().selectedClips.size > 0,
         reason: () => "Select a clip first.",
       }),

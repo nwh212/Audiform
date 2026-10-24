@@ -716,7 +716,9 @@
   const EDGE_PX = 6;
   const TITLE_H = 15;
   const SNAP_PX = 8;
-  type Gesture = "move" | "trim-left" | "trim-right" | "fade-in" | "fade-out" | "env-line" | "env-point";
+  type Gesture = "move" | "trim-left" | "trim-right" | "stretch-left" | "stretch-right" | "fade-in" | "fade-out" | "env-line" | "env-point";
+  /** Stretch handles: triangles this many pixels wide in a clip's top corners (see LaneCanvas). */
+  const STRETCH_PX = 11;
   let preview = $state<ClipChange[]>([]);
   /** While Alt-dragging a clip edge: the stretch it would get. */
   let stretchHint = $state<string | null>(null);
@@ -759,6 +761,8 @@
     move: "grab",
     "trim-left": trimCursor(true),
     "trim-right": trimCursor(false),
+    "stretch-left": "ew-resize",
+    "stretch-right": "ew-resize",
     "fade-in": "ew-resize",
     "fade-out": "ew-resize",
     "env-line": "crosshair",
@@ -774,6 +778,11 @@
     const x0 = xOf(clip.start, view);
     const x1 = xOf(clip.start + clipLength(clip, mediaMap.get(clip.media_id), rate), view);
     const w = x1 - x0;
+    // Stretch handles fill the title bar's corners when they are shown.
+    if (ed.stretchHandles && y <= TITLE_H + 1 && w > 2 * STRETCH_PX + 4 && !clip.looped && !clip.locked) {
+      if (x - x0 <= STRETCH_PX) return { kind: "stretch-left", clip };
+      if (x1 - x <= STRETCH_PX) return { kind: "stretch-right", clip };
+    }
     // Fade handles sit just under the title bar (see LaneCanvas).
     if (y > TITLE_H && y <= TITLE_H + 21 && w > 30) {
       const hit = (hx: number) => Math.abs(x - Math.min(Math.max(hx, x0 + 8), x1 - 8)) <= 8;
@@ -1176,7 +1185,10 @@
     window.addEventListener("pointerup", up, true);
   }
 
-  function startGesture(e: PointerEvent, d0: SessionDoc, track: TrackDoc, kind: Gesture, clip: ClipDoc) {
+  function startGesture(e: PointerEvent, d0: SessionDoc, track: TrackDoc, gesture: Gesture, clip: ClipDoc) {
+    // A stretch handle works like Alt on the clip's edge.
+    const handle = gesture === "stretch-left" || gesture === "stretch-right";
+    const kind: Gesture = gesture === "stretch-left" ? "trim-left" : gesture === "stretch-right" ? "trim-right" : gesture;
     const startX = e.clientX;
     const startY = e.clientY;
     const selected = editor.current().selectedClips;
@@ -1190,7 +1202,7 @@
     let moved = false;
     let changes: ClipChange[] = [];
     // Alt while grabbing an edge stretches the clip instead of trimming it.
-    const stretching = e.altKey && (kind === "trim-left" || kind === "trim-right") && !clip.looped && !clip.locked;
+    const stretching = (handle || e.altKey) && (kind === "trim-left" || kind === "trim-right") && !clip.looped && !clip.locked;
     let lastEv: PointerEvent | null = null;
     const move = (ev: PointerEvent) => {
       lastEv = ev;
@@ -1340,6 +1352,7 @@
           ],
         },
         act("Time Stretch...", "clip.stretch"),
+        act("Stretch and Pitch...", "clip.properties"),
         act(actions.isChecked("clip.fade-in") ? "Remove Fade In" : "Fade In", "clip.fade-in"),
         act(actions.isChecked("clip.fade-out") ? "Remove Fade Out" : "Fade Out", "clip.fade-out"),
         { kind: "sep" },
@@ -1916,6 +1929,17 @@
         <button
           type="button"
           class="view"
+          class:on={ed.stretchHandles}
+          title="Stretch Handles: each clip shows a triangle in its top corners; drag one to stretch the clip (no Alt needed)"
+          aria-label="Stretch handles"
+          aria-pressed={ed.stretchHandles}
+          onclick={() => editor.setStretchHandles(!ed.stretchHandles)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 9V6.2M8 9l2 1.4M6.5 2h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
+        </button>
+        <button
+          type="button"
+          class="view"
           class:on={ed.snap.on}
           title="Snapping: clips and selections snap to clips, the playhead and markers"
           aria-label="Snapping"
@@ -2280,6 +2304,7 @@
                 showPan={ed.showPan}
                 showFx={ed.showFx}
                 fxLanes={ed.fxLanes}
+                stretchHandles={ed.stretchHandles}
               />
             </div>
             {:else}

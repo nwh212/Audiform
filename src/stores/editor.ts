@@ -54,6 +54,8 @@ export interface EditorState {
   spectralTool: SpectralTool;
   /** Brush Select and Spot Repair size, in pixels. */
   brushSize: number;
+  /** Clips show stretch handles in their top corners; dragging one stretches the clip. */
+  stretchHandles: boolean;
 }
 
 /**
@@ -93,6 +95,7 @@ const initial: EditorState = {
   showPitch: false,
   spectralTool: "time",
   brushSize: 16,
+  stretchHandles: false,
 };
 const state = writable<EditorState>(initial);
 let value: EditorState = initial;
@@ -119,6 +122,7 @@ export const editor: Readable<EditorState> & {
   setShowPitch(on: boolean): void;
   setSpectralTool(tool: SpectralTool): void;
   setBrushSize(px: number): void;
+  setStretchHandles(on: boolean): void;
 } = {
   subscribe: state.subscribe,
   current: () => value,
@@ -139,6 +143,7 @@ export const editor: Readable<EditorState> & {
   setBrushSize: (px) => state.update((s) => ({ ...s, brushSize: Math.max(2, Math.min(80, Math.round(px))) })),
   setShowSpectrum: (on) => state.update((s) => ({ ...s, showSpectrum: on })),
   setFollowPlayhead: (on) => state.update((s) => ({ ...s, followPlayhead: on })),
+  setStretchHandles: (on) => state.update((s) => ({ ...s, stretchHandles: on })),
   setSnap: (patch) => state.update((s) => ({ ...s, snap: { ...s.snap, ...patch } })),
   setWidth: (w) => {
     if (w > 0 && w !== value.width) state.update((s) => ({ ...s, width: w }));
@@ -157,10 +162,11 @@ export interface EditorSettings {
   showSpectrum: boolean;
   showPitch: boolean;
   brushSize: number;
+  stretchHandles: boolean;
 }
 
 export function settingsOf(s: EditorState): EditorSettings {
-  return { snap: s.snap, autoCrossfade: s.autoCrossfade, timeFormat: s.timeFormat, showVolume: s.showVolume, showPan: s.showPan, playMode: s.playMode, followPlayhead: s.followPlayhead, showSpectrum: s.showSpectrum, showPitch: s.showPitch, brushSize: s.brushSize };
+  return { snap: s.snap, autoCrossfade: s.autoCrossfade, timeFormat: s.timeFormat, showVolume: s.showVolume, showPan: s.showPan, playMode: s.playMode, followPlayhead: s.followPlayhead, showSpectrum: s.showSpectrum, showPitch: s.showPitch, brushSize: s.brushSize, stretchHandles: s.stretchHandles };
 }
 
 /** Reads saved settings, keeping defaults for anything missing or the wrong type. */
@@ -182,6 +188,7 @@ export function parseSettings(raw: unknown, base: EditorSettings = settingsOf(in
     followPlayhead: bool(o.followPlayhead, base.followPlayhead),
     showSpectrum: bool(o.showSpectrum, base.showSpectrum),
     showPitch: bool(o.showPitch, base.showPitch),
+    stretchHandles: bool(o.stretchHandles, base.stretchHandles),
     brushSize: typeof o.brushSize === "number" && o.brushSize >= 2 && o.brushSize <= 80 ? Math.round(o.brushSize) : base.brushSize,
     playMode: o.playMode === "loop" || o.playMode === "skip" || o.playMode === "normal" ? o.playMode : base.playMode,
     timeFormat: o.timeFormat === "samples" || o.timeFormat === "time" || o.timeFormat === "timecode" ? o.timeFormat : base.timeFormat,

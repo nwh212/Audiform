@@ -336,6 +336,7 @@ export const MENUS: readonly Menu[] = [
         item("clip.ungroup", "Ungroup Selected Clips"),
       ]),
       item("clip.stretch", "Time Stretch..."),
+      item("clip.properties", "Stretch and Pitch..."),
       item("clip.music-fit", "Fit Music to Length..."),
       item("clip.stretch-reset", "Remove Stretch"),
       item("clip.phase-align", "Phase Align"),
