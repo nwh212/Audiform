@@ -587,8 +587,12 @@
       setView({ spp: z.spp, scroll: z.scroll });
     };
     if (e.clientX < left && !overRuler) {
-      e.preventDefault();
-      wheelResizeTracks(e);
+      // Over the track headers: the wheel scrolls the tracks (Alt+wheel resizes them, below).
+      if (e.altKey) {
+        e.preventDefault();
+        wheelResizeTracks(e);
+      }
+      return;
     } else if (e.altKey && e.shiftKey) {
       e.preventDefault();
       onZoom(e.deltaY < 0 ? "amp-in" : "amp-out");
@@ -596,14 +600,16 @@
       // Alt+wheel over the lanes makes the track under the pointer taller or shorter.
       e.preventDefault();
       wheelResizeTracks(e);
-    } else if (overRuler || e.ctrlKey) {
-      zoomTime();
     } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       e.preventDefault();
       const d = e.shiftKey ? e.deltaY : e.deltaX;
       setView({ scroll: view.scroll + d * view.spp });
+    } else if (overRuler || e.ctrlKey || settings.current.wheelZooms) {
+      // Over the lanes the wheel zooms in time, as in the Waveform editor
+      // (Settings: wheel zooms). The headers and the scrollbar scroll the tracks.
+      zoomTime();
     }
-    // Otherwise the wheel scrolls the tracks, which the scroller does by itself.
+    // Otherwise (wheel zoom off) the wheel scrolls the tracks, which the scroller does by itself.
   }
 
   function clipAt(track: TrackDoc, x: number): ClipDoc | null {

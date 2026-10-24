@@ -164,7 +164,7 @@ pub fn scope_phase(
         .copied()
         .find(|s| *s >= size)
         .unwrap_or(scope::SIZES[scope::SIZES.len() - 1]);
-    let p = scope::analyse(&scope::latest(n), a, b);
+    let p = scope::analyse(&scope::latest(n), a, b, scope::rate());
     let mut out = Vec::with_capacity(4 + p.bins.len() * 12);
     out.extend_from_slice(&p.correlation.to_le_bytes());
     for bin in p.bins {

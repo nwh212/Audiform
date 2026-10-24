@@ -10,6 +10,8 @@
 -->
 <script lang="ts">
   import { settings, zoomRatios } from "../../stores/settings";
+  import ColorPairPopover from "../../app/ColorPairPopover.svelte";
+  import { SPECTRUM_HIGH, SPECTRUM_LOW } from "../../app/colors";
   import { KIND_COLORS } from "../markers/markers";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
@@ -599,8 +601,20 @@
         { kind: "sep" },
         act("Select All", "edit.select-all"),
         act("Deselect All", "edit.deselect"),
+        ...(ed.showSpectrum
+          ? ([{ kind: "sep" }, { kind: "item", label: "Spectrogram Colors...", run: () => (colorPop = { x: e.clientX, y: e.clientY }) }] as ContextItem[])
+          : []),
       ],
     };
+  }
+
+  /** The spectrogram's color picker, opened from the right-click menu. */
+  let colorPop = $state<{ x: number; y: number } | null>(null);
+  let appColors = $state(settings.current.colors);
+  $effect(() => settings.subscribe((v) => (appColors = v.colors)));
+  function setSpectrumColors(low: string, high: string) {
+    const c = settings.current;
+    settings.set({ ...c, colors: { ...c.colors, spectrumLow: low, spectrumHigh: high } });
   }
 
   // Horizontal scroll bar.
@@ -757,6 +771,21 @@
   {/if}
 </section>
 
+{#if colorPop}
+  <ColorPairPopover
+    x={colorPop.x}
+    y={colorPop.y}
+    title="Spectrogram colors"
+    lowLabel="Quiet"
+    highLabel="Loud"
+    low={appColors.spectrumLow}
+    high={appColors.spectrumHigh}
+    lowDefault={SPECTRUM_LOW}
+    highDefault={SPECTRUM_HIGH}
+    onChange={setSpectrumColors}
+    onClose={() => (colorPop = null)}
+  />
+{/if}
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
 {/if}

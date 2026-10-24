@@ -495,6 +495,7 @@ fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, Str
         Vec::new()
     };
     let session_rate = session.sample_rate;
+    let has_plugins = !crate::commands::plugins::playing_plugin_slots(&session).is_empty();
     // Routed: one ring for the whole mix, at unity before the master fader.
     let (rings, gains) = if routed {
         (1, vec![[1.0, 1.0]])
@@ -509,7 +510,10 @@ fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, Str
         .name("transport".into())
         .spawn(move || run(session, from, jump, thread_shared, ready_tx))
         .map_err(|e| e.to_string())?;
-    let out_rate = match ready_rx.recv_timeout(Duration::from_secs(5)) {
+    // Plug-ins and instruments may still be loading (licence checks,
+    // samples): give them longer than a plain session needs.
+    let wait = if has_plugins { 30 } else { 5 };
+    let out_rate = match ready_rx.recv_timeout(Duration::from_secs(wait)) {
         Ok(Ok(rate)) => rate,
         Ok(Err(e)) => {
             let _ = thread.join();
@@ -557,6 +561,7 @@ fn run(
     let format = supported.sample_format();
     let config: StreamConfig = supported.config();
     let out_rate = config.sample_rate;
+    super::scope::set_rate(out_rate);
     let channels = usize::from(config.channels);
 
     if session.tracks.is_empty() {

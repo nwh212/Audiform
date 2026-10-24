@@ -42,6 +42,34 @@ pub fn plugin_slots(s: &Session) -> HashSet<Id> {
     out
 }
 
+/// Every plug-in slot in the session that plays: enabled chain slots on
+/// tracks, clips, buses and the master, and MIDI tracks' instruments.
+pub fn playing_plugin_slots(s: &Session) -> Vec<EffectSlot> {
+    let mut out = Vec::new();
+    let mut add = |c: &EffectChain| {
+        if c.enabled {
+            out.extend(
+                c.slots
+                    .iter()
+                    .filter(|x| x.enabled && plugins::is_plugin(&x.effect))
+                    .cloned(),
+            );
+        }
+    };
+    for t in &s.tracks {
+        add(&t.effects);
+        for c in &t.clips {
+            add(&c.effects);
+        }
+    }
+    for b in &s.buses {
+        add(&b.effects);
+    }
+    add(&s.master.effects);
+    out.extend(s.tracks.iter().filter_map(|t| t.instrument.clone()));
+    out
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderView {

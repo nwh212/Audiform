@@ -20,6 +20,12 @@ export interface AppColors {
   accent: string;
   /** The selected track's lane. */
   laneSelected: string;
+  /** Spectrogram: quiet and loud. Both empty keeps the built-in palette. */
+  spectrumLow: string;
+  spectrumHigh: string;
+  /** Phase Wheel: lowest and highest frequencies. Empty keeps red to magenta. */
+  phaseLow: string;
+  phaseHigh: string;
 }
 
 export interface AppSettings {
@@ -70,6 +76,10 @@ export const NO_COLORS: AppColors = {
   playhead: "",
   accent: "",
   laneSelected: "",
+  spectrumLow: "",
+  spectrumHigh: "",
+  phaseLow: "",
+  phaseHigh: "",
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -130,6 +140,10 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       playhead: color(c.playhead),
       accent: color(c.accent),
       laneSelected: color(c.laneSelected),
+      spectrumLow: color(c.spectrumLow),
+      spectrumHigh: color(c.spectrumHigh),
+      phaseLow: color(c.phaseLow),
+      phaseHigh: color(c.phaseHigh),
     },
     output: typeof o.output === "string" && o.output.trim() ? o.output : null,
     driver: o.driver === "asio" ? "asio" : "system",

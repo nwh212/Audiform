@@ -291,6 +291,21 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let y = mix_range(&s, 0, 20_000);
     let at = |i: usize| (y[i * 2] * 1_000.0).round() / 1_000.0;
     assert_eq!((at(11_999), at(12_000)), (0.0, 0.25));
+    // Instruments start loading in the background as soon as they are in
+    // the session, so playback never waits on a slow one.
+    let inst = s.tracks[0].instrument.clone().unwrap();
+    instance::warm(vec![inst.clone()]);
+    let t0 = std::time::Instant::now();
+    while instance::running(inst.id).is_none() && t0.elapsed() < std::time::Duration::from_secs(20)
+    {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        instance::running(inst.id).is_some(),
+        "warmed in the background"
+    );
+    instance::retain(&Default::default());
+
     // No instrument: silent, nothing breaks.
     s.tracks[0].instrument = None;
     assert!(mix_range(&s, 0, 20_000).iter().all(|v| *v == 0.0));

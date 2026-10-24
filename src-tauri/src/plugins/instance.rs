@@ -358,15 +358,33 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
     let found = find(&slot.effect)?;
     let fresh = FRESH.with(|c| c.get());
     if !fresh {
-        if let Ok(p) = pool().lock() {
-            if let Some(e) = p.get(&slot.id) {
-                if e.effect == slot.effect && e.rate == rate {
-                    return Some(e.host.clone());
+        // One start per slot: if it is already starting (in the background,
+        // see `warm`), wait for that one instead of starting a second.
+        let deadline = std::time::Instant::now() + LOAD_TIMEOUT;
+        loop {
+            if let Ok(p) = pool().lock() {
+                if let Some(e) = p.get(&slot.id) {
+                    if e.effect == slot.effect && e.rate == rate {
+                        return Some(e.host.clone());
+                    }
                 }
             }
+            let mut s = starting().lock().ok()?;
+            if !s.contains(&slot.id) || std::time::Instant::now() > deadline {
+                s.insert(slot.id);
+                break;
+            }
+            drop(s);
+            thread::sleep(Duration::from_millis(50));
         }
     }
-    let host = match Host::start(&found, rate, slot.plugin_state.clone(), slot_params(slot)) {
+    let started = Host::start(&found, rate, slot.plugin_state.clone(), slot_params(slot));
+    if !fresh {
+        if let Ok(mut s) = starting().lock() {
+            s.remove(&slot.id);
+        }
+    }
+    let host = match started {
         Ok(h) => Arc::new(Mutex::new(h)),
         Err(e) => {
             report_failure(slot.id, e);
@@ -386,6 +404,45 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         }
     }
     Some(host)
+}
+
+/// Slots whose playback host is being started right now.
+fn starting() -> &'static Mutex<HashSet<Id>> {
+    static S: OnceLock<Mutex<HashSet<Id>>> = OnceLock::new();
+    S.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Starts the playback hosts of `slots` in the background, so a plug-in
+/// or instrument that takes a while to load (licence checks, samples) is
+/// ready before Play rather than holding playback up. Slots already
+/// running or starting are left alone.
+pub fn warm(slots: Vec<EffectSlot>) {
+    let todo: Vec<EffectSlot> = slots
+        .into_iter()
+        .filter(|s| running(s.id).is_none() && !starting().lock().is_ok_and(|g| g.contains(&s.id)))
+        .collect();
+    if todo.is_empty() {
+        return;
+    }
+    let _ = thread::Builder::new()
+        .name("plugin-warm".into())
+        .spawn(move || {
+            let rate = crate::engine::output::device_rate();
+            let handles: Vec<_> = todo
+                .into_iter()
+                .filter_map(|s| {
+                    thread::Builder::new()
+                        .name("plugin-warm".into())
+                        .spawn(move || {
+                            let _ = host_for(&s, rate);
+                        })
+                        .ok()
+                })
+                .collect();
+            for h in handles {
+                let _ = h.join();
+            }
+        });
 }
 
 fn failures() -> &'static Mutex<HashMap<Id, String>> {

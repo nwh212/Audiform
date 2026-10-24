@@ -29,6 +29,17 @@ pub const SIZES: [usize; 5] = [1024, 2048, 4096, 8192, 16384];
 static RING: [AtomicU32; CAPACITY * 2] = [const { AtomicU32::new(0) }; CAPACITY * 2];
 /// Frames written so far (wrapping), so the newest frame is `WRITTEN - 1`.
 static WRITTEN: AtomicUsize = AtomicUsize::new(0);
+/// The output rate the frames were written at.
+static RATE: AtomicU32 = AtomicU32::new(48_000);
+
+/// Notes the output rate, when playback starts.
+pub fn set_rate(rate: u32) {
+    RATE.store(rate.max(1), Ordering::Relaxed);
+}
+
+pub fn rate() -> u32 {
+    RATE.load(Ordering::Relaxed)
+}
 
 /// Records one output frame. Audio thread: two stores, nothing else.
 #[inline]
@@ -85,7 +96,7 @@ pub struct Bin {
     pub phase: f32,
     /// Level, 0 (at or below -72 dBFS) to 1 (full scale).
     pub level: f32,
-    /// Where the bin sits, 0 (lowest) to 1 (highest), on a log scale.
+    /// Where the bin sits from 20 Hz (0) to 20 kHz (1), on a log scale.
     pub pitch: f32,
 }
 
@@ -98,8 +109,12 @@ pub struct Phase {
 /// Level range shown: this many dB below full scale is the center.
 const FLOOR_DB: f32 = 72.0;
 
-/// Compares `a` and `b` over `frames` (each [left, right]).
-pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal) -> Phase {
+/// Lowest and highest frequencies the pitch scale spans.
+const LOW_HZ: f32 = 20.0;
+const HIGH_HZ: f32 = 20_000.0;
+
+/// Compares `a` and `b` over `frames` (each [left, right]) at `rate`.
+pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal, rate: u32) -> Phase {
     let n = frames.len();
     let mut sa: Vec<f32> = frames.iter().map(|f| a.of(*f)).collect();
     let mut sb: Vec<f32> = frames.iter().map(|f| b.of(*f)).collect();
@@ -138,7 +153,8 @@ pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal) -> Phase {
         };
     }
     let full = sum / 2.0;
-    let top = ((n / 2) as f32).ln();
+    let hz_per_bin = rate.max(1) as f32 / n as f32;
+    let span = (HIGH_HZ / LOW_HZ).ln();
     let mut bins = Vec::with_capacity(n / 2);
     for k in 1..n / 2 {
         let (x, y) = (fa[k], fb[k]);
@@ -152,7 +168,7 @@ pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal) -> Phase {
         bins.push(Bin {
             phase: rel.im.atan2(rel.re),
             level,
-            pitch: (k as f32).ln() / top,
+            pitch: ((k as f32 * hz_per_bin / LOW_HZ).ln() / span).clamp(0.0, 1.0),
         });
     }
     Phase { correlation, bins }
@@ -181,7 +197,7 @@ mod tests {
 
     #[test]
     fn in_phase_opposite_and_a_quarter_turn() {
-        let same = analyse(&tone(4096, 0.0), Signal::Left, Signal::Right);
+        let same = analyse(&tone(4096, 0.0), Signal::Left, Signal::Right, 48_000);
         assert!((same.correlation - 1.0).abs() < 1e-3);
         assert!(loudest(&same).phase.abs() < 1e-3);
         // -6 dBFS sine: level 1 - 6/72.
@@ -191,6 +207,7 @@ mod tests {
             &tone(4096, std::f32::consts::PI),
             Signal::Left,
             Signal::Right,
+            48_000,
         );
         assert!((flipped.correlation + 1.0).abs() < 1e-3);
         assert!((loudest(&flipped).phase.abs() - std::f32::consts::PI).abs() < 1e-3);
@@ -199,12 +216,17 @@ mod tests {
             &tone(4096, std::f32::consts::FRAC_PI_2),
             Signal::Left,
             Signal::Right,
+            48_000,
         );
         assert!(quarter.correlation.abs() < 0.01);
         assert!((loudest(&quarter).phase - std::f32::consts::FRAC_PI_2).abs() < 1e-2);
 
+        // 64 cycles over 4,096 frames at 48 kHz is 750 Hz: on the log scale from 20 Hz to 20 kHz.
+        let want = (750f32 / 20.0).ln() / 1000f32.ln();
+        assert!((loudest(&same).pitch - want).abs() < 0.01);
+
         // Mid against side of an in-phase signal: side is silent.
-        let ms = analyse(&tone(4096, 0.0), Signal::Mid, Signal::Side);
+        let ms = analyse(&tone(4096, 0.0), Signal::Mid, Signal::Side, 48_000);
         assert_eq!(ms.correlation, 0.0);
     }
 

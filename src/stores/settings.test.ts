@@ -11,7 +11,7 @@ describe("app settings", () => {
     const s = sanitizeSettings({ zoomStep: 500, fadeShape: "wobbly", colors: { wave: "#ABCDEF", accent: "red" }, output: "  ", autosaveMinutes: 0, meterYellowDb: -10, meterRedDb: -20 });
     expect(s.zoomStep).toBe(100);
     expect(s.fadeShape).toBe("cosine");
-    expect(s.colors).toEqual({ wave: "#abcdef", playhead: "", accent: "", laneSelected: "" });
+    expect(s.colors).toEqual({ wave: "#abcdef", playhead: "", accent: "", laneSelected: "", spectrumLow: "", spectrumHigh: "", phaseLow: "", phaseHigh: "" });
     expect(s.output).toBeNull();
     expect(s.autosaveMinutes).toBe(1);
     expect(s.meterRedDb).toBe(-9);
@@ -19,7 +19,7 @@ describe("app settings", () => {
 
   it("turns settings into zoom ratios, colors and meter marks", () => {
     expect(zoomRatios(25)).toEqual({ zoomIn: 0.8, zoomOut: 1.25 });
-    expect(colorVars({ wave: "#112233", playhead: "", accent: "", laneSelected: "" })).toEqual({ "--wave": "#112233" });
+    expect(colorVars({ wave: "#112233", playhead: "", accent: "", laneSelected: "", spectrumLow: "", spectrumHigh: "", phaseLow: "", phaseHigh: "" })).toEqual({ "--wave": "#112233" });
     expect(meterPercent(-12)).toBeCloseTo(80);
     expect(meterPercent(-3)).toBeCloseTo(95);
     let seen = 0;

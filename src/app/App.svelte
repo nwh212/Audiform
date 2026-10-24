@@ -4051,6 +4051,16 @@
         restoreSettings(prefs.raw(KEY_EDITOR));
         settings.set(sanitizeSettings(prefs.raw(KEY_SETTINGS)));
         applyAppSettings(settings.current, false);
+        // Settings changed outside the Settings window (a view's right-click colors) are kept too.
+        let lastSettings = JSON.stringify(settings.current);
+        offs.push(
+          settings.subscribe((v) => {
+            const now = JSON.stringify(v);
+            if (now === lastSettings) return;
+            lastSettings = now;
+            prefs.set(KEY_SETTINGS, v);
+          }),
+        );
         let last = JSON.stringify(settingsOf(editor.current()));
         offs.push(
           editor.subscribe((st) => {

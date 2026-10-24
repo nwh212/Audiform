@@ -93,6 +93,10 @@
     { key: "playhead", label: "Playhead", theme: "#f2c14e" },
     { key: "accent", label: "Accent (focus and selection)", theme: "#3fa9f5" },
     { key: "laneSelected", label: "Selected track lane", theme: "#34343b" },
+    { key: "spectrumLow", label: "Spectrogram, quiet", theme: "#2a1a8a" },
+    { key: "spectrumHigh", label: "Spectrogram, loud", theme: "#ffe066" },
+    { key: "phaseLow", label: "Phase Wheel, low notes", theme: "#ff2a2a" },
+    { key: "phaseHigh", label: "Phase Wheel, high notes", theme: "#e02aff" },
   ];
   const CACHE_NOTES: Record<string, string> = {
     peaks: "Waveform drawings",
@@ -140,6 +144,9 @@
         {/if}
 
         {#if page === "General"}
+          <label class="row" title="Off: the wheel scrolls the tracks or the file, and Ctrl+wheel zooms. Over the track headers the wheel always scrolls the tracks.">
+            <input type="checkbox" bind:checked={d.app.wheelZooms} /> The mouse wheel over the timeline zooms in time (Multitrack and Waveform)
+          </label>
           <label class="row">Each wheel step zooms by <input type="number" min="5" max="100" step="5" bind:value={d.app.zoomStep} /> % a step</label>
           <fieldset>
             <legend>Wheel zoom centers on</legend>

@@ -15,6 +15,8 @@
   import { spectralSelection } from "../../stores/wave";
   import { sampleAt, xOf, type Viewport } from "./timeline";
   import { freqAt, fracOf, SPECTRUM_LUT, type SpectralShape } from "./spectrum";
+  import { settings } from "../../stores/settings";
+  import { SPECTRUM_HIGH, SPECTRUM_LOW, spectrumLut } from "../../app/colors";
 
   interface Props {
     doc: SessionDoc;
@@ -190,9 +192,9 @@
       const off = new ImageData(columns, rows);
       for (let i = 0; i < data.length; i++) {
         const k = data[i]! * 3;
-        off.data[i * 4] = SPECTRUM_LUT[k]!;
-        off.data[i * 4 + 1] = SPECTRUM_LUT[k + 1]!;
-        off.data[i * 4 + 2] = SPECTRUM_LUT[k + 2]!;
+        off.data[i * 4] = lut[k]!;
+        off.data[i * 4 + 1] = lut[k + 1]!;
+        off.data[i * 4 + 2] = lut[k + 2]!;
         off.data[i * 4 + 3] = 255;
       }
       const tmp = document.createElement("canvas");
@@ -369,6 +371,15 @@
     }
     return { x: Math.max(4, Math.min(width - 330, left)), y: Math.max(4, top - 30) };
   });
+
+  // The palette: the built-in one, or the quiet and loud colors picked in Settings or the right-click menu.
+  let lut = $state<Uint8Array>(SPECTRUM_LUT);
+  $effect(() =>
+    settings.subscribe((v) => {
+      const c = v.colors;
+      lut = c.spectrumLow || c.spectrumHigh ? spectrumLut(c.spectrumLow || SPECTRUM_LOW, c.spectrumHigh || SPECTRUM_HIGH) : SPECTRUM_LUT;
+    }),
+  );
 </script>
 
 <div class="spectrum" bind:clientHeight={height}>
