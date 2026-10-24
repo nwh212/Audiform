@@ -112,6 +112,7 @@
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
+  import { CompoundCommand } from "../commands/compound";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
@@ -1666,15 +1667,31 @@
       deleteLabel: "Remove from Session",
       selected: () => mediaPool.current.selected.size,
       total: () => mediaPool.size,
-      remove: () => {
+      remove: async () => {
         const used = usedMedia();
         const ids = [...mediaPool.current.selected];
-        const free = ids.filter((id) => !used.has(id));
-        if (free.length < ids.length) {
-          const kept = ids.length - free.length;
-          showNotice(`${kept} ${kept === 1 ? "file is" : "files are"} used by clips and stayed in the session.`);
-        }
-        return mediaPool.remove(free, sessionHistory);
+        const inUse = ids.filter((id) => used.has(id));
+        const doc = session.current;
+        if (inUse.length === 0 || !doc) return mediaPool.remove(ids, sessionHistory);
+        // Files on the timeline: remove them with their clips (one undo step), or keep those.
+        const clipIds = doc.tracks.flatMap((t) => t.clips.filter((c) => inUse.includes(c.media_id)).map((c) => c.id));
+        const n = inUse.length;
+        const choice = await ask(
+          "Files in use",
+          `${n === 1 ? "This file is" : `${n} of these files are`} used by ${clipIds.length} ${clipIds.length === 1 ? "clip" : "clips"} on the timeline. Remove ${n === 1 ? "it" : "them"} and ${clipIds.length === 1 ? "that clip" : "those clips"} too?`,
+          [
+            { label: "Remove with Clips", value: "all" },
+            { label: ids.length > n ? "Keep Those, Remove the Rest" : "Keep It", value: "keep" },
+            { label: "Cancel", value: "cancel" },
+          ],
+        );
+        if (choice === "cancel" || choice === null) return;
+        if (choice === "keep") return mediaPool.remove(ids.filter((id) => !used.has(id)), sessionHistory);
+        const files = mediaPool.removeCommand(ids);
+        const parts = [session.command("Remove Clips", { op: "remove_clips", ids: clipIds }), ...(files ? [files] : [])];
+        const label = ids.length === 1 ? "Remove File and Clips" : `Remove ${ids.length} Files and Clips`;
+        await sessionHistory.execute(new CompoundCommand(label, parts));
+        editor.selectClips([]);
       },
       selectAll: () => mediaPool.selectAll(),
       deselect: () => mediaPool.setSelection([]),

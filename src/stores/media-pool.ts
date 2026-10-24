@@ -162,6 +162,12 @@ export class MediaPool {
   }
 
   /** Removes items as one undoable step. */
+  /** Removing files as a command not run yet, to combine with others into one undo step. */
+  removeCommand(ids: readonly string[]): Command | null {
+    const present = ids.filter((id) => this.order.includes(id));
+    return present.length ? new RemoveMediaCommand(this, present, `Remove ${plural(present.length, "File", "Files")}`) : null;
+  }
+
   async remove(ids: readonly string[], runner: CommandRunner): Promise<void> {
     const present = ids.filter((id) => this.order.includes(id));
     if (present.length === 0) return;

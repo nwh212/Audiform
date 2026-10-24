@@ -589,6 +589,11 @@ export class SessionStore {
   }
 
   /** Runs an op as one undoable step. */
+  /** An op as a command not run yet, to combine with others into one undo step. */
+  command(label: string, op: Op): Command {
+    return new OpCommand(this, op, label);
+  }
+
   edit(label: string, op: Op, runner: CommandRunner): Promise<void> {
     return runner.execute(new OpCommand(this, op, label));
   }

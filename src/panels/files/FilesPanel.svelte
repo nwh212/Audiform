@@ -188,11 +188,44 @@
     return anchor && snap.selected.has(anchor) ? anchor : (sel[sel.length - 1] ?? null);
   }
 
+  /** Drag from empty space in the list: a box that picks every file it touches (Ctrl or Shift adds to what is picked). */
+  let pickBox = $state<{ x: number; y: number; w: number; h: number } | null>(null);
   function onBlankPointer(e: PointerEvent) {
-    if (e.target === e.currentTarget && e.button === 0) {
+    if (e.target !== e.currentTarget || e.button !== 0 || !list) return;
+    const el = list;
+    const keep = e.ctrlKey || e.metaKey || e.shiftKey ? new Set(snap?.selected ?? []) : new Set<string>();
+    if (!keep.size) {
       pool.setSelection([]);
       anchor = null;
     }
+    el.focus();
+    const r0 = el.getBoundingClientRect();
+    const sx = e.clientX - r0.left;
+    const sy = e.clientY - r0.top + el.scrollTop;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      const x = ev.clientX - r.left;
+      const y = ev.clientY - r.top + el.scrollTop;
+      if (!moved && Math.abs(x - sx) < 4 && Math.abs(y - sy) < 4) return;
+      moved = true;
+      pickBox = { x: Math.min(sx, x), y: Math.min(sy, y), w: Math.abs(x - sx), h: Math.abs(y - sy) };
+      const top = Math.min(sy, y);
+      const bottom = Math.max(sy, y);
+      const picked = new Set(keep);
+      for (const row of el.querySelectorAll<HTMLElement>(".row[data-id]")) {
+        const rt = row.offsetTop;
+        if (rt + row.offsetHeight >= top && rt <= bottom) picked.add(row.dataset.id!);
+      }
+      pool.setSelection([...picked]);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      pickBox = null;
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
   }
 
   function openMenu(e: MouseEvent) {
@@ -327,6 +360,19 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section class="panel" class:dropping aria-label="Files" data-area="files" bind:this={root} oncontextmenu={openMenu}>
   <div class="toolbar">
+    <button type="button" class="tool" title={tip("New Session", "file.new-session")} aria-label="New Session" disabled={!can("file.new-session")} onclick={() => run("file.new-session")}>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+        <path d="M3.5 6h6M3.5 8.5h6M3.5 11h6" stroke="currentColor" stroke-width="1.1" />
+        <path d="M12.5 5.5v4M10.5 7.5h4" stroke="currentColor" stroke-width="1.4" />
+      </svg>
+    </button>
+    <button type="button" class="tool" title={tip("New Audio File", "file.new-audio")} aria-label="New Audio File" disabled={!can("file.new-audio")} onclick={() => run("file.new-audio")}>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M1.5 8h1.5l1-3 1.5 6 1.5-6 1 3h1" fill="none" stroke="currentColor" stroke-width="1.2" />
+        <path d="M12.5 4.5v6M9.5 7.5h6" stroke="currentColor" stroke-width="1.4" />
+      </svg>
+    </button>
     <button
       type="button"
       class="tool"
@@ -399,6 +445,7 @@
     onkeydown={onListKey}
     onpointerdown={onBlankPointer}
   >
+    {#if pickBox}<div class="pick-box" style:left="{pickBox.x}px" style:top="{pickBox.y}px" style:width="{pickBox.w}px" style:height="{pickBox.h}px"></div>{/if}
     {#if sessionRow}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
@@ -627,6 +674,7 @@
   }
 
   .rows {
+    position: relative;
     overflow: auto;
     min-height: 0;
     outline: none;
@@ -775,5 +823,12 @@
     .duration {
       display: none;
     }
+  }
+  .pick-box {
+    position: absolute;
+    z-index: 2;
+    border: 1px dashed var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    pointer-events: none;
   }
 </style>

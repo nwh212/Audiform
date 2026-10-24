@@ -34,11 +34,11 @@ class ExactSamples {
   get(path: string, from: number, to: number): Frames | null {
     const have = this.held.get(path);
     if (have && from >= have.start && to <= have.start + have.count + 1) return have;
-    this.fetch(path, from, to);
+    this.request(path, from, to);
     return null;
   }
 
-  private fetch(path: string, from: number, to: number): void {
+  private request(path: string, from: number, to: number): void {
     const span = Math.max(1, to - from);
     const start = Math.max(0, Math.floor(from - span));
     const count = Math.ceil(span * 3) + 2;
