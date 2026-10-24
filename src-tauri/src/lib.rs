@@ -156,6 +156,7 @@ pub fn run() {
             commands::template::template_save,
             commands::template::template_delete,
             commands::session::session_default_folder,
+            commands::session::session_next_name,
             commands::workspace::workspace_list,
             commands::workspace::workspace_get,
             commands::workspace::workspace_put,

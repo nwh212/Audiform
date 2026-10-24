@@ -61,6 +61,20 @@ pub fn session_default_folder(app: AppHandle) -> Result<PathBuf, String> {
     Ok(docs.join("Altered Audio").join("Sessions"))
 }
 
+/// The first "`base` N" (N from 1) with no session folder of that name in
+/// `folder` yet, for New Session's suggested name.
+#[tauri::command]
+pub fn session_next_name(folder: PathBuf, base: String) -> String {
+    next_free_name(&folder, &base)
+}
+
+fn next_free_name(folder: &std::path::Path, base: &str) -> String {
+    (1..10_000)
+        .map(|n| format!("{base} {n}"))
+        .find(|name| !folder.join(name).exists())
+        .unwrap_or_else(|| base.to_string())
+}
+
 /// Empty tracks a new session starts with, so files can go straight onto a track.
 pub const NEW_SESSION_TRACKS: usize = 6;
 
@@ -579,6 +593,21 @@ pub async fn session_export_sesx(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_sessions_take_the_next_free_name() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            next_free_name(dir.path(), "Untitled Session"),
+            "Untitled Session 1"
+        );
+        std::fs::create_dir(dir.path().join("Untitled Session 1")).unwrap();
+        std::fs::create_dir(dir.path().join("Untitled Session 3")).unwrap();
+        assert_eq!(
+            next_free_name(dir.path(), "Untitled Session"),
+            "Untitled Session 2"
+        );
+    }
 
     #[test]
     fn a_new_session_has_six_empty_tracks() {

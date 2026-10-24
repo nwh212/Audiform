@@ -606,6 +606,11 @@ export function sessionDefaultFolder(): Promise<string> {
   return invoke<string>("session_default_folder");
 }
 
+/** The first "`base` N" with no session folder of that name in `folder` yet. */
+export function sessionNextName(folder: string, base: string): Promise<string> {
+  return invoke<string>("session_next_name", { folder, base });
+}
+
 /** Measures the mix's loudness. Progress arrives as `export-progress`; `exportCancel` stops it. */
 export function loudnessCheck(request: MixdownRequest): Promise<import("./loudness").LoudnessReport> {
   return invoke("loudness_check", {

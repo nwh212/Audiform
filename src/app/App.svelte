@@ -134,7 +134,7 @@
     templateList,
     templateSave,
     templateDelete,
-    sessionDefaultFolder,
+    sessionDefaultFolder, sessionNextName,
     type TemplateEntry,
     wavePeak,
     exportCancel,
@@ -2462,7 +2462,10 @@
     const folder = await sessionDefaultFolder().catch(() => "");
     const last = lastUsed(KEY_NEW_SESSION, { folder, template: null as string | null, sampleRate: 48_000, bitDepth: 32, mono: false });
     newSessionCount += 1;
-    newSessionReq = { initial: { name: `Untitled Session ${newSessionCount}`, ...last }, templates };
+    // The next name not taken in the folder it will be saved in (Untitled Session 2 when 1 exists).
+    const where = last.folder || folder;
+    const name = where ? await sessionNextName(where, "Untitled Session").catch(() => `Untitled Session ${newSessionCount}`) : `Untitled Session ${newSessionCount}`;
+    newSessionReq = { initial: { name, ...last }, templates };
   }
   async function makeNewSession(v: NewSessionSettings) {
     prefs.set(KEY_NEW_SESSION, { folder: v.folder, template: v.template, sampleRate: v.sampleRate, bitDepth: v.bitDepth, mono: v.mono });

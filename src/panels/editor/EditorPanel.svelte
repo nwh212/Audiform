@@ -1580,24 +1580,38 @@
     const y = e.clientY;
     const zoom = y - thumbTop < 6 && y >= thumbTop - 2 ? "top" : thumbBottom - y < 6 && y <= thumbBottom + 2 ? "bottom" : null;
     if (zoom) {
-      // Dragging an end of the thumb makes every track taller or shorter.
-      const start = (doc?.tracks ?? []).map((t) => ({ t, h: t.height }));
+      // Dragging an end of the thumb zooms vertically: the thumb covers the
+      // share of the session that fits the view, and every (open) track gets
+      // the same height so that it does.
+      const open = shown.filter((t) => !t.collapsed);
+      if (!open.length) return;
+      const content = [...(scroller.querySelectorAll<HTMLElement>(".headers > *") ?? [])].reduce((sum, el) => sum + el.offsetHeight, 0);
+      const fixed = Math.max(0, content - open.reduce((sum, t) => sum + shownHeight(t), 0));
       const span0 = Math.max(8, thumbBottom - thumbTop);
-      let factor = 1;
+      const topShare = (thumbTop - bar.top) / bar.height;
+      const bottomShare = (thumbBottom - bar.top) / bar.height;
+      let h = open[0]!.height;
       const move = (ev: PointerEvent) => {
         const d = zoom === "bottom" ? ev.clientY - y : y - ev.clientY;
-        factor = Math.max(0.25, Math.min(4, span0 / Math.max(8, span0 + d)));
-        heightPreview = factor;
+        const share = Math.min(1, Math.max(8, span0 + d) / bar.height);
+        h = Math.max(40, Math.min(600, Math.round((scrollerH / share - fixed) / open.length)));
+        uniformPreview = h;
       };
       const up = () => {
         window.removeEventListener("pointermove", move, true);
         window.removeEventListener("pointerup", up, true);
-        heightPreview = 1;
-        const ops = start
-          .map(({ t, h }) => ({ t, h: Math.max(40, Math.min(600, Math.round(h * factor))) }))
-          .filter(({ t, h }) => h !== t.height)
-          .map(({ t, h }) => ({ op: "set_track" as const, id: t.id, changes: { height: h } }));
-        if (ops.length) void session.edit("Track Height", { op: "batch", ops }, runner).catch(onError);
+        uniformPreview = null;
+        const ops = open.filter((t) => t.height !== h).map((t) => ({ op: "set_track" as const, id: t.id, changes: { height: h } }));
+        if (!ops.length) return;
+        const total = fixed + h * open.length;
+        void session
+          .edit("Track Height", { op: "batch", ops }, runner)
+          .then(() => nextFrame())
+          .then(() => {
+            // Keep the end not dragged where it was.
+            if (scroller) scroller.scrollTop = zoom === "bottom" ? topShare * total : bottomShare * total - scrollerH;
+          })
+          .catch(onError);
       };
       window.addEventListener("pointermove", move, true);
       window.addEventListener("pointerup", up, true);
@@ -1616,13 +1630,37 @@
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
   }
-  /** Live scale for all track heights while an end of the track scrollbar is dragged. */
+  /** Live scale for all track heights (vertical zoom keys). */
   let heightPreview = $state(1);
+  /** The one height every open track takes while an end of the track scrollbar is dragged. */
+  let uniformPreview = $state<number | null>(null);
+
+  /** Over the track scrollbar: a resize cursor near the thumb's ends. */
+  function onVbarHover(e: PointerEvent) {
+    const el = e.currentTarget as HTMLElement;
+    const bar = el.getBoundingClientRect();
+    const scale = rowsH / Math.max(1, bar.height);
+    const top = bar.top + scrollTop / scale;
+    const bottom = top + scrollerH / scale;
+    const near = Math.abs(e.clientY - top) < 7 || Math.abs(e.clientY - bottom) < 7;
+    el.style.cursor = near ? "ns-resize" : "pointer";
+  }
+
+  /** Double-click the track scrollbar: every open track the same height, all fitting the view. */
+  function fitAllTracks() {
+    const open = shown.filter((t) => !t.collapsed);
+    if (!open.length || !scroller) return;
+    const content = [...scroller.querySelectorAll<HTMLElement>(".headers > *")].reduce((sum, el) => sum + el.offsetHeight, 0);
+    const fixed = Math.max(0, content - open.reduce((sum, t) => sum + shownHeight(t), 0));
+    const h = Math.max(40, Math.min(600, Math.floor((scrollerH - fixed) / open.length)));
+    const ops = open.filter((t) => t.height !== h).map((t) => ({ op: "set_track" as const, id: t.id, changes: { height: h } }));
+    if (ops.length) void session.edit("Track Height", { op: "batch", ops }, runner).catch(onError);
+  }
 
   /** A track being resized by its bottom edge: its live height. */
   let resizing = $state<{ id: string; h: number } | null>(null);
   const shownHeight = (t: TrackDoc) =>
-    resizing?.id === t.id ? resizing.h : t.collapsed ? trackHeight(t) : heightPreview !== 1 ? Math.max(40, Math.min(600, Math.round(t.height * heightPreview))) : t.height;
+    resizing?.id === t.id ? resizing.h : t.collapsed ? trackHeight(t) : uniformPreview !== null ? uniformPreview : heightPreview !== 1 ? Math.max(40, Math.min(600, Math.round(t.height * heightPreview))) : t.height;
 
   function startResize(e: PointerEvent, track: TrackDoc) {
     if (e.button !== 0) return;
@@ -2111,7 +2149,7 @@
               ondblclick={(e) => onLaneDouble(e, track)}
             >
               <LaneCanvas
-                track={resizing?.id === track.id || heightPreview !== 1 ? { ...(shownTracks?.[i] ?? track), height: shownHeight(track) } : (shownTracks?.[i] ?? track)}
+                track={resizing?.id === track.id || heightPreview !== 1 || uniformPreview !== null ? { ...(shownTracks?.[i] ?? track), height: shownHeight(track) } : (shownTracks?.[i] ?? track)}
                 media={mediaMap}
                 sessionRate={rate}
                 {view}
@@ -2189,11 +2227,11 @@
   <!-- Track scrollbar: each track's color, the visible part as the thumb.
        Drag the thumb to scroll; drag its ends to make every track taller or shorter. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer}>
+  <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer} onpointermove={onVbarHover} ondblclick={fitAllTracks} title="Drag to scroll the tracks. Drag the thumb's ends to zoom: every track the same height. Double-click to fit them all.">
     {#each shown as track, i (track.id)}
       <div class="vseg" style:height="{(shownHeight(track) / Math.max(1, rowsH)) * 100}%" style:background={trackColor(track.color, i)}></div>
     {/each}
-    {#if rowsH > scrollerH + 1}
+    {#if rowsH > 0}
       <div class="vthumb" style:top="{(scrollTop / rowsH) * 100}%" style:height="{(scrollerH / rowsH) * 100}%">
         <span class="vend top"></span>
         <span class="vend bottom"></span>
@@ -2548,7 +2586,7 @@
     display: flex;
     flex: none;
     flex-direction: column;
-    width: 12px;
+    width: 14px;
     border-left: 1px solid var(--border);
     background: var(--surface-0);
     cursor: pointer;
@@ -2573,20 +2611,23 @@
     pointer-events: none;
   }
 
+  /* Grips on the thumb's ends: drag them to zoom vertically. */
   .vend {
     position: absolute;
-    left: 2px;
-    right: 2px;
-    height: 2px;
-    border-top: 1px solid #b4b4bc;
+    left: 1px;
+    right: 1px;
+    height: 5px;
+    border-radius: 2px;
+    background: repeating-linear-gradient(180deg, #d0d0d6 0 1px, transparent 1px 2px);
+    opacity: 0.85;
   }
 
   .vend.top {
-    top: 2px;
+    top: 1px;
   }
 
   .vend.bottom {
-    bottom: 2px;
+    bottom: 1px;
   }
 
   .rows {
