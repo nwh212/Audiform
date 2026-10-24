@@ -721,6 +721,7 @@ mod tests {
 /// opens it in the Waveform editor, ready to edit or Save As. Emits
 /// `export-progress` and stops on `export_cancel`; None when cancelled.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn wave_new_from_mix(
     app: AppHandle,
     open: State<'_, super::session::OpenSession>,
