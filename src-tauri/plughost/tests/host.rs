@@ -14,8 +14,15 @@ use altered_plughost::protocol::*;
 const CID: &str = "41A17E2D7E5700018A1B2C3D4E5F6071";
 const SYNTH: &str = "41A17E2D7E5700038A1B2C3D4E5F6073";
 
-/// Builds the test plug-in once and returns its bundle.
+/// Builds the test plug-in once and returns its bundle. Tests run at the
+/// same time, so the first builds and copies it and the rest wait, never
+/// reading a bundle half copied.
 pub fn test_bundle() -> PathBuf {
+    static BUNDLE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    BUNDLE.get_or_init(build_bundle).clone()
+}
+
+fn build_bundle() -> PathBuf {
     let here = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest = here.join("testplug").join("Cargo.toml");
     let target = here.join("target").join("testplug");
