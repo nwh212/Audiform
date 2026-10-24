@@ -43,12 +43,30 @@ use protocol::{read_frame, write_frame, Message, Request, ScanResult, AUDIO, CON
 /// Runs a host or a scan when the command line asks for one. Returns the
 /// exit code, or None for a normal start of the editor.
 pub fn main_with_args(args: &[String]) -> Option<i32> {
-    match args.get(1).map(String::as_str) {
+    let mode = args.get(1).map(String::as_str);
+    if matches!(mode, Some("--plugin-host" | "--plugin-scan")) {
+        init_com();
+    }
+    match mode {
         Some("--plugin-host") => Some(serve()),
         Some("--plugin-scan") => Some(scan(Path::new(args.get(2).map_or("", String::as_str)))),
         _ => None,
     }
 }
+
+/// Windows plug-ins expect the host's main thread to have COM and OLE
+/// started (for their windows, drag and drop, licence checks and the
+/// like), as every Windows host does.
+#[cfg(windows)]
+fn init_com() {
+    // SAFETY: called once, on the main thread, before any plug-in loads.
+    unsafe {
+        windows_sys::Win32::System::Ole::OleInitialize(std::ptr::null());
+    }
+}
+
+#[cfg(not(windows))]
+fn init_com() {}
 
 type Out = Arc<Mutex<io::Stdout>>;
 

@@ -7,6 +7,7 @@
  * never `invoke` directly, so the command surface stays in one place.
  */
 
+import { listen } from "@tauri-apps/api/event";
 import type { OutputFormat } from "./output-format";
 import { invoke } from "@tauri-apps/api/core";
 import type { EffectChainDoc, MediaRefDoc } from "../stores/session";
@@ -914,6 +915,18 @@ export function pluginsRegistry(): Promise<PluginRegistry> {
 }
 
 /** Scans the plug-in folders; `all` also rescans bundles that did not change. */
+/** Scan progress: bundles read so far, of how many, and the latest one's name. */
+export interface PluginScanProgress {
+  done: number;
+  total: number;
+  name: string;
+}
+
+/** Calls `fn` as a scan goes; resolves to a function that stops listening. */
+export function onPluginScanProgress(fn: (p: PluginScanProgress) => void): Promise<() => void> {
+  return listen<PluginScanProgress>("plugins-scan-progress", (e) => fn(e.payload));
+}
+
 export function pluginsScan(all: boolean): Promise<[{ scanned: number; found: number; failed: number }, PluginRegistry]> {
   return invoke("plugins_scan", { all });
 }

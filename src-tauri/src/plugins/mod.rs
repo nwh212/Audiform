@@ -41,6 +41,9 @@ pub const CATEGORY: &str = "Plug-ins (VST3)";
 /// Longest a bundle may take to scan before it is listed as failed.
 const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Bundles read at the same time.
+const SCAN_THREADS: usize = 4;
+
 /// A plug-in the scan found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Found {
@@ -254,6 +257,16 @@ pub fn scan_bundle(bundle: &Path) -> ScanResult {
         Ok(c) => c,
         Err(e) => return fail(format!("Could not start the plug-in host: {e}")),
     };
+    // Read while it runs: a plug-in with many controls prints more than
+    // the pipe holds, and would otherwise wait on us forever.
+    let reader = child.stdout.take().map(|mut out| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut text = String::new();
+            let _ = out.read_to_string(&mut text);
+            text
+        })
+    });
     let start = Instant::now();
     loop {
         match child.try_wait() {
@@ -267,11 +280,7 @@ pub fn scan_bundle(bundle: &Path) -> ScanResult {
             Err(e) => return fail(e.to_string()),
         }
     }
-    let mut text = String::new();
-    if let Some(mut out) = child.stdout.take() {
-        use std::io::Read;
-        let _ = out.read_to_string(&mut text);
-    }
+    let text = reader.and_then(|r| r.join().ok()).unwrap_or_default();
     match serde_json::from_str::<ScanResult>(text.trim()) {
         Ok(r) => r,
         Err(_) => fail("It crashed while loading, so it was skipped.".into()),
@@ -304,17 +313,51 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
     reg.failed.retain(|p| present.contains(&p.bundle));
     reg.stamps.retain(|b, _| present.contains(b));
     let mut report = ScanReport::default();
-    let total = bundles.len();
-    for (i, b) in bundles.iter().enumerate() {
-        progress(i, total, b);
-        let s = stamp(b);
-        if !all && reg.stamps.get(b) == Some(&s) {
-            continue;
+    let todo: Vec<(&PathBuf, u64)> = bundles
+        .iter()
+        .map(|b| (b, stamp(b)))
+        .filter(|(b, s)| all || reg.stamps.get(*b) != Some(s))
+        .collect();
+    let total = todo.len();
+    progress(0, total, Path::new(""));
+    // A few bundles at a time: most of a scan is waiting on plug-ins
+    // starting up (and their licence checks).
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let results: Vec<(usize, ScanResult)> = std::thread::scope(|scope| {
+        for _ in 0..SCAN_THREADS.min(total) {
+            let (tx, next, todo) = (tx.clone(), &next, &todo);
+            scope.spawn(move || loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let Some((b, _)) = todo.get(i) else { break };
+                if tx.send((i, b.as_path(), None)).is_err()
+                    || tx.send((i, b.as_path(), Some(scan_bundle(b)))).is_err()
+                {
+                    break;
+                }
+            });
         }
+        drop(tx);
+        let mut done = Vec::new();
+        for (i, b, r) in rx {
+            match r {
+                // Started: show the newest bundle being read.
+                None => progress(done.len(), total, b),
+                Some(r) => {
+                    done.push((i, r));
+                    progress(done.len(), total, b);
+                }
+            }
+        }
+        done
+    });
+    let mut results = results;
+    results.sort_by_key(|(i, _)| *i);
+    for (i, r) in results {
+        let (b, s) = todo[i];
         report.scanned += 1;
         reg.plugins.retain(|p| &p.bundle != b);
         reg.failed.retain(|p| &p.bundle != b);
-        let r = scan_bundle(b);
         for info in r.classes {
             reg.plugins.push(Found {
                 bundle: b.clone(),
@@ -446,6 +489,38 @@ mod tests {
         let found = find_bundles(dir.path());
         assert_eq!(found.len(), 2, "{found:?}");
         assert!(found.iter().any(|p| p.ends_with("Deep.vst3")));
+    }
+
+    /// A plug-in with many controls prints more than a pipe holds; the
+    /// scan must still read it (it used to wait for the scanner to exit,
+    /// which waited for the scan to read: every bundle timed out).
+    #[cfg(unix)]
+    #[test]
+    fn reads_a_big_scan_without_waiting_on_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let vendor = "v".repeat(300_000);
+        let json = format!(
+            r#"{{"classes":[{{"cid":"00","name":"Big","vendor":"{vendor}","version":"1","sub_categories":"Fx","params":[],"latency":0,"has_editor":false}}],"error":null}}"#
+        );
+        std::fs::write(dir.path().join("out.json"), json).unwrap();
+        let script = dir.path().join("host.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\ncat '{}'\n",
+                dir.path().join("out.json").display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::env::set_var("ALTERED_PLUGIN_HOST", &script);
+        let start = Instant::now();
+        let r = scan_bundle(Path::new("x.vst3"));
+        std::env::remove_var("ALTERED_PLUGIN_HOST");
+        assert_eq!(r.error, None);
+        assert_eq!(r.classes[0].vendor.len(), 300_000);
+        assert!(start.elapsed() < Duration::from_secs(10));
     }
 
     #[test]

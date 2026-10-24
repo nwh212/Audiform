@@ -10,7 +10,7 @@
   only listed as failed.
 -->
 <script lang="ts">
-  import { pluginsRegistry, pluginsScan, pluginsSetFolder, type PluginRegistry } from "./core";
+  import { onPluginScanProgress, pluginsRegistry, pluginsScan, pluginsSetFolder, type PluginRegistry, type PluginScanProgress } from "./core";
   import { pluginsVersion } from "../stores/plugins";
 
   interface Props {
@@ -25,6 +25,7 @@
 
   let reg = $state<PluginRegistry | null>(null);
   let scanning = $state(false);
+  let progress = $state<PluginScanProgress | null>(null);
   let filter = $state("");
 
   void pluginsRegistry()
@@ -41,6 +42,8 @@
   async function scan(all: boolean) {
     if (scanning) return;
     scanning = true;
+    progress = null;
+    const off = await onPluginScanProgress((p) => (progress = p)).catch(() => null);
     try {
       const [report, r] = await pluginsScan(all);
       reg = r;
@@ -50,7 +53,9 @@
     } catch (e) {
       onError(e);
     } finally {
+      off?.();
       scanning = false;
+      progress = null;
     }
   }
 
@@ -103,7 +108,13 @@
       </ul>
       <div class="row">
         <button type="button" onclick={() => void addFolder()} disabled={scanning}>Add Folder...</button>
-        <span class="grow"></span>
+        <span class="grow progress" aria-live="polite">
+          {#if scanning && progress && progress.total > 0}
+            Read {progress.done} of {progress.total}{progress.name ? `. Now: ${progress.name}` : ""}
+          {:else if scanning}
+            Looking for plug-ins...
+          {/if}
+        </span>
         <button type="button" class="primary" onclick={() => void scan(false)} disabled={scanning} title="Read new and changed plug-ins">{scanning ? "Scanning..." : "Scan"}</button>
         <button type="button" onclick={() => void scan(true)} disabled={scanning} title="Read every plug-in again">Rescan All</button>
       </div>
@@ -195,6 +206,13 @@
   }
   .grow {
     flex: 1;
+  }
+  .progress {
+    overflow: hidden;
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .folders,
   .failed {
