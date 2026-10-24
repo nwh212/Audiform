@@ -6,8 +6,10 @@
   A MIDI track's lane: its clips over a bar and beat grid. Double-click
   empty space for a new one-bar clip; double-click a clip to edit its
   notes. Drag a clip to move it and its right edge to change its length;
-  both snap to beats. Clips and notes are in beats, so they follow the
-  session tempo.
+  both snap to beats. Drag a clip up or down onto another MIDI track to
+  move it there (Alt: a copy); its notes go along and that track's
+  instrument plays them. Clips and notes are in beats, so they follow
+  the session tempo.
 -->
 <script lang="ts">
   import type { MidiClipDoc, TempoDoc, TrackDoc } from "../../stores/session";
@@ -32,9 +34,20 @@
     onOpen: (clipId: string) => void;
     /** Right-click: on a clip, or on empty space at a beat. */
     onMenu: (e: MouseEvent, clip: MidiClipDoc | null, beat: number) => void;
+    /** Clips dragged onto another MIDI track: moved (or copied) there, `delta` beats later. */
+    onTransfer?: (ids: string[], delta: number, toTrack: string, copy: boolean) => void;
+    /** The MIDI track a drag is over, for highlighting it; null when none. */
+    onDragOver?: (trackId: string | null) => void;
+    /** Highlighted as the place a dragged clip would land. */
+    dropTarget?: boolean;
   }
 
-  const { track, tempo, rate, view, width, height, color, selected, onSelect, onSetClips, onOpen, onMenu }: Props = $props();
+  const { track, tempo, rate, view, width, height, color, selected, onSelect, onSetClips, onOpen, onMenu, onTransfer = () => {}, onDragOver = () => {}, dropTarget = false }: Props = $props();
+
+  /** The MIDI track lane under a point, if any. */
+  function midiTrackAt(x: number, y: number): string | null {
+    return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-midi-lane]")?.dataset.midiLane ?? null;
+  }
 
   const clips = $derived(track.midi_clips ?? []);
   const xOfBeat = (b: number) => xOf(beatsToSamples(b, tempo, rate), view);
@@ -76,16 +89,28 @@
       onSelect([...ids]);
       drag = { ids: new Set([...ids].filter((id) => clips.some((c) => c.id === id))), delta: 0 };
     }
+    let over: string | null = null;
     const move = (ev: PointerEvent) => {
       const beats = (ev.clientX - startX) / Math.max(1e-9, pxPerBeat);
       if (sizing) sizing = { ...sizing, length: Math.max(0.25, snap(hit.length + beats, 1) || 1) };
-      if (drag) drag = { ...drag, delta: snap(beats, 1) };
+      if (drag) {
+        drag = { ...drag, delta: snap(beats, 1) };
+        // Over another MIDI track: it lights up as the place the clips land.
+        const t = midiTrackAt(ev.clientX, ev.clientY);
+        const next = t && t !== track.id ? t : null;
+        if (next !== over) {
+          over = next;
+          onDragOver(over);
+        }
+      }
     };
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       if (sizing && sizing.length !== hit.length) onSetClips(resizeClip(clips, sizing.id, sizing.length), "Clip Length");
-      if (drag && drag.delta !== 0) onSetClips(moveClips(clips, drag.ids, drag.delta), drag.ids.size > 1 ? "Move Clips" : "Move Clip");
+      if (drag && over) onTransfer([...drag.ids], drag.delta, over, ev.altKey);
+      else if (drag && drag.delta !== 0) onSetClips(moveClips(clips, drag.ids, drag.delta), drag.ids.size > 1 ? "Move Clips" : "Move Clip");
+      if (over) onDragOver(null);
       sizing = null;
       drag = null;
     };
@@ -141,6 +166,8 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="midi-lane"
+  class:drop={dropTarget}
+  data-midi-lane={track.id}
   style:height="{height}px"
   style:--grid-bar="{grid.bar}px"
   style:--grid-beat="{grid.beat}px"
@@ -192,6 +219,9 @@
     background-size: var(--grid-bar) 100%;
     background-position: var(--grid-x) 0;
     user-select: none;
+  }
+  .midi-lane.drop {
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
   .midi-lane.beats {
     background-image:

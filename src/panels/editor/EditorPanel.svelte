@@ -22,7 +22,7 @@
   import { BPM_MAX, BPM_MIN, clipLength, isMidi, midiEnd, stretchOf, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
-  import { duplicateClips, replaceClip } from "./midi";
+  import { duplicateClips, replaceClip, transferClips } from "./midi";
   import { effectsCatalog, midiAudition, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
   import HeaderFx from "./HeaderFx.svelte";
   import { rowTarget } from "../voice-chain/slot-drag";
@@ -232,6 +232,24 @@
   const outName = (o: { type: string; bus_id?: string } | undefined) => (o?.type === "bus" ? (doc?.buses?.find((b) => b.id === o.bus_id)?.name ?? "Missing bus") : "Master");
   let pianoRoll = $state<{ trackId: string; clipId: string } | null>(null);
   const tempo = $derived(doc ? tempoOf(doc) : { bpm: 120, beats_per_bar: 4 });
+
+  /** The MIDI track a dragged MIDI clip is over, highlighted. */
+  let midiDrop = $state<string | null>(null);
+
+  /** MIDI clips dragged onto another MIDI track: moved (or copied) there as one undoable edit. */
+  function transferMidiClips(from: TrackDoc, ids: string[], delta: number, toId: string, copy: boolean) {
+    const to = doc?.tracks.find((t) => t.id === toId);
+    if (!to || !isMidi(to)) return;
+    const r = transferClips(from.midi_clips ?? [], to.midi_clips ?? [], new Set(ids), delta, copy, () => crypto.randomUUID());
+    const n = ids.length;
+    const what = n > 1 ? `${n} MIDI Clips` : "MIDI Clip";
+    const ops: Op[] = [{ op: "set_midi_clips", track_id: to.id, clips: r.to }];
+    if (!copy) ops.unshift({ op: "set_midi_clips", track_id: from.id, clips: r.from });
+    void session
+      .edit(`${copy ? "Copy" : "Move"} ${what} to ${to.name}`, { op: "batch", ops }, runner)
+      .then(() => editor.selectClips(copy ? r.to.filter((c) => !(to.midi_clips ?? []).some((o) => o.id === c.id)).map((c) => c.id) : ids, to.id))
+      .catch(onError);
+  }
 
   function setMidiClips(track: TrackDoc, clips: MidiClipDoc[], label: string) {
     void session.edit(label, { op: "set_midi_clips", track_id: track.id, clips }, runner).catch(onError);
@@ -2419,6 +2437,9 @@
                 onSetClips={(clips, label) => setMidiClips(track, clips, label)}
                 onOpen={(clipId) => (pianoRoll = { trackId: track.id, clipId })}
                 onMenu={(e, clip, beat) => (menu = { x: e.clientX, y: e.clientY, items: midiClipItems(track, clip, beat) })}
+                onTransfer={(ids, delta, to, copy) => transferMidiClips(track, ids, delta, to, copy)}
+                onDragOver={(id) => (midiDrop = id)}
+                dropTarget={midiDrop === track.id}
               />
             </div>
             {:else if row.kind === "track"}

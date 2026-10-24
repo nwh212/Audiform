@@ -91,6 +91,29 @@ export function moveClips(clips: MidiClipDoc[], ids: ReadonlySet<string>, delta:
   return sorted(clips.map((c) => (ids.has(c.id) ? { ...c, start: c.start + d } : c)));
 }
 
+/**
+ * Moves (or with `copy`, copies under new ids) the clips `ids` from one
+ * track's clips to another's, `delta` beats later, none before the
+ * start. Their notes go along; the other track's instrument plays them.
+ */
+export function transferClips(
+  from: MidiClipDoc[],
+  to: MidiClipDoc[],
+  ids: ReadonlySet<string>,
+  delta: number,
+  copy: boolean,
+  newId: () => string,
+): { from: MidiClipDoc[]; to: MidiClipDoc[] } {
+  const moving = from.filter((c) => ids.has(c.id));
+  if (moving.length === 0) return { from, to };
+  const d = Math.max(-Math.min(...moving.map((c) => c.start)), delta);
+  const placed = moving.map((c) => ({ ...structuredClone(c), id: copy ? newId() : c.id, start: c.start + d }));
+  return {
+    from: copy ? from : from.filter((c) => !ids.has(c.id)),
+    to: sorted([...to, ...placed]),
+  };
+}
+
 /** Sets a clip's length (at least `min` beats). Notes past the end stay, unheard. */
 export function resizeClip(clips: MidiClipDoc[], id: string, length: number, min = 0.25): MidiClipDoc[] {
   return clips.map((c) => (c.id === id ? { ...c, length: Math.max(min, length) } : c));

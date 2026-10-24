@@ -1182,3 +1182,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-24: Mix Down to New File opens in the Waveform editor
 
 - **Restated as behavior** (the tester asked for the mixdown to open as a file in the app rather than asking where to save it): Multitrack > Mix Down to New File (Entire Session, Time Selection, Selected Clips) renders the mix into a new untitled 32-bit float file and opens it in the Waveform editor, with no save dialog, the same way Paste to New File works. It counts as unsaved work; Save As puts it on the drive. Plug-ins' latest settings are saved into the session first, progress shows as for an export, and it can be cancelled. File > Export > Session Mixdown still writes straight to a file of your choice.
+
+## 2026-10-24: drag MIDI clips between MIDI tracks
+
+- A MIDI clip dragged up or down onto another MIDI track moves there, keeping its notes and its place in time (plus any sideways move, snapped to beats); that track's instrument plays them. With Alt held it is copied instead (new ids), the same proposed Alt+drag copy gesture as audio clips, which still needs the project lead's approval. The track under the pointer is outlined while dragging. Both tracks change in one undoable step. Audio and bus rows are not drop targets for MIDI clips.

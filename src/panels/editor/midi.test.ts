@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  transferClips,
   addNote,
   beatsToSamples,
   clipAtBeat,
@@ -103,5 +104,20 @@ describe("midi", () => {
       [64, 5],
     ]);
     expect([...p.pasted].sort()).toEqual([2, 3]);
+  });
+});
+
+describe("moving MIDI clips between tracks", () => {
+  const clip = (id: string, start: number) => ({ id, name: id, start, length: 4, notes: [{ pitch: 60, velocity: 100, start: 0, length: 1 }] });
+  it("moves clips with their notes, keeping their ids", () => {
+    const r = transferClips([clip("a", 0), clip("b", 8)], [clip("c", 4)], new Set(["a"]), 2, false, () => "new");
+    expect(r.from.map((c) => c.id)).toEqual(["b"]);
+    expect(r.to.map((c) => [c.id, c.start])).toEqual([["a", 2], ["c", 4]]);
+    expect(r.to[0]!.notes).toHaveLength(1);
+  });
+  it("copies under new ids and leaves the source alone, never before the start", () => {
+    const r = transferClips([clip("a", 1)], [], new Set(["a"]), -5, true, () => "new");
+    expect(r.from.map((c) => c.id)).toEqual(["a"]);
+    expect(r.to.map((c) => [c.id, c.start])).toEqual([["new", 0]]);
   });
 });
