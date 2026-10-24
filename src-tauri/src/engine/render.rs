@@ -87,12 +87,24 @@ impl Active {
         } else {
             (offset_frames, 0)
         };
-        let stretched = clip.loop_len == 0 && (clip.stretch - 1.0).abs() > 1e-9;
+        // A pitch change by `shift` (2 to the semitones over 12): read the
+        // file faster by that much, which raises the pitch and shortens it,
+        // then stretch the time by the clip's ratio times `shift`, keeping
+        // the pitch, so it fills the clip again.
+        let shift = if clip.keep_pitch && clip.loop_len == 0 {
+            2f64.powf(clip.pitch / 12.0)
+        } else {
+            1.0
+        };
+        let stretched =
+            clip.loop_len == 0 && ((clip.stretch - 1.0).abs() > 1e-9 || (shift - 1.0).abs() > 1e-9);
         // Tape-style stretch reads the file as if its rate were scaled, so it
         // plays slower and lower (or faster and higher). Pitch-keeping stretch
-        // reads normally and reshapes time afterwards.
+        // reads normally (or faster, for a pitch change) and reshapes time afterwards.
         let read_rate = if stretched && !clip.keep_pitch {
             (f64::from(out_rate) * clip.stretch).round().max(1_000.0) as u32
+        } else if (shift - 1.0).abs() > 1e-9 {
+            (f64::from(out_rate) / shift).round().max(1_000.0) as u32
         } else {
             out_rate
         };
@@ -116,8 +128,14 @@ impl Active {
             pending: Vec::new(),
             used: 0,
             lap_left,
-            stretcher: (stretched && clip.keep_pitch)
-                .then(|| Stretcher::new(clip.stretch, out_rate)),
+            stretcher: (stretched && clip.keep_pitch).then(|| {
+                let ratio = clip.stretch * shift;
+                if clip.stretch_frame > 0.0 {
+                    Stretcher::with_frame(ratio, out_rate, clip.stretch_frame)
+                } else {
+                    Stretcher::new(ratio, out_rate)
+                }
+            }),
             scratch: Vec::new(),
             fx: Fx::new(&clip.effects, out_rate),
         }
@@ -843,5 +861,29 @@ mod tests {
             .count() as f32;
         let hz = ups * 48_000.0 / body.len() as f32;
         assert!((hz - 220.0).abs() < 5.0, "pitch {hz}");
+    }
+
+    #[test]
+    fn pitch_shift_keeps_the_length_and_moves_the_pitch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = tone_file(dir.path());
+        // Up an octave: 440 Hz, still one second long.
+        let mut plan = stretched(path, 48_000, 1.0, true);
+        plan.tracks[0].clips[0].pitch = 12.0;
+        let all = render_all(plan, 48_000);
+        let left: Vec<f32> = all.iter().step_by(2).copied().collect();
+        let rms = |s: &[f32]| (s.iter().map(|v| v * v).sum::<f32>() / s.len() as f32).sqrt();
+        assert!(
+            rms(&left[42_000..46_000]) > 0.25,
+            "end rms {}",
+            rms(&left[42_000..46_000])
+        );
+        let body = &left[6_000..42_000];
+        let ups = body
+            .windows(2)
+            .filter(|w| w[0] < 0.0 && w[1] >= 0.0)
+            .count() as f32;
+        let hz = ups * 48_000.0 / body.len() as f32;
+        assert!((hz - 440.0).abs() < 10.0, "pitch {hz}");
     }
 }

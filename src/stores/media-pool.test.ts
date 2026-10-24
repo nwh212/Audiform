@@ -144,6 +144,23 @@ describe("MediaPool", () => {
     expect(pool.get("x2")?.status).toBe("error");
   });
 
+  it("keeps open files when a session's files are added", async () => {
+    const { pool, stack } = setup();
+    await pool.importPaths(["C:\\a.wav", "C:\\b.wav"], stack);
+    await pool.whenIdle();
+    const b = pool.current.items[1]!.id;
+    pool.merge([
+      { id: "s1", path: "c:\\B.wav" },
+      { id: "s2", path: "C:\\c.wav" },
+    ]);
+    expect(names(pool)).toEqual(["a.wav", "b.wav", "c.wav"]);
+    // The listed file now goes by the session's id, which its clips use.
+    expect(pool.get("s1")?.path).toBe("C:\\b.wav");
+    expect(pool.current.items.some((it) => it.id === b)).toBe(false);
+    await pool.whenIdle();
+    expect(pool.readyItems().map((i) => i.id)).toEqual([pool.current.items[0]!.id, "s1", "s2"]);
+  });
+
   it("reads file names from either slash style", () => {
     expect(fileName("C:\\Shows\\ep 12.wav")).toBe("ep 12.wav");
     expect(fileName("/home/host/bumper.mp3")).toBe("bumper.mp3");

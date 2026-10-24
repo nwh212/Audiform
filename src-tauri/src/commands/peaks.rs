@@ -152,6 +152,84 @@ mod tests {
 /// frames (one of 1024 to 16384; smaller is lighter), comparing signal
 /// `a` against `b` (left, right, mid or side). Little-endian f32s: the
 /// correlation, then phase, level, pitch and coherence for each band with sound.
+/// The Phase Wheel while stopped: the same picture for the `size` frames
+/// of the session (or the Waveform editor's file, with `wave`) that end
+/// at `position`, so it follows the playhead as it is moved.
+#[tauri::command]
+pub async fn scope_phase_at(
+    open: tauri::State<'_, super::session::OpenSession>,
+    open_wave: tauri::State<'_, super::wave::OpenWave>,
+    position: u64,
+    size: usize,
+    a: crate::engine::scope::Signal,
+    b: crate::engine::scope::Signal,
+    wave: bool,
+) -> Result<Response, String> {
+    use crate::engine::{graph, plan, render::Renderer, scope};
+    let session = if wave {
+        let w = open_wave.0.lock().map_err(|e| e.to_string())?;
+        match w.as_ref() {
+            Some(w) => w.session.clone(),
+            None => {
+                return Ok(phase_bytes(&scope::Phase {
+                    correlation: 0.0,
+                    bins: Vec::new(),
+                }))
+            }
+        }
+    } else {
+        open.0.lock().map_err(|e| e.to_string())?.session.clone()
+    };
+    let n = window(size);
+    let rate = session.sample_rate.max(1);
+    let p = spawn_blocking(move || {
+        let start = position.saturating_sub(n as u64);
+        let master = plan::master_gain(&session);
+        let mut mix = graph::Mix::new(
+            Renderer::new(plan::build(&session, rate), start),
+            graph::Graph::new(&session, rate, true),
+        );
+        let mut out = vec![Vec::new(); mix.outputs()];
+        let mut frames: Vec<[f32; 2]> = Vec::with_capacity(n);
+        while frames.len() < n {
+            let got = mix.render((n - frames.len()).min(4_096), &mut out);
+            if got == 0 {
+                break;
+            }
+            frames.extend(
+                out[0][..got * 2]
+                    .chunks_exact(2)
+                    .map(|f| [f[0] * master, f[1] * master]),
+            );
+        }
+        scope::analyse(&frames, a, b, rate)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(phase_bytes(&p))
+}
+
+fn window(size: usize) -> usize {
+    use crate::engine::scope::SIZES;
+    SIZES
+        .iter()
+        .copied()
+        .find(|s| *s >= size)
+        .unwrap_or(SIZES[SIZES.len() - 1])
+}
+
+fn phase_bytes(p: &crate::engine::scope::Phase) -> Response {
+    let mut out = Vec::with_capacity(4 + p.bins.len() * 16);
+    out.extend_from_slice(&p.correlation.to_le_bytes());
+    for bin in &p.bins {
+        out.extend_from_slice(&bin.phase.to_le_bytes());
+        out.extend_from_slice(&bin.level.to_le_bytes());
+        out.extend_from_slice(&bin.pitch.to_le_bytes());
+        out.extend_from_slice(&bin.coherence.to_le_bytes());
+    }
+    Response::new(out)
+}
+
 #[tauri::command]
 pub fn scope_phase(
     size: usize,
@@ -159,19 +237,6 @@ pub fn scope_phase(
     b: crate::engine::scope::Signal,
 ) -> Response {
     use crate::engine::scope;
-    let n = scope::SIZES
-        .iter()
-        .copied()
-        .find(|s| *s >= size)
-        .unwrap_or(scope::SIZES[scope::SIZES.len() - 1]);
-    let p = scope::analyse(&scope::latest(n), a, b, scope::rate());
-    let mut out = Vec::with_capacity(4 + p.bins.len() * 16);
-    out.extend_from_slice(&p.correlation.to_le_bytes());
-    for bin in p.bins {
-        out.extend_from_slice(&bin.phase.to_le_bytes());
-        out.extend_from_slice(&bin.level.to_le_bytes());
-        out.extend_from_slice(&bin.pitch.to_le_bytes());
-        out.extend_from_slice(&bin.coherence.to_le_bytes());
-    }
-    Response::new(out)
+    let p = scope::analyse(&scope::latest(window(size)), a, b, scope::rate());
+    phase_bytes(&p)
 }

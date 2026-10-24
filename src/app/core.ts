@@ -285,6 +285,17 @@ export async function scopePhase(size: number, a: ScopeSignal, b: ScopeSignal): 
   return { correlation: all[0] ?? 0, bins: all.subarray(1) };
 }
 
+/**
+ * The same picture while stopped: the `size` frames of the session (or the
+ * Waveform editor's file, with `wave`) that end at `position`.
+ */
+export async function scopePhaseAt(position: number, size: number, a: ScopeSignal, b: ScopeSignal, wave: boolean): Promise<{ correlation: number; bins: Float32Array }> {
+  const bytes = rawBytes(await invoke<unknown>("scope_phase_at", { position: Math.max(0, Math.round(position)), size, a, b, wave }));
+  if (bytes.byteLength < 4) return { correlation: 0, bins: new Float32Array(0) };
+  const all = new Float32Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 4));
+  return { correlation: all[0] ?? 0, bins: all.subarray(1) };
+}
+
 /** The Waveform editor's file: its edit list as a one-track session. */
 export interface WaveDocRaw<S> {
   session: S;

@@ -133,9 +133,26 @@ export const AUDIO_TYPES: { id: AudioType; label: string }[] = [
 export interface StretchDoc {
   /** Timeline length over natural length: 1.25 plays 25 percent longer. */
   ratio: number;
-  /** True keeps the pitch; false changes pitch with speed, like tape. */
+  /** True keeps the pitch; false changes pitch with speed, like tape (varispeed). */
   keep_pitch: boolean;
+  /** Pitch change in semitones, -24 to +24 (pitch-keeping only). */
+  pitch?: number;
+  /** Several notes at once (music): longer analysis frames. */
+  polyphonic?: boolean;
+  /** Worked out ahead rather than live. Sounds the same here; kept for round trips. */
+  rendered?: boolean;
+  advanced?: StretchAdvancedDoc | null;
 }
+
+export interface StretchAdvancedDoc {
+  window_ms: number;
+  transient_sensitivity: number;
+  preserve_formants: boolean;
+  high_precision: boolean;
+}
+
+export const PITCH_MIN = -24;
+export const PITCH_MAX = 24;
 
 export const STRETCH_MIN = 0.25;
 export const STRETCH_MAX = 4;

@@ -57,6 +57,10 @@ pub struct ClipPlan {
     pub stretch: f64,
     /// Stretch keeps the pitch (true) or changes it with speed (false).
     pub keep_pitch: bool,
+    /// Pitch change in semitones (pitch-keeping stretch only).
+    pub pitch: f64,
+    /// Stretch analysis frame length in seconds; 0 picks one by material.
+    pub stretch_frame: f64,
     /// Clip Voice Chain, run after the clip's gain and fades.
     pub effects: EffectChain,
     /// Automation of the clip chain's effect settings, over time.
@@ -131,6 +135,8 @@ impl ClipPlan {
             loop_phase: 0,
             stretch: 1.0,
             keep_pitch: true,
+            pitch: 0.0,
+            stretch_frame: 0.0,
             effects: EffectChain::default(),
             automation: Vec::new(),
         }
@@ -428,6 +434,21 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                         loop_phase,
                         stretch: c.stretch_ratio(),
                         keep_pitch: c.stretch.is_none_or(|s| s.keep_pitch),
+                        pitch: match (c.looped, c.stretch) {
+                            (None, Some(s)) if s.keep_pitch => s.pitch.clamp(
+                                crate::session::model::PITCH_MIN,
+                                crate::session::model::PITCH_MAX,
+                            ),
+                            _ => 0.0,
+                        },
+                        stretch_frame: c.stretch.map_or(0.0, |s| match s.advanced {
+                            Some(a) if a.window_ms > 0.0 => {
+                                (a.window_ms / 1000.0).clamp(0.005, 0.2)
+                            }
+                            // Several notes at once: longer frames keep chords steady.
+                            _ if s.polyphonic => 0.08,
+                            _ => 0.0,
+                        }),
                         effects: c.effects.clone(),
                         automation: param_lanes(c, session.sample_rate, out_rate),
                     })
@@ -484,6 +505,9 @@ fn envelope_hash(c: &Clip) -> u64 {
         mix(0x5354_5243);
         mix(st.ratio.to_bits());
         mix(u64::from(st.keep_pitch));
+        mix(st.pitch.to_bits());
+        mix(u64::from(st.polyphonic));
+        mix(st.advanced.map_or(0, |a| a.window_ms.to_bits()));
     }
     // The loop changes what plays where, so it is part of the shape too.
     if let Some(l) = c.looped {

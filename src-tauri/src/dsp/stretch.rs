@@ -41,7 +41,13 @@ pub struct Stretcher {
 impl Stretcher {
     /// `ratio` above 1 makes the audio longer (slower), below 1 shorter.
     pub fn new(ratio: f64, rate: u32) -> Self {
-        let mut n = ((f64::from(rate) * FRAME_SECONDS) as usize).max(256);
+        Self::with_frame(ratio, rate, FRAME_SECONDS)
+    }
+
+    /// The same with a chosen frame length in seconds: longer suits music
+    /// with several notes at once, shorter a single voice.
+    pub fn with_frame(ratio: f64, rate: u32, frame_seconds: f64) -> Self {
+        let mut n = ((f64::from(rate) * frame_seconds) as usize).max(256);
         n -= n % 4;
         let hop = n / 2;
         // Periodic Hann: two windows half a frame apart add up to exactly 1.
@@ -49,7 +55,8 @@ impl Stretcher {
             .map(|i| (0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / n as f64).cos()) as f32)
             .collect();
         Self {
-            ratio: ratio.clamp(0.25, 4.0),
+            // Pitch changes stretch further than the clip itself (see the renderer).
+            ratio: ratio.clamp(0.125, 8.0),
             n,
             hop,
             search: n / 4,

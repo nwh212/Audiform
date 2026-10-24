@@ -406,17 +406,41 @@
       ]
     },
     "ClipStretch": {
-      "description": "How a stretched clip plays.",
+      "description": "How a stretched (or pitch-shifted) clip plays.",
       "type": "object",
       "properties": {
+        "advanced": {
+          "description": "Finer settings, when set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StretchAdvanced"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "keep_pitch": {
-          "description": "True keeps the pitch (for speech and ad fitting); false changes\npitch with speed, like a tape running faster or slower.",
+          "description": "True keeps the pitch (for speech and ad fitting); false changes\npitch with speed, like a tape running faster or slower (varispeed).",
+          "type": "boolean"
+        },
+        "pitch": {
+          "description": "Pitch change in semitones, -24 to +24, independent of the stretch.\nOnly while the pitch is kept (varispeed sets pitch by speed).",
+          "type": "number",
+          "format": "double"
+        },
+        "polyphonic": {
+          "description": "For music and other material with several notes at once: longer\nanalysis frames. False suits a single voice or instrument.",
           "type": "boolean"
         },
         "ratio": {
           "description": "Timeline length over natural length: 1.25 plays 25 percent longer.",
           "type": "number",
           "format": "double"
+        },
+        "rendered": {
+          "description": "The user asked for the stretch to be worked out ahead (rendered)\nrather than live. Playback and export sound the same either way;\nkept so files from other editors round-trip.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1118,6 +1142,36 @@
         "scroll",
         "scroll_y",
         "playhead"
+      ]
+    },
+    "StretchAdvanced": {
+      "description": "Finer stretch settings. The window size sets the length of the\nanalysis frames; the rest are kept for files that carry them.",
+      "type": "object",
+      "properties": {
+        "high_precision": {
+          "description": "Higher precision takes longer to work out.",
+          "type": "boolean"
+        },
+        "preserve_formants": {
+          "description": "Keep the voice's character when the pitch moves.",
+          "type": "boolean"
+        },
+        "transient_sensitivity": {
+          "description": "How readily a sharp attack starts a new frame, 0 to 100.",
+          "type": "number",
+          "format": "double"
+        },
+        "window_ms": {
+          "description": "Analysis frame length in milliseconds (about 10 to 100).",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "window_ms",
+        "transient_sensitivity",
+        "preserve_formants",
+        "high_precision"
       ]
     },
     "Tempo": {

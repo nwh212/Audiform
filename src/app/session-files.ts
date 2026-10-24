@@ -216,7 +216,7 @@ export class SessionFiles {
 
   private async replace(r: SessionResult<SessionDoc>, base: string, unsaved: boolean): Promise<void> {
     this.d.session.set(r.session, r.path);
-    this.d.pool.replaceAll(r.session.media.map((m) => ({ id: m.id, path: m.path })));
+    this.d.pool.merge(r.session.media.map((m) => ({ id: m.id, path: m.path })));
     await this.d.stack.clear(base);
     if (unsaved) await this.d.stack.markUnsaved();
     this.d.onReplaced?.(r.session);

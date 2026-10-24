@@ -1264,6 +1264,9 @@ fn set_clip(s: &mut Session, ch: &ClipChange) -> Result<ClipChange, OpError> {
         } else {
             ch.stretch.map(|s| ClipStretch {
                 ratio: s.ratio.clamp(STRETCH_MIN, STRETCH_MAX),
+                pitch: s
+                    .pitch
+                    .clamp(super::model::PITCH_MIN, super::model::PITCH_MAX),
                 ..s
             })
         };
@@ -2480,6 +2483,7 @@ mod tests {
                     stretch: Some(ClipStretch {
                         ratio: 1.25,
                         keep_pitch: true,
+                        ..ClipStretch::default()
                     }),
                     ..ClipChange::default()
                 }],
@@ -2494,6 +2498,7 @@ mod tests {
                     stretch: Some(ClipStretch {
                         ratio: 99.0,
                         keep_pitch: false,
+                        ..ClipStretch::default()
                     }),
                     ..ClipChange::default()
                 }],

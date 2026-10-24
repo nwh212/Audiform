@@ -573,7 +573,25 @@
     if (!doc || e.button !== 0) return;
     const x = xIn(e, e.currentTarget as HTMLElement);
     if (x > width) return;
-    void transport.seek(Math.max(0, Math.min(total, Math.round(sampleAt(x, view)))));
+    // Click or drag: the playhead follows the mouse. While playing,
+    // playback moves there when the button is let go.
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    const at = (ev: PointerEvent) => Math.max(0, Math.min(total, Math.round(sampleAt(Math.max(0, Math.min(width, xIn(ev, el))), view))));
+    const wasPlaying = !!tp?.playing;
+    let last = at(e);
+    if (!wasPlaying) void transport.seek(last);
+    const move = (ev: PointerEvent) => {
+      last = at(ev);
+      if (!wasPlaying) void transport.seek(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      void transport.seek(last);
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
   }
 
   function onWheel(e: WheelEvent) {

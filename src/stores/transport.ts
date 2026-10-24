@@ -91,7 +91,8 @@ export class TransportStore {
 
   constructor(
     private readonly backend: TransportBackend,
-    private readonly session: SessionStore,
+    /** The document this transport plays. */
+    readonly session: SessionStore,
     private readonly onError: (e: unknown) => void = console.error,
     private readonly tickMs = 33,
   ) {}

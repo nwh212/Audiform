@@ -524,15 +524,66 @@ pub struct ClipLoop {
     pub phase: u64,
 }
 
-/// How a stretched clip plays.
+/// How a stretched (or pitch-shifted) clip plays.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ClipStretch {
     /// Timeline length over natural length: 1.25 plays 25 percent longer.
     pub ratio: f64,
     /// True keeps the pitch (for speech and ad fitting); false changes
-    /// pitch with speed, like a tape running faster or slower.
+    /// pitch with speed, like a tape running faster or slower (varispeed).
     pub keep_pitch: bool,
+    /// Pitch change in semitones, -24 to +24, independent of the stretch.
+    /// Only while the pitch is kept (varispeed sets pitch by speed).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub pitch: f64,
+    /// For music and other material with several notes at once: longer
+    /// analysis frames. False suits a single voice or instrument.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub polyphonic: bool,
+    /// The user asked for the stretch to be worked out ahead (rendered)
+    /// rather than live. Playback and export sound the same either way;
+    /// kept so files from other editors round-trip.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rendered: bool,
+    /// Finer settings, when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advanced: Option<StretchAdvanced>,
 }
+
+impl Default for ClipStretch {
+    fn default() -> Self {
+        Self {
+            ratio: 1.0,
+            keep_pitch: true,
+            pitch: 0.0,
+            polyphonic: false,
+            rendered: false,
+            advanced: None,
+        }
+    }
+}
+
+/// Finer stretch settings. The window size sets the length of the
+/// analysis frames; the rest are kept for files that carry them.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct StretchAdvanced {
+    /// Analysis frame length in milliseconds (about 10 to 100).
+    pub window_ms: f64,
+    /// How readily a sharp attack starts a new frame, 0 to 100.
+    pub transient_sensitivity: f64,
+    /// Keep the voice's character when the pitch moves.
+    pub preserve_formants: bool,
+    /// Higher precision takes longer to work out.
+    pub high_precision: bool,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Pitch changes a clip can take, in semitones.
+pub const PITCH_MIN: f64 = -24.0;
+pub const PITCH_MAX: f64 = 24.0;
 
 /// Stretch ratios a clip can take.
 pub const STRETCH_MIN: f64 = 0.25;

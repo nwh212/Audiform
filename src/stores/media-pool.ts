@@ -193,6 +193,49 @@ export class MediaPool {
     this.pump();
   }
 
+  /**
+   * Adds a session's files to the list and keeps the files already open,
+   * as when a session is opened or a new one started, so switching
+   * sessions never loses imported files. A file already listed takes the
+   * session's id, since its clips refer to it by that. Not undoable: it
+   * resets history along with the session.
+   */
+  merge(entries: readonly { id: string; path: string }[]): void {
+    const ignore = this.deps.ignorePathCase ?? true;
+    const byPath = new Map<string, string>();
+    for (const id of this.order) {
+      const it = this.known.get(id);
+      if (it) byPath.set(pathKey(it.path, ignore), id);
+    }
+    this.selection.clear();
+    for (const { id, path } of entries) {
+      const old = byPath.get(pathKey(path, ignore));
+      if (old === id) continue;
+      if (old !== undefined) {
+        const it = this.known.get(old)!;
+        this.known.delete(old);
+        this.known.set(id, { ...it, id });
+        this.order = this.order.map((o) => (o === old ? id : o));
+        const w = this.waiting.indexOf(old);
+        if (w >= 0) this.waiting[w] = id;
+        // Being measured under the old id: measure again under the new one.
+        else if (it.status === "probing") this.waiting.push(id);
+        byPath.set(pathKey(path, ignore), id);
+        continue;
+      }
+      if (this.known.has(id)) {
+        if (!this.order.includes(id)) this.order.push(id);
+        continue;
+      }
+      this.known.set(id, { id, path, name: fileName(path), status: "probing", info: null, error: null });
+      this.order.push(id);
+      this.waiting.push(id);
+      byPath.set(pathKey(path, ignore), id);
+    }
+    this.emit();
+    this.pump();
+  }
+
   /** Ready files, for saving with the session. */
   readyItems(): MediaItem[] {
     return this.state.items.filter((it) => it.status === "ready" && it.info);
@@ -274,7 +317,8 @@ export class MediaPool {
         )
         .then((next) => {
           this.running--;
-          this.update(next);
+          // Skipped when the file was given another id meanwhile (see merge).
+          if (this.known.get(id)?.id === id) this.update(next);
           this.pump();
         });
     }

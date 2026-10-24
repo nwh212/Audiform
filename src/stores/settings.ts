@@ -67,7 +67,22 @@ export interface AppSettings {
   markerName: string;
   /** Frames per second for timecode. */
   timecodeFps: number;
+  /** The Phase Wheel's choices, kept for every file and session. */
+  phaseWheel: PhaseWheelPrefs;
 }
+
+export type PhaseSignal = "left" | "right" | "mid" | "side";
+export interface PhaseWheelPrefs {
+  /** Frames analysed each time. */
+  size: number;
+  /** Pictures a second, at most. */
+  fps: number;
+  a: PhaseSignal;
+  b: PhaseSignal;
+}
+export const PHASE_SIZES = [1024, 2048, 4096, 8192, 16384] as const;
+export const PHASE_RATES = [15, 30, 60, 120] as const;
+const PHASE_SIGNALS: readonly PhaseSignal[] = ["left", "right", "mid", "side"];
 
 export const TIMECODE_RATES = [24, 25, 30, 50, 60] as const;
 
@@ -105,6 +120,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   countdownSec: 0,
   markerName: "Marker",
   timecodeFps: 30,
+  phaseWheel: { size: 4096, fps: 60, a: "left", b: "right" },
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -181,6 +197,19 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     timecodeFps: TIMECODE_RATES.includes(o.timecodeFps as never)
       ? (o.timecodeFps as number)
       : d.timecodeFps,
+    phaseWheel: phasePrefs(o.phaseWheel),
+  };
+}
+
+function phasePrefs(raw: unknown): PhaseWheelPrefs {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const d = DEFAULT_SETTINGS.phaseWheel;
+  const sig = (v: unknown, def: PhaseSignal) => (PHASE_SIGNALS.includes(v as PhaseSignal) ? (v as PhaseSignal) : def);
+  return {
+    size: PHASE_SIZES.includes(p.size as never) ? (p.size as number) : d.size,
+    fps: PHASE_RATES.includes(p.fps as never) ? (p.fps as number) : d.fps,
+    a: sig(p.a, d.a),
+    b: sig(p.b, d.b),
   };
 }
 

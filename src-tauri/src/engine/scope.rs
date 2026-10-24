@@ -10,7 +10,7 @@
 //! for an analysis now and then; it reads the newest frames, which may
 //! tear against a write in progress. For a picture that is fine.
 //!
-//! The analysis compares two signals (left, right, mid or side) in 128
+//! The analysis compares two signals (left, right, mid or side) in 1,024
 //! frequency bands spaced evenly on a log scale from 20 Hz to 20 kHz. For
 //! each band: the phase of the second signal relative to the first (0
 //! when they move together, half a turn when they are opposite), summed
@@ -107,8 +107,9 @@ pub struct Bin {
     pub coherence: f32,
 }
 
-/// Bands the 20 Hz to 20 kHz range is split into.
-pub const BANDS: usize = 128;
+/// Bands the 20 Hz to 20 kHz range is split into: about one point per
+/// analysis bin in the middle range, so the wheel fills in densely.
+pub const BANDS: usize = 1024;
 
 pub struct Phase {
     /// -1 to 1; 0 when either side is silent.
@@ -264,7 +265,7 @@ mod tests {
 
         // 64 cycles over 4,096 frames at 48 kHz is 750 Hz: on the log scale from 20 Hz to 20 kHz.
         let want = (750f32 / 20.0).ln() / 1000f32.ln();
-        assert!((loudest(&same).pitch - want).abs() < 1.0 / BANDS as f32);
+        assert!((loudest(&same).pitch - want).abs() < 0.02);
         // One point per band at most.
         assert!(same.bins.len() <= BANDS);
 

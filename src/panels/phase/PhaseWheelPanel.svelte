@@ -10,20 +10,22 @@
   pick the two ends), its angle the phase of "Compare to" against
   "Signal" (straight up when they move together, clockwise when "Compare
   to" is ahead, straight down when they are opposite and would cancel
-  in mono), its brightness how loud the band is and its size how steady
-  its phase is. A plain delay or phase shift draws one clean curve. The bar
+  in mono), its size how loud the band is and its brightness both the
+  level and how steady its phase is. A plain delay or phase shift draws one clean curve. The bar
   under the wheel is the overall correlation: +1 the same, 0 unrelated,
   -1 opposite. Compares left and right, or mid and side. Smaller sample
   counts are lighter on slower computers and react faster; larger ones
-  resolve low frequencies better. It redraws up to 60 times a second;
-  15 or 30 is lighter.
+  resolve low frequencies better and draw more dots. It redraws up to 120
+  times a second; 15 or 30 is lighter. While stopped it shows the audio
+  just before the playhead, and follows the playhead as it moves. Its
+  choices are kept in the settings, for every file and session.
 -->
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { scopePhase, type ScopeSignal } from "../../app/core";
+  import { scopePhase, scopePhaseAt, type ScopeSignal } from "../../app/core";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
   import { hexToRgb, PHASE_HIGH, PHASE_LOW, ramp } from "../../app/colors";
-  import { settings } from "../../stores/settings";
+  import { PHASE_RATES, PHASE_SIZES, settings, type PhaseWheelPrefs } from "../../stores/settings";
   import type { TransportState, TransportStore } from "../../stores/transport";
 
   interface Props {
@@ -34,7 +36,6 @@
 
   const { transport, wave = null }: Props = $props();
 
-  const SIZES = [1024, 2048, 4096, 8192, 16384];
   const SIGNALS: { id: ScopeSignal; label: string }[] = [
     { id: "left", label: "Left" },
     { id: "right", label: "Right" },
@@ -42,12 +43,23 @@
     { id: "side", label: "Side (L-R)" },
   ];
 
-  let size = $state(4096);
-  /** Pictures a second, at most. */
-  let fps = $state(60);
-  const RATES = [15, 30, 60];
   let appColors = $state(settings.current.colors);
-  $effect(() => settings.subscribe((v) => (appColors = v.colors)));
+  let prefs = $state<PhaseWheelPrefs>(settings.current.phaseWheel);
+  $effect(() =>
+    settings.subscribe((v) => {
+      appColors = v.colors;
+      prefs = v.phaseWheel;
+    }),
+  );
+  const size = $derived(prefs.size);
+  /** Pictures a second, at most. */
+  const fps = $derived(prefs.fps);
+  const a = $derived(prefs.a);
+  const b = $derived(prefs.b);
+  function setPref(change: Partial<PhaseWheelPrefs>) {
+    const c = settings.current;
+    settings.set({ ...c, phaseWheel: { ...c.phaseWheel, ...change } });
+  }
   /** 64 colors from the low end to the high end, so drawing never works one out per dot. */
   const palette = $derived.by(() => {
     const low = hexToRgb(appColors.phaseLow || PHASE_LOW)!;
@@ -60,8 +72,6 @@
     const c = settings.current;
     settings.set({ ...c, colors: { ...c.colors, phaseLow: low, phaseHigh: high } });
   }
-  let a = $state<ScopeSignal>("left");
-  let b = $state<ScopeSignal>("right");
   let correlation = $state(0);
   let canvas = $state<HTMLCanvasElement | null>(null);
   let box = $state({ w: 0, h: 0 });
@@ -71,6 +81,24 @@
   $effect(() => transport.subscribe((v) => (multi = v)));
   $effect(() => wave?.subscribe((v) => (waveS = v)));
   const playing = $derived(!!multi?.playing || !!waveS?.playing);
+
+  /**
+   * While stopped, the playhead of whichever editor moved it last: the
+   * session's or the Waveform editor's.
+   */
+  let follow = $state<{ wave: boolean; at: number }>({ wave: false, at: -1 });
+  $effect(() =>
+    transport.session.subscribe((d) => {
+      const at = d?.view.playhead;
+      if (at !== undefined && (follow.wave || at !== follow.at)) follow = { wave: false, at };
+    }),
+  );
+  $effect(() =>
+    wave?.session.subscribe((d) => {
+      const at = d?.view.playhead;
+      if (at !== undefined && (!follow.wave || at !== follow.at)) follow = { wave: true, at };
+    }),
+  );
 
   /**
    * A new picture on each screen refresh while playing, up to `fps` a
@@ -84,11 +112,35 @@
     try {
       const r = await scopePhase(size, a, b);
       correlation = r.correlation;
-      draw(r.bins);
+      draw(r.bins, 0.35);
     } catch {
       // Nothing playing yet, or the core is busy: the next frame tries again.
     } finally {
       busy = false;
+    }
+  }
+
+  /** Stopped: one picture at the playhead; a move while one is worked out asks again after. */
+  let still = false;
+  let stillAgain = false;
+  async function drawStill() {
+    if (still) {
+      stillAgain = true;
+      return;
+    }
+    still = true;
+    try {
+      do {
+        stillAgain = false;
+        const r = await scopePhaseAt(follow.at, size, a, b, follow.wave);
+        if (playing) break;
+        correlation = r.correlation;
+        draw(r.bins, 1);
+      } while (stillAgain);
+    } catch {
+      // Nothing open, or the core is busy: the next move tries again.
+    } finally {
+      still = false;
     }
   }
   function loop(now: number) {
@@ -109,7 +161,17 @@
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     if (playing) frame = requestAnimationFrame(loop);
-    else void fetchAndDraw();
+  });
+  $effect(() => {
+    // Stopped: follow the playhead.
+    void follow;
+    void size;
+    void a;
+    void b;
+    void palette;
+    void box.w;
+    void box.h;
+    if (!playing) void drawStill();
   });
   onDestroy(() => {
     if (frame !== null) cancelAnimationFrame(frame);
@@ -119,7 +181,8 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
   }
 
-  function draw(bins: Float32Array) {
+  /** `fade` dims the last picture by that much (1 clears it), so dots leave a trail while playing. */
+  function draw(bins: Float32Array, fade: number) {
     const c = canvas;
     if (!c) return;
     const side = Math.max(60, Math.min(box.w, box.h));
@@ -135,9 +198,8 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const mid = side / 2;
     const R = mid - 18;
-    // Fade the last picture a little, so dots leave a short trail.
     g.globalCompositeOperation = "source-over";
-    g.fillStyle = "rgba(10, 10, 12, 0.55)";
+    g.fillStyle = `rgba(10, 10, 12, ${fade})`;
     g.fillRect(0, 0, side, side);
     // Rings and axes.
     g.strokeStyle = "rgba(255, 255, 255, 0.10)";
@@ -170,7 +232,7 @@
     g.fillText("-90°", mid - R + 4, mid - 4);
     // The dots: distance from the center is the frequency, the angle from
     // straight up (clockwise) the phase, color the frequency, brightness
-    // the level, size how steady the phase is.
+    // the level and steadiness, size the level.
     g.globalCompositeOperation = "lighter";
     for (let i = 0; i + 3 < bins.length; i += 4) {
       const ph = bins[i]!;
@@ -181,9 +243,9 @@
       const x = mid + r * Math.sin(ph);
       const y = mid - r * Math.cos(ph);
       const [cr, cg, cb] = palette[Math.max(0, Math.min(63, Math.round(pitch * 63)))]!;
-      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(1, 0.15 + 1.1 * level)})`;
+      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(1, (0.1 + 1.1 * level) * (0.5 + 0.5 * coherence))})`;
       g.beginPath();
-      g.arc(x, y, 1.5 + 2.5 * coherence, 0, Math.PI * 2);
+      g.arc(x, y, 1.2 + 2.4 * level, 0, Math.PI * 2);
       g.fill();
     }
     g.globalCompositeOperation = "source-over";
@@ -205,7 +267,7 @@
     title="Right-click for the colors"
   >
     <canvas bind:this={canvas} aria-label="Phase of each frequency between the two signals"></canvas>
-    {#if !playing}<span class="idle">Shows what is playing. Press play.</span>{/if}
+    {#if !playing}<span class="idle">Stopped: the audio at the playhead.</span>{/if}
   </div>
   <div class="legend" title="Dot colors by frequency. Right-click the wheel to change them.">
     <span class="lab">20 Hz</span>
@@ -222,15 +284,15 @@
     <span class="val" class:neg={correlation < 0}>{corrText}</span>
   </div>
   <div class="controls">
-    <label>Signal <select bind:value={a}>{#each SIGNALS as s (s.id)}<option value={s.id}>{s.label}</option>{/each}</select></label>
-    <label>Compare to <select bind:value={b}>{#each SIGNALS as s (s.id)}<option value={s.id}>{s.label}</option>{/each}</select></label>
+    <label>Signal <select value={a} onchange={(e) => setPref({ a: e.currentTarget.value as ScopeSignal })}>{#each SIGNALS as s (s.id)}<option value={s.id}>{s.label}</option>{/each}</select></label>
+    <label>Compare to <select value={b} onchange={(e) => setPref({ b: e.currentTarget.value as ScopeSignal })}>{#each SIGNALS as s (s.id)}<option value={s.id}>{s.label}</option>{/each}</select></label>
     <label title="Frames analysed each time. Fewer is lighter on slower computers and reacts faster; more shows low frequencies in finer detail.">
       Samples
-      <select bind:value={size}>{#each SIZES as n (n)}<option value={n}>{n}</option>{/each}</select>
+      <select value={size} onchange={(e) => setPref({ size: Number(e.currentTarget.value) })}>{#each PHASE_SIZES as n (n)}<option value={n}>{n}</option>{/each}</select>
     </label>
     <label title="Pictures a second, at most. Lower is lighter on slower computers.">
       Refresh
-      <select bind:value={fps}>{#each RATES as r (r)}<option value={r}>{r} fps</option>{/each}</select>
+      <select value={fps} onchange={(e) => setPref({ fps: Number(e.currentTarget.value) })}>{#each PHASE_RATES as r (r)}<option value={r}>{r} fps</option>{/each}</select>
     </label>
   </div>
   <p class="note">The app plays in stereo, so the choices are left, right, mid and side.</p>
