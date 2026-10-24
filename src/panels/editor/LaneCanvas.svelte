@@ -114,8 +114,21 @@
   let exactTick = $state(0);
   $effect(() => exactSamples.subscribe(() => exactTick++));
 
-  $effect(() => {
+  // Waveform data for this lane's own files only, so a file that finishes
+  // loading redraws the lanes that use it, not every lane in the session.
+  const peakKey = $derived.by(() => {
     void peakTick;
+    let key = "";
+    for (const c of track.clips) {
+      const m = media.get(c.media_id);
+      const e = m ? peaks.get(m.path) : null;
+      key += e ? `${e.status}${Math.round(e.progress * 20)}.${e.levels.length}|` : "-|";
+    }
+    return key;
+  });
+
+  $effect(() => {
+    void peakKey;
     void exactTick;
     void liveTake?.tick;
     const c = canvas;

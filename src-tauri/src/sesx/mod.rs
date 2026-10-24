@@ -428,7 +428,13 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         track.output = output_of(audio, &bus_ids);
         track.effects = racks(t, &mut report);
 
-        for c in t.children().filter(|n| n.has_tag_name("audioClip")) {
+        // Lowest first: a later clip plays on top of an earlier one.
+        let mut clip_nodes: Vec<_> = t
+            .children()
+            .filter(|n| n.has_tag_name("audioClip"))
+            .collect();
+        clip_nodes.sort_by_key(|c| attr_u64(*c, "zOrder").unwrap_or(0));
+        for c in clip_nodes {
             let Some(file_key) = c.attribute("fileID") else {
                 continue;
             };

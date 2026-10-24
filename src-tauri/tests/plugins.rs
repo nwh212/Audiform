@@ -213,6 +213,17 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     instance::retain(&Default::default());
     assert!(instance::running(fx.id).is_none(), "unused hosts stop");
 
+    // Two tracks with plug-ins run side by side and still mix in time.
+    let mut two = session(dir.path(), slot(&[("p0", 0.5)]));
+    let mut other = two.tracks[0].clone();
+    other.id = new_id();
+    for c in &mut other.clips {
+        c.id = new_id();
+    }
+    other.effects.slots = vec![slot(&[("p0", 0.25)])];
+    two.tracks.push(other);
+    assert_eq!(peak(&mix(&two)), (6_000, 0.75));
+
     // The plug-in crashes: the mix carries on with the dry sound, in time.
     let s3 = session(dir.path(), slot(&[("p0", 0.5), ("p1", 1.0)]));
     assert_eq!(peak(&mix(&s3)), (6_000, 1.0));

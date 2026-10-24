@@ -657,11 +657,11 @@
   }
 
   /**
-   * The mouse wheel. Over the ruler it zooms the timeline; over a track's
-   * header it makes the track taller or shorter (Shift: all tracks); over
-   * the lanes it scrolls the tracks up and down. Alt + wheel scales the
-   * waveforms, Ctrl + wheel zooms the timeline, Shift + wheel (or a
-   * sideways wheel) scrolls along the timeline.
+   * The mouse wheel. Over the ruler and the overview it zooms the
+   * timeline; over the lanes and headers it scrolls the tracks up and
+   * down. Alt + wheel makes the track under the pointer taller or shorter,
+   * Alt + Shift + wheel scales the waveforms, Ctrl + wheel zooms the
+   * timeline, Shift + wheel (or a sideways wheel) scrolls along it.
    */
   function onWheel(e: WheelEvent) {
     if (!lanesEl) return;
@@ -693,12 +693,53 @@
       e.preventDefault();
       const d = e.shiftKey ? e.deltaY : e.deltaX;
       setView({ scroll: view.scroll + d * view.spp });
-    } else if (overRuler || e.ctrlKey || settings.current.wheelZooms) {
-      // Over the lanes the wheel zooms in time, as in the Waveform editor
-      // (Settings: wheel zooms). The headers and the scrollbar scroll the tracks.
+    } else if (overRuler || e.ctrlKey) {
+      // Over the ruler (and the overview above it) the wheel zooms in time;
+      // Ctrl+wheel zooms anywhere.
       zoomTime();
     }
-    // Otherwise (wheel zoom off) the wheel scrolls the tracks, which the scroller does by itself.
+    // Over the lanes and headers the wheel scrolls the tracks, which the
+    // scroller does by itself. The track scrollbar zooms them (onVbarWheel).
+  }
+
+  /**
+   * The wheel over the track scrollbar zooms vertically: every open track
+   * the same height, taller or shorter, as dragging the thumb's ends does.
+   * One undoable step once the wheel stops.
+   */
+  let vbarTimer: ReturnType<typeof setTimeout> | undefined;
+  function onVbarWheel(e: WheelEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const open = shown.filter((t) => !t.collapsed);
+    if (!open.length || !scroller) return;
+    const cur = uniformPreview ?? open[0]!.height;
+    const h = Math.max(40, Math.min(600, Math.round(cur * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
+    if (h === cur) return;
+    // Keep the middle of the view on the same spot.
+    const sc = scroller;
+    const mid = (sc.scrollTop + sc.clientHeight / 2) / Math.max(1, sc.scrollHeight);
+    uniformPreview = h;
+    void nextFrame().then(() => {
+      sc.scrollTop = mid * sc.scrollHeight - sc.clientHeight / 2;
+    });
+    clearTimeout(vbarTimer);
+    vbarTimer = setTimeout(() => {
+      const size = uniformPreview;
+      if (size === null) return;
+      const ops = open.filter((t) => t.height !== size).map((t) => ({ op: "set_track" as const, id: t.id, changes: { height: size } }));
+      if (!ops.length) {
+        uniformPreview = null;
+        return;
+      }
+      void session
+        .edit("Track Height", { op: "batch", ops }, runner)
+        .then(() => (uniformPreview = null))
+        .catch((err) => {
+          uniformPreview = null;
+          onError(err);
+        });
+    }, 350);
   }
 
   function clipAt(track: TrackDoc, x: number): ClipDoc | null {
@@ -2366,7 +2407,7 @@
   <!-- Track scrollbar: each track's color, the visible part as the thumb.
        Drag the thumb to scroll; drag its ends to make every track taller or shorter. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer} onpointermove={onVbarHover} ondblclick={fitAllTracks} title="Drag to scroll the tracks. Drag the thumb's ends to zoom: every track the same height. Double-click to fit them all.">
+  <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer} onpointermove={onVbarHover} ondblclick={fitAllTracks} onwheel={onVbarWheel} title="Drag to scroll the tracks. Drag the thumb's ends, or use the mouse wheel here, to zoom: every track the same height. Double-click to fit them all.">
     {#each shown as track, i (track.id)}
       <div class="vseg" style:height="{(shownHeight(track) / Math.max(1, rowsH)) * 100}%" style:background={trackColor(track.color, i)}></div>
     {/each}

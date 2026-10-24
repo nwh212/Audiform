@@ -529,6 +529,8 @@ pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxIm
     }
     s.session = imported.session.clone();
     s.path = None;
+    // Its plug-ins start loading now, so playback is ready sooner.
+    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
     Ok(SesxImported {
         result: SessionWithPath {
             session: imported.session,

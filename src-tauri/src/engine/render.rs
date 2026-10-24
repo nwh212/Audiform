@@ -886,4 +886,82 @@ mod tests {
         let hz = ups * 48_000.0 / body.len() as f32;
         assert!((hz - 440.0).abs() < 10.0, "pitch {hz}");
     }
+
+    fn silent_file(dir: &std::path::Path) -> PathBuf {
+        let path = dir.join("silent.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..48_000 {
+            w.write_sample(0i16).unwrap();
+        }
+        w.finalize().unwrap();
+        path
+    }
+
+    /// A clip on top covers the one under it, which comes through only
+    /// where the top clip fades; a crossfade plays both through their fades.
+    #[test]
+    fn the_clip_on_top_covers_the_one_under_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let tone = tone_file(dir.path());
+        let quiet = silent_file(dir.path());
+        let run = |under: ClipPlan, over: ClipPlan| {
+            let mut clips = vec![under, over];
+            crate::engine::plan::add_covers(&mut clips);
+            let all = render_all(
+                Plan {
+                    out_rate: 48_000,
+                    session_rate: 48_000,
+                    tracks: vec![TrackPlan {
+                        midi: None,
+                        id: new_id(),
+                        clips,
+                    }],
+                },
+                20_000,
+            );
+            move |from: usize| {
+                all[from * 2..(from + 400) * 2]
+                    .iter()
+                    .step_by(2)
+                    .fold(0f32, |m, s| m.max(s.abs()))
+            }
+        };
+        // A silent clip on top, inside the tone, with a 2,000-frame fade in.
+        let mut over = ClipPlan::plain(new_id(), quiet.clone(), 8_000, 6_000, 0.0);
+        over.fade_in = 2_000;
+        let peak = run(
+            ClipPlan::plain(new_id(), tone.clone(), 0, 20_000, 0.0),
+            over,
+        );
+        assert!(
+            (peak(2_000) - 0.5).abs() < 0.02,
+            "uncovered {}",
+            peak(2_000)
+        );
+        assert!(
+            peak(8_800) > 0.15 && peak(8_800) < 0.5,
+            "fading under {}",
+            peak(8_800)
+        );
+        assert!(peak(11_000) < 1e-4, "covered {}", peak(11_000));
+        assert!((peak(15_000) - 0.5).abs() < 0.02, "after {}", peak(15_000));
+        // A crossfade: the tone fades out across the top clip's fade in.
+        let mut under = ClipPlan::plain(new_id(), tone, 0, 10_000, 0.0);
+        under.fade_out = 2_000;
+        let mut over = ClipPlan::plain(new_id(), quiet, 8_000, 6_000, 0.0);
+        over.fade_in = 2_000;
+        let peak = run(under, over);
+        let linear = 0.5 * (1.0 - 900.0 / 2_000.0);
+        assert!(
+            (peak(8_700) - linear).abs() < 0.03,
+            "own fade only {}",
+            peak(8_700)
+        );
+    }
 }

@@ -65,6 +65,83 @@ pub struct ClipPlan {
     pub effects: EffectChain,
     /// Automation of the clip chain's effect settings, over time.
     pub automation: Vec<ParamLane>,
+    /// Clips above this one on the track that overlap it. A clip on top
+    /// covers the ones under it; they come through only where it fades.
+    pub covers: Vec<Cover>,
+}
+
+/// Where a clip on top covers this one, in frames from this clip's start.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cover {
+    pub from: u64,
+    pub to: u64,
+    pub fade_in: u64,
+    pub fade_in_shape: FadeShape,
+    pub fade_out: u64,
+    pub fade_out_shape: FadeShape,
+    /// This clip fades out across the top clip's fade in (or in across
+    /// its fade out): a crossfade, where both play through their own fades.
+    pub crossfade_in: bool,
+    pub crossfade_out: bool,
+}
+
+impl Cover {
+    /// How much of this clip comes through at `rel`: 1 outside the top
+    /// clip, 0 under its body, and the rest of its fade inside a fade.
+    fn pass(&self, rel: u64) -> f32 {
+        if rel < self.from || rel >= self.to {
+            return 1.0;
+        }
+        let into = rel - self.from;
+        if into < self.fade_in {
+            return if self.crossfade_in {
+                1.0
+            } else {
+                1.0 - fade_curve(self.fade_in_shape, into as f32 / self.fade_in as f32)
+            };
+        }
+        let left = self.to - rel;
+        if left < self.fade_out {
+            return if self.crossfade_out {
+                1.0
+            } else {
+                1.0 - fade_curve(self.fade_out_shape, left as f32 / self.fade_out as f32)
+            };
+        }
+        0.0
+    }
+}
+
+/// Fills in each clip's covers: every later clip (drawn on top) that
+/// overlaps it and is not muted.
+pub(crate) fn add_covers(clips: &mut [ClipPlan]) {
+    for i in 0..clips.len() {
+        let (lo, hi) = clips.split_at_mut(i + 1);
+        let a = &mut lo[i];
+        let a_end = a.start + a.len;
+        for b in hi.iter() {
+            let b_end = b.start + b.len;
+            if b.gain == 0.0 || b.start >= a_end || b_end <= a.start {
+                continue;
+            }
+            let from = b.start.saturating_sub(a.start);
+            // Where b starts before a, its fade in is partly gone already.
+            let cut = a.start.saturating_sub(b.start);
+            let to = b_end - a.start;
+            a.covers.push(Cover {
+                from,
+                to,
+                fade_in: b.fade_in.saturating_sub(cut),
+                fade_in_shape: b.fade_in_shape,
+                fade_out: b.fade_out.min(to - from),
+                fade_out_shape: b.fade_out_shape,
+                crossfade_in: a.fade_out > 0 && a_end <= b.start + b.fade_in + 1 && a_end > b.start,
+                crossfade_out: a.fade_in > 0
+                    && a.start + 1 >= b_end.saturating_sub(b.fade_out)
+                    && a.start < b_end,
+            });
+        }
+    }
 }
 
 /// One effect setting moving over time: (frame from the clip start,
@@ -139,6 +216,7 @@ impl ClipPlan {
             stretch_frame: 0.0,
             effects: EffectChain::default(),
             automation: Vec::new(),
+            covers: Vec::new(),
         }
     }
 
@@ -149,6 +227,7 @@ impl ClipPlan {
             && self.volume.is_empty()
             && self.pan.is_empty()
             && self.loop_len == 0
+            && self.covers.is_empty()
     }
 
     /// Looped clips: a short dip on both sides of each seam inside the
@@ -213,6 +292,9 @@ impl ClipPlan {
         }
         if rel < self.fade_in {
             g *= fade_curve(self.fade_in_shape, rel as f32 / self.fade_in as f32);
+        }
+        for c in &self.covers {
+            g *= c.pass(rel);
         }
         g *= self.seam_gain(rel);
         let left = self.len.saturating_sub(rel);
@@ -451,9 +533,14 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                         }),
                         effects: c.effects.clone(),
                         automation: param_lanes(c, session.sample_rate, out_rate),
+                        covers: Vec::new(),
                     })
                 })
                 .collect(),
+        })
+        .map(|mut t: TrackPlan| {
+            add_covers(&mut t.clips);
+            t
         })
         .collect();
     Plan {

@@ -428,12 +428,22 @@ pub fn warm(slots: Vec<EffectSlot>) {
         .name("plugin-warm".into())
         .spawn(move || {
             let rate = crate::engine::output::device_rate();
-            let handles: Vec<_> = todo
-                .into_iter()
-                .filter_map(|s| {
+            // A few at a time: a session with dozens of heavy plug-ins
+            // loading all at once slows the whole computer, the editor too.
+            let workers = thread::available_parallelism()
+                .map_or(2, |n| (n.get() / 2).clamp(2, 6))
+                .min(todo.len());
+            let mut todo = todo;
+            todo.reverse();
+            let queue = Arc::new(Mutex::new(todo));
+            let handles: Vec<_> = (0..workers)
+                .filter_map(|_| {
+                    let queue = queue.clone();
                     thread::Builder::new()
                         .name("plugin-warm".into())
-                        .spawn(move || {
+                        .spawn(move || loop {
+                            let next = queue.lock().ok().and_then(|mut q| q.pop());
+                            let Some(s) = next else { break };
                             let _ = host_for(&s, rate);
                         })
                         .ok()

@@ -35,7 +35,7 @@ export class PeakStore {
 
   constructor(
     private readonly backend: PeakBackend,
-    private readonly concurrency = 2,
+    private readonly concurrency = Math.max(2, Math.min(4, Math.floor((globalThis.navigator?.hardwareConcurrency ?? 4) / 2))),
   ) {}
 
   /** Calls `fn` whenever any entry changes. */

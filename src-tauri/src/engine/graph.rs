@@ -623,6 +623,7 @@ impl Graph {
             o.clear();
             o.resize(n, 0.0);
         }
+        let done = self.run_plugin_tracks(raw, n);
         let mut scratch = std::mem::take(&mut self.scratch);
         for k in 0..self.order.len() {
             let node = self.order[k];
@@ -630,16 +631,16 @@ impl Graph {
                 Node::Track(i) => std::mem::take(&mut self.tracks[i]),
                 Node::Bus(i) => std::mem::take(&mut self.buses[i]),
             };
-            if let Node::Track(i) = node {
-                st.input.clear();
-                st.input.extend_from_slice(&raw[i][..n]);
-                st.in_delay.run(&mut st.input);
+            let ran = matches!(node, Node::Track(i) if done.get(i).copied().unwrap_or(false));
+            if !ran {
+                if let Node::Track(i) = node {
+                    prepare_track(&mut st, &raw[i][..n]);
+                } else if st.mono {
+                    fold_mono(&mut st.input);
+                }
+                self.fill_keys(&mut st.keys, n);
+                run_strip(&mut st);
             }
-            if st.mono {
-                fold_mono(&mut st.input);
-            }
-            self.fill_keys(&mut st.keys, n);
-            run_strip(&mut st);
             let (from, to) = match node {
                 Node::Track(i) => (&self.applied.tracks[i], &self.levels.tracks[i]),
                 Node::Bus(i) => (&self.applied.buses[i], &self.levels.buses[i]),
@@ -698,6 +699,47 @@ impl Graph {
         self.applied = self.levels.clone();
     }
 
+    /// Runs, side by side, the chains of tracks that hold a plug-in and
+    /// listen to no other track. Each plug-in waits on its own host
+    /// process, so running them together keeps a session with many heavy
+    /// plug-ins from adding up their times. Returns which tracks ran.
+    fn run_plugin_tracks(&mut self, raw: &[Vec<f32>], n: usize) -> Vec<bool> {
+        let mut done = vec![false; self.tracks.len()];
+        let heavy: Vec<usize> = (0..self.tracks.len().min(raw.len()))
+            .filter(|&i| {
+                let t = &self.tracks[i];
+                t.keys.is_empty() && t.fx.as_ref().is_some_and(|f| f.chain.has_plugins())
+            })
+            .collect();
+        if heavy.len() < 2 {
+            return done;
+        }
+        let threads = std::thread::available_parallelism()
+            .map_or(4, std::num::NonZero::get)
+            .clamp(2, 16)
+            .min(heavy.len());
+        let mut taken: Vec<(usize, Strip)> = heavy
+            .iter()
+            .map(|&i| (i, std::mem::take(&mut self.tracks[i])))
+            .collect();
+        let per = taken.len().div_ceil(threads);
+        std::thread::scope(|scope| {
+            for chunk in taken.chunks_mut(per) {
+                scope.spawn(move || {
+                    for (i, st) in chunk.iter_mut() {
+                        prepare_track(st, &raw[*i][..n]);
+                        run_strip(st);
+                    }
+                });
+            }
+        });
+        for (i, st) in taken {
+            self.tracks[i] = st;
+            done[i] = true;
+        }
+        done
+    }
+
     fn fill_keys(&self, keys: &mut [Tap], n: usize) {
         for tap in keys {
             tap.buf.clear();
@@ -721,6 +763,17 @@ pub fn fold_mono(buf: &mut [f32]) {
 }
 
 /// Runs a strip's chain over its input, leaving the result in `pre`.
+/// A track strip's input for this block: its clips, held back to line up,
+/// folded to mono when asked.
+fn prepare_track(st: &mut Strip, raw: &[f32]) {
+    st.input.clear();
+    st.input.extend_from_slice(raw);
+    st.in_delay.run(&mut st.input);
+    if st.mono {
+        fold_mono(&mut st.input);
+    }
+}
+
 fn run_strip(st: &mut Strip) {
     std::mem::swap(&mut st.input, &mut st.pre);
     if let Some(fx) = st.fx.as_mut() {
