@@ -29,6 +29,20 @@ describe("FileDropRouter", () => {
     expect(hover).toEqual([true, false]);
   });
 
+  it("tells the panel under the files where they are, with the files, so it can preview the drop", () => {
+    const moves: (string | null)[] = [];
+    const router = new FileDropRouter(() => {});
+    router.register({ element: box(0, 0, 250, 400), onDrop: () => {}, onMove: (p, at) => moves.push(at ? `${p.join()}@${at.x},${at.y}` : null) });
+    router.handle({ type: "enter", paths: ["a.wav", "b.wav"], x: 10, y: 10 });
+    router.handle({ type: "over", x: 20, y: 30 });
+    router.handle({ type: "over", x: 600, y: 30 });
+    expect(moves).toEqual(["a.wav,b.wav@10,10", "a.wav,b.wav@20,30", null]);
+    // In-app drags pass their files along too.
+    router.dragOver(5, 6, undefined, ["c.wav"]);
+    router.dragCancel();
+    expect(moves.slice(3)).toEqual(["c.wav@5,6", null]);
+  });
+
   it("sends drops outside every panel to the fallback", () => {
     const fallback: string[][] = [];
     const router = new FileDropRouter((p) => fallback.push(p));

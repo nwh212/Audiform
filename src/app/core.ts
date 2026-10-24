@@ -274,8 +274,9 @@ export type ScopeSignal = "left" | "right" | "mid" | "side";
 
 /**
  * The Phase Wheel's picture of what is playing now: the correlation of
- * `a` and `b`, and per frequency bin its phase difference (radians, 0
- * in phase), level and pitch (each 0 to 1), packed as triplets.
+ * `a` and `b`, and per frequency band the phase of `b` relative to `a`
+ * (radians, 0 in phase), its level, its pitch (20 Hz to 20 kHz, log) and
+ * how consistent its phase is (each 0 to 1), packed in fours.
  */
 export async function scopePhase(size: number, a: ScopeSignal, b: ScopeSignal): Promise<{ correlation: number; bins: Float32Array }> {
   const bytes = rawBytes(await invoke<unknown>("scope_phase", { size, a, b }));

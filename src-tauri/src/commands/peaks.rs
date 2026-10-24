@@ -151,7 +151,7 @@ mod tests {
 /// The Phase Wheel's picture of what is playing now: the newest `size`
 /// frames (one of 1024 to 16384; smaller is lighter), comparing signal
 /// `a` against `b` (left, right, mid or side). Little-endian f32s: the
-/// correlation, then phase, level and pitch for each bin with sound.
+/// correlation, then phase, level, pitch and coherence for each band with sound.
 #[tauri::command]
 pub fn scope_phase(
     size: usize,
@@ -165,12 +165,13 @@ pub fn scope_phase(
         .find(|s| *s >= size)
         .unwrap_or(scope::SIZES[scope::SIZES.len() - 1]);
     let p = scope::analyse(&scope::latest(n), a, b, scope::rate());
-    let mut out = Vec::with_capacity(4 + p.bins.len() * 12);
+    let mut out = Vec::with_capacity(4 + p.bins.len() * 16);
     out.extend_from_slice(&p.correlation.to_le_bytes());
     for bin in p.bins {
         out.extend_from_slice(&bin.phase.to_le_bytes());
         out.extend_from_slice(&bin.level.to_le_bytes());
         out.extend_from_slice(&bin.pitch.to_le_bytes());
+        out.extend_from_slice(&bin.coherence.to_le_bytes());
     }
     Response::new(out)
 }

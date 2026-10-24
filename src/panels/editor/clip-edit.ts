@@ -764,3 +764,38 @@ export function clearRange(doc: SessionDoc, trackIds: Iterable<string>, a: numbe
   if (inside.length === 0) return null;
   return { op: "batch", ops: [...ops, { op: "remove_clips", ids: inside }] };
 }
+
+/**
+ * Alt+drag copies: the edit that puts copies of the moved clips where the
+ * drag left them (new ids, on their new tracks), leaving the originals
+ * in place. Changes to other clips (crossfades made by the drop) still
+ * apply. Copies that shared a group share a new one of their own.
+ */
+export function copyMoved(doc: SessionDoc, moving: readonly string[], changes: readonly ClipChange[], newId: () => string): { op: Op; ids: string[] } {
+  const moved = new Set(moving);
+  const copies: [string, ClipDoc][] = [];
+  const others: ClipChange[] = [];
+  const groups = new Map<string, string>();
+  const ids: string[] = [];
+  for (const ch of changes) {
+    if (!moved.has(ch.id)) {
+      others.push(ch);
+      continue;
+    }
+    const track = doc.tracks.find((t) => t.clips.some((c) => c.id === ch.id));
+    const clip = track?.clips.find((c) => c.id === ch.id);
+    if (!track || !clip) continue;
+    const { id: _id, track_id, ungroup: _ungroup, group: _group, ...fields } = ch;
+    const id = newId();
+    let group: string | null = null;
+    if (clip.group) {
+      group = groups.get(clip.group) ?? newId();
+      groups.set(clip.group, group);
+    }
+    copies.push([track_id ?? track.id, { ...clip, ...fields, id, group } as ClipDoc]);
+    ids.push(id);
+  }
+  const ops: Op[] = [{ op: "restore_clips", clips: copies }];
+  if (others.length) ops.push({ op: "set_clips", changes: others });
+  return { op: ops.length === 1 ? ops[0]! : { op: "batch", ops }, ids };
+}

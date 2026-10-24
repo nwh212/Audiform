@@ -51,7 +51,7 @@ export function beginPathDrag(
       ghost.style.left = `${e.clientX + 12}px`;
       ghost.style.top = `${e.clientY + 8}px`;
     }
-    router.dragOver(e.clientX, e.clientY, from);
+    router.dragOver(e.clientX, e.clientY, from, dragging ?? []);
   };
 
   const up = (e: PointerEvent) => {

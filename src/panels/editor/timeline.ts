@@ -15,10 +15,10 @@ export interface Viewport {
   scroll: number;
 }
 
-/** Closest zoom in: 4 samples per pixel. */
-export const MIN_SPP = 4;
-/** Closest zoom in the Waveform editor: 32 pixels per sample, so single samples can be seen. */
-export const SAMPLE_SPP = 1 / 32;
+/** Closest zoom in: 32 pixels per sample, so single samples can be seen (drawn as points on a line). */
+export const MIN_SPP = 1 / 32;
+/** Closest zoom in the Waveform editor, the same as the Multitrack's. */
+export const SAMPLE_SPP = MIN_SPP;
 /** Farthest zoom out: about 6 hours across 1,000 pixels at 48 kHz. */
 export const MAX_SPP = 1_048_576;
 

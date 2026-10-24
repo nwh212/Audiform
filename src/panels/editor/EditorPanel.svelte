@@ -26,7 +26,7 @@
   import { pluginOpenWindow, pluginsRegistry } from "../../app/core";
   import { pluginsVersion } from "../../stores/plugins";
   import { stretchTo } from "./stretch";
-  import { clipsAt, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
+  import { clipsAt, copyMoved, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
   import { addPoint, chipBox, chipLabel, envChange, envName, formatValue, fxChoices, fxLaneOf, fxParam, levelAt, movePoint, pointsOf, rangeOf, restValue, snapValue, valueToY, yToValue, type EnvKind } from "./envelope";
   import LaneCanvas from "./LaneCanvas.svelte";
@@ -38,7 +38,7 @@
   import TrackMeter from "./TrackMeter.svelte";
   import { inputLevels, liveTakes, type LiveTakes } from "../../stores/record";
   import { keepLast } from "../../app/settings/device-cache";
-  import { audioInputs, openSoundSettings, type AudioInput } from "../../app/core";
+  import { audioInputs, openSoundSettings, probeMedia, type AudioInput } from "../../app/core";
   import WaveformView from "./WaveformView.svelte";
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
   import type { Readable } from "svelte/store";
@@ -305,15 +305,35 @@
   });
 
   // Follow Playhead: during playback, page the lanes when the playhead
-  // nears the right edge or falls off either side.
+  // nears the right edge or falls off either side. Moving the view away
+  // from the playhead yourself (overview bar, wheel, scrollbar) pauses
+  // that until the playhead is back in view or playback starts again, so
+  // you can look at another part of the session while it plays.
+  let followHeld = false;
+  let wasPlaying = false;
   $effect(() => {
-    if (!tp?.playing || !ed.followPlayhead || lanesWidth <= 0) return;
+    const playingNow = !!tp?.playing;
+    if (playingNow && !wasPlaying) followHeld = false;
+    wasPlaying = playingNow;
+    if (!playingNow || !ed.followPlayhead || lanesWidth <= 0) return;
     const x = xOf(playhead, view);
-    if (x > lanesWidth * 0.92 || x < 0) setView({ scroll: playhead - lanesWidth * 0.08 * view.spp });
+    const inView = x >= 0 && x <= lanesWidth;
+    if (followHeld) {
+      if (!inView) return;
+      // Back in view: follow again from here.
+      followHeld = false;
+    }
+    if (x > lanesWidth * 0.92 || x < 0) setView({ scroll: playhead - lanesWidth * 0.08 * view.spp }, true);
   });
 
-  function setView(v: Partial<{ spp: number; scroll: number; playhead: number }>) {
+  /** Changes the view. `auto` is the follow's own paging; anything else is the user's. */
+  function setView(v: Partial<{ spp: number; scroll: number; playhead: number }>, auto = false) {
     if (!doc) return;
+    if (!auto && tp?.playing && v.playhead === undefined && (v.scroll !== undefined || v.spp !== undefined)) {
+      const spp = v.spp ?? doc.view.samples_per_pixel;
+      const x = (playhead - (v.scroll ?? doc.view.scroll)) / spp;
+      followHeld = x < 0 || x > lanesWidth;
+    }
     session.setView({
       ...doc.view,
       samples_per_pixel: v.spp ?? doc.view.samples_per_pixel,
@@ -327,6 +347,7 @@
     return router.register({
       element: lanesEl,
       onHover: (over) => (dropping = over),
+      onMove: (paths, at) => showDropGhost(paths, at),
       onDrop: (paths, at) => {
         const { trackId, sample } = hitLanes(at.x, at.y);
         onPlaceFiles(paths, trackId, sample);
@@ -335,6 +356,51 @@
   });
 
   /** Track and sample under a window point. */
+  /**
+   * While files hover over the lanes: where each would land if dropped
+   * here (one after another from the pointer, on the track under it, or
+   * on a new track below the last), with its name and length.
+   */
+  let dropGhost = $state<{ top: number; height: number; newTrack: boolean; items: { name: string; x: number; w: number }[] } | null>(null);
+  const probed = new Map<string, Promise<{ name: string; len: number } | null>>();
+  let ghostSeq = 0;
+  function probeLength(path: string): Promise<{ name: string; len: number } | null> {
+    let p = probed.get(path);
+    if (!p) {
+      p = probeMedia(path)
+        .then((i) => ({ name: i.name, len: Math.round((i.length * rate) / Math.max(1, i.sampleRate)) }))
+        .catch(() => null);
+      probed.set(path, p);
+    }
+    return p;
+  }
+  function showDropGhost(paths: string[], at: { x: number; y: number } | null) {
+    const seq = ++ghostSeq;
+    if (!at || paths.length === 0 || !lanesEl || !doc) {
+      dropGhost = null;
+      return;
+    }
+    const { trackId, sample } = hitLanes(at.x, at.y);
+    const track = trackId ? doc.tracks.find((t) => t.id === trackId) : null;
+    const lanesBox = lanesEl.getBoundingClientRect();
+    const row = track && !isMidi(track) ? lanesEl.querySelector<HTMLElement>(`[data-track="${CSS.escape(track.id)}"]`) : null;
+    const rows = [...lanesEl.querySelectorAll<HTMLElement>("[data-track]")];
+    const lastBottom = rows.length ? rows[rows.length - 1]!.getBoundingClientRect().bottom - lanesBox.top : 0;
+    const top = row ? row.getBoundingClientRect().top - lanesBox.top : lastBottom;
+    const height = row ? row.offsetHeight - TRACK_GAP : 60;
+    void Promise.all(paths.map(probeLength)).then((infos) => {
+      if (seq !== ghostSeq) return;
+      let pos = Math.max(0, sample);
+      const items = [];
+      for (const i of infos) {
+        if (!i) continue;
+        items.push({ name: i.name, x: xOf(pos, view), w: Math.max(4, i.len / view.spp) });
+        pos += i.len;
+      }
+      dropGhost = items.length ? { top, height, newTrack: !row, items } : null;
+    });
+  }
+
   function hitLanes(x: number, y: number): { trackId: string | null; sample: number } {
     const rect = lanesEl!.getBoundingClientRect();
     const sample = sampleAt(x - rect.left, view);
@@ -1115,6 +1181,8 @@
         if (over) row = d0.tracks.findIndex((t) => t.id === over);
         changes = moveClips(d0, ids, dx, row - startRow, targets, tol).changes;
         if (ed.autoCrossfade) changes = withCrossfades(d0, changes);
+        // Alt held: the drop makes copies and leaves the originals.
+        stretchHint = ev.altKey ? (ids.length > 1 ? `Copy ${ids.length} clips` : "Copy") : null;
       } else if (stretching) {
         const m = mediaMap.get(clip.media_id);
         let edge = (kind === "trim-left" ? clip.start : end) + dx;
@@ -1124,7 +1192,7 @@
         const right = kind === "trim-right" ? Math.max(clip.start + MIN_CLIP, edge) : end;
         const r = stretchTo(clip, m, rate, right - left, clip.stretch?.keep_pitch ?? true);
         changes = r ? [left !== clip.start ? { ...r.change, start: left } : r.change] : [];
-        stretchHint = r ? `${Math.round(r.ratio * 1000) / 10}%${r.limited ? " (limit)" : ""}` : null;
+        stretchHint = r ? `Stretch ${Math.round(r.ratio * 1000) / 10}%${r.limited ? " (limit)" : ""}` : null;
       } else if (kind === "trim-left" || kind === "trim-right") {
         const side = kind === "trim-left" ? "left" : "right";
         const c = trimClip(d0, clip, side, dx, targets, tol);
@@ -1169,6 +1237,15 @@
       preview = [];
       stretchHint = null;
       if (!moved || changes.length === 0) return;
+      if (kind === "move" && lastEv?.altKey) {
+        // Alt+drag: copies where they were dropped; the originals stay.
+        const copy = copyMoved(d0, ids, changes, () => crypto.randomUUID());
+        void session
+          .edit(copy.ids.length > 1 ? `Copy ${copy.ids.length} Clips` : "Copy Clip", copy.op, runner)
+          .then(() => editor.selectClips(copy.ids))
+          .catch(onError);
+        return;
+      }
       const label = stretching
         ? "Stretch Clip"
         : kind === "move"
@@ -2105,7 +2182,14 @@
       </div>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="lanes" class:dropping bind:this={lanesEl} bind:clientWidth={lanesWidth} onpointerleave={() => (razor = null)}>
-        {#if stretchHint}<div class="stretch-hint" aria-live="polite">Stretch {stretchHint}</div>{/if}
+        {#if stretchHint}<div class="stretch-hint" aria-live="polite">{stretchHint}</div>{/if}
+        {#if dropGhost && dropping}
+          {#each dropGhost.items as g, k (k)}
+            <div class="drop-ghost" style:left="{g.x}px" style:width="{g.w}px" style:top="{dropGhost.top + 1}px" style:height="{dropGhost.height - 2}px">
+              <span>{g.name}{dropGhost.newTrack && k === 0 ? " (new track)" : ""}</span>
+            </div>
+          {/each}
+        {/if}
         {#if selBox}
           <div class="selBox" style:left="{selBox.x}px" style:top="{selBox.y}px" style:width="{selBox.w}px" style:height="{selBox.h}px"></div>
         {/if}
@@ -2524,8 +2608,10 @@
     border-bottom-color: var(--danger);
   }
 
+  /* Exactly as wide as the lanes (set in code), never stretched, so the
+     playhead's triangle sits on its line whatever sits to the right. */
   .ruler {
-    flex: 1;
+    flex: none;
     min-width: 0;
     cursor: text;
     border-bottom: 1px solid var(--border);
@@ -2922,6 +3008,29 @@
 
   .lane {
     cursor: default;
+  }
+
+  /* Where dragged-in files would land. */
+  .drop-ghost {
+    position: absolute;
+    z-index: 5;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px dashed var(--accent);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    pointer-events: none;
+  }
+
+  .drop-ghost span {
+    display: block;
+    padding: 1px 4px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    color: #fff;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .bus-lane {

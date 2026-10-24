@@ -291,7 +291,8 @@
     if (items.length === 0) return null;
     const ops: Op[] = [];
     let target = trackId;
-    if (!target || !doc.tracks.some((t) => t.id === target)) {
+    // Audio never lands on a MIDI track: it gets a new track instead.
+    if (!target || !doc.tracks.some((t) => t.id === target && t.kind !== "midi")) {
       target = uuid();
       ops.push({
         op: "add_track",

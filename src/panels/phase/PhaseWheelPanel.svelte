@@ -4,11 +4,14 @@
   This file is part of Altered Audio Editor.
 
   Phase Wheel: how two signals of what is playing line up, frequency by
-  frequency. Each dot is one frequency: its angle is the phase between
-  the two (straight up when they move together, straight down when they
-  are opposite and would cancel in mono), its distance from the center
-  how loud it is, its color its frequency from 20 Hz to 20 kHz (red to
-  magenta by default; right-click to pick the two ends). The bar
+  frequency. Each dot is one band of frequencies: its distance from the
+  center is the frequency (20 Hz in the middle, 20 kHz at the ring, the
+  same scale as its color, red to magenta by default; right-click to
+  pick the two ends), its angle the phase of "Compare to" against
+  "Signal" (straight up when they move together, clockwise when "Compare
+  to" is ahead, straight down when they are opposite and would cancel
+  in mono), its brightness how loud the band is and its size how steady
+  its phase is. A plain delay or phase shift draws one clean curve. The bar
   under the wheel is the overall correlation: +1 the same, 0 unrelated,
   -1 opposite. Compares left and right, or mid and side. Smaller sample
   counts are lighter on slower computers and react faster; larger ones
@@ -165,19 +168,22 @@
     g.fillText("+90°", mid + R - 4, mid - 4);
     g.textAlign = "left";
     g.fillText("-90°", mid - R + 4, mid - 4);
-    // The dots: angle from straight up is the phase, distance the level, color the pitch.
+    // The dots: distance from the center is the frequency, the angle from
+    // straight up (clockwise) the phase, color the frequency, brightness
+    // the level, size how steady the phase is.
     g.globalCompositeOperation = "lighter";
-    for (let i = 0; i + 2 < bins.length; i += 3) {
+    for (let i = 0; i + 3 < bins.length; i += 4) {
       const ph = bins[i]!;
       const level = bins[i + 1]!;
       const pitch = bins[i + 2]!;
-      const r = level * R;
+      const coherence = bins[i + 3]!;
+      const r = (0.04 + 0.96 * pitch) * R;
       const x = mid + r * Math.sin(ph);
       const y = mid - r * Math.cos(ph);
       const [cr, cg, cb] = palette[Math.max(0, Math.min(63, Math.round(pitch * 63)))]!;
-      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${0.2 + 0.55 * level})`;
+      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(1, 0.15 + 1.1 * level)})`;
       g.beginPath();
-      g.arc(x, y, 1.6 + 1.6 * level, 0, Math.PI * 2);
+      g.arc(x, y, 1.5 + 2.5 * coherence, 0, Math.PI * 2);
       g.fill();
     }
     g.globalCompositeOperation = "source-over";

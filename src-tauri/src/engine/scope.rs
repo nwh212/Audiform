@@ -10,11 +10,15 @@
 //! for an analysis now and then; it reads the newest frames, which may
 //! tear against a write in progress. For a picture that is fine.
 //!
-//! The analysis compares two signals (left, right, mid or side) bin by
-//! bin: for each frequency, the phase difference between them (0 when
-//! they move together, half a turn when they are opposite) and how loud
-//! it is. Plus the correlation of the two over the whole window, from
-//! +1 (the same) through 0 (unrelated) to -1 (opposite).
+//! The analysis compares two signals (left, right, mid or side) in 128
+//! frequency bands spaced evenly on a log scale from 20 Hz to 20 kHz. For
+//! each band: the phase of the second signal relative to the first (0
+//! when they move together, half a turn when they are opposite), summed
+//! over the band's bins so a steady relationship reads as one steady
+//! point; how loud the band is; and how consistent its phase is across
+//! the band (1 for a plain delay or phase shift, near 0 for unrelated
+//! sound). Plus the correlation of the two over the whole window, from +1
+//! (the same) through 0 (unrelated) to -1 (opposite).
 
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
@@ -89,16 +93,22 @@ impl Signal {
     }
 }
 
-/// One frequency bin of the comparison.
+/// One frequency band of the comparison.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bin {
-    /// Phase of `a` relative to `b`, -pi to pi (0 is in phase).
+    /// Phase of `b` relative to `a`, -pi to pi (0 is in phase; positive
+    /// when `b` leads).
     pub phase: f32,
     /// Level, 0 (at or below -72 dBFS) to 1 (full scale).
     pub level: f32,
-    /// Where the bin sits from 20 Hz (0) to 20 kHz (1), on a log scale.
+    /// The band's middle from 20 Hz (0) to 20 kHz (1), on a log scale.
     pub pitch: f32,
+    /// How alike the phase is across the band, 0 to 1.
+    pub coherence: f32,
 }
+
+/// Bands the 20 Hz to 20 kHz range is split into.
+pub const BANDS: usize = 128;
 
 pub struct Phase {
     /// -1 to 1; 0 when either side is silent.
@@ -155,20 +165,48 @@ pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal, rate: u32) -> Phase {
     let full = sum / 2.0;
     let hz_per_bin = rate.max(1) as f32 / n as f32;
     let span = (HIGH_HZ / LOW_HZ).ln();
-    let mut bins = Vec::with_capacity(n / 2);
+    // Per band: the cross spectrum (b against a) and each side's power, summed.
+    let mut cross = vec![realfft::num_complex::Complex32::new(0.0, 0.0); BANDS];
+    let mut pa = vec![0f32; BANDS];
+    let mut pb = vec![0f32; BANDS];
+    let mut count = vec![0u32; BANDS];
     for k in 1..n / 2 {
+        let f = k as f32 * hz_per_bin;
+        if !(LOW_HZ..HIGH_HZ).contains(&f) {
+            continue;
+        }
+        let band = (((f / LOW_HZ).ln() / span) * BANDS as f32) as usize;
+        let band = band.min(BANDS - 1);
         let (x, y) = (fa[k], fb[k]);
-        let mag = (x.norm() + y.norm()) * 0.5 / full;
-        let db = 20.0 * mag.max(1e-9).log10();
+        cross[band] += y * x.conj();
+        pa[band] += x.norm_sqr();
+        pb[band] += y.norm_sqr();
+        count[band] += 1;
+    }
+    let mut bins = Vec::with_capacity(BANDS);
+    for band in 0..BANDS {
+        if count[band] == 0 {
+            continue;
+        }
+        // The band's whole power, scaled so a sine reads at its own level
+        // (the Hann window spreads a sine over 1.5 bins' worth of power).
+        let rms = ((pa[band] + pb[band]) * 0.5 / 1.5).sqrt() / full;
+        let db = 20.0 * rms.max(1e-9).log10();
         let level = ((db + FLOOR_DB) / FLOOR_DB).clamp(0.0, 1.0);
         if level <= 0.0 {
             continue;
         }
-        let rel = x * y.conj();
+        let c = cross[band];
+        let power = (pa[band] * pb[band]).sqrt();
         bins.push(Bin {
-            phase: rel.im.atan2(rel.re),
+            phase: c.im.atan2(c.re),
             level,
-            pitch: ((k as f32 * hz_per_bin / LOW_HZ).ln() / span).clamp(0.0, 1.0),
+            pitch: (band as f32 + 0.5) / BANDS as f32,
+            coherence: if power > 0.0 {
+                (c.norm() / power).clamp(0.0, 1.0)
+            } else {
+                0.0
+            },
         });
     }
     Phase { correlation, bins }
@@ -201,7 +239,8 @@ mod tests {
         assert!((same.correlation - 1.0).abs() < 1e-3);
         assert!(loudest(&same).phase.abs() < 1e-3);
         // -6 dBFS sine: level 1 - 6/72.
-        assert!((loudest(&same).level - (1.0 - 6.02 / 72.0)).abs() < 0.01);
+        // Within 2 dB: a band edge can split the sine's power.
+        assert!((loudest(&same).level - (1.0 - 6.02 / 72.0)).abs() < 2.0 / 72.0);
 
         let flipped = analyse(
             &tone(4096, std::f32::consts::PI),
@@ -219,11 +258,15 @@ mod tests {
             48_000,
         );
         assert!(quarter.correlation.abs() < 0.01);
-        assert!((loudest(&quarter).phase - std::f32::consts::FRAC_PI_2).abs() < 1e-2);
+        // Right lags left by a quarter turn: right relative to left is -90°.
+        assert!((loudest(&quarter).phase + std::f32::consts::FRAC_PI_2).abs() < 1e-2);
+        assert!(loudest(&quarter).coherence > 0.99);
 
         // 64 cycles over 4,096 frames at 48 kHz is 750 Hz: on the log scale from 20 Hz to 20 kHz.
         let want = (750f32 / 20.0).ln() / 1000f32.ln();
-        assert!((loudest(&same).pitch - want).abs() < 0.01);
+        assert!((loudest(&same).pitch - want).abs() < 1.0 / BANDS as f32);
+        // One point per band at most.
+        assert!(same.bins.len() <= BANDS);
 
         // Mid against side of an in-phase signal: side is silent.
         let ms = analyse(&tone(4096, 0.0), Signal::Mid, Signal::Side, 48_000);

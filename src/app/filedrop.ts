@@ -21,6 +21,12 @@ export interface DropTarget {
   onDrop(paths: string[], at: { x: number; y: number }): void;
   /** Highlight on or off while files hover over this panel. */
   onHover?(over: boolean): void;
+  /**
+   * Where the files are over this panel while they hover (CSS pixels,
+   * relative to the window), to preview where they would land; null when
+   * they leave or drop. `paths` is empty while not known yet.
+   */
+  onMove?(paths: string[], at: { x: number; y: number } | null): void;
 }
 
 export type DropEvent =
@@ -32,6 +38,8 @@ export type DropEvent =
 export class FileDropRouter {
   private readonly targets = new Set<DropTarget>();
   private hovered: DropTarget | null = null;
+  /** The files being dragged, known from the start of the drag. */
+  private paths: string[] = [];
 
   constructor(private readonly fallback: (paths: string[]) => void) {}
 
@@ -47,7 +55,9 @@ export class FileDropRouter {
     switch (e.type) {
       case "enter":
       case "over":
+        if (e.type === "enter") this.paths = e.paths;
         this.setHovered(this.hit(e.x, e.y));
+        this.hovered?.onMove?.(this.paths, { x: e.x, y: e.y });
         break;
       case "drop": {
         const target = this.hit(e.x, e.y);
@@ -59,13 +69,15 @@ export class FileDropRouter {
       }
       case "leave":
         this.setHovered(null);
+        this.paths = [];
         break;
     }
   }
 
   /** In-app drags (Drive Manager rows, library items): highlight the panel under the pointer. */
-  dragOver(x: number, y: number, from?: HTMLElement): void {
+  dragOver(x: number, y: number, from?: HTMLElement, paths: string[] = []): void {
     this.setHovered(this.hit(x, y, from));
+    this.hovered?.onMove?.(paths, { x, y });
   }
 
   /** Ends an in-app drag. Returns true when a panel took the files. No fallback. */
@@ -94,6 +106,7 @@ export class FileDropRouter {
 
   private setHovered(t: DropTarget | null): void {
     if (t === this.hovered) return;
+    this.hovered?.onMove?.([], null);
     this.hovered?.onHover?.(false);
     this.hovered = t;
     t?.onHover?.(true);

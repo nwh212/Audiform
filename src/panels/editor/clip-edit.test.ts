@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { ClipDoc, SessionDoc, TrackDoc } from "../../stores/session";
-import { clipsAt, copyClips, fadeClip, gapAt, LockedError, MIN_CLIP, moveClips, nearest, pasteClips, previewTracks, rippleDeleteClips, rippleDeleteRange, snapTargets, trimToRange, splitClips, trimClip, trimToPlayhead, withCrossfades, withGroups, withVolume, withEnvelope, envelopeId, loopChanges } from "./clip-edit";
+import { clipsAt, copyClips, copyMoved, fadeClip, gapAt, LockedError, MIN_CLIP, moveClips, nearest, pasteClips, previewTracks, rippleDeleteClips, rippleDeleteRange, snapTargets, trimToRange, splitClips, trimClip, trimToPlayhead, withCrossfades, withGroups, withVolume, withEnvelope, envelopeId, loopChanges } from "./clip-edit";
 
 const fade = () => ({ length: 0, shape: "linear" as const, curve: 0 });
 
@@ -418,5 +418,26 @@ describe("clearRange", () => {
   it("does nothing on empty time", () => {
     const doc = session([track("A", [clip("b", 100_000)])]);
     expect(clearRange(doc, ["A"], 0, 24_000, () => "x")).toBeNull();
+  });
+});
+
+describe("copyMoved", () => {
+  it("copies the dragged clips to where they were dropped and leaves the originals", () => {
+    const clip = (id: string, start: number, group?: string) => ({ id, name: id, media_id: "m", start, source_in: 0, source_out: 100, gain_db: 0, muted: false, locked: false, color: null, fade_in: { length: 0, shape: "linear", curve: 0 }, fade_out: { length: 0, shape: "linear", curve: 0 }, ...(group ? { group } : {}) });
+    const doc = {
+      tracks: [
+        { id: "t1", clips: [clip("a", 0, "g"), clip("b", 200, "g"), clip("n", 500)] },
+        { id: "t2", clips: [] },
+      ],
+    } as unknown as SessionDoc;
+    let k = 0;
+    const r = copyMoved(doc, ["a", "b"], [{ id: "a", start: 50, track_id: "t2" }, { id: "b", start: 250, track_id: "t2" }, { id: "n", fade_in: { length: 10, shape: "linear", curve: 0 } }], () => `new${k++}`);
+    expect(r.ids).toEqual(["new0", "new2"]);
+    const ops = (r.op as { op: "batch"; ops: { op: string; clips?: [string, { id: string; start: number; group: string | null }][] }[] }).ops;
+    expect(ops[0]!.clips!.map(([t, c]) => [t, c.id, c.start, c.group])).toEqual([
+      ["t2", "new0", 50, "new1"],
+      ["t2", "new2", 250, "new1"],
+    ]);
+    expect(ops[1]).toEqual({ op: "set_clips", changes: [{ id: "n", fade_in: { length: 10, shape: "linear", curve: 0 } }] });
   });
 });

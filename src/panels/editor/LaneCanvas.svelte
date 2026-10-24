@@ -12,6 +12,7 @@
   import type { LiveWave } from "../../stores/record";
   import { defaultTrackColor, trackHeight, peakRange, pickLevel, xOf, type Viewport, TRACK_GAP } from "./timeline";
   import { chipBox, chipLabel, fxLaneOf, pointsOf, rangeOf, restValue, valueToY, type EnvKind, type FxLane } from "./envelope";
+  import { exactSamples, SAMPLE_VIEW } from "../../stores/exact-samples";
 
   interface Props {
     track: TrackDoc;
@@ -107,8 +108,13 @@
     return c.startsWith("--") ? css(c) : c;
   }
 
+  // Redraw when exact samples (for close zoom) arrive.
+  let exactTick = $state(0);
+  $effect(() => exactSamples.subscribe(() => exactTick++));
+
   $effect(() => {
     void peakTick;
+    void exactTick;
     void liveTake?.tick;
     const c = canvas;
     if (!c) return;
@@ -195,7 +201,56 @@
           g.fillText(`No waveform data (${entry.levels.length} levels)`, left + 6, body.top + 12);
           g.restore();
         }
-        if (level) {
+        // Zoomed in close: the file's exact samples, a line through them
+        // with a dot on each once they are 6 pixels apart.
+        const exact =
+          framesPerPx <= SAMPLE_VIEW && clip !== liveClip && !clip.looped && ratio === 1 && m
+            ? exactSamples.get(
+                m.path,
+                Math.max(clip.source_in, Math.floor(clip.source_in + ((view.scroll + left * view.spp - clip.start) * srcRate) / sessionRate) - 1),
+                Math.min(clip.source_out, Math.ceil(clip.source_in + ((view.scroll + right * view.spp - clip.start) * srcRate) / sessionRate) + 1),
+              )
+            : null;
+        if (exact) {
+          const tone = lighten(color, 0.55);
+          g.strokeStyle = tone;
+          g.fillStyle = tone;
+          g.lineWidth = 1.25;
+          g.globalAlpha = clip.muted ? 0.35 : 1;
+          const laneH = body.height / ch;
+          const fA = Math.max(clip.source_in, exact.start, Math.floor(clip.source_in + ((view.scroll + left * view.spp - clip.start) * srcRate) / sessionRate) - 1);
+          const fB = Math.min(clip.source_out, exact.start + exact.count, Math.ceil(clip.source_in + ((view.scroll + right * view.spp - clip.start) * srcRate) / sessionRate) + 1);
+          const pxPerFrame = 1 / framesPerPx;
+          g.save();
+          g.beginPath();
+          g.rect(left, body.top, right - left, body.height);
+          g.clip();
+          for (let k = 0; k < ch; k++) {
+            const mid = body.top + laneH * (k + 0.5);
+            const hc = Math.min(k, exact.channels - 1);
+            const at = (f: number): [number, number] => {
+              const v = Math.max(-1, Math.min(1, (exact.data[(f - exact.start) * exact.channels + hc] ?? 0) * ampZoom));
+              return [xOf(clip.start + ((f - clip.source_in) * sessionRate) / srcRate, view), mid - v * (laneH / 2 - 1)];
+            };
+            g.beginPath();
+            for (let f = fA; f < fB; f++) {
+              const [x, y] = at(f);
+              if (f === fA) g.moveTo(x, y);
+              else g.lineTo(x, y);
+            }
+            g.stroke();
+            if (pxPerFrame >= 6) {
+              for (let f = fA; f < fB; f++) {
+                const [x, y] = at(f);
+                g.beginPath();
+                g.arc(x, y, 2.25, 0, Math.PI * 2);
+                g.fill();
+              }
+            }
+          }
+          g.restore();
+          g.globalAlpha = 1;
+        } else if (level) {
           // Much lighter than the clip body so the waveform stands out.
           g.fillStyle = lighten(color, 0.55);
           g.globalAlpha = clip.muted ? 0.35 : 1;

@@ -105,8 +105,12 @@
   const channels = $derived(Math.max(1, Math.min(2, doc?.media[0]?.channels ?? 1)));
   const clips = $derived((doc?.tracks[0]?.clips ?? []).slice().sort((a, b) => a.start - b.start));
 
-  function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>) {
+  function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>, auto = false) {
     if (!doc) return;
+    if (!auto && tp?.playing && v.playhead === undefined && (v.scroll !== undefined || v.spp !== undefined)) {
+      const x = (tp.position - (v.scroll ?? doc.view.scroll)) / (v.spp ?? doc.view.samples_per_pixel);
+      followHeld = x < 0 || x > width;
+    }
     const maxScroll = Math.max(0, total - width * (v.spp ?? view.spp) * 0.5);
     wave.setView({
       ...doc.view,
@@ -135,11 +139,22 @@
     setView({ spp: f.spp, scroll: 0 });
   });
 
-  // Keep the playhead in view while playing.
+  // Keep the playhead in view while playing, unless the view was moved
+  // away from it by hand: then wait until it is back in view (or playback
+  // starts again).
+  let followHeld = false;
+  let wasPlaying = false;
   $effect(() => {
-    if (!tp?.playing || width <= 0) return;
+    const playingNow = !!tp?.playing;
+    if (playingNow && !wasPlaying) followHeld = false;
+    wasPlaying = playingNow;
+    if (!playingNow || !tp || width <= 0) return;
     const x = xOf(tp.position, view);
-    if (x > width - 20 || x < 0) setView({ scroll: tp.position - 20 * view.spp });
+    if (followHeld) {
+      if (x < 0 || x > width) return;
+      followHeld = false;
+    }
+    if (x > width - 20 || x < 0) setView({ scroll: tp.position - 20 * view.spp }, true);
   });
 
   /** Farthest zoom out: the whole file fills the view, with no empty time after it. */
