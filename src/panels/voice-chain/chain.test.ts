@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
 import {
   addSlot,
+  pluginMenuGroups,
   applyPreset,
   batchPresets,
   BUILTIN_PRESETS,
@@ -235,5 +236,18 @@ describe("voice chain", () => {
     ]);
     const r = replaceSlot(c, "b", { ...newSlot(gain, "z") });
     expect(r.slots.map((x) => x.id)).toEqual(["a", "z", "c"]);
+  });
+});
+
+describe("plug-in menu groups", () => {
+  it("groups by type and maker, Other last", () => {
+    const p = (name: string, vendor: string, kind: string) => ({ effect: `vst3:${name}`, name, vendor, kind });
+    const g = pluginMenuGroups([p("Zeta Verb", "Acme", "Fx|Reverb"), p("Alpha Verb", "Bolt", "Fx|Reverb"), p("Comp", "Acme", "Fx|Dynamics"), p("Odd", "", "")]);
+    expect(g.types.map(([k, l]) => [k, l.map((x) => x.name)])).toEqual([
+      ["Dynamics", ["Comp"]],
+      ["Reverb", ["Alpha Verb", "Zeta Verb"]],
+      ["Other", ["Odd"]],
+    ]);
+    expect(g.makers.map(([k]) => k)).toEqual(["Acme", "Bolt", "Other"]);
   });
 });

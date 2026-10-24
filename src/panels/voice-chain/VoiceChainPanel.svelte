@@ -15,7 +15,7 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
-  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import type { CommandRunner } from "../../stores/media-pool";
@@ -44,7 +44,9 @@
     setParam,
     setSlot,
     toSlider,
+    pluginMenuGroups,
     type ChainPreset,
+    type MenuPlugin,
   } from "./chain";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import ResponseGraph from "./ResponseGraph.svelte";
@@ -98,8 +100,24 @@
       void effectsCatalog()
         .then((c) => (catalog = c))
         .catch((e) => (loadError = String(e)));
+      void pluginsRegistry()
+        .then((r) => (menuPlugins = r.plugins.filter((p) => !p.instrument)))
+        .catch(() => (menuPlugins = []));
     }),
   );
+  /** Installed effect plug-ins with their maker and type, for the Add effect menu. */
+  let menuPlugins = $state<MenuPlugin[]>([]);
+
+  /**
+   * Opens a slot the way its effect is best edited: a plug-in in its own
+   * window (when it has one and is running), anything else in the
+   * settings window here.
+   */
+  function openSlot(s: EffectSlotDoc) {
+    const info = byId.get(s.effect);
+    if (info?.plugin && info.hasWindow && !$stoppedPlugins.has(s.id)) openPluginWindow(s);
+    else openWindow(s.id);
+  }
 
   /** Opens a plug-in's own window (it runs in its own process). */
   function openPluginWindow(s: EffectSlotDoc) {
@@ -259,7 +277,13 @@
     if (!info) return;
     const s = newSlot(info, crypto.randomUUID());
     commit(`Add ${info.name}`, addSlot(chain, s));
-    openWindow(s.id);
+    openSlot(s);
+  }
+
+  /** The Add effect button: the families as submenus. */
+  function openAddMenu(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    slotMenu = { x: r.left, y: r.bottom, items: familyItems(add) };
   }
 
   // Slot rows: drag to reorder, Alt+Up or Alt+Down on a row, and a right-click menu.
@@ -280,13 +304,25 @@
   /** The effects of each family as submenus, for adding at the end or replacing a slot. */
   function familyItems(pick: (id: string) => void): ContextItem[] {
     return [
-      ...categories.map((c): ContextItem => ({ kind: "sub", label: c, items: catalog.filter((e) => e.category === c).map((e): ContextItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })) })),
+      ...categories
+        .filter((c) => !catalog.some((e) => e.category === c && e.plugin))
+        .map((c): ContextItem => ({ kind: "sub", label: c, items: catalog.filter((e) => e.category === c).map((e): ContextItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })) })),
       { kind: "sep" },
-      ...(catalog.some((e) => e.plugin)
-        ? []
-        : [{ kind: "item", label: "Plug-ins (VST3)", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} } as ContextItem]),
+      pluginItems(pick),
       { kind: "item", label: "VST (version 2)", disabled: true, reason: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.", run: () => {} },
     ];
+  }
+  /** VST3 plug-ins: by type, then by maker. */
+  function pluginItems(pick: (id: string) => void): ContextItem {
+    const installed = menuPlugins.filter((p) => byId.has(p.effect));
+    if (!installed.length) return { kind: "item", label: "VST3", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} };
+    const { types, makers } = pluginMenuGroups(installed);
+    const list = (ps: MenuPlugin[]): ContextItem[] => ps.map((p) => ({ kind: "item", label: p.name, run: () => pick(p.effect) }));
+    return {
+      kind: "sub",
+      label: "VST3",
+      items: [...types.map(([t, ps]): ContextItem => ({ kind: "sub", label: t, items: list(ps) })), { kind: "sep" }, ...makers.map(([m, ps]): ContextItem => ({ kind: "sub", label: m, items: list(ps) }))],
+    };
   }
   function openSlotMenu(e: MouseEvent, s: EffectSlotDoc | undefined) {
     e.preventDefault();
@@ -294,7 +330,8 @@
     if (s) {
       const info = byId.get(s.effect);
       items.push(
-        { kind: "item", label: "Edit Effect", run: () => openWindow(s.id) },
+        { kind: "item", label: info?.plugin && info.hasWindow ? "Open Plug-in Window" : "Edit Effect", run: () => openSlot(s) },
+        ...(info?.plugin ? [{ kind: "item", label: "Show Controls", run: () => openWindow(s.id) } as ContextItem] : []),
         { kind: "item", label: "Remove Effect", run: () => commit(`Remove ${info?.name ?? "Effect"}`, removeSlot(chain, s.id)) },
         { kind: "sep" },
         {
@@ -604,33 +641,18 @@
             <span
               class="name"
               class:stopped={$stoppedPlugins.has(s.id)}
-              onclick={() => openWindow(s.id)}
+              onclick={() => openSlot(s)}
               title={$stoppedPlugins.get(s.id) ?? info?.description ?? (s.effect.startsWith("vst3:") ? "This plug-in is not installed (or not scanned yet): kept in the file, skipped on playback. See Effects > Plug-in Manager." : "Not a built-in effect: kept in the file, skipped on playback.")}
             >
               {info?.name ?? s.effect}
             </span>
             {#if info?.plugin}
-              <button type="button" class="mini" title="Open the plug-in's own window" aria-label="Open the plug-in's own window" onclick={() => openPluginWindow(s)}>◳</button>
+              <button type="button" class="mini" title="Show its controls as a list (and restart it if it stopped)" aria-label="Show its controls" onclick={() => openWindow(s.id)}>☰</button>
             {/if}
-            <button type="button" class="mini" title="Open its settings" aria-label="Open its settings" onclick={() => openWindow(s.id)}>⚙</button>
+            <button type="button" class="mini" title={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} aria-label={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} onclick={() => openSlot(s)}>⚙</button>
             <button type="button" class="mini" title="Remove" aria-label="Remove" onclick={() => commit(`Remove ${info?.name ?? "Effect"}`, removeSlot(chain, s.id))}>✕</button>
           {:else if i === chain.slots.length}
-            <select
-              class="add"
-              aria-label="Add an effect"
-              value=""
-              onchange={(e) => {
-                add(e.currentTarget.value);
-                e.currentTarget.value = "";
-              }}
-            >
-              <option value="" disabled>+ Add effect</option>
-              {#each categories as c (c)}
-                <optgroup label={c}>
-                  {#each catalog.filter((e) => e.category === c) as e (e.id)}<option value={e.id}>{e.name}</option>{/each}
-                </optgroup>
-              {/each}
-            </select>
+            <button type="button" class="add" aria-haspopup="menu" onclick={openAddMenu}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
           {:else}
             <span class="name blank"></span>
           {/if}
@@ -958,8 +980,11 @@
     cursor: grab;
   }
   .add {
+    display: flex;
     flex: 1;
+    justify-content: space-between;
     color: var(--text-dim);
+    text-align: left;
   }
   .mini {
     min-width: 20px;

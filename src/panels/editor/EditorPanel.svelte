@@ -1286,6 +1286,7 @@
       sub("Track", [
         act("Add Mono Audio Track", "multitrack.add.mono"),
         act("Add Stereo Audio Track", "multitrack.add.stereo"),
+        act("Add MIDI Track", "multitrack.add.midi"),
         act("Add Tracks...", "multitrack.add-tracks"),
         off("Add 5.1 Audio Track", "Surround tracks are not planned."),
         sep,
@@ -1408,6 +1409,7 @@
       { kind: "sep" },
       { kind: "item", label: "Add Mono Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.mono"); } },
       { kind: "item", label: "Add Stereo Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.stereo"); } },
+      { kind: "item", label: "Add MIDI Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.midi"); } },
       { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
       { kind: "sep" },
       ...routingItems(track),

@@ -638,3 +638,37 @@ export function sanitizePresets(raw: unknown): ChainPreset[] {
   }
   return out;
 }
+
+/** A plug-in as the Add effect menu needs it. */
+export interface MenuPlugin {
+  effect: string;
+  name: string;
+  vendor: string;
+  /** VST3 categories, for example "Fx|Reverb". */
+  kind: string;
+}
+
+/**
+ * Plug-ins grouped for the Add effect menu: by type (the first category
+ * after "Fx", "Other" when there is none) and by maker, each sorted by name.
+ */
+export function pluginMenuGroups(plugins: readonly MenuPlugin[]): { types: [string, MenuPlugin[]][]; makers: [string, MenuPlugin[]][] } {
+  const group = (key: (p: MenuPlugin) => string) => {
+    const m = new Map<string, MenuPlugin[]>();
+    for (const p of plugins) {
+      const k = key(p);
+      m.set(k, [...(m.get(k) ?? []), p]);
+    }
+    return [...m.entries()]
+      .sort(([a], [b]) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)))
+      .map(([k, list]): [string, MenuPlugin[]] => [k, [...list].sort((a, b) => a.name.localeCompare(b.name))]);
+  };
+  const type = (p: MenuPlugin) => {
+    const parts = p.kind
+      .split("|")
+      .map((s) => s.trim())
+      .filter((s) => s && s.toLowerCase() !== "fx");
+    return parts[0] ?? "Other";
+  };
+  return { types: group(type), makers: group((p) => p.vendor.trim() || "Other") };
+}
