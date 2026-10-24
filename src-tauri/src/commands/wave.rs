@@ -117,6 +117,7 @@ pub fn session_for(info: &codecs::AudioInfo) -> Result<Session, String> {
                     name: name.clone(),
                     stereo: info.channels > 1,
                     index: 0,
+                    midi: false,
                 },
             ],
         },

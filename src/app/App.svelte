@@ -110,6 +110,7 @@
   import { PluginSync } from "./plugin-sync";
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
+  import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
@@ -621,8 +622,9 @@
     const start = i >= 0 ? i + 1 : doc.tracks.length;
     const names = newTrackNames(doc.tracks.map((t) => t.name), v.count, v.base);
     const ids = names.map(() => uuid());
-    const ops: Op[] = names.map((name, k) => ({ op: "add_track", id: ids[k]!, name, stereo: v.stereo, index: start + k }));
-    await session.edit(v.count === 1 ? "Add Track" : `Add ${v.count} Tracks`, { op: "batch", ops }, sessionHistory);
+    const ops: Op[] = names.map((name, k) => ({ op: "add_track", id: ids[k]!, name, stereo: v.stereo, index: start + k, ...(v.midi ? { midi: true } : {}) }));
+    const what = v.midi ? "MIDI Track" : "Track";
+    await session.edit(v.count === 1 ? `Add ${what}` : `Add ${v.count} ${what}s`, { op: "batch", ops }, sessionHistory);
     editor.selectTrack(ids[0]!);
   }
 
@@ -636,6 +638,23 @@
     return session
       .edit(stereo ? "Add Stereo Track" : "Add Mono Track", { op: "add_track", id, name: nextTrackName(doc.tracks), stereo, index }, sessionHistory)
       .then(() => editor.selectTrack(id));
+  }
+
+  /** Multitrack > Add > MIDI Track: after the selected track, ready for an instrument. */
+  async function addMidiTrack() {
+    const doc = session.current;
+    if (!doc) return;
+    const sel = editor.current().selectedTrack;
+    const i = doc.tracks.findIndex((t) => t.id === sel);
+    const id = uuid();
+    const [name] = newTrackNames(
+      doc.tracks.map((t) => t.name),
+      1,
+      "MIDI",
+    );
+    await session.edit("Add MIDI Track", { op: "add_track", id, name: name!, stereo: true, index: i >= 0 ? i + 1 : doc.tracks.length, midi: true }, sessionHistory);
+    editor.selectTrack(id);
+    showNotice("Added a MIDI track. Pick its instrument in the track header, then double-click the lane to make a clip.");
   }
 
   /** Multitrack > Add > Bus Track: a bus at the end of the Mixer, shown there. */
@@ -1645,14 +1664,20 @@
     multitrack: {
       deleteLabel: "Delete Clips",
       selected: () => editor.current().selectedClips.size,
-      total: () => (session.current?.tracks ?? []).reduce((n, t) => n + t.clips.length, 0),
+      total: () => (session.current?.tracks ?? []).reduce((n, t) => n + t.clips.length + (t.midi_clips?.length ?? 0), 0),
       remove: async () => {
+        const doc = session.current;
         const ids = [...editor.current().selectedClips];
-        if (!ids.length) return;
-        await session.edit(ids.length === 1 ? "Delete Clip" : `Delete ${ids.length} Clips`, { op: "remove_clips", ids }, sessionHistory);
+        if (!ids.length || !doc) return;
+        const ops = deleteClipsOps(doc, new Set(ids));
+        if (!ops.length) return;
+        await session.edit(ids.length === 1 ? "Delete Clip" : `Delete ${ids.length} Clips`, ops.length === 1 ? ops[0]! : { op: "batch", ops }, sessionHistory);
         editor.selectClips([]);
       },
-      selectAll: () => editor.selectClips((session.current?.tracks ?? []).flatMap((t) => t.clips.map((c) => c.id))),
+      selectAll: () => {
+        const doc = session.current;
+        if (doc) editor.selectClips([...doc.tracks.flatMap((t) => t.clips.map((c) => c.id)), ...allMidiClipIds(doc)]);
+      },
       deselect: () => {
         editor.selectClips([]);
         const v = session.current?.view;
@@ -3081,6 +3106,7 @@
         enabled: () => session.current !== null,
       }),
       actions.register({ id: "multitrack.add.stereo", run: () => addTrack(true) }),
+      actions.register({ id: "multitrack.add.midi", run: () => addMidiTrack(), enabled: () => session.current !== null }),
       actions.register({ id: "multitrack.add.bus", run: () => addBus(true), enabled: () => session.current !== null }),
       actions.register({ id: "multitrack.add.bus-mono", run: () => addBus(false), enabled: () => session.current !== null }),
       actions.register({

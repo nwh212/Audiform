@@ -118,6 +118,7 @@ pub fn track() -> Track {
     Track {
         id: id(200),
         name: "Host".into(),
+        kind: Default::default(),
         role: TrackRole::Standard,
         host_profile_id: Some("host".into()),
         channels: ChannelLayout::Mono,
@@ -145,6 +146,8 @@ pub fn track() -> Track {
         }],
         effects: effect_chain(),
         clips: vec![clip()],
+        instrument: None,
+        midi_clips: Vec::new(),
         envelopes: vec![envelope()],
     }
 }
@@ -196,6 +199,7 @@ pub fn session() -> Session {
         bit_depth: 32,
         created: date(),
         modified: date(),
+        tempo: Default::default(),
         media: vec![MediaRef {
             id: id(100),
             path: "C:/GCRN/Show/412/host.wav".into(),

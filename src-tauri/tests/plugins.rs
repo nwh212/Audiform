@@ -4,7 +4,8 @@
 
 //! VST3 plug-ins end to end: scan a real bundle with the editor's own
 //! executable as the host, mix through it in a Voice Chain, keep its
-//! settings, and carry on when it crashes.
+//! settings, and carry on when it crashes. Then a MIDI track playing
+//! the test instrument.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -13,11 +14,12 @@ use std::sync::atomic::AtomicBool;
 use altered_audio_editor_lib::export::mixdown::{render_mix, MixdownRequest};
 use altered_audio_editor_lib::plugins::{self, instance};
 use altered_audio_editor_lib::session::model::{
-    new_id, ChannelLayout, EffectSlot, MediaRef, Session, Track,
+    new_id, ChannelLayout, EffectSlot, MediaRef, MidiClip, Note, Session, Track,
 };
 use altered_audio_editor_lib::session::ops::{apply, ClipSpec, Op};
 
 const EFFECT: &str = "vst3:41A17E2D7E5700018A1B2C3D4E5F6071";
+const SYNTH: &str = "vst3:41A17E2D7E5700038A1B2C3D4E5F6073";
 
 /// Builds the test plug-in and puts it in a bundle inside `dir`.
 fn bundle(dir: &Path) -> PathBuf {
@@ -113,9 +115,13 @@ fn session(dir: &Path, fx: EffectSlot) -> Session {
 }
 
 fn mix(s: &Session) -> Vec<f32> {
+    mix_range(s, 0, 12_000)
+}
+
+fn mix_range(s: &Session, from: u64, to: u64) -> Vec<f32> {
     let mut out = Vec::new();
     let req = MixdownRequest {
-        range: Some((0, 12_000)),
+        range: Some((from, to)),
         ..MixdownRequest::default()
     };
     render_mix(
@@ -160,7 +166,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let report = plugins::scan(true, |_, _, _| {});
     assert_eq!(
         (report.found, report.failed),
-        (1, 0),
+        (2, 0),
         "{:?}",
         plugins::snapshot().failed
     );
@@ -169,6 +175,15 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         altered_audio_editor_lib::dsp::effects::info(EFFECT).expect("a plug-in is an effect");
     assert_eq!(info.name, "Altered Test Gain");
     assert_eq!(info.params[0].key, "p0");
+    // The synth is an instrument: offered to MIDI tracks, not Voice Chains.
+    assert_eq!(
+        plugins::instruments()
+            .iter()
+            .map(|i| i.name)
+            .collect::<Vec<_>>(),
+        ["Altered Test Synth"]
+    );
+    assert!(plugins::catalog().iter().all(|i| i.id != SYNTH));
     // A rescan skips the unchanged bundle.
     assert_eq!(plugins::scan(false, |_, _, _| {}).scanned, 0);
 
@@ -206,6 +221,79 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let mut missing = slot(&[]);
     missing.effect = "vst3:00000000000000000000000000000000".into();
     assert_eq!(peak(&mix(&session(dir.path(), missing))), (6_000, 1.0));
+
+    // A MIDI track: at 120 BPM a beat is 24,000 samples. The clip starts
+    // at beat 0.25 (6,000) and holds one note for an eighth of a beat
+    // (3,000). Full velocity plays 0.5; the track's chain (the gain
+    // plug-in at half, with its look-ahead) brings it to 0.25, in time.
+    let mut s = Session::new("m", 48_000);
+    s.bit_depth = 32;
+    let tid = new_id();
+    apply(
+        &mut s,
+        &Op::AddTrack {
+            id: tid,
+            name: "Keys".into(),
+            stereo: true,
+            index: 0,
+            midi: true,
+        },
+    )
+    .unwrap();
+    let mut synth = slot(&[]);
+    synth.effect = SYNTH.into();
+    s.tracks[0].instrument = Some(synth);
+    s.tracks[0].effects.slots.push(slot(&[("p0", 0.5)]));
+    apply(
+        &mut s,
+        &Op::SetMidiClips {
+            track_id: tid,
+            clips: vec![MidiClip {
+                id: new_id(),
+                name: "c".into(),
+                start: 0.25,
+                length: 1.0,
+                muted: false,
+                color: None,
+                notes: vec![Note {
+                    pitch: 60,
+                    velocity: 127,
+                    start: 0.0,
+                    length: 0.125,
+                }],
+            }],
+        },
+    )
+    .unwrap();
+    let y = mix(&s);
+    let at = |i: usize| (y[i * 2] * 1_000.0).round() / 1_000.0;
+    assert_eq!(
+        (at(5_999), at(6_000), at(8_999), at(9_000)),
+        (0.0, 0.25, 0.25, 0.0)
+    );
+    // Starting in the middle of the note plays it from there.
+    let y = mix_range(&s, 7_000, 8_000);
+    assert_eq!((y[0] * 1_000.0).round() / 1_000.0, 0.25);
+    // The session runs to the clip's end.
+    assert_eq!(
+        altered_audio_editor_lib::export::mixdown::session_end(&s),
+        30_000
+    );
+    // A slower tempo moves the note: at 60 BPM it starts at 12,000.
+    apply(
+        &mut s,
+        &Op::SetTempo {
+            bpm: 60.0,
+            beats_per_bar: 4,
+        },
+    )
+    .unwrap();
+    let y = mix_range(&s, 0, 20_000);
+    let at = |i: usize| (y[i * 2] * 1_000.0).round() / 1_000.0;
+    assert_eq!((at(11_999), at(12_000)), (0.0, 0.25));
+    // No instrument: silent, nothing breaks.
+    s.tracks[0].instrument = None;
+    assert!(mix_range(&s, 0, 20_000).iter().all(|v| *v == 0.0));
 
     // Removing the folder forgets the plug-in at the next scan.
     plugins::set_folder(&folder, false);

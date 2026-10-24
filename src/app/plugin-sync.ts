@@ -6,13 +6,24 @@
  * Keeps the session in step with running VST3 plug-ins. What the user
  * sets in a plug-in's own window lives in its host process; this brings
  * it back into the slot (controls as `p<id>` values, everything else as
- * `plugin_state`) as undoable "Plug-in Settings" edits, so it is saved
+ * `plugin_state`) as undoable "Plug-in Settings" edits (Voice Chain
+ * slots and MIDI tracks' instruments alike), so it is saved
  * with the session and heard in exports. It also passes on plug-ins that
  * stopped, and restarts playback when a plug-in's look-ahead changes.
  */
 
 import type { PluginEvents } from "./core";
 import type { EffectChainDoc, EffectSlotDoc, EffectTarget, Op, SessionDoc } from "../stores/session";
+
+/** Every MIDI track's instrument, with its track. */
+export function instrumentSlots(doc: SessionDoc): { trackId: string; slot: EffectSlotDoc }[] {
+  return doc.tracks.flatMap((t) => (t.instrument ? [{ trackId: t.id, slot: t.instrument }] : []));
+}
+
+/** Every plug-in slot: chain slots and instruments. */
+export function pluginSlots(doc: SessionDoc): EffectSlotDoc[] {
+  return [...allSlots(doc).map((x) => x.slot), ...instrumentSlots(doc).map((x) => x.slot)].filter(isPluginSlot);
+}
 
 /** Every chain slot in the session, with whose chain it is. */
 export function allSlots(doc: SessionDoc): { target: EffectTarget; chain: EffectChainDoc; slot: EffectSlotDoc }[] {
@@ -40,7 +51,14 @@ export function syncOps(doc: SessionDoc, events: PluginEvents[], states: Readonl
   const byTarget = new Map<string, { target: EffectTarget; chain: EffectChainDoc }>();
   const keyOf = (t: EffectTarget) => ("id" in t ? `${t.kind}:${t.id}` : t.kind);
   const slots = allSlots(doc);
+  const instruments = instrumentSlots(doc);
+  const changedInstruments = new Map<string, EffectSlotDoc>();
   const touch = (slotId: string, change: (s: EffectSlotDoc) => EffectSlotDoc) => {
+    const inst = instruments.find((x) => x.slot.id === slotId);
+    if (inst) {
+      changedInstruments.set(inst.trackId, change(changedInstruments.get(inst.trackId) ?? inst.slot));
+      return;
+    }
     const found = slots.find((x) => x.slot.id === slotId);
     if (!found) return;
     const k = keyOf(found.target);
@@ -65,6 +83,11 @@ export function syncOps(doc: SessionDoc, events: PluginEvents[], states: Readonl
     const before = slots.find((x) => keyOf(x.target) === keyOf(target))?.chain;
     if (before && JSON.stringify(before) === JSON.stringify(chain)) continue;
     ops.push({ op: "set_effects", target, chain });
+  }
+  for (const [trackId, slot] of changedInstruments) {
+    const before = instruments.find((x) => x.trackId === trackId)?.slot;
+    if (before && JSON.stringify(before) === JSON.stringify(slot)) continue;
+    ops.push({ op: "set_track", id: trackId, changes: { instrument: slot } });
   }
   return ops;
 }
@@ -100,7 +123,7 @@ export class PluginSync {
   /** One round: events in, settings fetched where they changed, edits out. */
   async tick(): Promise<void> {
     const doc = this.deps.doc();
-    if (this.busy || !doc || !allSlots(doc).some((x) => isPluginSlot(x.slot))) return;
+    if (this.busy || !doc || pluginSlots(doc).length === 0) return;
     this.busy = true;
     try {
       const events = await this.deps.events();
@@ -112,7 +135,7 @@ export class PluginSync {
           if (s) states.set(e.slotId, s);
         }
         if (e.stopped) {
-          const slot = allSlots(doc).find((x) => x.slot.id === e.slotId)?.slot;
+          const slot = pluginSlots(doc).find((s) => s.id === e.slotId);
           if (slot) this.deps.onStopped(slot, e.stopped);
         }
       }
@@ -131,8 +154,7 @@ export class PluginSync {
     const doc = this.deps.doc();
     if (!doc) return;
     const states = new Map<string, string>();
-    for (const { slot } of allSlots(doc)) {
-      if (!isPluginSlot(slot)) continue;
+    for (const slot of pluginSlots(doc)) {
       const s = await this.deps.state(slot.id).catch(() => null);
       if (s && s !== slot.plugin_state) states.set(slot.id, s);
     }

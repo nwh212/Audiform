@@ -83,7 +83,7 @@ pub enum MixdownError {
     Write(String),
 }
 
-/// Session samples where the last clip ends.
+/// Session samples where the last clip (audio or MIDI) ends.
 pub fn session_end(session: &Session) -> u64 {
     plan::build(session, session.sample_rate)
         .tracks
@@ -91,6 +91,7 @@ pub fn session_end(session: &Session) -> u64 {
         .flat_map(|t| t.clips.iter().map(|c| c.start + c.len))
         .max()
         .unwrap_or(0)
+        .max(plan::midi_end(session))
 }
 
 /// What a render pass produced.
@@ -139,6 +140,7 @@ fn render_mix_inner(
         let keep: HashSet<Id> = ids.iter().copied().collect();
         for t in &mut s.tracks {
             t.clips.retain(|c| keep.contains(&c.id));
+            t.midi_clips.retain(|c| keep.contains(&c.id));
         }
     }
     if req.dry {
@@ -163,7 +165,11 @@ fn render_mix_inner(
         None if req.track.is_some() => (0, full_end),
         None => (0, session_end(&s)),
     };
-    if end <= start || s.tracks.iter().all(|t| t.clips.is_empty()) {
+    if end <= start
+        || s.tracks
+            .iter()
+            .all(|t| t.clips.is_empty() && t.midi_clips.is_empty())
+    {
         return Err(MixdownError::Empty);
     }
     let total = end - start;

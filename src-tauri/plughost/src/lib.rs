@@ -110,16 +110,17 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
     let mut audio: Option<Audio> = None;
     let mut buf = Vec::new();
     let mut changes = Vec::new();
+    let mut notes = Vec::new();
     let mut samples = Vec::new();
     let mut reply = Vec::new();
     loop {
         match read_frame(&mut stdin, &mut buf) {
             Ok(Some(AUDIO)) => {
-                if protocol::decode_audio(&buf, &mut changes, &mut samples).is_none() {
+                if protocol::decode_audio(&buf, &mut changes, &mut notes, &mut samples).is_none() {
                     break;
                 }
                 if let Some(a) = audio.as_mut() {
-                    a.process(&changes, &mut samples);
+                    a.process(&changes, &notes, &mut samples);
                 }
                 if !changes.is_empty() {
                     let _ = tx.send(ToMain::Changes(changes.clone()));
@@ -156,6 +157,12 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                         if tx.send(ToMain::Request(Request::GetState)).is_err() {
                             break;
                         }
+                    }
+                    Request::Tempo { bpm, beats_per_bar } => {
+                        if let Some(a) = audio.as_mut() {
+                            a.set_tempo(bpm, beats_per_bar as i32);
+                        }
+                        send(&out, &Message::Ok);
                     }
                     Request::Reset => {
                         if let Some(a) = audio.as_mut() {
@@ -251,6 +258,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                                 latency: p.latency,
                                 params: p.params.clone(),
                                 has_editor: p.controller.is_some(),
+                                instrument: p.instrument,
                             },
                         );
                         to_audio = Some(a.from_editor.clone());
@@ -327,11 +335,8 @@ pub fn scan(bundle: &Path) -> i32 {
                 if c.category != module::AUDIO_CLASS {
                     continue;
                 }
-                // Instruments need notes, which a Voice Chain does not send.
                 let subs = c.sub_categories.to_ascii_lowercase();
-                if subs.contains("instrument") && !subs.contains("fx") {
-                    continue;
-                }
+                let named = subs.contains("instrument") && !subs.contains("fx");
                 let cid = module::cid_hex(&c.cid);
                 match Plugin::load(bundle, &cid, 48_000.0, None) {
                     Ok((p, a)) => {
@@ -345,6 +350,7 @@ pub fn scan(bundle: &Path) -> i32 {
                             params: p.params.clone(),
                             latency: p.latency,
                             has_editor: p.controller.is_some(),
+                            instrument: named || p.instrument,
                         });
                     }
                     Err(e) => errors.push(format!("{}: {e}", c.name)),

@@ -894,7 +894,7 @@ export interface EffectInfo {
 /** The Plug-in Manager's list. */
 export interface PluginRegistry {
   folders: { path: string; standard: boolean; on: boolean }[];
-  plugins: { effect: string; name: string; vendor: string; version: string; kind: string; bundle: string; latency: number; hasWindow: boolean; controls: number }[];
+  plugins: { effect: string; name: string; vendor: string; version: string; kind: string; bundle: string; latency: number; hasWindow: boolean; instrument: boolean; controls: number }[];
   failed: { bundle: string; error: string }[];
 }
 

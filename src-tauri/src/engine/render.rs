@@ -17,14 +17,21 @@
 //! so it picks up exactly where the old one was. That works while the
 //! look-ahead stays the same; a change in look-ahead moves where the
 //! input is read from, so the transport restarts instead.
+//!
+//! MIDI tracks play their notes through their instrument here, and what
+//! it plays is the track's sound. Notes go to the instrument as early as
+//! its look-ahead, so its sound lines up with the other tracks. Starting
+//! (or jumping) in the middle of a note plays that note from there.
 
 use std::collections::HashMap;
 
 use super::fx::{swap_fx, Fx};
-use super::plan::{ClipPlan, ParamLane, Plan, TrackPlan};
+use super::plan::{ClipPlan, MidiPlan, ParamLane, Plan, TrackPlan};
 use crate::codecs::AudioReader;
 use crate::dsp::stretch::Stretcher;
+use crate::plugins::instance::Instrument;
 use crate::session::model::{EffectChain, Id};
+use altered_plughost::protocol::NoteEvent;
 
 impl Fx {
     /// Runs the chain over `buf`, whose first frame is `at` frames into
@@ -256,6 +263,8 @@ pub struct Renderer {
     /// Next output frame to render.
     pos: u64,
     active: Vec<HashMap<Id, Active>>,
+    /// MIDI tracks' instruments, started on their first block.
+    playing: Vec<Option<Playing>>,
     /// On reaching frame `.0`, continue from frame `.1`: back to the
     /// start for Loop Playback, past the selection for Skip Selection.
     jump: Option<(u64, u64)>,
@@ -270,6 +279,7 @@ impl Renderer {
             plan,
             pos: start_frame,
             active: (0..n).map(|_| HashMap::new()).collect(),
+            playing: (0..n).map(|_| None).collect(),
             jump: None,
             rendered: 0,
         }
@@ -341,6 +351,11 @@ impl Renderer {
             buf.clear();
             buf.resize(frames * 2, 0.0);
             render_track(track, &mut self.active[t], rate, start, end, buf);
+            if let Some(midi) = &track.midi {
+                self.playing[t]
+                    .get_or_insert_with(|| Playing::open(midi, start, rate))
+                    .play(midi, buf);
+            }
         }
         self.pos = end;
         self.rendered += frames as u64;
@@ -351,12 +366,92 @@ impl Renderer {
                 for a in &mut self.active {
                     a.clear();
                 }
+                // Instruments let go and pick up the notes at the new spot.
+                for p in &mut self.playing {
+                    *p = None;
+                }
                 if to > at {
                     // Skips happen once.
                     self.jump = None;
                 }
             }
         }
+    }
+}
+
+/// A MIDI track's instrument, playing.
+struct Playing {
+    inst: Instrument,
+    /// The output frame whose notes go to the instrument next: ahead of
+    /// what is heard by the instrument's look-ahead.
+    at: u64,
+    /// Notes already sounding at the start, played at once.
+    chase: Vec<NoteEvent>,
+    events: Vec<NoteEvent>,
+}
+
+impl Playing {
+    /// Starts the instrument for playback from output frame `start`,
+    /// primed so its first sound heard is the sound at `start`.
+    fn open(midi: &MidiPlan, start: u64, rate: u32) -> Playing {
+        let inst = Instrument::start(&midi.instrument, rate, midi.tempo);
+        let chase = midi
+            .notes
+            .iter()
+            .filter(|n| n.on < start && n.off > start)
+            .map(|n| NoteEvent {
+                offset: 0,
+                on: true,
+                pitch: n.pitch,
+                velocity: n.velocity,
+            })
+            .collect();
+        let mut p = Playing {
+            at: start,
+            inst,
+            chase,
+            events: Vec::new(),
+        };
+        let mut left = p.inst.latency;
+        let mut sink = Vec::new();
+        while left > 0 {
+            let n = left.min(4_096);
+            sink.clear();
+            sink.resize(n * 2, 0.0);
+            p.play(midi, &mut sink);
+            left -= n;
+        }
+        p
+    }
+
+    /// Plays the next block into `buf` (stereo, the block's size).
+    fn play(&mut self, midi: &MidiPlan, buf: &mut [f32]) {
+        let n = (buf.len() / 2) as u64;
+        let (from, to) = (self.at, self.at + n);
+        self.events.clear();
+        self.events.append(&mut self.chase);
+        let first = midi.offs.partition_point(|o| o.0 < from);
+        for &(f, pitch) in midi.offs[first..].iter().take_while(|o| o.0 < to) {
+            self.events.push(NoteEvent {
+                offset: (f - from) as u32,
+                on: false,
+                pitch,
+                velocity: 0.0,
+            });
+        }
+        let first = midi.notes.partition_point(|x| x.on < from);
+        for x in midi.notes[first..].iter().take_while(|x| x.on < to) {
+            self.events.push(NoteEvent {
+                offset: (x.on - from) as u32,
+                on: true,
+                pitch: x.pitch,
+                velocity: x.velocity,
+            });
+        }
+        // In time order; at the same frame a note ends before the next starts.
+        self.events.sort_by_key(|e| (e.offset, e.on));
+        self.inst.play(&self.events, buf);
+        self.at = to;
     }
 }
 
@@ -431,6 +526,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![ClipPlan::plain(
                     new_id(),
@@ -491,6 +587,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![ClipPlan::plain(
                     new_id(),
@@ -537,6 +634,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![clip],
             }],
@@ -571,6 +669,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![ClipPlan::plain(
                     new_id(),
@@ -611,6 +710,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![clip],
             }],
@@ -666,6 +766,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![clip],
             }],
@@ -703,6 +804,7 @@ mod tests {
             out_rate: 48_000,
             session_rate: 48_000,
             tracks: vec![TrackPlan {
+                midi: None,
                 id: new_id(),
                 clips: vec![c],
             }],

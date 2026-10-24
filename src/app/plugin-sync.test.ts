@@ -28,6 +28,12 @@ describe("plug-in sync", () => {
     expect(b!.chain.slots[0]!.plugin_state).toBe("STATE");
   });
 
+  it("keeps a MIDI track's instrument settings with the track", () => {
+    const d = { ...doc, tracks: [...doc.tracks, { id: "k", kind: "midi", clips: [], effects: chain([]), instrument: plug("i1") }] } as unknown as SessionDoc;
+    const ops = syncOps(d, [ev("i1", { edits: [["p0", 0.5]] })], new Map([["i1", "SYNTH"]]));
+    expect(ops).toEqual([{ op: "set_track", id: "k", changes: { instrument: { ...plug("i1"), params: { p0: 0.5 }, plugin_state: "SYNTH" } } }]);
+  });
+
   it("makes no edit when nothing changed", () => {
     expect(syncOps(doc, [ev("s1", { edits: [["p0", 1]] })], new Map())).toEqual([]);
     expect(syncOps(doc, [ev("gone", { edits: [["p0", 0]] })], new Map())).toEqual([]);

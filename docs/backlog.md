@@ -114,7 +114,7 @@ Collected from the project's Discord group. Each entry says what we will build, 
 - Per-channel input and output routing so each track can take its own channel from a multi-microphone interface, plus loopback channels for system audio.
 - **Phase:** P4 recording. Needs real hardware to test. Latency compensation and punch-in already sit in that phase.
 
-### 5. MIDI and virtual instruments (not started)
+### 5. MIDI and virtual instruments (tracks, piano roll and VST3 instruments proposed 2026-10-24; controllers not started)
 
 - A MIDI track type with clips, playback and a piano roll, virtual instruments on those tracks (depends on plugin hosting), and external controller mapping to transport, faders, pan and trigger pads.
 - **Phase:** its own phase after Podcast mode, as already planned. The soundboard-trigger use (pads that fire clips) is small and could ship earlier without the piano roll.
@@ -334,7 +334,7 @@ Checked against the code. "Built" means it is in the repo and tested in the sand
 | Time stretch and varispeed | Built: Clip > Time Stretch, Alt+drag on a clip edge, pitch kept (WSOLA) or tape-style, about 25 percent either way, exact-length stretch in the Waveform editor (0.1.6). | Formant keeping, a higher quality engine (Rubber Band is GPL, needs a note in `ATTRIBUTION.md`, decide by listening tests on speech). |
 | Plugin hosting (VST3) | Built (proposed 2026-10-24, see decisions.md). | Separate host process per plug-in (pipes, not shared memory), Plug-in Manager with user folders, plug-in windows on Windows, settings saved in the session. Still open: windows on Linux and macOS, macOS bundles, live input monitoring through plug-ins, plug-in sidechain inputs. VST2 stays out. |
 | ASIO and channel routing | ASIO built (Cargo feature, on in release builds, falls back to the normal driver). Per-channel input picking built. | Hardware testing. Buffer size, sample rate and latency controls. Output routing and a routing matrix. Loopback channels. |
-| MIDI and instruments | Not started. | See the MIDI plan below. |
+| MIDI and instruments | MIDI tracks, MIDI clips, a piano roll, session tempo and VST3 instruments built (proposed 2026-10-24, see decisions.md). | Free (non-snapping) stretch of MIDI clips when clip stretching reaches them (tester request: MIDI clips should get a free stretch, not only one that snaps), hearing notes while drawing them, recording from a MIDI keyboard, `.mid` import and export, tempo changes along the timeline, moving MIDI clips between tracks with Alt+Up and Alt+Down, copy and paste of MIDI clips, quantize, controllers and sustain pedal, and the controller mapping in the MIDI plan below. |
 | Markers, Playlist, chapters | Built: point, range, chapter, cue, ad slot and social clip markers with colors and notes, Playlist panel, chapter export (files and embedded), Waveform editor cue points. | Clip markers that move with their clip (check), marker keyboard navigation (needs shortcut approval). |
 | Video and ADR | Not started. | See the video plan below. |
 | Podcast tools | One-click loudness built (Loudness Match, targets by region and custom). Silence and breath handling built non-destructively (QuickPass Turn Down, Breath Gate). Phase Align and Phase Rotate built. | Auto-ducking. Multi-mic alignment and bleed reduction. A smarter breath detector. |

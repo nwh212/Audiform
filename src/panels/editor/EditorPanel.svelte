@@ -19,7 +19,12 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
-  import { clipLength, stretchOf, type BusDoc, type ClipChange, type ClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import { BPM_MAX, BPM_MIN, clipLength, isMidi, midiEnd, stretchOf, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import MidiLane from "./MidiLane.svelte";
+  import PianoRollDialog from "./PianoRollDialog.svelte";
+  import { duplicateClips, replaceClip } from "./midi";
+  import { pluginOpenWindow, pluginsRegistry } from "../../app/core";
+  import { pluginsVersion } from "../../stores/plugins";
   import { stretchTo } from "./stretch";
   import { clipsAt, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
@@ -153,6 +158,101 @@
   let ruler = $state<HTMLCanvasElement | null>(null);
   let dropping = $state(false);
   let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
+
+  // MIDI tracks: the instruments to pick from, the piano roll, the tempo.
+  let instruments = $state<{ effect: string; name: string; vendor: string; hasWindow: boolean }[]>([]);
+  $effect(() =>
+    pluginsVersion.subscribe(() => {
+      void pluginsRegistry()
+        .then((r) => (instruments = r.plugins.filter((p) => p.instrument)))
+        .catch(() => (instruments = []));
+    }),
+  );
+  let pianoRoll = $state<{ trackId: string; clipId: string } | null>(null);
+  const tempo = $derived(doc ? tempoOf(doc) : { bpm: 120, beats_per_bar: 4 });
+
+  function setMidiClips(track: TrackDoc, clips: MidiClipDoc[], label: string) {
+    void session.edit(label, { op: "set_midi_clips", track_id: track.id, clips }, runner).catch(onError);
+  }
+
+  function setInstrument(track: TrackDoc, effect: string) {
+    if (!effect) {
+      setTrack(track, { clear_instrument: true }, "Remove Instrument");
+      return;
+    }
+    const slot = { id: crypto.randomUUID(), effect, enabled: true, params: {}, preset: null };
+    setTrack(track, { instrument: slot }, "Set Instrument");
+  }
+
+  function openInstrument(track: TrackDoc) {
+    if (!track.instrument) return;
+    const name = instruments.find((i) => i.effect === track.instrument!.effect)?.name ?? "Instrument";
+    void pluginOpenWindow(track.instrument, `${name}: ${track.name}`).catch(onError);
+  }
+
+  function setTempo(bpm: number, beatsPerBar: number) {
+    const b = Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(bpm * 100) / 100));
+    const n = Math.min(32, Math.max(1, Math.round(beatsPerBar)));
+    if (!Number.isFinite(b) || (b === tempo.bpm && n === tempo.beats_per_bar)) return;
+    void session.edit("Tempo", { op: "set_tempo", bpm: b, beats_per_bar: n }, runner).catch(onError);
+  }
+
+  function midiClipItems(track: TrackDoc, clip: MidiClipDoc | null, beat: number): ContextItem[] {
+    const clips = track.midi_clips ?? [];
+    if (!clip) {
+      return [
+        {
+          kind: "item",
+          label: "New MIDI Clip Here",
+          run: () => {
+            const id = crypto.randomUUID();
+            const start = Math.floor(beat / tempo.beats_per_bar) * tempo.beats_per_bar;
+            setMidiClips(track, [...clips, { id, name: "MIDI", start, length: tempo.beats_per_bar, notes: [] }].sort((a, b) => a.start - b.start), "New MIDI Clip");
+            editor.selectClips([id], track.id);
+          },
+        },
+      ];
+    }
+    const ids = new Set(clips.filter((c) => ed.selectedClips.has(c.id)).map((c) => c.id));
+    if (!ids.size) ids.add(clip.id);
+    const many = ids.size > 1;
+    return [
+      { kind: "item", label: "Edit Notes...", run: () => (pianoRoll = { trackId: track.id, clipId: clip.id }) },
+      { kind: "sep" },
+      {
+        kind: "item",
+        label: many ? `Duplicate ${ids.size} Clips` : "Duplicate Clip",
+        run: () => {
+          const d = duplicateClips(clips, ids, () => crypto.randomUUID());
+          setMidiClips(track, d.clips, many ? "Duplicate Clips" : "Duplicate Clip");
+          editor.selectClips(d.added, track.id);
+        },
+      },
+      {
+        kind: "item",
+        label: clip.muted ? "Unmute Clip" : "Mute Clip",
+        run: () => setMidiClips(track, clips.map((c) => (ids.has(c.id) ? { ...c, muted: !clip.muted } : c)), clip.muted ? "Unmute Clip" : "Mute Clip"),
+      },
+      {
+        kind: "item",
+        label: "Rename Clip...",
+        run: () =>
+          void prompt("Rename Clip", "Name", clip.name).then((name) => {
+            if (name && name.trim() && name.trim() !== clip.name) setMidiClips(track, replaceClip(clips, { ...clip, name: name.trim() }), "Rename Clip");
+          }),
+      },
+      { kind: "sep" },
+      {
+        kind: "item",
+        label: many ? `Delete ${ids.size} Clips` : "Delete Clip",
+        shortcut: shortcutFor("edit.delete"),
+        run: () => {
+          setMidiClips(track, clips.filter((c) => !ids.has(c.id)), many ? "Delete Clips" : "Delete Clip");
+          editor.selectClips([], track.id);
+        },
+      },
+    ];
+  }
   let renaming = $state<string | null>(null);
   let dragTrack = $state<{ id: string; overIndex: number; y: number } | null>(null);
   /** The track or bus whose color is being picked. */
@@ -180,7 +280,7 @@
   const mediaMap = $derived(new Map((doc?.media ?? []).map((m) => [m.id, m])));
   const contentEnd = $derived.by(() => {
     if (!doc) return 0;
-    let end = 0;
+    let end = midiEnd(doc, rate);
     for (const t of doc.tracks)
       for (const c of t.clips) end = Math.max(end, c.start + clipLength(c, mediaMap.get(c.media_id), rate));
     return end;
@@ -1567,8 +1667,30 @@
   <div class="toolbar">
     <button type="button" class="tool text" title={tip("Add Mono Track", "multitrack.add.mono")} onclick={() => run("multitrack.add.mono")}>+ Mono</button>
     <button type="button" class="tool text" title={tip("Add Stereo Track", "multitrack.add.stereo")} onclick={() => run("multitrack.add.stereo")}>+ Stereo</button>
+    <button type="button" class="tool text" title={tip("Add MIDI Track", "multitrack.add.midi")} onclick={() => run("multitrack.add.midi")}>+ MIDI</button>
     <button type="button" class="tool text" title={tip("Add Bus Track", "multitrack.add.bus")} onclick={() => run("multitrack.add.bus")}>+ Bus</button>
     <span class="spacer"></span>
+    {#if doc}
+      <label class="tempo" title="Session tempo. MIDI clips and notes follow it.">
+        <input
+          type="number"
+          min={BPM_MIN}
+          max={BPM_MAX}
+          step="1"
+          aria-label="Tempo in beats per minute"
+          value={tempo.bpm}
+          onchange={(e) => setTempo(Number(e.currentTarget.value), tempo.beats_per_bar)}
+          onkeydown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+        />
+        <span>BPM</span>
+        <select aria-label="Beats per bar" title="Beats per bar" value={tempo.beats_per_bar} onchange={(e) => setTempo(tempo.bpm, Number(e.currentTarget.value))}>
+          {#each [2, 3, 4, 5, 6, 7, 9, 12] as n (n)}<option value={n}>{n}/4</option>{/each}
+        </select>
+      </label>
+    {/if}
     {#if doc}<span class="rate" title="Session sample rate">{(rate / 1000).toLocaleString("en-US")} kHz</span>{/if}
   </div>
 
@@ -1739,6 +1861,7 @@
               {/if}
               <button type="button" class="ms" class:on={track.muted} title="Mute" aria-pressed={track.muted} onclick={() => setTrack(track, { muted: !track.muted }, track.muted ? "Unmute Track" : "Mute Track")}>M</button>
               <button type="button" class="ms solo" class:on={track.solo} title="Solo" aria-pressed={track.solo} onclick={() => setTrack(track, { solo: !track.solo }, track.solo ? "Unsolo Track" : "Solo Track")}>S</button>
+              {#if !isMidi(track)}
               <button type="button" class="ms rec" class:on={track.record_armed} title="Arm for recording: Record records this track's input" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
               <button
                 type="button"
@@ -1750,6 +1873,7 @@
               >
                 <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
               </button>
+              {/if}
               <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}>MO</button>
             </div>
             {#if !track.collapsed && headerView === "sends" && doc}
@@ -1783,7 +1907,23 @@
               </button>
             </div>
             {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 76}
+            {#if !track.collapsed && isMidi(track)}
+              {@const inst = track.instrument ? instruments.find((x) => x.effect === track.instrument!.effect) : null}
+              <div class="line">
+                <select
+                  class="instrument"
+                  title={track.instrument && !inst ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes"}
+                  value={track.instrument?.effect ?? ""}
+                  onchange={(e) => setInstrument(track, e.currentTarget.value)}
+                >
+                  <option value="">{instruments.length ? "No instrument" : "No instruments found. Scan in Effects > Plug-in Manager."}</option>
+                  {#if track.instrument && !inst}<option value={track.instrument.effect}>Missing instrument</option>{/if}
+                  {#each instruments as x (x.effect)}<option value={x.effect}>{x.name}{x.vendor ? ` (${x.vendor})` : ""}</option>{/each}
+                </select>
+                <button type="button" class="ms" title="Open the instrument's window" aria-label="Open the instrument's window" disabled={!track.instrument || !inst} onclick={() => openInstrument(track)}>◳</button>
+              </div>
+            {/if}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 76 && !isMidi(track)}
               <div class="line">
                 <button type="button" class="pick" title="The input this track records from" onclick={(e) => void openInputMenu(e, track)}>
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
@@ -1911,7 +2051,25 @@
         {/if}
         {#if doc}
           {#each laneList as row (row.id)}
-            {#if row.kind === "track"}
+            {#if row.kind === "track" && isMidi(row.track)}
+            {@const track = row.track}
+            <div class="lane" data-track={track.id} data-lane={track.id}>
+              <MidiLane
+                {track}
+                {tempo}
+                {rate}
+                {view}
+                width={lanesWidth}
+                height={shownHeight(track)}
+                color={trackColor(track.color, row.i)}
+                selected={ed.selectedClips}
+                onSelect={(ids) => editor.selectClips(ids, track.id)}
+                onSetClips={(clips, label) => setMidiClips(track, clips, label)}
+                onOpen={(clipId) => (pianoRoll = { trackId: track.id, clipId })}
+                onMenu={(e, clip, beat) => (menu = { x: e.clientX, y: e.clientY, items: midiClipItems(track, clip, beat) })}
+              />
+            </div>
+            {:else if row.kind === "track"}
             {@const track = row.track}
             {@const i = row.i}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -2052,6 +2210,25 @@
       void session.edit(target.kind === "bus" ? "Bus Color" : "Track Color", op, runner).catch(onError);
     }}
   />
+{/if}
+
+{#if pianoRoll && doc}
+  {@const pr = pianoRoll}
+  {@const prTrack = doc.tracks.find((t) => t.id === pr.trackId)}
+  {@const prClip = prTrack?.midi_clips?.find((c) => c.id === pr.clipId)}
+  {#if prTrack && prClip}
+    <PianoRollDialog
+      clip={prClip}
+      {tempo}
+      instrument={prTrack.instrument ? (instruments.find((x) => x.effect === prTrack.instrument!.effect)?.name ?? null) : null}
+      onApply={(c) => {
+        const t = prTrack;
+        setMidiClips(t, replaceClip(t.midi_clips ?? [], c), "Edit Notes");
+        pianoRoll = null;
+      }}
+      onClose={() => (pianoRoll = null)}
+    />
+  {/if}
 {/if}
 
 {#if menu}
@@ -2207,6 +2384,43 @@
     display: flex;
     gap: 1px;
     margin-left: auto;
+  }
+
+  .toolbar .tempo {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-right: 6px;
+    color: var(--text-faint);
+    font-size: var(--font-size-small);
+  }
+
+  .toolbar .tempo input,
+  .toolbar .tempo select {
+    height: 20px;
+    box-sizing: border-box;
+    padding: 0 3px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+  }
+
+  .toolbar .tempo input {
+    width: 52px;
+  }
+
+  select.instrument {
+    flex: 1;
+    min-width: 0;
+    height: 20px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--font-size-small);
   }
 
   .toolbar .rate {

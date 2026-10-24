@@ -196,8 +196,49 @@ export interface TrackDoc {
   output?: OutputDoc;
   sends?: SendDoc[];
   clips: ClipDoc[];
+  /** "midi" for MIDI tracks. Missing for audio tracks. */
+  kind?: "audio" | "midi";
+  /** MIDI tracks: the VST3 instrument that plays the notes. */
+  instrument?: EffectSlotDoc | null;
+  /** MIDI tracks: their clips. Missing when there are none. */
+  midi_clips?: MidiClipDoc[];
   [key: string]: unknown;
 }
+
+/** A note in a MIDI clip. Times are in beats from the clip's start. */
+export interface NoteDoc {
+  /** 0 to 127; 60 is middle C. */
+  pitch: number;
+  /** 1 to 127. */
+  velocity: number;
+  start: number;
+  length: number;
+}
+
+/** A MIDI clip. Its start and length are in beats, so it follows the tempo. */
+export interface MidiClipDoc {
+  id: string;
+  name: string;
+  start: number;
+  length: number;
+  muted?: boolean;
+  color?: string | null;
+  notes: NoteDoc[];
+}
+
+export interface TempoDoc {
+  bpm: number;
+  beats_per_bar: number;
+}
+
+export const DEFAULT_TEMPO: TempoDoc = { bpm: 120, beats_per_bar: 4 };
+export const BPM_MIN = 20;
+export const BPM_MAX = 400;
+
+/** The session's tempo (the default when the file has none). */
+export const tempoOf = (doc: SessionDoc): TempoDoc => (doc.tempo as TempoDoc | undefined) ?? DEFAULT_TEMPO;
+
+export const isMidi = (t: TrackDoc) => t.kind === "midi";
 
 export interface ViewDoc {
   samples_per_pixel: number;
@@ -230,6 +271,8 @@ export interface SessionDoc {
     effects?: EffectChainDoc;
     [key: string]: unknown;
   };
+  /** Missing at the default, 120 BPM in 4. */
+  tempo?: TempoDoc;
   [key: string]: unknown;
 }
 
@@ -335,6 +378,10 @@ export interface TrackChanges {
   /** The host profile applied; "" clears it. */
   host_profile_id?: string;
   output?: OutputDoc;
+  /** MIDI tracks: sets the instrument. */
+  instrument?: EffectSlotDoc;
+  /** MIDI tracks: takes the instrument out. */
+  clear_instrument?: boolean;
 }
 
 export interface BusChanges {
@@ -361,6 +408,8 @@ export type Op =
       name: string;
       stereo: boolean;
       index: number;
+      /** A MIDI track instead of an audio track. */
+      midi?: boolean;
     }
   | { op: "restore_track"; track: TrackDoc; index: number }
   | { op: "remove_track"; id: string }
@@ -387,6 +436,8 @@ export type Op =
   | { op: "move_bus"; id: string; to: number }
   | { op: "set_bus"; id: string; changes: BusChanges }
   | { op: "set_sends"; owner: string; sends: SendDoc[] }
+  | { op: "set_midi_clips"; track_id: string; clips: MidiClipDoc[] }
+  | { op: "set_tempo"; bpm: number; beats_per_bar: number }
   | { op: "batch"; ops: Op[] };
 
 export interface SessionBackend {
@@ -412,10 +463,20 @@ export function clipLength(
   return r === 1 ? natural : Math.round(natural * r);
 }
 
-/** End of the last clip, in session samples. */
+/** End of the last MIDI clip, in session samples (the core's sums). */
+export function midiEnd(doc: SessionDoc, rate = doc.sample_rate): number {
+  const t = tempoOf(doc);
+  const bpm = Math.min(BPM_MAX, Math.max(BPM_MIN, t.bpm));
+  let end = 0;
+  for (const tr of doc.tracks)
+    for (const c of tr.midi_clips ?? []) end = Math.max(end, Math.round(((c.start + c.length) * 60 * rate) / bpm));
+  return end;
+}
+
+/** End of the last clip (audio or MIDI), in session samples. */
 export function sessionEnd(doc: SessionDoc): number {
   const media = new Map(doc.media.map((m) => [m.id, m]));
-  let end = 0;
+  let end = midiEnd(doc);
   for (const t of doc.tracks) {
     for (const c of t.clips)
       end = Math.max(

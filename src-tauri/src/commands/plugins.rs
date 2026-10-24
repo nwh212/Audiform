@@ -34,6 +34,11 @@ pub fn plugin_slots(s: &Session) -> HashSet<Id> {
         add(&b.effects);
     }
     add(&s.master.effects);
+    out.extend(
+        s.tracks
+            .iter()
+            .filter_map(|t| t.instrument.as_ref().map(|i| i.id)),
+    );
     out
 }
 
@@ -59,6 +64,8 @@ pub struct PluginView {
     pub bundle: PathBuf,
     pub latency: u32,
     pub has_window: bool,
+    /// Plays notes on a MIDI track rather than sitting in a Voice Chain.
+    pub instrument: bool,
     pub controls: usize,
 }
 
@@ -109,6 +116,7 @@ fn view(reg: &Registry) -> RegistryView {
                 bundle: p.bundle.clone(),
                 latency: p.info.latency,
                 has_window: p.info.has_editor,
+                instrument: p.info.instrument,
                 controls: p.info.params.iter().filter(|x| !x.hidden).count(),
             })
             .collect(),

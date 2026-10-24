@@ -13,11 +13,17 @@
 //! playback restarts from where it was. Voice Chain changes are listed
 //! apart (`chains`): they swap into the running renderer and graph,
 //! with no restart, unless the chain's look-ahead changes.
+//!
+//! MIDI tracks plan their notes in output frames at the session tempo,
+//! with their instrument; the renderer plays them through it.
 
 use std::path::PathBuf;
 
 use crate::dsp::effects::chain_hash;
-use crate::session::model::{Clip, EffectChain, EnvelopeTarget, Fade, FadeShape, Id, Session};
+use crate::session::model::{
+    Clip, EffectChain, EffectSlot, EnvelopeTarget, Fade, FadeShape, Id, Session, Tempo, Track,
+    TrackKind,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClipPlan {
@@ -267,6 +273,77 @@ pub fn fade_curve(shape: FadeShape, t: f32) -> f32 {
 pub struct TrackPlan {
     pub id: Id,
     pub clips: Vec<ClipPlan>,
+    /// A MIDI track with an instrument: what it plays.
+    pub midi: Option<MidiPlan>,
+}
+
+/// One note in output frames.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NotePlan {
+    pub on: u64,
+    /// After `on`.
+    pub off: u64,
+    pub pitch: u8,
+    /// 0 to 1.
+    pub velocity: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MidiPlan {
+    pub instrument: EffectSlot,
+    pub tempo: Tempo,
+    /// Every note of every unmuted clip, cut at its clip's end, in order of `on`.
+    pub notes: Vec<NotePlan>,
+    /// Every note's end: (frame, pitch), in order.
+    pub offs: Vec<(u64, u8)>,
+}
+
+/// What a MIDI track plays, or None when it has no instrument (silent).
+fn midi_plan(t: &Track, tempo: Tempo, out_rate: u32) -> Option<MidiPlan> {
+    if t.kind != TrackKind::Midi {
+        return None;
+    }
+    let instrument = t.instrument.clone()?;
+    let mut notes: Vec<NotePlan> = Vec::new();
+    for c in t.midi_clips.iter().filter(|c| !c.muted) {
+        for n in &c.notes {
+            if n.start >= c.length || n.length <= 0.0 {
+                continue;
+            }
+            let on = tempo.samples(c.start + n.start, out_rate);
+            let off = tempo.samples(c.start + (n.start + n.length).min(c.length), out_rate);
+            notes.push(NotePlan {
+                on,
+                off: off.max(on + 1),
+                pitch: n.pitch.min(127),
+                velocity: f32::from(n.velocity.clamp(1, 127)) / 127.0,
+            });
+        }
+    }
+    notes.sort_by_key(|n| n.on);
+    let mut offs: Vec<(u64, u8)> = notes.iter().map(|n| (n.off, n.pitch)).collect();
+    offs.sort_unstable();
+    Some(MidiPlan {
+        instrument,
+        tempo,
+        notes,
+        offs,
+    })
+}
+
+/// Session samples where the track's last MIDI clip ends.
+pub fn midi_end(session: &Session) -> u64 {
+    session
+        .tracks
+        .iter()
+        .flat_map(|t| &t.midi_clips)
+        .map(|c| {
+            session
+                .tempo
+                .samples(c.start + c.length, session.sample_rate)
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -289,6 +366,7 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
         .iter()
         .map(|t| TrackPlan {
             id: t.id,
+            midi: midi_plan(t, session.tempo, out_rate),
             clips: t
                 .clips
                 .iter()
@@ -434,6 +512,8 @@ fn envelope_hash(c: &Clip) -> u64 {
 pub struct Layout {
     pub tracks: Vec<(Id, Vec<ClipKey>)>,
     pub routing: u64,
+    /// MIDI notes, instruments and the tempo.
+    pub midi: u64,
 }
 
 /// Whose Voice Chain it is.
@@ -544,7 +624,42 @@ pub fn layout(session: &Session) -> Layout {
     Layout {
         tracks: clip_layout(session),
         routing: routing_hash(session),
+        midi: midi_hash(session),
     }
+}
+
+/// A fingerprint of what MIDI tracks play: the tempo, each instrument
+/// (not its settings, which reach a running instrument directly) and
+/// every MIDI clip.
+fn midi_hash(session: &Session) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut mix = |v: u64| {
+        h ^= v;
+        h = h.wrapping_mul(0x100_0000_01b3);
+    };
+    mix(session.tempo.bpm.to_bits());
+    mix(u64::from(session.tempo.beats_per_bar));
+    for t in session.tracks.iter().filter(|t| t.kind == TrackKind::Midi) {
+        mix(t.id.as_u128() as u64);
+        if let Some(i) = &t.instrument {
+            mix(i.id.as_u128() as u64);
+            for b in i.effect.bytes() {
+                mix(u64::from(b));
+            }
+        }
+        for c in &t.midi_clips {
+            mix(c.id.as_u128() as u64);
+            mix(c.start.to_bits());
+            mix(c.length.to_bits());
+            mix(u64::from(c.muted));
+            for n in &c.notes {
+                mix(u64::from(n.pitch) | u64::from(n.velocity) << 8);
+                mix(n.start.to_bits());
+                mix(n.length.to_bits());
+            }
+        }
+    }
+    h
 }
 
 fn clip_layout(session: &Session) -> Vec<(Id, Vec<ClipKey>)> {

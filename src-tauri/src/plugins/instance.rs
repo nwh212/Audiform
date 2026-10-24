@@ -25,14 +25,14 @@ use std::thread;
 use std::time::Duration;
 
 use altered_plughost::protocol::{
-    decode_samples, encode_audio, read_frame, write_frame, Message, ParamInfo, Request, AUDIO,
-    CONTROL,
+    decode_samples, encode_audio, read_frame, write_frame, Message, NoteEvent, ParamInfo, Request,
+    AUDIO, CONTROL,
 };
 use serde::Serialize;
 
 use super::{find, host_program, param_id, Found};
 use crate::dsp::effects::{Params, Processor};
-use crate::session::model::{EffectSlot, Id};
+use crate::session::model::{EffectSlot, Id, Tempo};
 
 /// Longest a plug-in may take to process one block before it counts as hung.
 pub const PROCESS_TIMEOUT: Duration = Duration::from_secs(4);
@@ -183,6 +183,7 @@ impl Host {
                 latency,
                 params,
                 has_editor,
+                ..
             }) => {
                 host.latency = latency as usize;
                 host.params = params;
@@ -226,9 +227,9 @@ impl Host {
         }
     }
 
-    /// Processes interleaved stereo in place. False (and `io` untouched)
-    /// when the plug-in is gone.
-    pub fn process(&mut self, changes: &[(u32, f64)], io: &mut [f32]) -> bool {
+    /// Processes interleaved stereo in place, playing `notes` (for
+    /// instruments). False (and `io` untouched) when the plug-in is gone.
+    pub fn process(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32]) -> bool {
         if self.is_dead() || io.is_empty() {
             return false;
         }
@@ -237,7 +238,7 @@ impl Host {
                 k.extend(changes.iter().copied());
             }
         }
-        encode_audio(&mut self.buf, changes, io);
+        encode_audio(&mut self.buf, changes, notes, io);
         if write_frame(&mut self.stdin, AUDIO, &self.buf).is_err() {
             self.stop("The plug-in crashed and is bypassed.");
             return false;
@@ -300,6 +301,16 @@ impl Host {
 
     pub fn reset(&mut self) {
         let _ = self.request(&Request::Reset, REQUEST_TIMEOUT);
+    }
+
+    pub fn set_tempo(&mut self, tempo: Tempo) {
+        let _ = self.request(
+            &Request::Tempo {
+                bpm: tempo.bpm,
+                beats_per_bar: tempo.beats_per_bar,
+            },
+            REQUEST_TIMEOUT,
+        );
     }
 }
 
@@ -483,7 +494,7 @@ pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
 impl Processor for PluginProcessor {
     fn process(&mut self, buf: &mut [f32]) {
         let done = match self.host.lock() {
-            Ok(mut h) => h.process(&self.pending, buf),
+            Ok(mut h) => h.process(&self.pending, &[], buf),
             Err(_) => false,
         };
         if done {
@@ -519,5 +530,50 @@ impl Processor for PluginProcessor {
 
     fn is_plugin(&self) -> bool {
         true
+    }
+}
+
+/// A MIDI track's instrument, played by the renderer: notes in, sound out.
+/// When it is missing or stops, the track is silent.
+pub struct Instrument {
+    host: Option<Arc<Mutex<Host>>>,
+    pub latency: usize,
+    pending: Vec<(u32, f64)>,
+}
+
+impl Instrument {
+    /// Starts (or picks up) the slot's instrument, told the session's
+    /// tempo, with every note let go.
+    pub fn start(slot: &EffectSlot, rate: u32, tempo: Tempo) -> Instrument {
+        let host = host_for(slot, rate);
+        let (latency, pending) = match host.as_ref().and_then(|h| h.lock().ok()) {
+            Some(mut h) => {
+                h.reset();
+                h.set_tempo(tempo);
+                (h.latency, h.differing(&slot_params(slot)))
+            }
+            None => (0, Vec::new()),
+        };
+        Instrument {
+            host,
+            latency,
+            pending,
+        }
+    }
+
+    /// Plays one block into `io` (stereo; zeroed here), with `notes` at
+    /// their frame offsets.
+    pub fn play(&mut self, notes: &[NoteEvent], io: &mut [f32]) {
+        io.fill(0.0);
+        let Some(host) = &self.host else { return };
+        let done = match host.lock() {
+            Ok(mut h) => h.process(&self.pending, notes, io),
+            Err(_) => false,
+        };
+        if done {
+            self.pending.clear();
+        } else {
+            io.fill(0.0);
+        }
     }
 }

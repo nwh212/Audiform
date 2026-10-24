@@ -12,7 +12,8 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
-use vst3::Steinberg::Vst::MediaTypes_::kAudio;
+use vst3::Steinberg::Vst::Event_::EventTypes_::{kNoteOffEvent, kNoteOnEvent};
+use vst3::Steinberg::Vst::MediaTypes_::{kAudio, kEvent};
 use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
     kIsHidden, kIsProgramChange, kIsReadOnly,
 };
@@ -22,19 +23,20 @@ use vst3::Steinberg::Vst::ProcessContext_::StatesAndFlags_::{
 use vst3::Steinberg::Vst::ProcessModes_::kRealtime;
 use vst3::Steinberg::Vst::SymbolicSampleSizes_::kSample32;
 use vst3::Steinberg::Vst::{
-    AudioBusBuffers, AudioBusBuffers__type0, IAudioProcessor, IAudioProcessorTrait, IComponent,
-    IComponentHandler, IComponentTrait, IConnectionPoint, IConnectionPointTrait, IEditController,
-    IEditControllerTrait, IParameterChanges, ParameterInfo, ProcessContext, ProcessData,
-    ProcessSetup, SpeakerArr, SpeakerArrangement,
+    AudioBusBuffers, AudioBusBuffers__type0, Event, Event__type0, IAudioProcessor,
+    IAudioProcessorTrait, IComponent, IComponentHandler, IComponentTrait, IConnectionPoint,
+    IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IParameterChanges,
+    NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext, ProcessData, ProcessSetup,
+    SpeakerArr, SpeakerArrangement,
 };
 use vst3::Steinberg::{
     kResultOk, kResultTrue, FUnknown, IBStream, IPluginBaseTrait, IPluginFactoryTrait, TUID,
 };
 use vst3::{ComPtr, ComWrapper, Interface};
 
-use crate::com::{from_wstring, Edit, Handler, HostApp, MemStream, ParamChanges};
+use crate::com::{from_wstring, Edit, EventList, Handler, HostApp, MemStream, ParamChanges};
 use crate::module::{parse_cid, Module};
-use crate::protocol::{base64_decode, base64_encode, ParamInfo, MAX_BLOCK};
+use crate::protocol::{base64_decode, base64_encode, NoteEvent, ParamInfo, MAX_BLOCK};
 
 /// A COM pointer moved to another thread. VST3 allows processing on
 /// another thread than setup; the plug-in is responsible for the rest.
@@ -50,6 +52,9 @@ pub struct Plugin {
     pub edits: Arc<Mutex<Vec<Edit>>>,
     pub latency: u32,
     pub params: Vec<ParamInfo>,
+    /// Takes notes and has no audio input: it makes sound rather than
+    /// processing it.
+    pub instrument: bool,
     _handler: ComWrapper<Handler>,
     _host: ComWrapper<HostApp>,
     _module: Module,
@@ -65,6 +70,10 @@ pub struct Audio {
     in_bufs: Vec<Vec<Vec<f32>>>,
     out_bufs: Vec<Vec<Vec<f32>>>,
     time: i64,
+    /// Takes note events.
+    events: bool,
+    /// Tempo and beats per bar, told to the plug-in with every block.
+    tempo: (f64, i32),
     /// Control changes from the plug-in's window, for the next block.
     pub from_editor: Arc<Mutex<Vec<(u32, f64)>>>,
 }
@@ -186,7 +195,8 @@ impl Plugin {
             let processor = component
                 .cast::<IAudioProcessor>()
                 .ok_or("This plug-in does not process audio.")?;
-            let (ins, outs) = setup_buses(&component, &processor);
+            let (ins, outs, events) = setup_buses(&component, &processor);
+            let instrument = events && ins.is_empty();
             let mut setup = ProcessSetup {
                 processMode: kRealtime as i32,
                 symbolicSampleSize: kSample32 as i32,
@@ -213,6 +223,8 @@ impl Plugin {
                     .collect(),
                 ins,
                 time: 0,
+                events,
+                tempo: (120.0, 4),
                 from_editor: Arc::new(Mutex::new(Vec::new())),
             };
             Ok((
@@ -223,6 +235,7 @@ impl Plugin {
                     edits,
                     latency,
                     params,
+                    instrument,
                     _handler: handler,
                     _host: host,
                     _module: module,
@@ -299,12 +312,17 @@ fn split_state(data: &str) -> Option<(Vec<u8>, Vec<u8>)> {
 }
 
 /// Asks for stereo on the main buses, keeps the plug-in's own layout on
-/// any others (sidechain inputs and the like), and turns them all on.
-/// Returns the channels of each input and output bus.
+/// any others (sidechain inputs and the like), and turns them all on,
+/// along with the first note input. Returns the channels of each input
+/// and output bus, and whether there is a note input.
 unsafe fn setup_buses(
     component: &ComPtr<IComponent>,
     processor: &ComPtr<IAudioProcessor>,
-) -> (Vec<usize>, Vec<usize>) {
+) -> (Vec<usize>, Vec<usize>, bool) {
+    let events = component.getBusCount(kEvent as i32, kInput as i32) > 0;
+    if events {
+        component.activateBus(kEvent as i32, kInput as i32, 0, 1);
+    }
     let nin = component.getBusCount(kAudio as i32, kInput as i32).max(0);
     let nout = component.getBusCount(kAudio as i32, kOutput as i32).max(0);
     let current = |dir: i32, i: i32| {
@@ -344,7 +362,42 @@ unsafe fn setup_buses(
         (0..nout)
             .map(|i| channels(current(kOutput as i32, i)))
             .collect(),
+        events,
     )
+}
+
+/// A note as VST3 wants it, `offset` frames into the block.
+fn vst_event(n: &NoteEvent, offset: u32) -> Event {
+    let pitch = i16::from(n.pitch.min(127));
+    Event {
+        busIndex: 0,
+        sampleOffset: offset as i32,
+        ppqPosition: 0.0,
+        flags: 0,
+        r#type: (if n.on { kNoteOnEvent } else { kNoteOffEvent }) as u16,
+        __field0: if n.on {
+            Event__type0 {
+                noteOn: NoteOnEvent {
+                    channel: 0,
+                    pitch,
+                    tuning: 0.0,
+                    velocity: n.velocity.clamp(0.0, 1.0),
+                    length: 0,
+                    noteId: i32::from(pitch),
+                },
+            }
+        } else {
+            Event__type0 {
+                noteOff: NoteOffEvent {
+                    channel: 0,
+                    pitch,
+                    velocity: n.velocity.clamp(0.0, 1.0),
+                    noteId: i32::from(pitch),
+                    tuning: 0.0,
+                },
+            }
+        },
+    }
 }
 
 unsafe fn read_params(c: &ComPtr<IEditController>) -> Vec<ParamInfo> {
@@ -369,20 +422,33 @@ unsafe fn read_params(c: &ComPtr<IEditController>) -> Vec<ParamInfo> {
 }
 
 impl Audio {
-    /// Processes interleaved stereo in place, applying `changes` first.
-    pub fn process(&mut self, changes: &[(u32, f64)], io: &mut [f32]) {
+    /// Processes interleaved stereo in place, applying `changes` first
+    /// and playing `notes` at their offsets.
+    pub fn process(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32]) {
         let mut first = true;
-        for chunk in io.chunks_mut(MAX_BLOCK * 2) {
+        for (i, chunk) in io.chunks_mut(MAX_BLOCK * 2).enumerate() {
             let mut all: Vec<(u32, f64)> = if first { changes.to_vec() } else { Vec::new() };
             if let Ok(mut e) = self.from_editor.lock() {
                 all.append(&mut e);
             }
             first = false;
-            self.block(&all, chunk);
+            let from = (i * MAX_BLOCK) as u32;
+            let to = from + (chunk.len() / 2) as u32;
+            let events: Vec<Event> = notes
+                .iter()
+                .filter(|n| self.events && n.offset >= from && n.offset < to)
+                .map(|n| vst_event(n, n.offset - from))
+                .collect();
+            self.block(&all, events, chunk);
         }
     }
 
-    fn block(&mut self, changes: &[(u32, f64)], io: &mut [f32]) {
+    /// The tempo the plug-in is told (for synced delays, arpeggios and the like).
+    pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: i32) {
+        self.tempo = (bpm.clamp(1.0, 999.0), beats_per_bar.clamp(1, 32));
+    }
+
+    fn block(&mut self, changes: &[(u32, f64)], events: Vec<Event>, io: &mut [f32]) {
         let n = io.len() / 2;
         if n == 0 {
             return;
@@ -437,13 +503,17 @@ impl Audio {
         let mut ins: Vec<AudioBusBuffers> = in_ptrs.iter_mut().map(bus).collect();
         let mut outs: Vec<AudioBusBuffers> = out_ptrs.iter_mut().map(bus).collect();
         let pc = ComWrapper::new(ParamChanges::from_changes(changes));
+        let ev = ComWrapper::new(EventList {
+            events: events.into(),
+        });
         let mut ctx: ProcessContext = unsafe { std::mem::zeroed() };
         ctx.state = (kPlaying | kTempoValid | kTimeSigValid) as u32;
         ctx.sampleRate = self.rate;
         ctx.projectTimeSamples = self.time;
         ctx.continousTimeSamples = self.time;
-        ctx.tempo = 120.0;
-        ctx.timeSigNumerator = 4;
+        ctx.tempo = self.tempo.0;
+        ctx.projectTimeMusic = self.time as f64 / self.rate * self.tempo.0 / 60.0;
+        ctx.timeSigNumerator = self.tempo.1;
         ctx.timeSigDenominator = 4;
         let mut data = ProcessData {
             processMode: kRealtime as i32,
@@ -465,7 +535,12 @@ impl Audio {
                 .as_com_ref::<IParameterChanges>()
                 .map_or(ptr::null_mut(), |r| r.as_ptr()),
             outputParameterChanges: ptr::null_mut(),
-            inputEvents: ptr::null_mut(),
+            inputEvents: if self.events {
+                ev.as_com_ref::<IEventList>()
+                    .map_or(ptr::null_mut(), |r| r.as_ptr())
+            } else {
+                ptr::null_mut()
+            },
             outputEvents: ptr::null_mut(),
             processContext: &mut ctx,
         };

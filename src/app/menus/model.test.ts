@@ -89,6 +89,7 @@ describe("menu model", () => {
       "edit.find",
       "multitrack.add.mono",
       "multitrack.add.stereo",
+      "multitrack.add.midi",
       "multitrack.add.bus",
       "multitrack.add.bus-mono",
       "fx.plugin-manager",

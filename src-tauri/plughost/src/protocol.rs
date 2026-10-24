@@ -12,8 +12,10 @@
 //!   events from the host ([`Message`]).
 //! - `AUDIO`: one block. From the editor: frames (u32), the number of
 //!   parameter changes (u32), each change as id (u32) and value (f64),
-//!   then the frames as interleaved stereo f32. From the host: the
-//!   processed frames, interleaved stereo f32.
+//!   the number of note events (u32), each as frame offset (u32), on or
+//!   off (u8), pitch (u8) and velocity (f32, 0 to 1), then the frames as
+//!   interleaved stereo f32. From the host: the processed frames,
+//!   interleaved stereo f32.
 
 use std::io::{self, Read, Write};
 
@@ -38,6 +40,21 @@ pub struct ClassInfo {
     pub params: Vec<ParamInfo>,
     pub latency: u32,
     pub has_editor: bool,
+    /// Plays notes (takes note events and makes sound) rather than
+    /// processing audio.
+    #[serde(default)]
+    pub instrument: bool,
+}
+
+/// A note starting or ending within a block.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NoteEvent {
+    /// Frames from the start of the block.
+    pub offset: u32,
+    pub on: bool,
+    pub pitch: u8,
+    /// 0 to 1.
+    pub velocity: f32,
 }
 
 /// One plug-in control. Values are normalized, 0 to 1.
@@ -84,6 +101,11 @@ pub enum Request {
         title: String,
     },
     CloseEditor,
+    /// The session's tempo, told to the plug-in with every block.
+    Tempo {
+        bpm: f64,
+        beats_per_bar: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -93,6 +115,8 @@ pub enum Message {
         latency: u32,
         params: Vec<ParamInfo>,
         has_editor: bool,
+        #[serde(default)]
+        instrument: bool,
     },
     /// Settings: base64 of the plug-in's component and controller state.
     State {
@@ -149,7 +173,12 @@ pub fn read_frame(r: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<Option<u8>
 }
 
 /// An audio request: frames, parameter changes and interleaved samples.
-pub fn encode_audio(out: &mut Vec<u8>, changes: &[(u32, f64)], samples: &[f32]) {
+pub fn encode_audio(
+    out: &mut Vec<u8>,
+    changes: &[(u32, f64)],
+    notes: &[NoteEvent],
+    samples: &[f32],
+) {
     out.clear();
     out.extend_from_slice(&((samples.len() / 2) as u32).to_le_bytes());
     out.extend_from_slice(&(changes.len() as u32).to_le_bytes());
@@ -157,15 +186,23 @@ pub fn encode_audio(out: &mut Vec<u8>, changes: &[(u32, f64)], samples: &[f32]) 
         out.extend_from_slice(&id.to_le_bytes());
         out.extend_from_slice(&v.to_le_bytes());
     }
+    out.extend_from_slice(&(notes.len() as u32).to_le_bytes());
+    for n in notes {
+        out.extend_from_slice(&n.offset.to_le_bytes());
+        out.push(u8::from(n.on));
+        out.push(n.pitch);
+        out.extend_from_slice(&n.velocity.to_le_bytes());
+    }
     for s in samples {
         out.extend_from_slice(&s.to_le_bytes());
     }
 }
 
-/// Reads an audio request back: (changes, samples). None if malformed.
+/// Reads an audio request back: changes, notes and samples. None if malformed.
 pub fn decode_audio(
     buf: &[u8],
     changes: &mut Vec<(u32, f64)>,
+    notes: &mut Vec<NoteEvent>,
     samples: &mut Vec<f32>,
 ) -> Option<()> {
     let u32_at = |i: usize| {
@@ -181,6 +218,22 @@ pub fn decode_audio(
         let v = f64::from_le_bytes(buf.get(at + 4..at + 12)?.try_into().ok()?);
         changes.push((id, v));
         at += 12;
+    }
+    let m = u32_at(at)? as usize;
+    at += 4;
+    notes.clear();
+    for _ in 0..m {
+        let offset = u32_at(at)?;
+        let on = *buf.get(at + 4)? != 0;
+        let pitch = *buf.get(at + 5)?;
+        let velocity = f32::from_le_bytes(buf.get(at + 6..at + 10)?.try_into().ok()?);
+        notes.push(NoteEvent {
+            offset,
+            on,
+            pitch,
+            velocity,
+        });
+        at += 10;
     }
     decode_samples(buf.get(at..)?, samples);
     (samples.len() == frames * 2).then_some(())
@@ -248,14 +301,21 @@ mod tests {
     fn frames_and_audio_round_trip() {
         let mut wire = Vec::new();
         let mut body = Vec::new();
-        encode_audio(&mut body, &[(7, 0.25)], &[0.5, -0.5, 1.0, 0.0]);
+        let note = NoteEvent {
+            offset: 1,
+            on: true,
+            pitch: 60,
+            velocity: 0.75,
+        };
+        encode_audio(&mut body, &[(7, 0.25)], &[note], &[0.5, -0.5, 1.0, 0.0]);
         write_frame(&mut wire, AUDIO, &body).unwrap();
         let mut r = &wire[..];
         let mut buf = Vec::new();
         assert_eq!(read_frame(&mut r, &mut buf).unwrap(), Some(AUDIO));
-        let (mut ch, mut s) = (Vec::new(), Vec::new());
-        decode_audio(&buf, &mut ch, &mut s).unwrap();
+        let (mut ch, mut n, mut s) = (Vec::new(), Vec::new(), Vec::new());
+        decode_audio(&buf, &mut ch, &mut n, &mut s).unwrap();
         assert_eq!(ch, vec![(7, 0.25)]);
+        assert_eq!(n, vec![note]);
         assert_eq!(s, vec![0.5, -0.5, 1.0, 0.0]);
         assert_eq!(read_frame(&mut r, &mut buf).unwrap(), None);
     }

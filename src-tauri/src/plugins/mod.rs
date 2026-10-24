@@ -44,6 +44,9 @@ const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 /// Bundles read at the same time.
 const SCAN_THREADS: usize = 4;
 
+/// Version of `plugins.json`. 2: instruments are listed too.
+const SCHEMA_VERSION: u32 = 2;
+
 /// A plug-in the scan found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Found {
@@ -96,6 +99,11 @@ pub fn load(config_dir: &Path) {
         .ok()
         .and_then(|b| serde_json::from_slice::<Registry>(&b).ok())
         .unwrap_or_default();
+    let mut reg = reg;
+    if reg.schema_version < SCHEMA_VERSION {
+        // Older scans left instruments out: the next scan reads every bundle again.
+        reg.stamps.clear();
+    }
     if let Ok(mut f) = config_file().lock() {
         *f = Some(file);
     }
@@ -376,7 +384,7 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
     reg.plugins.sort_by_key(|p| p.info.name.to_lowercase());
     report.found = reg.plugins.len();
     report.failed = reg.failed.len();
-    reg.schema_version = 1;
+    reg.schema_version = SCHEMA_VERSION;
     save(&reg);
     set(reg);
     report
@@ -465,9 +473,25 @@ pub fn effect_info(found: &Found) -> EffectInfo {
     }
 }
 
-/// Every installed plug-in, as effects.
+/// Every installed effect plug-in, as effects (instruments are left out:
+/// they make sound rather than process it).
 pub fn catalog() -> Vec<EffectInfo> {
-    snapshot().plugins.iter().map(effect_info).collect()
+    snapshot()
+        .plugins
+        .iter()
+        .filter(|p| !p.info.instrument)
+        .map(effect_info)
+        .collect()
+}
+
+/// Every installed instrument, for MIDI tracks.
+pub fn instruments() -> Vec<EffectInfo> {
+    snapshot()
+        .plugins
+        .iter()
+        .filter(|p| p.info.instrument)
+        .map(effect_info)
+        .collect()
 }
 
 /// A plug-in's look-ahead from the scan, without starting it.
@@ -533,6 +557,7 @@ mod tests {
                 vendor: "Acme".into(),
                 version: "1".into(),
                 sub_categories: "Fx".into(),
+                instrument: false,
                 params: vec![
                     altered_plughost::protocol::ParamInfo {
                         id: 7,

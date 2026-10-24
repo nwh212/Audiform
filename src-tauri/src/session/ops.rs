@@ -15,9 +15,10 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::model::{
-    AudioType, Bus, ChannelLayout, Clip, ClipLoop, ClipStretch, EffectChain, Envelope,
-    EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef, Output, Send, Session,
-    SessionView, Track, TrackRole, STRETCH_MAX, STRETCH_MIN,
+    AudioType, Bus, ChannelLayout, Clip, ClipLoop, ClipStretch, EffectChain, EffectSlot, Envelope,
+    EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef, MidiClip, Output, Send,
+    Session, SessionView, Tempo, Track, TrackKind, TrackRole, BPM_MAX, BPM_MIN, STRETCH_MAX,
+    STRETCH_MIN,
 };
 
 /// Points for one effect setting's envelope on a clip.
@@ -106,6 +107,12 @@ pub struct TrackChanges {
     /// Where the track's sound goes after its fader: the master or a bus.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Output>,
+    /// MIDI tracks: the instrument plug-in that plays the notes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instrument: Option<EffectSlot>,
+    /// MIDI tracks: takes the instrument out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_instrument: Option<bool>,
 }
 
 /// Bus settings to change. Fields left out stay as they are.
@@ -254,6 +261,9 @@ pub enum Op {
         name: String,
         stereo: bool,
         index: usize,
+        /// A MIDI track instead of an audio track.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        midi: bool,
     },
     /// Puts back a removed track exactly as it was.
     RestoreTrack {
@@ -363,6 +373,16 @@ pub enum Op {
         id: Id,
         changes: BusChanges,
     },
+    /// Replaces a MIDI track's clips (and their notes).
+    SetMidiClips {
+        track_id: Id,
+        clips: Vec<MidiClip>,
+    },
+    /// The session's tempo and meter. MIDI clips and notes follow it.
+    SetTempo {
+        bpm: f64,
+        beats_per_bar: u32,
+    },
     /// Replaces the aux sends of a track or bus.
     SetSends {
         owner: Id,
@@ -406,6 +426,8 @@ pub enum OpError {
     NoKeySource(Id),
     #[error("That routing would feed the sound back into itself.")]
     RoutingLoop,
+    #[error("Audio clips go on audio tracks, MIDI clips on MIDI tracks.")]
+    WrongTrackKind,
 }
 
 fn track_index(s: &Session, id: Id) -> Result<usize, OpError> {
@@ -440,10 +462,9 @@ fn changes_routing(op: &Op) -> bool {
 }
 
 fn id_taken(s: &Session, id: Id) -> bool {
-    s.tracks
-        .iter()
-        .any(|t| t.id == id || t.clips.iter().any(|c| c.id == id))
-        || s.media.iter().any(|m| m.id == id)
+    s.tracks.iter().any(|t| {
+        t.id == id || t.clips.iter().any(|c| c.id == id) || t.midi_clips.iter().any(|c| c.id == id)
+    }) || s.media.iter().any(|m| m.id == id)
         || s.buses.iter().any(|b| b.id == id)
         || s.markers.iter().any(|m| m.id == id)
 }
@@ -511,6 +532,7 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             name,
             stereo,
             index,
+            midi,
         } => {
             if id_taken(s, *id) {
                 return Err(OpError::DuplicateId(*id));
@@ -520,7 +542,11 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             } else {
                 ChannelLayout::Mono
             };
-            let mut t = Track::new(name.clone(), layout);
+            let mut t = if *midi {
+                Track::midi(name.clone())
+            } else {
+                Track::new(name.clone(), layout)
+            };
             t.id = *id;
             s.tracks.insert((*index).min(s.tracks.len()), t);
             Ok(Op::RemoveTrack { id: *id })
@@ -608,6 +634,20 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             if let Some(v) = changes.output {
                 old.output = Some(std::mem::replace(&mut t.output, v));
             }
+            if changes.instrument.is_some() || changes.clear_instrument == Some(true) {
+                if t.kind != TrackKind::Midi {
+                    return Err(OpError::WrongTrackKind);
+                }
+                let new = if changes.clear_instrument == Some(true) {
+                    None
+                } else {
+                    changes.instrument.clone()
+                };
+                match std::mem::replace(&mut t.instrument, new) {
+                    Some(v) => old.instrument = Some(v),
+                    None => old.clear_instrument = Some(true),
+                }
+            }
             Ok(Op::SetTrack {
                 id: *id,
                 changes: old,
@@ -683,6 +723,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
         }
         Op::AddClips { track_id, clips } => {
             let ti = track_index(s, *track_id)?;
+            if s.tracks[ti].kind != TrackKind::Audio {
+                return Err(OpError::WrongTrackKind);
+            }
             for c in clips {
                 if id_taken(s, c.id) {
                     return Err(OpError::DuplicateId(c.id));
@@ -957,6 +1000,41 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
                 changes: old,
             })
         }
+        Op::SetMidiClips { track_id, clips } => {
+            let i = track_index(s, *track_id)?;
+            if s.tracks[i].kind != TrackKind::Midi {
+                return Err(OpError::WrongTrackKind);
+            }
+            for c in clips {
+                let ours = s.tracks[i].midi_clips.iter().any(|x| x.id == c.id);
+                if !ours && id_taken(s, c.id) {
+                    return Err(OpError::DuplicateId(c.id));
+                }
+            }
+            let clips: Vec<MidiClip> = clips.iter().map(tidy_midi_clip).collect();
+            let old = std::mem::replace(&mut s.tracks[i].midi_clips, clips);
+            Ok(Op::SetMidiClips {
+                track_id: *track_id,
+                clips: old,
+            })
+        }
+        Op::SetTempo { bpm, beats_per_bar } => {
+            let old = std::mem::replace(
+                &mut s.tempo,
+                Tempo {
+                    bpm: if bpm.is_finite() {
+                        bpm.clamp(BPM_MIN, BPM_MAX)
+                    } else {
+                        120.0
+                    },
+                    beats_per_bar: (*beats_per_bar).clamp(1, 16),
+                },
+            );
+            Ok(Op::SetTempo {
+                bpm: old.bpm,
+                beats_per_bar: old.beats_per_bar,
+            })
+        }
         Op::SetSends { owner, sends } => {
             for x in sends {
                 bus_index(s, x.bus_id)?;
@@ -993,6 +1071,29 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             inverses.reverse();
             Ok(Op::Batch { ops: inverses })
         }
+    }
+}
+
+/// A MIDI clip with every value in range: notes inside MIDI's limits,
+/// positive lengths, sorted by start then pitch.
+fn tidy_midi_clip(c: &MidiClip) -> MidiClip {
+    let ok = |v: f64, lo: f64| if v.is_finite() { v.max(lo) } else { lo };
+    let mut notes: Vec<_> = c
+        .notes
+        .iter()
+        .map(|n| super::model::Note {
+            pitch: n.pitch.min(127),
+            velocity: n.velocity.clamp(1, 127),
+            start: ok(n.start, 0.0),
+            length: ok(n.length, 1.0 / 64.0),
+        })
+        .collect();
+    notes.sort_by(|a, b| a.start.total_cmp(&b.start).then(a.pitch.cmp(&b.pitch)));
+    MidiClip {
+        start: ok(c.start, 0.0),
+        length: ok(c.length, 1.0 / 16.0),
+        notes,
+        ..c.clone()
     }
 }
 
@@ -1099,6 +1200,9 @@ fn set_clip(s: &mut Session, ch: &ClipChange) -> Result<ClipChange, OpError> {
         Some(id) => Some(track_index(s, id)?),
         None => None,
     };
+    if to_track.is_some_and(|t| s.tracks[t].kind != TrackKind::Audio) {
+        return Err(OpError::WrongTrackKind);
+    }
     let moves = ch.start.is_some()
         || ch.source_in.is_some()
         || ch.source_out.is_some()
@@ -1376,6 +1480,148 @@ mod tests {
     }
 
     #[test]
+    fn midi_tracks_clips_instrument_and_tempo() {
+        use crate::session::model::{MidiClip, Note};
+        let mut s = Session::new("Test", 48_000);
+        let (midi, audio) = (new_id(), new_id());
+        roundtrip(
+            &mut s,
+            Op::AddTrack {
+                id: midi,
+                name: "Keys".into(),
+                stereo: true,
+                index: 0,
+                midi: true,
+            },
+        );
+        roundtrip(
+            &mut s,
+            Op::AddTrack {
+                id: audio,
+                name: "Voice".into(),
+                stereo: false,
+                index: 1,
+                midi: false,
+            },
+        );
+        assert_eq!(s.tracks[0].kind, TrackKind::Midi);
+        let clip = MidiClip {
+            id: new_id(),
+            name: "Chords".into(),
+            start: 4.0,
+            length: 4.0,
+            muted: false,
+            color: None,
+            notes: vec![
+                Note {
+                    pitch: 67,
+                    velocity: 0,
+                    start: 1.0,
+                    length: 0.5,
+                },
+                Note {
+                    pitch: 200,
+                    velocity: 200,
+                    start: -1.0,
+                    length: f64::NAN,
+                },
+            ],
+        };
+        roundtrip(
+            &mut s,
+            Op::SetMidiClips {
+                track_id: midi,
+                clips: vec![clip.clone()],
+            },
+        );
+        let n = &s.tracks[0].midi_clips[0].notes;
+        assert_eq!(
+            (n[0].pitch, n[0].velocity, n[0].start),
+            (127, 127, 0.0),
+            "tidied and sorted"
+        );
+        assert!(n[0].length > 0.0);
+        assert_eq!((n[1].pitch, n[1].velocity), (67, 1));
+        // MIDI clips only on MIDI tracks, audio clips only on audio tracks.
+        let wrong = Op::SetMidiClips {
+            track_id: audio,
+            clips: vec![],
+        };
+        assert_eq!(apply(&mut s, &wrong), Err(OpError::WrongTrackKind));
+        let m = media(new_id());
+        let mid = m.id;
+        apply(&mut s, &Op::AddMedia { media: m }).unwrap();
+        let wrong = Op::AddClips {
+            track_id: midi,
+            clips: vec![ClipSpec {
+                id: new_id(),
+                name: "a".into(),
+                media_id: mid,
+                start: 0,
+                source_in: 0,
+                source_out: 10,
+            }],
+        };
+        assert_eq!(apply(&mut s, &wrong), Err(OpError::WrongTrackKind));
+        // Instrument in and out.
+        let inst = crate::session::model::EffectSlot {
+            id: new_id(),
+            effect: "vst3:00112233445566778899AABBCCDDEEFF".into(),
+            enabled: true,
+            params: Default::default(),
+            preset: None,
+            sidechain: None,
+            plugin_state: None,
+        };
+        roundtrip(
+            &mut s,
+            Op::SetTrack {
+                id: midi,
+                changes: TrackChanges {
+                    instrument: Some(inst.clone()),
+                    ..TrackChanges::default()
+                },
+            },
+        );
+        roundtrip(
+            &mut s,
+            Op::SetTrack {
+                id: midi,
+                changes: TrackChanges {
+                    clear_instrument: Some(true),
+                    ..TrackChanges::default()
+                },
+            },
+        );
+        let wrong = Op::SetTrack {
+            id: audio,
+            changes: TrackChanges {
+                instrument: Some(inst),
+                ..TrackChanges::default()
+            },
+        };
+        assert_eq!(apply(&mut s, &wrong), Err(OpError::WrongTrackKind));
+        // Tempo, clamped.
+        roundtrip(
+            &mut s,
+            Op::SetTempo {
+                bpm: 90.0,
+                beats_per_bar: 3,
+            },
+        );
+        apply(
+            &mut s,
+            &Op::SetTempo {
+                bpm: 9_000.0,
+                beats_per_bar: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!((s.tempo.bpm, s.tempo.beats_per_bar), (400.0, 1));
+        assert_eq!(s.tempo.samples(1.0, 48_000), 7_200);
+    }
+
+    #[test]
     fn buses_route_send_key_and_undo_in_one_step() {
         let mut s = Session::new("Test", 48_000);
         let (voice, music, mix, verb) = (new_id(), new_id(), new_id(), new_id());
@@ -1387,6 +1633,7 @@ mod tests {
                     name: "T".into(),
                     stereo: true,
                     index: i,
+                    midi: false,
                 },
             );
         }
@@ -1587,6 +1834,7 @@ mod tests {
                 name: "Host".into(),
                 stereo: false,
                 index: 0,
+                midi: false,
             },
         );
         let mut chain = EffectChain::default();
@@ -1635,6 +1883,7 @@ mod tests {
                     name: format!("T{i}"),
                     stereo: true,
                     index: i,
+                    midi: false,
                 },
             );
         }
@@ -1667,6 +1916,7 @@ mod tests {
                 name: "Host".into(),
                 stereo: false,
                 index: 0,
+                midi: false,
             },
         )
         .unwrap();
@@ -1723,6 +1973,7 @@ mod tests {
                         name: "ok".into(),
                         stereo: true,
                         index: 0,
+                        midi: false,
                     },
                     Op::RemoveTrack { id: new_id() },
                 ],
@@ -1748,6 +1999,7 @@ mod tests {
             name: "a".into(),
             stereo: true,
             index: 0,
+            midi: false,
         };
         apply(&mut s, &add).unwrap();
         assert_eq!(apply(&mut s, &add), Err(OpError::DuplicateId(id)));
@@ -1778,6 +2030,7 @@ mod tests {
                         name: "Host".into(),
                         stereo: false,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddMedia { media: media(m) },
                     Op::AddClips {
@@ -1857,6 +2110,7 @@ mod tests {
                 name: "T".into(),
                 stereo: false,
                 index: 0,
+                midi: false,
             });
         }
         ops.push(Op::AddClips {
@@ -1983,6 +2237,7 @@ mod tests {
                         name: "A".into(),
                         stereo: false,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddClips {
                         track_id: t,
@@ -2038,6 +2293,7 @@ mod tests {
                         name: "A".into(),
                         stereo: false,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddClips {
                         track_id: t,
@@ -2121,6 +2377,7 @@ mod tests {
                         name: "A".into(),
                         stereo: false,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddClips {
                         track_id: t,
@@ -2198,6 +2455,7 @@ mod tests {
                         name: "A".into(),
                         stereo: false,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddClips {
                         track_id: t,
@@ -2277,6 +2535,7 @@ mod tests {
                         name: "Host".into(),
                         stereo: true,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddMedia { media: media(m) },
                     Op::AddClips {
@@ -2333,6 +2592,7 @@ mod tests {
                         name: "Music".into(),
                         stereo: true,
                         index: 0,
+                        midi: false,
                     },
                     Op::AddMedia { media: media(m) },
                     Op::AddClips {

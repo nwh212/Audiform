@@ -12,6 +12,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use altered_plughost::protocol::*;
 
 const CID: &str = "41A17E2D7E5700018A1B2C3D4E5F6071";
+const SYNTH: &str = "41A17E2D7E5700038A1B2C3D4E5F6073";
 
 /// Builds the test plug-in once and returns its bundle.
 pub fn test_bundle() -> PathBuf {
@@ -86,8 +87,17 @@ impl Host {
 
     /// Sends a block; None when the host is gone.
     fn process(&mut self, changes: &[(u32, f64)], samples: &[f32]) -> Option<Vec<f32>> {
+        self.play(changes, &[], samples)
+    }
+
+    fn play(
+        &mut self,
+        changes: &[(u32, f64)],
+        notes: &[NoteEvent],
+        samples: &[f32],
+    ) -> Option<Vec<f32>> {
         let mut body = Vec::new();
-        encode_audio(&mut body, changes, samples);
+        encode_audio(&mut body, changes, notes, samples);
         write_frame(&mut self.stdin, AUDIO, &body).ok()?;
         let mut buf = Vec::new();
         loop {
@@ -103,9 +113,19 @@ impl Host {
     }
 
     fn load(&mut self, bundle: &Path, state: Option<String>, params: Vec<(u32, f64)>) -> Message {
+        self.load_class(bundle, CID, state, params)
+    }
+
+    fn load_class(
+        &mut self,
+        bundle: &Path,
+        cid: &str,
+        state: Option<String>,
+        params: Vec<(u32, f64)>,
+    ) -> Message {
         self.request(&Request::Load {
             path: bundle.to_string_lossy().into_owned(),
-            cid: CID.into(),
+            cid: cid.into(),
             rate: 48_000.0,
             state,
             params,
@@ -147,8 +167,14 @@ fn scans_processes_saves_and_survives_a_crash() {
         .unwrap();
     let scan: ScanResult = serde_json::from_slice(&out.stdout).expect("scan prints JSON");
     assert_eq!(scan.error, None);
-    assert_eq!(scan.classes.len(), 1);
+    assert_eq!(scan.classes.len(), 2);
     let c = &scan.classes[0];
+    assert!(!c.instrument);
+    // The synth has a note input and no audio input: an instrument.
+    assert_eq!(
+        (scan.classes[1].name.as_str(), scan.classes[1].instrument),
+        ("Altered Test Synth", true)
+    );
     assert_eq!(
         (c.cid.as_str(), c.name.as_str(), c.latency),
         (CID, "Altered Test Gain", 32)
@@ -229,4 +255,63 @@ fn scans_processes_saves_and_survives_a_crash() {
     assert_eq!(h.process(&[(1, 1.0)], &impulse(64, 0)), None);
     let status = h.child.wait().unwrap();
     assert!(!status.success());
+}
+
+#[test]
+fn plays_notes_on_an_instrument_at_their_frames() {
+    let bundle = test_bundle();
+    let mut h = Host::start();
+    match h.load_class(&bundle, SYNTH, None, vec![]) {
+        Message::Loaded {
+            instrument,
+            latency,
+            ..
+        } => assert_eq!((instrument, latency), (true, 0)),
+        m => panic!("{m:?}"),
+    }
+    assert_eq!(
+        h.request(&Request::Tempo {
+            bpm: 90.0,
+            beats_per_bar: 3
+        }),
+        Message::Ok
+    );
+    let on = |offset, pitch, velocity| NoteEvent {
+        offset,
+        on: true,
+        pitch,
+        velocity,
+    };
+    let off = |offset, pitch| NoteEvent {
+        offset,
+        on: false,
+        pitch,
+        velocity: 0.0,
+    };
+    let silent = vec![0.0; 256 * 2];
+    // A note from frame 10 to 100.
+    let y = h
+        .play(&[], &[on(10, 60, 1.0), off(100, 60)], &silent)
+        .unwrap();
+    assert_eq!(
+        (y[9 * 2], y[10 * 2], y[99 * 2], y[100 * 2]),
+        (0.0, 0.5, 0.5, 0.0)
+    );
+    // Held across blocks, softer, through a block bigger than the largest.
+    let big = vec![0.0; (MAX_BLOCK + 300) * 2];
+    let y = h
+        .play(
+            &[],
+            &[on(5, 64, 0.5), off(MAX_BLOCK as u32 + 200, 64)],
+            &big,
+        )
+        .unwrap();
+    assert_eq!(y[4 * 2], 0.0);
+    assert_eq!(y[(MAX_BLOCK + 199) * 2], 0.25);
+    assert_eq!(y[(MAX_BLOCK + 200) * 2], 0.0);
+    // A reset silences a held note.
+    h.play(&[], &[on(0, 67, 1.0)], &silent).unwrap();
+    assert_eq!(h.request(&Request::Reset), Message::Ok);
+    let y = h.play(&[], &[], &silent).unwrap();
+    assert_eq!(y[0], 0.0);
 }

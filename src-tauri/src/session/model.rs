@@ -57,6 +57,10 @@ pub struct Session {
     /// Bus tracks, top to bottom.
     pub buses: Vec<Bus>,
     pub master: MasterTrack,
+    /// Tempo and meter. MIDI clips and notes are placed in beats, so they
+    /// follow it. Files from before MIDI tracks get the default.
+    #[serde(default, skip_serializing_if = "Tempo::is_default")]
+    pub tempo: Tempo,
     pub markers: Vec<Marker>,
     /// Playlist panel: range markers in the order they play and export.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -99,6 +103,7 @@ impl Session {
             tracks: Vec::new(),
             buses: Vec::new(),
             master: MasterTrack::default(),
+            tempo: Tempo::default(),
             markers: Vec::new(),
             playlist: Vec::new(),
             view: SessionView::default(),
@@ -113,6 +118,91 @@ impl Session {
     pub fn media_by_id(&self, id: Id) -> Option<&MediaRef> {
         self.media.iter().find(|m| m.id == id)
     }
+}
+
+/// The session's tempo and meter.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Tempo {
+    /// Beats (quarter notes) per minute.
+    pub bpm: f64,
+    /// Beats in a bar, for example 4 in 4/4 or 3 in 3/4.
+    pub beats_per_bar: u32,
+}
+
+impl Default for Tempo {
+    fn default() -> Self {
+        Self {
+            bpm: 120.0,
+            beats_per_bar: 4,
+        }
+    }
+}
+
+/// Lowest and highest tempos a session can have.
+pub const BPM_MIN: f64 = 20.0;
+pub const BPM_MAX: f64 = 400.0;
+
+impl Tempo {
+    pub fn is_default(&self) -> bool {
+        *self == Tempo::default()
+    }
+
+    /// Beats to samples at `rate`.
+    pub fn samples(&self, beats: f64, rate: u32) -> u64 {
+        (beats.max(0.0) * 60.0 / self.bpm.clamp(BPM_MIN, BPM_MAX) * f64::from(rate)).round() as u64
+    }
+
+    /// Samples at `rate` to beats.
+    pub fn beats(&self, samples: u64, rate: u32) -> f64 {
+        samples as f64 / f64::from(rate.max(1)) * self.bpm.clamp(BPM_MIN, BPM_MAX) / 60.0
+    }
+}
+
+/// What a track holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TrackKind {
+    /// Audio clips.
+    #[default]
+    Audio,
+    /// MIDI clips, played by the track's instrument.
+    Midi,
+}
+
+impl TrackKind {
+    pub fn is_audio(&self) -> bool {
+        *self == TrackKind::Audio
+    }
+}
+
+/// One note in a MIDI clip.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Note {
+    /// MIDI note number, 0 to 127 (60 is middle C).
+    pub pitch: u8,
+    /// 1 to 127.
+    pub velocity: u8,
+    /// Beats from the clip's start.
+    pub start: f64,
+    /// Beats.
+    pub length: f64,
+}
+
+/// A MIDI clip: notes, placed in beats so they follow the tempo.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct MidiClip {
+    pub id: Id,
+    pub name: String,
+    /// Timeline position of the clip's left edge, in beats.
+    pub start: f64,
+    /// Beats. Notes past the end are not played.
+    pub length: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub muted: bool,
+    /// `#rrggbb` or a palette token. None uses the track color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    pub notes: Vec<Note>,
 }
 
 /// A source audio file referenced by clips.
@@ -196,6 +286,9 @@ pub enum TrackRole {
 pub struct Track {
     pub id: Id,
     pub name: String,
+    /// Audio or MIDI. Left out of the file for audio tracks.
+    #[serde(default, skip_serializing_if = "TrackKind::is_audio")]
+    pub kind: TrackKind,
     pub role: TrackRole,
     /// Scaffolding (P5): id of the host profile applied to this track,
     /// for example `host`.
@@ -240,6 +333,13 @@ pub struct Track {
     pub effects: EffectChain,
     /// Clips on this track. Order does not matter; position does.
     pub clips: Vec<Clip>,
+    /// MIDI tracks: the VST3 instrument that plays the notes. Its sound
+    /// then goes through the track's Voice Chain like any track's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instrument: Option<EffectSlot>,
+    /// MIDI tracks: their clips.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub midi_clips: Vec<MidiClip>,
     /// Track automation lanes.
     pub envelopes: Vec<Envelope>,
 }
@@ -250,6 +350,7 @@ impl Track {
         Self {
             id: new_id(),
             name: name.into(),
+            kind: TrackKind::Audio,
             role: TrackRole::Standard,
             host_profile_id: None,
             channels,
@@ -270,7 +371,17 @@ impl Track {
             sends: Vec::new(),
             effects: EffectChain::default(),
             clips: Vec::new(),
+            instrument: None,
+            midi_clips: Vec::new(),
             envelopes: Vec::new(),
+        }
+    }
+
+    /// An empty MIDI track.
+    pub fn midi(name: impl Into<String>) -> Self {
+        Self {
+            kind: TrackKind::Midi,
+            ..Self::new(name, ChannelLayout::Stereo)
         }
     }
 }

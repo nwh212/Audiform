@@ -97,6 +97,10 @@
       ],
       "format": "uuid"
     },
+    "tempo": {
+      "description": "Tempo and meter. MIDI clips and notes are placed in beats, so they\nfollow it. Files from before MIDI tracks get the default.",
+      "$ref": "#/$defs/Tempo"
+    },
     "tracks": {
       "description": "Audio tracks, top to bottom.",
       "type": "array",
@@ -902,6 +906,88 @@
         "length"
       ]
     },
+    "MidiClip": {
+      "description": "A MIDI clip: notes, placed in beats so they follow the tempo.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "`#rrggbb` or a palette token. None uses the track color.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "length": {
+          "description": "Beats. Notes past the end are not played.",
+          "type": "number",
+          "format": "double"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Note"
+          }
+        },
+        "start": {
+          "description": "Timeline position of the clip's left edge, in beats.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "start",
+        "length",
+        "notes"
+      ]
+    },
+    "Note": {
+      "description": "One note in a MIDI clip.",
+      "type": "object",
+      "properties": {
+        "length": {
+          "description": "Beats.",
+          "type": "number",
+          "format": "double"
+        },
+        "pitch": {
+          "description": "MIDI note number, 0 to 127 (60 is middle C).",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "start": {
+          "description": "Beats from the clip's start.",
+          "type": "number",
+          "format": "double"
+        },
+        "velocity": {
+          "description": "1 to 127.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pitch",
+        "velocity",
+        "start",
+        "length"
+      ]
+    },
     "Output": {
       "description": "Where a track or bus sends its output.",
       "oneOf": [
@@ -1034,6 +1120,27 @@
         "playhead"
       ]
     },
+    "Tempo": {
+      "description": "The session's tempo and meter.",
+      "type": "object",
+      "properties": {
+        "beats_per_bar": {
+          "description": "Beats in a bar, for example 4 in 4/4 or 3 in 3/4.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "bpm": {
+          "description": "Beats (quarter notes) per minute.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "bpm",
+        "beats_per_bar"
+      ]
+    },
     "TimeRange": {
       "description": "A span of the timeline.",
       "type": "object",
@@ -1117,6 +1224,28 @@
             "null"
           ]
         },
+        "instrument": {
+          "description": "MIDI tracks: the VST3 instrument that plays the notes. Its sound\nthen goes through the track's Voice Chain like any track's.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EffectSlot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "description": "Audio or MIDI. Left out of the file for audio tracks.",
+          "$ref": "#/$defs/TrackKind"
+        },
+        "midi_clips": {
+          "description": "MIDI tracks: their clips.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MidiClip"
+          }
+        },
         "monitor_input": {
           "description": "Scaffolding (P4): input monitoring on.",
           "type": "boolean"
@@ -1181,6 +1310,21 @@
         "effects",
         "clips",
         "envelopes"
+      ]
+    },
+    "TrackKind": {
+      "description": "What a track holds.",
+      "oneOf": [
+        {
+          "description": "Audio clips.",
+          "type": "string",
+          "const": "audio"
+        },
+        {
+          "description": "MIDI clips, played by the track's instrument.",
+          "type": "string",
+          "const": "midi"
+        }
       ]
     },
     "TrackRole": {

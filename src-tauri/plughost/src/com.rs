@@ -15,10 +15,10 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 use vst3::Steinberg::Vst::{
-    IAttributeList, IAttributeListTrait, IComponentHandler, IComponentHandlerTrait,
-    IHostApplication, IHostApplicationTrait, IMessage, IMessageTrait, IParamValueQueue,
-    IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, ParamID, ParamValue,
-    String128, TChar,
+    Event, IAttributeList, IAttributeListTrait, IComponentHandler, IComponentHandlerTrait,
+    IEventList, IEventListTrait, IHostApplication, IHostApplicationTrait, IMessage, IMessageTrait,
+    IParamValueQueue, IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, ParamID,
+    ParamValue, String128, TChar,
 };
 use vst3::Steinberg::{
     int32, int64, kInvalidArgument, kNoInterface, kResultFalse, kResultOk, kResultTrue, tresult,
@@ -280,6 +280,40 @@ impl IParameterChangesTrait for ParamChanges {
             *index = i as int32;
         }
         self.getParameterData(i as int32)
+    }
+}
+
+/// The note events for one block.
+#[derive(Default)]
+pub struct EventList {
+    pub events: RefCell<Vec<Event>>,
+}
+
+impl Class for EventList {
+    type Interfaces = (IEventList,);
+}
+
+impl IEventListTrait for EventList {
+    unsafe fn getEventCount(&self) -> int32 {
+        self.events.borrow().len() as int32
+    }
+
+    unsafe fn getEvent(&self, index: int32, e: *mut Event) -> tresult {
+        match self.events.borrow().get(index.max(0) as usize) {
+            Some(ev) if !e.is_null() => {
+                *e = *ev;
+                kResultOk
+            }
+            _ => kResultFalse,
+        }
+    }
+
+    unsafe fn addEvent(&self, e: *mut Event) -> tresult {
+        if e.is_null() {
+            return kInvalidArgument;
+        }
+        self.events.borrow_mut().push(*e);
+        kResultOk
     }
 }
 

@@ -5,7 +5,8 @@
 
   Multitrack > Add Track > Add Tracks: several mono or stereo tracks at
   once, optionally named ("Guest" gives Guest, Guest 2, Guest 3), placed
-  after the selected track, or bus tracks (added below the audio tracks). Surround
+  after the selected track, MIDI tracks (notes played by a VST3
+  instrument), or bus tracks (added below the audio tracks). Surround
   tracks show why they are not offered.
 -->
 <script lang="ts">
@@ -16,10 +17,12 @@
     stereo: boolean;
     /** Bus tracks instead of audio tracks. */
     bus: boolean;
+    /** MIDI tracks instead of audio tracks. */
+    midi: boolean;
     base: string;
   }
 
-  type Kind = "mono" | "stereo" | "bus";
+  type Kind = "mono" | "stereo" | "midi" | "bus";
 
   interface Props {
     existing: readonly string[];
@@ -33,7 +36,7 @@
   let kind = $state<Kind>("mono");
   let base = $state("");
   const n = $derived(Math.max(1, Math.min(32, Math.round(Number(count) || 1))));
-  const preview = $derived(newTrackNames(existing, Math.min(n, 4), base || (kind === "bus" ? "Bus" : "")));
+  const preview = $derived(newTrackNames(existing, Math.min(n, 4), base || (kind === "bus" ? "Bus" : kind === "midi" ? "MIDI" : "")));
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
@@ -47,6 +50,7 @@
       <select bind:value={kind}>
         <option value="mono">Mono audio (one voice or mic)</option>
         <option value="stereo">Stereo audio (music, beds, mixes)</option>
+        <option value="midi">MIDI (notes played by an instrument plug-in)</option>
         <option value="bus">Stereo bus (groups tracks, takes sends)</option>
         <option disabled>5.1 surround (not planned for podcast work)</option>
       </select>
@@ -54,7 +58,7 @@
     <label class="row"><span>Name</span><input type="text" placeholder="Track" bind:value={base} /></label>
     <p class="note">Adds {preview.join(", ")}{n > 4 ? `, and ${n - 4} more` : ""}{kind === "bus" ? " below the audio tracks" : afterName ? ` after ${afterName}` : " at the bottom"}.</p>
     <footer>
-      <button type="button" class="primary" onclick={() => onApply({ count: n, stereo: kind !== "mono", bus: kind === "bus", base: base || (kind === "bus" ? "Bus" : "") })}>Add</button>
+      <button type="button" class="primary" onclick={() => onApply({ count: n, stereo: kind !== "mono", bus: kind === "bus", midi: kind === "midi", base: base || (kind === "bus" ? "Bus" : kind === "midi" ? "MIDI" : "") })}>Add</button>
       <button type="button" onclick={onClose}>Cancel</button>
     </footer>
   </div>

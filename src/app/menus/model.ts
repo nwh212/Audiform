@@ -202,6 +202,7 @@ export const MENUS: readonly Menu[] = [
       sub("Add Track", [
         item("multitrack.add.mono", "Mono Track"),
         item("multitrack.add.stereo", "Stereo Track"),
+        item("multitrack.add.midi", "MIDI Track"),
         item("multitrack.add-tracks", "Add Tracks..."),
         item("multitrack.add.guest", "Guest Track", { pending: P5 }),
         item("multitrack.add.bus", "Bus Track"),
