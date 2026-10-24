@@ -87,9 +87,23 @@ fn read_frames(path: &std::path::Path, start: u64, count: u64) -> Result<Vec<u8>
     let mut r =
         crate::codecs::AudioReader::open(path, channels, None).map_err(|e| e.to_string())?;
     let rate = f64::from(r.source_rate().max(1));
-    r.seek(start as f64 / rate).map_err(|e| e.to_string())?;
+    // Some files cannot jump to a spot; read from the start and drop what comes before it.
+    let mut skip = 0usize;
+    if r.seek(start as f64 / rate).is_err() {
+        r = crate::codecs::AudioReader::open(path, channels, None).map_err(|e| e.to_string())?;
+        skip = start as usize * channels;
+    }
     let want = count as usize * channels;
     let mut samples = Vec::with_capacity(want);
+    while skip > 0 {
+        let mut block = Vec::new();
+        if !r.read_into(&mut block).map_err(|e| e.to_string())? {
+            break;
+        }
+        let drop = block.len().min(skip);
+        skip -= drop;
+        samples.extend_from_slice(&block[drop..]);
+    }
     while samples.len() < want {
         if !r.read_into(&mut samples).map_err(|e| e.to_string())? {
             break;

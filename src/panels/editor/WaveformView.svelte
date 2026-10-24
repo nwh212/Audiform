@@ -189,6 +189,7 @@
   /** Exact samples read for drawing, per file: a stretch around what is shown. */
   let exact = $state<Record<string, { start: number; count: number; channels: number; data: Float32Array }>>({});
   const asking = new Set<string>();
+  const failed = new Set<string>();
   function needFrames(path: string, from: number, to: number) {
     const have = exact[path];
     if (have && from >= have.start && to <= have.start + have.count) return;
@@ -200,7 +201,11 @@
     asking.add(key);
     void mediaFrames(path, start, count)
       .then((r) => (exact = { ...exact, [path]: { start, count: r.data.length / r.channels, channels: r.channels, data: r.data } }))
-      .catch(() => {})
+      .catch((e: unknown) => {
+        // The peak drawing stays up; say why once per file.
+        if (!failed.has(path)) console.warn(`Exact samples could not be read from ${path}:`, e);
+        failed.add(path);
+      })
       .finally(() => asking.delete(key));
   }
 
@@ -295,7 +300,8 @@
         const fB = Math.min(clip.source_out, Math.ceil(clip.source_in + (relB * srcRate) / rate) + 1);
         needFrames(m.path, fA, fB);
         const have = exact[m.path];
-        if (!have || fA < have.start || fB > have.start + have.count) continue;
+        const ready = have && fA >= have.start && fB <= have.start + Math.max(have.count, 0) + 1;
+        if (ready) {
         const pxPerFrame = 1 / framesPerPx;
         g.strokeStyle = waveColor;
         g.lineWidth = 1.25;
@@ -326,6 +332,8 @@
           }
         }
         continue;
+        }
+        // Not read yet (or could not be): the finest peaks below, until it is.
       }
       const level = pickLevel(entry.levels, framesPerPx);
       if (!level) continue;

@@ -250,11 +250,23 @@ export function peaksLevel(path: string, level: number): Promise<ArrayBuffer> {
   return invoke<ArrayBuffer>("peaks_level", { path, level });
 }
 
+/**
+ * Raw bytes from a command, as a fresh Uint8Array. Some webviews hand raw
+ * bytes back as an ArrayBuffer, others as a typed view or a plain array.
+ */
+export function rawBytes(buf: unknown): Uint8Array {
+  if (buf instanceof ArrayBuffer) return new Uint8Array(buf.slice(0));
+  if (ArrayBuffer.isView(buf)) return new Uint8Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  return Uint8Array.from(buf as ArrayLike<number>);
+}
+
 /** Exact samples of a file: `count` frames from frame `start` at its own rate, interleaved. */
 export async function mediaFrames(path: string, start: number, count: number): Promise<{ channels: number; data: Float32Array }> {
-  const buf = await invoke<ArrayBuffer>("media_frames", { path, start: Math.max(0, Math.floor(start)), count: Math.max(0, Math.ceil(count)) });
-  const channels = new DataView(buf).getUint32(0, true) || 1;
-  return { channels, data: new Float32Array(buf.slice(4)) };
+  const bytes = rawBytes(await invoke<unknown>("media_frames", { path, start: Math.max(0, Math.floor(start)), count: Math.max(0, Math.ceil(count)) }));
+  if (bytes.byteLength < 4) return { channels: 1, data: new Float32Array(0) };
+  const channels = new DataView(bytes.buffer).getUint32(0, true) || 1;
+  const n = Math.floor((bytes.byteLength - 4) / 4);
+  return { channels, data: new Float32Array(bytes.buffer.slice(4, 4 + n * 4)) };
 }
 
 /** The Waveform editor's file: its edit list as a one-track session. */

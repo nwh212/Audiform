@@ -19,6 +19,7 @@
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
+  import { defaultTrackColor } from "../editor/timeline";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
@@ -178,6 +179,22 @@
   const onTrackTab = $derived(!inWave && tab === "track");
   const bus = $derived(onTrackTab ? doc?.buses?.find((b) => b.id === ownerId) : undefined);
   const onMaster = $derived(onTrackTab && !!doc && ownerId === MASTER_ID);
+  /**
+   * The color of whatever the panel is working on, as CSS: the clip's
+   * (or its track's) on Clip Effects, the track's or bus's on Track
+   * Effects, the accent for the master. None in the Waveform editor.
+   */
+  const tint = $derived.by((): string | null => {
+    if (inWave || !doc) return null;
+    const css = (c: string) => (c.startsWith("--") ? `var(${c})` : c);
+    const tracks = doc.tracks;
+    const trackColor = (t: typeof track) => (t ? css(t.color ?? defaultTrackColor(Math.max(0, tracks.indexOf(t)))) : null);
+    if (tab === "clip") return clip?.color ? css(clip.color) : trackColor(clipTrack ?? track);
+    if (onMaster) return "var(--accent)";
+    if (bus) return css(bus.color ?? "--clip-3");
+    return trackColor(track);
+  });
+
   // Tell the Editor whose chain this is, so it can mark that row.
   $effect(() => {
     chainTarget.set(onTrackTab ? (onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null)) : null);
@@ -514,7 +531,7 @@
   };
 </script>
 
-<section class="vc" aria-label="Voice Chain">
+<section class="vc" class:tinted={!!tint} style:--vc-tint={tint} aria-label="Voice Chain">
   <div class="tabs" role="tablist" hidden={inWave}>
     <button type="button" role="tab" aria-selected={tab === "clip"} class:on={tab === "clip"} onclick={() => setTab("clip")}>Clip Effects</button>
     <button type="button" role="tab" aria-selected={tab === "track"} class:on={tab === "track"} onclick={() => setTab("track")}>Track Effects</button>
@@ -851,6 +868,21 @@
     overflow-y: auto;
     background: var(--surface-1);
     font-size: 12px;
+  }
+  /*
+   * Tinted with the color of the track, clip, bus or master being worked
+   * on. The panel's surfaces and outlines are mixed from the theme's
+   * (dark) values and that color, so lighter and darker parts keep their
+   * order. A light theme would use a lighter mix.
+   */
+  .vc.tinted {
+    --surface-0: color-mix(in srgb, var(--vc-tint) 8%, #141416);
+    --surface-1: color-mix(in srgb, var(--vc-tint) 13%, #1b1b1e);
+    --surface-2: color-mix(in srgb, var(--vc-tint) 17%, #232327);
+    --surface-3: color-mix(in srgb, var(--vc-tint) 21%, #2c2c31);
+    --border: color-mix(in srgb, var(--vc-tint) 30%, #34343a);
+    --border-strong: color-mix(in srgb, var(--vc-tint) 42%, #44444b);
+    transition: background-color 120ms;
   }
   .tabs {
     display: flex;
