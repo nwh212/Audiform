@@ -463,6 +463,23 @@ export function clipLength(
   return r === 1 ? natural : Math.round(natural * r);
 }
 
+/**
+ * True for a session with nothing in it worth keeping: no clips (audio or
+ * MIDI), markers, buses or effects. Files imported into such a session
+ * sit in the Files panel to open on their own, without making a session
+ * anyone has to save.
+ */
+export function isBlank(doc: SessionDoc | null): boolean {
+  if (!doc) return true;
+  const fx = (c: { slots?: unknown[] } | undefined) => (c?.slots?.length ?? 0) > 0;
+  return (
+    doc.tracks.every((t) => t.clips.length === 0 && !(t.midi_clips?.length ?? 0) && !fx(t.effects)) &&
+    doc.markers.length === 0 &&
+    !(doc.buses?.length ?? 0) &&
+    !fx(doc.master?.effects)
+  );
+}
+
 /** End of the last MIDI clip, in session samples (the core's sums). */
 export function midiEnd(doc: SessionDoc, rate = doc.sample_rate): number {
   const t = tempoOf(doc);
@@ -515,7 +532,29 @@ export class SessionStore {
   async load(): Promise<SessionDoc> {
     const r = await this.backend.get();
     this.set(r.session, r.path);
+    if (r.path === null) this.launch = { id: r.session.id, tracks: r.session.tracks.map((t) => t.id).join() };
     return this.doc!;
+  }
+
+  /** The never-saved session the app opened with, and its tracks then. */
+  private launch: { id: string; tracks: string } | null = null;
+
+  /**
+   * True while the open session is still the blank one the app started
+   * with: never saved, its tracks as they were, and nothing in it (files
+   * imported into the Files panel do not count). It is not listed, starred
+   * or offered for saving, and the Editor shows its start screen. A
+   * session made with New Session or opened from a file never is.
+   */
+  isScratch(doc: SessionDoc | null = this.doc): boolean {
+    return (
+      !!doc &&
+      !!this.launch &&
+      this.filePath === null &&
+      doc.id === this.launch.id &&
+      doc.tracks.map((t) => t.id).join() === this.launch.tracks &&
+      isBlank(doc)
+    );
   }
 
   /** Replaces the whole document, for example after opening a file. */

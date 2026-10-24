@@ -107,8 +107,9 @@ describe("SessionFiles", () => {
     expect(displayName("C:\\Shows\\Show 440.altaudio", null)).toBe("Show 440");
   });
 
-  it("a never-saved session with nothing in it is not one to save", async () => {
-    const { files, calls, makeDirty } = setup({ blank: true });
+  it("the blank session the app opened with is not one to save", async () => {
+    const { files, calls, makeDirty, session } = setup({ blank: true });
+    await session.load();
     // Files imported into the Files panel only: no star, no question, no recovery copy.
     await makeDirty();
     expect(files.dirty).toBe(true);
@@ -118,6 +119,22 @@ describe("SessionFiles", () => {
     expect(await files.newSession()).toBe(true);
     expect(calls).toEqual(["create"]);
     expect(isBlank(withContent(doc()))).toBe(false);
+  });
+
+  it("a new session, or a track added, is a real session (tester report: tracks would not show)", async () => {
+    const { files, session, makeDirty } = setup({ blank: true });
+    await session.load();
+    expect(session.isScratch()).toBe(true);
+    // A track added to the launch session ends it being scratch.
+    session.set({ ...doc(), tracks: [{ id: "t1", name: "Track 1", clips: [] } as unknown as SessionDoc["tracks"][number]] });
+    expect(session.isScratch()).toBe(false);
+    // So does a session made with New Session, even with nothing in it.
+    await files.newSession();
+    expect(session.current?.id).toBe("id-Untitled Session");
+    session.set({ ...doc(), id: "fresh" });
+    await makeDirty();
+    expect(session.isScratch()).toBe(false);
+    expect(files.unsaved).toBe(true);
   });
 
   it("asks where to save the first time, then saves in place", async () => {

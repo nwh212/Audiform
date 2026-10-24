@@ -130,9 +130,9 @@
 
   /** Nothing in the session yet and nothing chosen: show a start screen instead of six empty tracks. */
   let startDismissed = $state(false);
-  const showStart = $derived(
-    !startDismissed && doc != null && !session.path && doc.markers.length === 0 && (doc.buses?.length ?? 0) === 0 && doc.tracks.every((t) => t.clips.length === 0),
-  );
+  // Only the blank session the app opened with shows the start screen; a
+  // new or opened session, or any track or clip added, puts the tracks up.
+  const showStart = $derived(!startDismissed && doc != null && session.isScratch(doc));
   const shown = $derived(listedTracks(doc?.tracks ?? []));
   const headerTracks = $derived(showStart ? [] : shown);
   const listedIds = $derived(new Set(shown.map((t) => t.id)));

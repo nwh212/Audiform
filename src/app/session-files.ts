@@ -56,22 +56,7 @@ export interface SessionFilesDeps {
   libraries?(): string[];
 }
 
-/**
- * True for a session with nothing in it worth keeping: no clips (audio or
- * MIDI), markers, buses or effects. Files imported into such a session
- * sit in the Files panel to open on their own, without making a session
- * anyone has to save.
- */
-export function isBlank(doc: SessionDoc | null): boolean {
-  if (!doc) return true;
-  const fx = (c: { slots?: unknown[] } | undefined) => (c?.slots?.length ?? 0) > 0;
-  return (
-    doc.tracks.every((t) => t.clips.length === 0 && !(t.midi_clips?.length ?? 0) && !fx(t.effects)) &&
-    doc.markers.length === 0 &&
-    !(doc.buses?.length ?? 0) &&
-    !fx(doc.master?.effects)
-  );
-}
+export { isBlank } from "../stores/session";
 
 /** Display name: the file name without extension, or the session name. */
 export function displayName(path: string | null, doc: SessionDoc | null): string {
@@ -106,9 +91,9 @@ export class SessionFiles {
     return this.d.stack.current.dirty;
   }
 
-  /** Changed and worth saving: a never-saved session with nothing in it does not count. */
+  /** Changed and worth saving: the blank session the app opened with, with files imported only, does not count. */
   get unsaved(): boolean {
-    return this.dirty && !(this.d.session.path === null && isBlank(this.d.session.current));
+    return this.dirty && !this.d.session.isScratch();
   }
 
   get name(): string {

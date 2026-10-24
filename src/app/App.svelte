@@ -111,7 +111,7 @@
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
-  import { SessionFiles, displayName, isBlank, planOpen, type Choice } from "./session-files";
+  import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
     sessionAutosave,
@@ -1455,7 +1455,7 @@
       return;
     }
     // A never-saved session with nothing in it (files imported only) is not listed as "Untitled Session".
-    if (!session.path && isBlank(d)) {
+    if (session.isScratch(d)) {
       if (get(sessionRow)) sessionRow.set(null);
       return;
     }
