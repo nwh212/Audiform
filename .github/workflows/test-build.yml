@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) The GeekCast Radio Network, LLC.
+# This file is part of Altered Audio Editor.
+
+# Test build of this branch: the Windows installer and portable exe as a
+# downloadable artifact. Not part of the pull request.
+
+name: Test build
+
+on:
+  push:
+    branches: ["build/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows test build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build installer (with ASIO)
+        id: asio
+        continue-on-error: true
+        env:
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+        run: npm run tauri build -- --features asio
+
+      - name: Build installer (without ASIO)
+        if: steps.asio.outcome != 'success'
+        run: npm run tauri build
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "test-build"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Copy-Item $setup.FullName (Join-Path $out "Altered-Audio-Editor-buses-test-setup.exe")
+          Copy-Item src-tauri/target/release/altered-audio-editor.exe (Join-Path $out "Altered Audio Editor (buses test).exe")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: altered-audio-editor-buses-test-windows
+          path: ${{ runner.temp }}/test-build/*
+          if-no-files-found: error
