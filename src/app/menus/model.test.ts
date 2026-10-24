@@ -214,6 +214,7 @@ describe("menu model", () => {
       "file.export.markers",
       "edit.marker.chapter",
       "clip.stretch",
+      "clip.properties",
       "fx.gen.tone",
       "fx.gen.noise",
       "fx.gen.silence",
