@@ -16,12 +16,13 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import { liveTakes, type LiveTakes } from "../../stores/record";
-  import { clipLength, sessionEnd, type ClipDoc, type SessionDoc, type SessionStore } from "../../stores/session";
+  import { clipLength, sessionEnd, stretchOf, type ClipDoc, type SessionDoc, type SessionStore } from "../../stores/session";
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { onDestroy } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
   import { levelAt, pointsOf } from "./envelope";
-  import { fit, formatIn, peakRange, pickLevel, rulerTicks, sampleAt, xOf, zoomAround, type Viewport } from "./timeline";
+  import { fit, formatIn, peakRange, pickLevel, rulerTicks, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
+  import { mediaFrames } from "../../app/core";
   import TransportBar from "./TransportBar.svelte";
   import SpectrumView from "./SpectrumView.svelte";
 
@@ -139,6 +140,9 @@
     if (x > width - 20 || x < 0) setView({ scroll: tp.position - 20 * view.spp });
   });
 
+  /** Farthest zoom out: the whole file fills the view, with no empty time after it. */
+  const outermost = () => fit(total, width).spp;
+
   /** The view's zoom commands, used by the Zoom actions while this editor shows. */
   export function zoom(kind: "in" | "out" | "full" | "selection" | "amp-in" | "amp-out"): void {
     if (!doc) return;
@@ -152,7 +156,7 @@
       setView({ spp: f.spp, scroll: Math.max(0, selection.start - (selection.end - selection.start) * 0.05) });
     } else if (kind === "in" || kind === "out") {
       const anchor = Math.max(0, Math.min(width, xOf(playhead, view)));
-      const z = zoomAround(view, kind === "in" ? 0.5 : 2, anchor);
+      const z = zoomAround(view, kind === "in" ? 0.5 : 2, anchor, outermost(), SAMPLE_SPP);
       setView({ spp: z.spp, scroll: z.scroll });
     }
   }
@@ -174,6 +178,30 @@
     if (rel < c.fade_in.length) g *= rel / Math.max(1, c.fade_in.length);
     if (len - rel < c.fade_out.length) g *= (len - rel) / Math.max(1, c.fade_out.length);
     return g;
+  }
+
+  /**
+   * Zoomed in past this many source frames per pixel, the waveform is
+   * drawn from the file's exact samples (a line through them, with a dot
+   * on each once they are far enough apart) instead of the peak cache.
+   */
+  const SAMPLE_VIEW = 8;
+  /** Exact samples read for drawing, per file: a stretch around what is shown. */
+  let exact = $state<Record<string, { start: number; count: number; channels: number; data: Float32Array }>>({});
+  const asking = new Set<string>();
+  function needFrames(path: string, from: number, to: number) {
+    const have = exact[path];
+    if (have && from >= have.start && to <= have.start + have.count) return;
+    const span = to - from;
+    const start = Math.max(0, Math.floor(from - span));
+    const count = Math.ceil(span * 3) + 2;
+    const key = `${path}:${start}:${count}`;
+    if (asking.has(key)) return;
+    asking.add(key);
+    void mediaFrames(path, start, count)
+      .then((r) => (exact = { ...exact, [path]: { start, count: r.data.length / r.channels, channels: r.channels, data: r.data } }))
+      .catch(() => {})
+      .finally(() => asking.delete(key));
   }
 
   function css(name: string): string {
@@ -258,6 +286,47 @@
       if (entry.status !== "ready" || !entry.summary) continue;
       const srcRate = m.sample_rate || entry.summary.sampleRate;
       const framesPerPx = (view.spp * srcRate) / rate;
+      const plain = !clip.looped && (clip.stretch == null || stretchOf(clip) === 1);
+      if (framesPerPx <= SAMPLE_VIEW && plain) {
+        // Exact samples: map every frame in view to its spot, through the piece's level.
+        const relA = Math.max(0, view.scroll + x0 * view.spp - clip.start);
+        const relB = Math.min(len, view.scroll + x1 * view.spp - clip.start);
+        const fA = Math.max(clip.source_in, Math.floor(clip.source_in + (relA * srcRate) / rate) - 1);
+        const fB = Math.min(clip.source_out, Math.ceil(clip.source_in + (relB * srcRate) / rate) + 1);
+        needFrames(m.path, fA, fB);
+        const have = exact[m.path];
+        if (!have || fA < have.start || fB > have.start + have.count) continue;
+        const pxPerFrame = 1 / framesPerPx;
+        g.strokeStyle = waveColor;
+        g.lineWidth = 1.25;
+        for (let ch = 0; ch < channels; ch++) {
+          const top = ch * laneH;
+          const mid = top + laneH / 2;
+          const half = laneH / 2 - 2;
+          const hc = Math.min(ch, have.channels - 1);
+          const at = (f: number) => {
+            const rel = ((f - clip.source_in) * rate) / srcRate;
+            const v = (have.data[(f - have.start) * have.channels + hc] ?? 0) * pieceGain(clip, rel, len) * ampZoom;
+            return [xOf(clip.start + rel, view), mid - Math.max(-1, Math.min(1, v)) * half] as const;
+          };
+          g.beginPath();
+          for (let f = fA; f < fB; f++) {
+            const [x, y] = at(f);
+            if (f === fA) g.moveTo(x, y);
+            else g.lineTo(x, y);
+          }
+          g.stroke();
+          if (pxPerFrame >= 6) {
+            for (let f = fA; f < fB; f++) {
+              const [x, y] = at(f);
+              g.beginPath();
+              g.arc(x, y, 2.25, 0, Math.PI * 2);
+              g.fill();
+            }
+          }
+        }
+        continue;
+      }
       const level = pickLevel(entry.levels, framesPerPx);
       if (!level) continue;
       const pch = entry.summary.channels;
@@ -492,7 +561,7 @@
       e.preventDefault();
       const r = zoomRatios();
       const at = settings.current.wheelAnchor === "playhead" ? Math.max(0, Math.min(width, xOf(playhead, view))) : x;
-      const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at);
+      const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, outermost(), SAMPLE_SPP);
       setView({ spp: z.spp, scroll: z.scroll });
     } else {
       e.preventDefault();

@@ -250,6 +250,13 @@ export function peaksLevel(path: string, level: number): Promise<ArrayBuffer> {
   return invoke<ArrayBuffer>("peaks_level", { path, level });
 }
 
+/** Exact samples of a file: `count` frames from frame `start` at its own rate, interleaved. */
+export async function mediaFrames(path: string, start: number, count: number): Promise<{ channels: number; data: Float32Array }> {
+  const buf = await invoke<ArrayBuffer>("media_frames", { path, start: Math.max(0, Math.floor(start)), count: Math.max(0, Math.ceil(count)) });
+  const channels = new DataView(buf).getUint32(0, true) || 1;
+  return { channels, data: new Float32Array(buf.slice(4)) };
+}
+
 /** The Waveform editor's file: its edit list as a one-track session. */
 export interface WaveDocRaw<S> {
   session: S;

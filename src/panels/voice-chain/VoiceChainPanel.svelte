@@ -18,6 +18,7 @@
   import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
+  import { chainTarget } from "../../stores/chain-target";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
@@ -177,6 +178,11 @@
   const onTrackTab = $derived(!inWave && tab === "track");
   const bus = $derived(onTrackTab ? doc?.buses?.find((b) => b.id === ownerId) : undefined);
   const onMaster = $derived(onTrackTab && !!doc && ownerId === MASTER_ID);
+  // Tell the Editor whose chain this is, so it can mark that row.
+  $effect(() => {
+    chainTarget.set(onTrackTab ? (onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null)) : null);
+  });
+  $effect(() => () => chainTarget.set(null));
   const target = $derived.by((): EffectTarget | null => {
     if (inWave) return waveTrack ? { kind: "track", id: waveTrack.id } : null;
     if (tab === "clip") return clip ? { kind: "clip", id: clip.id } : null;
@@ -573,7 +579,12 @@
         {@const count = (c: EffectChainDoc | undefined) => ((c?.slots.length ?? 0) > 0 ? ` (${c!.slots.length})` : "")}
         <label class="line target">
           <span>{onMaster ? "Master" : bus ? "Bus" : "Track"}</span>
-          <select class="grow" aria-label="Track, bus or master" value={onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? "")} onchange={(e) => (pickedTrack = e.currentTarget.value)}>
+          <select class="grow" aria-label="Track, bus or master" value={onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? "")} onchange={(e) => {
+            const id = e.currentTarget.value;
+            // Select it in the Editor too, so the row marked there is the one shown here.
+            editor.selectTrack(id);
+            pickedTrack = id;
+          }}>
             <optgroup label="Tracks">
               {#each doc.tracks as t (t.id)}<option value={t.id}>{t.name}{count(t.effects)}</option>{/each}
             </optgroup>

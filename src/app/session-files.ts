@@ -56,6 +56,23 @@ export interface SessionFilesDeps {
   libraries?(): string[];
 }
 
+/**
+ * True for a session with nothing in it worth keeping: no clips (audio or
+ * MIDI), markers, buses or effects. Files imported into such a session
+ * sit in the Files panel to open on their own, without making a session
+ * anyone has to save.
+ */
+export function isBlank(doc: SessionDoc | null): boolean {
+  if (!doc) return true;
+  const fx = (c: { slots?: unknown[] } | undefined) => (c?.slots?.length ?? 0) > 0;
+  return (
+    doc.tracks.every((t) => t.clips.length === 0 && !(t.midi_clips?.length ?? 0) && !fx(t.effects)) &&
+    doc.markers.length === 0 &&
+    !(doc.buses?.length ?? 0) &&
+    !fx(doc.master?.effects)
+  );
+}
+
 /** Display name: the file name without extension, or the session name. */
 export function displayName(path: string | null, doc: SessionDoc | null): string {
   if (path) {
@@ -89,13 +106,18 @@ export class SessionFiles {
     return this.d.stack.current.dirty;
   }
 
+  /** Changed and worth saving: a never-saved session with nothing in it does not count. */
+  get unsaved(): boolean {
+    return this.dirty && !(this.d.session.path === null && isBlank(this.d.session.current));
+  }
+
   get name(): string {
     return displayName(this.d.session.path, this.d.session.current);
   }
 
   /** Window title, with a star while there are unsaved changes. */
   title(): string {
-    return `${this.name}${this.dirty ? " *" : ""} - Altered Audio Editor`;
+    return `${this.name}${this.unsaved ? " *" : ""} - Altered Audio Editor`;
   }
 
   startAutosave(intervalMs = AUTOSAVE_MS): void {
@@ -110,7 +132,7 @@ export class SessionFiles {
 
   /** Writes a recovery copy if there is anything unsaved. */
   async autosaveNow(): Promise<boolean> {
-    if (!this.dirty) return false;
+    if (!this.unsaved) return false;
     try {
       await this.d.backend.autosave(this.mediaRefs());
       return true;
@@ -121,7 +143,7 @@ export class SessionFiles {
 
   /** Returns false if the user cancelled. */
   async confirmDiscard(): Promise<boolean> {
-    if (!this.dirty) return true;
+    if (!this.unsaved) return true;
     const choice = await this.d.askSave(this.name);
     if (choice === "cancel") return false;
     if (choice === "save") return this.save();

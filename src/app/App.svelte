@@ -111,7 +111,7 @@
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
-  import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
+  import { SessionFiles, displayName, isBlank, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
     sessionAutosave,
@@ -1444,7 +1444,7 @@
   function updateEditorTitle() {
     const f = waveFile.current();
     const what = inWave() && f ? (f.path.split(/[\\/]/).pop() ?? "") : files.name;
-    dock.setTitle("editor", what ? `Editor - ${what}${inWave() ? "" : files.dirty ? " *" : ""}` : "Editor");
+    dock.setTitle("editor", what ? `Editor - ${what}${inWave() ? "" : files.unsaved ? " *" : ""}` : "Editor");
   }
   /** The open session as a row at the top of the Files panel. */
   const sessionRow = writable<SessionRow | null>(null);
@@ -1454,13 +1454,13 @@
       sessionRow.set(null);
       return;
     }
-    // A blank session nobody has touched is not listed as "Untitled Session".
-    if (!session.path && !files.dirty && d.tracks.every((t) => t.clips.length === 0)) {
+    // A never-saved session with nothing in it (files imported only) is not listed as "Untitled Session".
+    if (!session.path && isBlank(d)) {
       if (get(sessionRow)) sessionRow.set(null);
       return;
     }
     const seconds = sessionEnd(d) / Math.max(1, d.sample_rate);
-    const row: SessionRow = { name: files.name, dirty: files.dirty, seconds, sampleRate: d.sample_rate, active: !inWave() };
+    const row: SessionRow = { name: files.name, dirty: files.unsaved, seconds, sampleRate: d.sample_rate, active: !inWave() };
     const cur = get(sessionRow);
     if (!cur || cur.name !== row.name || cur.dirty !== row.dirty || cur.seconds !== row.seconds || cur.sampleRate !== row.sampleRate || cur.active !== row.active) sessionRow.set(row);
   }

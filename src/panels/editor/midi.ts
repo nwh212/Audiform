@@ -178,3 +178,34 @@ export function deleteClipsOps(doc: SessionDoc, ids: ReadonlySet<string>): Op[] 
 
 /** Every MIDI clip id in the session. */
 export const allMidiClipIds = (doc: SessionDoc) => doc.tracks.flatMap((t) => (t.midi_clips ?? []).map((c) => c.id));
+
+/**
+ * Moves the start of the notes at `indexes` by `beats`, keeping their
+ * ends where they are (each stays at least MIN_NOTE long and starts at 0
+ * or later).
+ */
+export function resizeNotesStart(notes: NoteDoc[], indexes: ReadonlySet<number>, beats: number): NoteDoc[] {
+  return notes.map((n, i) => {
+    if (!indexes.has(i)) return n;
+    const end = n.start + n.length;
+    const start = Math.min(end - MIN_NOTE, Math.max(0, n.start + beats));
+    return { ...n, start, length: end - start };
+  });
+}
+
+/** The notes at `indexes`, moved so the earliest starts at 0: what Copy keeps. */
+export function copyNotes(notes: NoteDoc[], indexes: ReadonlySet<number>): NoteDoc[] {
+  const picked = notes.filter((_, i) => indexes.has(i));
+  const first = Math.min(...picked.map((n) => n.start));
+  return picked.map((n) => ({ ...n, start: n.start - first }));
+}
+
+/** How long a copied set of notes runs, in beats. */
+export const spanOf = (copied: NoteDoc[]) => Math.max(0, ...copied.map((n) => n.start + n.length));
+
+/** Pastes `copied` (from copyNotes) at `at` beats. Returns the notes and the pasted ones' indexes. */
+export function pasteNotes(notes: NoteDoc[], copied: NoteDoc[], at: number): { notes: NoteDoc[]; pasted: Set<number> } {
+  const added = copied.map((n) => ({ ...n, start: n.start + Math.max(0, at) }));
+  const all = sortNotes([...notes, ...added]);
+  return { notes: all, pasted: new Set(added.map((a) => all.indexOf(a))) };
+}

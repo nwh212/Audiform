@@ -7,7 +7,7 @@ import { UndoStack } from "../commands";
 import { MediaPool } from "../stores/media-pool";
 import { SessionStore, type SessionDoc } from "../stores/session";
 import type { Recoverable, SessionResult } from "./core";
-import { displayName, planOpen, SessionFiles, type Choice, type SessionFileBackend } from "./session-files";
+import { displayName, isBlank, planOpen, SessionFiles, type Choice, type SessionFileBackend } from "./session-files";
 
 function doc(name = "Untitled Session", media: SessionDoc["media"] = []): SessionDoc {
   return {
@@ -31,7 +31,10 @@ const result = (session: SessionDoc, path: string | null, missing: string[] = []
   missing,
 });
 
-function setup(opts: { choice?: Choice; pickSave?: string | null; recoverable?: Recoverable[]; recover?: boolean } = {}) {
+/** A session with something in it worth saving (a marker). */
+const withContent = (d: SessionDoc): SessionDoc => ({ ...d, markers: [{ id: "mk", name: "Intro", kind: "cue", start: 0 } as unknown as SessionDoc["markers"][number]] });
+
+function setup(opts: { choice?: Choice; pickSave?: string | null; recoverable?: Recoverable[]; recover?: boolean; blank?: boolean } = {}) {
   const calls: string[] = [];
   let recent: string[] = [];
   const notices: string[] = [];
@@ -67,7 +70,7 @@ function setup(opts: { choice?: Choice; pickSave?: string | null; recoverable?: 
     },
     setView: async () => {},
   });
-  session.set(doc(), null);
+  session.set(opts.blank ? doc() : withContent(doc()), null);
   const pool = new MediaPool({ expand: async (p) => p, probe: async () => ({ path: "", name: "", format: "WAV", codec: "PCM", sampleRate: 48000, channels: 2, length: 10, bitDepth: 16, fileSize: 1 }) });
   const stack = new UndoStack();
   const files = new SessionFiles({
@@ -102,6 +105,19 @@ describe("SessionFiles", () => {
     await makeDirty();
     expect(files.title()).toBe("Untitled Session * - Altered Audio Editor");
     expect(displayName("C:\\Shows\\Show 440.altaudio", null)).toBe("Show 440");
+  });
+
+  it("a never-saved session with nothing in it is not one to save", async () => {
+    const { files, calls, makeDirty } = setup({ blank: true });
+    // Files imported into the Files panel only: no star, no question, no recovery copy.
+    await makeDirty();
+    expect(files.dirty).toBe(true);
+    expect(files.unsaved).toBe(false);
+    expect(files.title()).toBe("Untitled Session - Altered Audio Editor");
+    expect(await files.autosaveNow()).toBe(false);
+    expect(await files.newSession()).toBe(true);
+    expect(calls).toEqual(["create"]);
+    expect(isBlank(withContent(doc()))).toBe(false);
   });
 
   it("asks where to save the first time, then saves in place", async () => {

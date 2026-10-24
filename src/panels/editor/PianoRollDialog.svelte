@@ -4,15 +4,22 @@
   This file is part of Altered Audio Editor.
 
   A MIDI clip's notes, on a piano roll. Click empty space to add a note
-  one grid step long; drag a note to move it, drag its right edge to
-  change its length, and double-click or right-click it to delete it.
-  Shift-click picks several. The velocity lane below sets how hard each
+  one grid step long; drag a note's middle to move it, drag either end to
+  stretch it that way, and double-click or right-click it to delete it.
+  Shift-click picks several, Shift-drag on empty space picks all in a
+  box; moving or stretching one picked note moves or stretches them all.
+  Copy and paste (Ctrl+C, Ctrl+V) paste at the last spot clicked. Snap
+  turns the grid on and off. The velocity lane below sets how hard each
   note plays. Done (or Escape) keeps the changes as one undoable edit;
   Cancel drops them.
 -->
+<script lang="ts" module>
+  /** Copied notes, kept while the app runs, so they paste into any clip. */
+  let clipboard: import("../../stores/session").NoteDoc[] = [];
+</script>
 <script lang="ts">
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
-  import { GRIDS, MIN_NOTE, addNote, gridBeats, isBlackKey, moveNotes, noteName, pitchRange, removeNotes, resizeNotes, setVelocity, snap, snapDown } from "./midi";
+  import { GRIDS, MIN_NOTE, addNote, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
     clip: MidiClipDoc;
@@ -29,16 +36,24 @@
   let clip = $state<MidiClipDoc>(structuredClone($state.snapshot(original)) as MidiClipDoc);
   let picked = $state<Set<number>>(new Set());
   let grid = $state(0.25);
+  /** Snap to the grid while drawing, moving and stretching. */
+  let snapOn = $state(true);
+  /** Where Paste puts notes: the last spot clicked on the grid, in beats. */
+  let cursor = $state<number | null>(null);
+  let hasCopy = $state(clipboard.length > 0);
+  /** Shift-drag on empty space: the box being drawn, in pixels. */
+  let box = $state<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   let zoom = $state(64);
   /** Length (beats) of the next note added: the last one drawn or resized. */
   let drawLength = $state(0.25);
 
   const ROW = 14;
-  const KEYS = 56;
-  const step = $derived(gridBeats(grid, tempo));
+  const step = $derived(snapOn ? gridBeats(grid, tempo) : 0);
   const changed = $derived(JSON.stringify($state.snapshot(clip)) !== JSON.stringify(original));
-  const bars = $derived(Math.ceil(clip.length / tempo.beats_per_bar));
-  const widthPx = $derived(Math.max(clip.length, bars * tempo.beats_per_bar) * zoom);
+  /** The grid runs two bars past the clip's end (or its last note), so there is room to work. */
+  const widthPx = $derived(
+    (Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * tempo.beats_per_bar) * zoom,
+  );
 
   let scroller = $state<HTMLDivElement | null>(null);
   $effect(() => {
@@ -85,7 +100,38 @@
     let i = noteAt(p.beat, p.pitch);
     const startX = e.clientX;
     const startY = e.clientY;
-    let mode: "move" | "size";
+    cursor = step > 0 ? snapDown(p.beat, step) : p.beat;
+    let mode: "move" | "end" | "start";
+    if (i < 0 && e.shiftKey) {
+      // Shift-drag on empty space: pick every note the box touches.
+      const r = el.getBoundingClientRect();
+      const x0 = e.clientX - r.left;
+      const y0 = e.clientY - r.top;
+      const before = new Set(picked);
+      box = { x0, y0, x1: x0, y1: y0 };
+      const moveBox = (ev: PointerEvent) => {
+        if (!box) return;
+        box = { ...box, x1: ev.clientX - r.left, y1: ev.clientY - r.top };
+        const [bx0, bx1] = [Math.min(box.x0, box.x1), Math.max(box.x0, box.x1)];
+        const [by0, by1] = [Math.min(box.y0, box.y1), Math.max(box.y0, box.y1)];
+        const inside = new Set(before);
+        clip.notes.forEach((n, k) => {
+          const nx0 = xOf(n.start);
+          const nx1 = xOf(n.start + n.length);
+          const ny0 = yOf(n.pitch);
+          if (nx1 >= bx0 && nx0 <= bx1 && ny0 + ROW >= by0 && ny0 <= by1) inside.add(k);
+        });
+        picked = inside;
+      };
+      const endBox = () => {
+        window.removeEventListener("pointermove", moveBox, true);
+        window.removeEventListener("pointerup", endBox, true);
+        box = null;
+      };
+      window.addEventListener("pointermove", moveBox, true);
+      window.addEventListener("pointerup", endBox, true);
+      return;
+    }
     if (i < 0) {
       // A new note, one grid step (or the last length drawn), on the grid.
       const n: NoteDoc = { pitch: p.pitch, velocity: 100, start: snapDown(p.beat, step), length: step > 0 ? Math.max(step, drawLength) : drawLength };
@@ -93,11 +139,13 @@
       clip = { ...clip, notes };
       i = notes.findIndex((x) => x.start === n.start && x.pitch === n.pitch);
       picked = new Set([i]);
-      mode = "size";
+      mode = "end";
     } else {
       const n = clip.notes[i]!;
-      const edgePx = xOf(n.start + n.length) - (e.clientX - el.getBoundingClientRect().left);
-      mode = edgePx <= 5 ? "size" : "move";
+      // Near either end stretches that way; the middle moves.
+      const px = e.clientX - el.getBoundingClientRect().left;
+      const zone = Math.min(6, (n.length * zoom) / 3);
+      mode = xOf(n.start + n.length) - px <= zone ? "end" : px - xOf(n.start) <= zone ? "start" : "move";
       if (e.shiftKey) {
         const next = new Set(picked);
         if (next.has(i)) next.delete(i);
@@ -109,24 +157,31 @@
     }
     const base = clip.notes;
     const sel = new Set(picked);
+    // The note grabbed: the picked ones follow it, by the same amount.
+    const grabbed = base[i]!;
     const move = (ev: PointerEvent) => {
       const dBeats = (ev.clientX - startX) / zoom;
       if (mode === "move") {
-        const d = step > 0 ? snap(dBeats, step) : dBeats;
+        // The grabbed note lands on the grid; the rest keep their places around it.
+        const d = step > 0 ? snap(grabbed.start + dBeats, step) - grabbed.start : dBeats;
         const ds = -Math.round((ev.clientY - startY) / ROW);
         clip = { ...clip, notes: moveNotes(base, sel, d, ds) };
+      } else if (mode === "end") {
+        const end = grabbed.start + grabbed.length + dBeats;
+        const target = step > 0 ? Math.max(grabbed.start + step, snap(end, step)) : Math.max(grabbed.start + MIN_NOTE, end);
+        clip = { ...clip, notes: resizeNotes(base, sel, target - (grabbed.start + grabbed.length)) };
       } else {
-        const n = base[[...sel][0] ?? 0]!;
-        const end = n.start + n.length + dBeats;
-        const target = step > 0 ? Math.max(n.start + step, snap(end, step)) : Math.max(n.start + MIN_NOTE, end);
-        clip = { ...clip, notes: resizeNotes(base, sel, target - (n.start + n.length)) };
+        const end = grabbed.start + grabbed.length;
+        const start = grabbed.start + dBeats;
+        const target = Math.max(0, step > 0 ? Math.min(end - step, snap(start, step)) : Math.min(end - MIN_NOTE, start));
+        clip = { ...clip, notes: resizeNotesStart(base, sel, target - grabbed.start) };
       }
     };
     const up = () => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       const keep = [...sel].map((k) => clip.notes[k]!).filter(Boolean);
-      if (mode === "size" && keep[0]) drawLength = keep[0].length;
+      if (mode !== "move" && clip.notes[i]) drawLength = clip.notes[i]!.length;
       setNotes(clip.notes, keep);
     };
     window.addEventListener("pointermove", move, true);
@@ -142,6 +197,27 @@
 
   function deletePicked() {
     if (picked.size) setNotes(removeNotes(clip.notes, picked));
+  }
+
+  function copyPicked(cut = false) {
+    if (!picked.size) return;
+    clipboard = copyNotes(clip.notes, picked);
+    hasCopy = true;
+    if (cut) deletePicked();
+  }
+
+  /** Pastes at the last spot clicked (or right after the copied notes), then moves the spot past them. */
+  function paste() {
+    if (!clipboard.length) return;
+    const firstPicked = picked.size ? Math.min(...[...picked].map((k) => clip.notes[k]?.start ?? 0)) : 0;
+    const at = cursor ?? firstPicked + spanOf(clipboard);
+    const r = pasteNotes(clip.notes, clipboard, at);
+    // Pasted past the end: the clip grows to the next bar line, so they play.
+    const end = at + spanOf(clipboard);
+    const bar = Math.max(1, tempo.beats_per_bar);
+    clip = { ...clip, notes: r.notes, length: end > clip.length ? Math.ceil(end / bar - 1e-9) * bar : clip.length };
+    picked = r.pasted;
+    cursor = at + spanOf(clipboard);
   }
 
   function onVelocityDown(e: PointerEvent) {
@@ -186,6 +262,15 @@
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       e.preventDefault();
       picked = new Set(clip.notes.map((_, i) => i));
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      copyPicked();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+      e.preventDefault();
+      copyPicked(true);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      paste();
     }
   }
 
@@ -205,10 +290,14 @@
         <input type="number" min="0.25" step="1" value={clip.length} onchange={(e) => (clip = { ...clip, length: Math.max(0.25, Number(e.currentTarget.value) || clip.length) })} />
         beats
       </label>
+      <label title="Snap notes to the grid while drawing, moving and stretching">
+        <input type="checkbox" bind:checked={snapOn} />
+        Snap
+      </label>
       <label>
         Grid
-        <select bind:value={grid}>
-          {#each GRIDS as g (g.beats)}<option value={g.beats}>{g.label}</option>{/each}
+        <select bind:value={grid} disabled={!snapOn}>
+          {#each GRIDS.filter((g) => g.beats >= 0) as g (g.beats)}<option value={g.beats}>{g.label}</option>{/each}
         </select>
       </label>
       <label title="How hard the picked notes play, 1 to 127">
@@ -226,7 +315,9 @@
         <button type="button" title="Zoom out" aria-label="Zoom out" onclick={() => (zoom = Math.max(12, zoom / 1.5))}>−</button>
         <button type="button" title="Zoom in" aria-label="Zoom in" onclick={() => (zoom = Math.min(400, zoom * 1.5))}>+</button>
       </span>
-      <button type="button" disabled={!picked.size} onclick={deletePicked}>Delete Notes</button>
+      <button type="button" disabled={!picked.size} title="Copy the picked notes (Ctrl+C)" onclick={() => copyPicked()}>Copy</button>
+      <button type="button" disabled={!hasCopy} title="Paste at the last spot clicked (Ctrl+V)" onclick={paste}>Paste</button>
+      <button type="button" disabled={!picked.size} title="Delete the picked notes (Delete)" onclick={deletePicked}>Delete</button>
     </header>
 
     <div class="roll" bind:this={scroller}>
@@ -251,7 +342,12 @@
           {#each pitches as p (p)}
             {#if isBlackKey(p)}<div class="row-black" style:top="{yOf(p)}px" style:height="{ROW}px"></div>{/if}
           {/each}
+          <div class="past" style:left="{xOf(clip.length)}px" title="Past the clip's end: notes here are not played. Lengthen the clip to hear them."></div>
           <div class="end" style:left="{xOf(clip.length)}px" title="The clip ends here"></div>
+          {#if cursor !== null}<div class="cursor" style:left="{xOf(cursor)}px" title="Paste goes here"></div>{/if}
+          {#if box}
+            <div class="box" style:left="{Math.min(box.x0, box.x1)}px" style:top="{Math.min(box.y0, box.y1)}px" style:width="{Math.abs(box.x1 - box.x0)}px" style:height="{Math.abs(box.y1 - box.y0)}px"></div>
+          {/if}
           {#each clip.notes as n, i (i)}
             <div
               class="note"
@@ -263,7 +359,9 @@
               style:height="{ROW - 2}px"
               style:--vel={n.velocity / 127}
               title="{noteName(n.pitch)}, velocity {n.velocity}"
-            ></div>
+            >
+              <span class="h l"></span><span class="h r"></span>
+            </div>
           {/each}
         </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -278,7 +376,7 @@
     <footer>
       <span class="note-text">
         {clip.notes.length}
-        {clip.notes.length === 1 ? "note" : "notes"}{instrument ? `. Plays on ${instrument}.` : ". Pick an instrument in the track header to hear them."} Click to add, drag to move, drag the right edge to resize, double-click to delete.
+        {clip.notes.length === 1 ? "note" : "notes"}{instrument ? `. Plays on ${instrument}.` : ". Pick an instrument in the track header to hear them."} Click to add. Drag the middle to move, an end to stretch. Shift-click or Shift-drag to pick several. Double-click to delete.
       </span>
       <button type="button" onclick={onClose}>Cancel</button>
       <button type="button" class="primary" onclick={done}>Done</button>
@@ -417,6 +515,28 @@
     background: var(--accent);
     pointer-events: none;
   }
+  .past {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+  }
+  .cursor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--text) 55%, transparent);
+    pointer-events: none;
+  }
+  .box {
+    position: absolute;
+    border: 1px dashed var(--text);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    pointer-events: none;
+  }
   .note {
     position: absolute;
     box-sizing: border-box;
@@ -424,6 +544,20 @@
     border-radius: 2px;
     background: color-mix(in srgb, var(--accent) calc(45% + 55% * var(--vel)), var(--surface-1));
     cursor: grab;
+  }
+  /* The ends stretch the note (the grid works out which end from where the pointer is). */
+  .note .h {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: min(6px, 33%);
+    cursor: ew-resize;
+  }
+  .note .l {
+    left: 0;
+  }
+  .note .r {
+    right: 0;
   }
   .note.picked {
     border-color: var(--text);

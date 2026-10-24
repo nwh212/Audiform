@@ -33,6 +33,7 @@
   import ClipColorDialog from "../../app/ClipColorDialog.svelte";
   import { laneRows, moveRowOps } from "./rows";
   import { monoCheck } from "../../stores/mono-check";
+  import { chainTarget } from "../../stores/chain-target";
   import Dial from "./Dial.svelte";
   import TrackMeter from "./TrackMeter.svelte";
   import { inputLevels, liveTakes, type LiveTakes } from "../../stores/record";
@@ -1436,7 +1437,8 @@
 
   // Track reordering by dragging the header.
   function onHeaderPointer(e: PointerEvent, track: TrackDoc) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input")) return;
+    // Controls work as controls; only the rest of the header picks up and drags the track.
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, select, textarea, label, a")) return;
     startRowDrag(e, track.id, "Move Track");
   }
 
@@ -1818,6 +1820,7 @@
             class="header"
             class:alt={i % 2 === 1}
             class:selected={ed.selectedTrack === track.id}
+            class:fx={$chainTarget === track.id}
             style:--track-color={trackColor(track.color, i)}
             data-header={track.id}
             data-row={track.id}
@@ -1830,7 +1833,8 @@
             }}
           >
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="grab" title="Drag to move the track up or down" onpointerdown={(e) => onHeaderPointer(e, track)}></div>
+            <div class="grab" title="Click to select the track (its effects show in the Voice Chain). Drag to move it up or down." onpointerdown={(e) => onHeaderPointer(e, track)}></div>
+            {#if $chainTarget === track.id}<span class="fx-tag" title="The Voice Chain is showing this track's effects">FX</span>{/if}
             <div class="line">
               <button
                 type="button"
@@ -1958,6 +1962,7 @@
           <div
             class="header bus"
             class:selected={ed.selectedTrack === b.id}
+            class:fx={$chainTarget === b.id}
             style:--track-color={b.color ? trackColor(b.color, 0) : "var(--clip-3)"}
             style:height="{busHeight(b)}px"
             data-bus-header={b.id}
@@ -2015,6 +2020,7 @@
           <div
             class="header master"
             class:selected={ed.selectedTrack === MASTER_ID}
+            class:fx={$chainTarget === MASTER_ID}
             style:height="72px"
             title="Master: every track and bus ends here. Click to show its Voice Chain."
             onclick={() => editor.selectTrack(MASTER_ID)}
@@ -2613,6 +2619,31 @@
 
   .header.selected {
     background: var(--lane-selected);
+  }
+
+  /* The row whose effects the Voice Chain shows. */
+  .header.fx::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--accent);
+    border-left-width: 3px;
+    pointer-events: none;
+  }
+
+  .fx-tag {
+    position: absolute;
+    right: 26px;
+    bottom: 3px;
+    z-index: 1;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 12px;
+    pointer-events: none;
   }
 
   .header.selected .name {

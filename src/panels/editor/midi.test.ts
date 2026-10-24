@@ -13,6 +13,10 @@ import {
   moveNotes,
   newClip,
   noteName,
+  copyNotes,
+  pasteNotes,
+  resizeNotesStart,
+  spanOf,
   removeNotes,
   resizeNotes,
   samplesToBeats,
@@ -80,5 +84,24 @@ describe("midi", () => {
     expect(resizeNotes(notes, new Set([0]), -5)[0]!.length).toBeGreaterThan(0);
     expect(setVelocity(notes, new Set([1]), 300)[1]!.velocity).toBe(127);
     expect(removeNotes(notes, new Set([0]))).toEqual([notes[1]]);
+  });
+
+  it("stretches note starts, copies and pastes", () => {
+    const notes = [note(60, 1, 2), note(64, 2, 1)];
+    // Dragging the start left lengthens, right shortens, the end stays.
+    expect(resizeNotesStart(notes, new Set([0]), -1)[0]).toMatchObject({ start: 0, length: 3 });
+    expect(resizeNotesStart(notes, new Set([0]), 5)[0]!.start + resizeNotesStart(notes, new Set([0]), 5)[0]!.length).toBe(3);
+    expect(resizeNotesStart(notes, new Set([0]), -9)[0]).toMatchObject({ start: 0, length: 3 });
+    const copied = copyNotes(notes, new Set([0, 1]));
+    expect(copied.map((n) => n.start)).toEqual([0, 1]);
+    expect(spanOf(copied)).toBe(2);
+    const p = pasteNotes(notes, copied, 4);
+    expect(p.notes.map((n) => [n.pitch, n.start])).toEqual([
+      [60, 1],
+      [64, 2],
+      [60, 4],
+      [64, 5],
+    ]);
+    expect([...p.pasted].sort()).toEqual([2, 3]);
   });
 });
