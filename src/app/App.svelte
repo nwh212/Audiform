@@ -49,7 +49,7 @@
   import { editor, restoreSettings, settingsOf } from "../stores/editor";
   import { anchorStart, clipsFrom, clipsUpTo, nextClipId } from "./clip-select";
   import { hasClipIn, showOnly } from "../panels/editor/visibility";
-  import { clipLength, sessionEnd, type ClipDoc, type Op, type TrackDoc } from "../stores/session";
+  import { clipLength, sessionEnd, setErrorSink, type ClipDoc, type Op, type TrackDoc } from "../stores/session";
   import { fit, maxSppFor, zoomAround } from "../panels/editor/timeline";
   import ChoiceDialog, { type ChoiceButton } from "./ChoiceDialog.svelte";
   import ExportDialog, { type ExportScopeInfo, type ExportSettings } from "./ExportDialog.svelte";
@@ -214,6 +214,20 @@
     clearTimeout(errorTimer);
     errorTimer = setTimeout(() => (lastError = null), 12000);
   }
+
+  // Errors nothing else catches (in an update, an effect or a promise)
+  // show in the status bar, so they can be seen and reported.
+  setErrorSink((e) => showError(e));
+  onMount(() => {
+    const onErr = (ev: ErrorEvent) => showError(ev.error ?? ev.message);
+    const onRej = (ev: PromiseRejectionEvent) => showError(ev.reason);
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
+    return () => {
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onRej);
+    };
+  });
 
   /** A short status bar message that clears itself. */
   function showNotice(text: string) {

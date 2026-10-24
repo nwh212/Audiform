@@ -181,7 +181,8 @@
   $effect(() =>
     pluginsVersion.subscribe(() => {
       void pluginsRegistry()
-        .then((r) => (instruments = r.plugins.filter((p) => p.instrument)))
+        // One per id, whatever the list holds, so the picker can never break.
+        .then((r) => (instruments = r.plugins.filter((p, i, all) => p.instrument && all.findIndex((q) => q.effect.toUpperCase() === p.effect.toUpperCase()) === i)))
         .catch(() => (instruments = []));
     }),
   );
@@ -1978,7 +1979,7 @@
                 >
                   <option value="">{instruments.length ? "No instrument" : "No instruments found. Scan in Effects > Plug-in Manager."}</option>
                   {#if track.instrument && !inst}<option value={track.instrument.effect}>Missing instrument</option>{/if}
-                  {#each instruments as x (x.effect)}<option value={x.effect}>{x.name}{x.vendor ? ` (${x.vendor})` : ""}</option>{/each}
+                  {#each instruments as x, k (k)}<option value={x.effect}>{x.name}{x.vendor ? ` (${x.vendor})` : ""}</option>{/each}
                 </select>
                 <button type="button" class="ms" title="Open the instrument's window" aria-label="Open the instrument's window" disabled={!track.instrument || !inst} onclick={() => openInstrument(track)}>◳</button>
               </div>

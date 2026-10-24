@@ -107,7 +107,7 @@
     <section>
       <h2>Folders searched</h2>
       <ul class="folders">
-        {#each reg?.folders ?? [] as f (f.path)}
+        {#each reg?.folders ?? [] as f, k (k)}
           <li class:off={!f.on}>
             {#if f.standard}
               <label title={f.on ? "Searched. Untick to leave this standard folder out." : "Left out. Tick to search it again."}>
@@ -155,7 +155,7 @@
           <div class="tr th" role="row">
             <span role="columnheader">Name</span><span role="columnheader">Maker</span><span role="columnheader">Kind</span><span role="columnheader" title="Look-ahead the plug-in adds, compensated during playback and export">Delay</span><span role="columnheader">Window</span>
           </div>
-          {#each shown as p (p.effect)}
+          {#each shown as p, k (k)}
             <div class="tr" role="row" title={p.note ? `${p.bundle}\n${p.note}` : p.bundle}>
               <span>{#if p.note}<span class="warn" title={p.note}>⚠</span> {/if}{p.name}</span><span>{p.vendor}</span><span>{p.kind.replaceAll("|", ", ")}</span><span>{p.latency ? `${p.latency} smp` : "none"}</span><span>{p.hasWindow ? "yes" : "controls only"}</span>
             </div>
@@ -165,7 +165,7 @@
       {#if reg?.failed.length}
         <h2>Could not be read ({reg.failed.length})</h2>
         <ul class="failed">
-          {#each reg.failed as f (f.bundle)}
+          {#each reg.failed as f, k (k)}
             <li title={f.bundle}><b>{name(f.bundle)}</b>: {f.error}</li>
           {/each}
         </ul>

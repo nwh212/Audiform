@@ -107,6 +107,7 @@ pub fn load(config_dir: &Path) {
         // Older scans left instruments out or failed: the next scan reads every bundle again.
         reg.stamps.clear();
     }
+    dedupe(&mut reg.plugins);
     if let Ok(mut f) = config_file().lock() {
         *f = Some(file);
     }
@@ -471,6 +472,7 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
         reg.stamps.insert(b.clone(), s);
     }
     progress(total, total, Path::new(""));
+    dedupe(&mut reg.plugins);
     reg.plugins.sort_by_key(|p| p.info.name.to_lowercase());
     report.found = reg.plugins.len();
     report.failed = reg.failed.len();
@@ -478,6 +480,17 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
     save(&reg);
     set(reg);
     report
+}
+
+/// One entry per plug-in. The same plug-in is often installed twice (in
+/// two scanned folders, or an old copy beside a new one); both have the
+/// same class id, so they are the same effect. The fully read copy is
+/// kept, else the first. (Two entries with one id broke the interface's
+/// lists.)
+fn dedupe(plugins: &mut Vec<Found>) {
+    plugins.sort_by_key(|p| p.info.note.is_some());
+    let mut seen = HashSet::new();
+    plugins.retain(|p| seen.insert(p.info.cid.to_ascii_uppercase()));
 }
 
 pub fn is_plugin(effect: &str) -> bool {
@@ -682,6 +695,37 @@ mod tests {
         assert!(r.is_none());
         assert!(took < Duration::from_secs(5), "{took:?}");
         std::env::remove_var("ALTERED_PLUGIN_HOST");
+    }
+
+    #[test]
+    fn the_same_plug_in_twice_is_listed_once() {
+        let f = |bundle: &str, cid: &str, note: Option<&str>| Found {
+            bundle: bundle.into(),
+            info: ClassInfo {
+                cid: cid.into(),
+                name: "Verb".into(),
+                vendor: String::new(),
+                version: String::new(),
+                sub_categories: String::new(),
+                params: vec![],
+                latency: 0,
+                has_editor: true,
+                instrument: false,
+                note: note.map(Into::into),
+            },
+        };
+        let mut list = vec![
+            f("a/Verb.vst3", "00AA", Some("Not fully read.")),
+            f("b/Verb.vst3", "00aa", None),
+            f("c/Other.vst3", "00BB", None),
+        ];
+        dedupe(&mut list);
+        assert_eq!(
+            list.iter()
+                .map(|p| p.bundle.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            ["b/Verb.vst3", "c/Other.vst3"]
+        );
     }
 
     #[test]

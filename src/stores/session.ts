@@ -504,6 +504,15 @@ export function sessionEnd(doc: SessionDoc): number {
   return end;
 }
 
+/** Where errors no caller can catch go; the app shows them in the status bar. */
+let errorSink: (e: unknown) => void = (e) => console.error(e);
+export function setErrorSink(fn: (e: unknown) => void): void {
+  errorSink = fn;
+}
+export function reportError(e: unknown): void {
+  errorSink(e);
+}
+
 export class SessionStore {
   private doc: SessionDoc | null = null;
   private filePath: string | null = null;
@@ -557,11 +566,26 @@ export class SessionStore {
     );
   }
 
+  /**
+   * Tells every listener. One that throws is reported and skipped, so a
+   * fault in one part of the interface never leaves the rest showing an
+   * old session (tester report: tracks added but never shown).
+   */
+  private notify(doc: SessionDoc | null): void {
+    for (const fn of this.listeners) {
+      try {
+        fn(doc);
+      } catch (e) {
+        reportError(e);
+      }
+    }
+  }
+
   /** Replaces the whole document, for example after opening a file. */
   set(doc: SessionDoc, path?: string | null): void {
     this.doc = doc;
     if (path !== undefined) this.filePath = path;
-    for (const fn of this.listeners) fn(doc);
+    this.notify(doc);
   }
 
   /** Runs an op as one undoable step. */
@@ -580,7 +604,7 @@ export class SessionStore {
   setView(view: ViewDoc): void {
     if (!this.doc) return;
     this.doc = { ...this.doc, view };
-    for (const fn of this.listeners) fn(this.doc);
+    this.notify(this.doc);
     clearTimeout(this.viewTimer);
     this.viewTimer = setTimeout(() => {
       this.viewTimer = undefined;
