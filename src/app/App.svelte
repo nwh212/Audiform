@@ -194,7 +194,7 @@
   import ToolStrip from "./ToolStrip.svelte";
   import NewAudioFileDialog, { type NewAudioSettings } from "./NewAudioFileDialog.svelte";
   import NewSessionDialog, { type NewSessionSettings } from "./NewSessionDialog.svelte";
-  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, newWaveFromClips, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, newWaveFromClips, newWaveFromMix, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
   import { get, writable } from "svelte/store";
   import type { SessionRow } from "../panels/files/session-row";
   import { rasterize } from "../panels/editor/spectrum";
@@ -1198,10 +1198,52 @@
       openExportDialog(source);
       return;
     }
+    if (target === "files-panel") {
+      await mixToNewFile(source);
+      return;
+    }
     const suffix = source === "all" ? "Mixdown" : source === "selection" ? "Selection" : "Clips";
     const path = await exportPickPath(`${doc.name} ${suffix}`, sessionFolder());
     if (!path) return;
     await runMixdown(source, target, path, null);
+  }
+
+  /**
+   * Mix Down to New File: the mix opens in the Waveform editor as a new
+   * untitled file, nothing asked. Save As puts it on the drive.
+   */
+  async function mixToNewFile(source: MixSource) {
+    const doc = session.current;
+    const what = mixRange(source);
+    if (!doc || !what || exporting) return;
+    const suffix = source === "all" ? "Mixdown" : source === "selection" ? "Selection" : "Clips";
+    exporting = { title: "Mixing down to a new file", progress: 0, floating: true };
+    let off: (() => void) | null = null;
+    try {
+      off = await listen<{ done: number; total: number }>("export-progress", (e) => {
+        if (exporting) exporting = { ...exporting, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 };
+      });
+      await pluginSync.captureAll().catch(showError);
+      const r = await newWaveFromMix(`${doc.name} ${suffix}`, {
+        ...(what.range ? { range: what.range } : {}),
+        ...(what.clips ? { clips: what.clips } : {}),
+      });
+      if (!r) {
+        showNotice("Mixdown cancelled.");
+        return;
+      }
+      await transport.stop();
+      editor.setMode("waveform");
+      dock.show("editor");
+      actions.invalidate();
+      const clipped = r.peak > 1 ? ` It goes above 0 dBFS (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); it is kept as float, so nothing is lost, but turn it down before saving to a fixed format.` : "";
+      showNotice(`Mixed down to a new file in the Waveform editor. Save As keeps it.${clipped}`);
+    } catch (e) {
+      showError(e);
+    } finally {
+      off?.();
+      exporting = null;
+    }
   }
 
   async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false) {

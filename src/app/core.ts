@@ -317,6 +317,19 @@ export function waveNewFromClips<S, C, M>(name: string, sampleRate: number, chan
   return invoke<WaveDocRaw<S>>("wave_new_from_clips", { name, sampleRate, channels, clips, media });
 }
 
+/**
+ * Mix Down to New File: renders the session's mix (or a range or some
+ * clips) into a new untitled file and opens it in the Waveform editor.
+ * Null when cancelled. Progress arrives as `export-progress` events.
+ */
+export async function waveNewFromMix<S>(name: string, request: { range?: [number, number]; clips?: string[] }): Promise<{ doc: WaveDocRaw<S>; result: MixdownResult } | null> {
+  const r = await invoke<[WaveDocRaw<S>, MixdownResult] | null>("wave_new_from_mix", {
+    name,
+    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: null },
+  });
+  return r ? { doc: r[0], result: r[1] } : null;
+}
+
 /** File > New Audio File: an empty untitled file in the Waveform editor. */
 export function waveNew<S>(name: string, sampleRate: number, channels: number, bitDepth: number): Promise<WaveDocRaw<S>> {
   return invoke<WaveDocRaw<S>>("wave_new", { name, sampleRate, channels, bitDepth });

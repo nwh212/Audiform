@@ -1178,3 +1178,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-24: mixdown with only MIDI tracks
 
 - Multitrack > Mix Down to New File (and File > Export > Session Mixdown, Go to End, Zoom Out Full) measured the session by its audio clips only, so a session with only MIDI tracks showed them greyed out ("no clips yet"). They now use the session's end with MIDI clips included, as the core's mixdown already did.
+
+## 2026-10-24: Mix Down to New File opens in the Waveform editor
+
+- **Restated as behavior** (the tester asked for the mixdown to open as a file in the app rather than asking where to save it): Multitrack > Mix Down to New File (Entire Session, Time Selection, Selected Clips) renders the mix into a new untitled 32-bit float file and opens it in the Waveform editor, with no save dialog, the same way Paste to New File works. It counts as unsaved work; Save As puts it on the drive. Plug-ins' latest settings are saved into the session first, progress shows as for an export, and it can be cancelled. File > Export > Session Mixdown still writes straight to a file of your choice.

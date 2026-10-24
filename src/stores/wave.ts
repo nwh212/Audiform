@@ -13,7 +13,7 @@ import { editor } from "./editor";
 import { writable, type Readable } from "svelte/store";
 import { UndoStack } from "../commands";
 import type { StashedHistory } from "../commands/undo-stack";
-import { transportStatus, transportStop, waveApply, waveClose, waveForget, waveNew, waveNewFromClips, waveOpen, wavePark, wavePlay, waveResume, waveSave, waveSetView, type WaveDocRaw } from "../app/core";
+import { transportStatus, transportStop, waveApply, waveClose, waveForget, waveNew, waveNewFromClips, waveNewFromMix, type MixdownResult, waveOpen, wavePark, wavePlay, waveResume, waveSave, waveSetView, type WaveDocRaw } from "../app/core";
 import { SessionStore, type ClipDoc, type MediaRefDoc, type Op, type SessionDoc, type ViewDoc } from "./session";
 import { TransportStore } from "./transport";
 import type { SpectralShape } from "../panels/editor/spectrum";
@@ -126,6 +126,20 @@ export async function newWaveFromClips(sampleRate: number, clips: ClipDoc[], med
   await waveHistory.clear("New");
   // A new file is unsaved work.
   await waveHistory.markUnsaved();
+}
+
+/** Mix Down to New File: the session's mix as a new untitled file. Null when cancelled. */
+export async function newWaveFromMix(name: string, request: { range?: [number, number]; clips?: string[] }): Promise<MixdownResult | null> {
+  spectralSelection.set(null);
+  await waveTransport.stop();
+  const made = await waveNewFromMix<SessionDoc>(name, request);
+  if (!made) return null;
+  await parkCurrent();
+  adopt(made.doc);
+  await waveHistory.clear("New");
+  // A new file is unsaved work.
+  await waveHistory.markUnsaved();
+  return made.result;
 }
 
 /** File > New Audio File: an empty untitled file. */

@@ -153,6 +153,7 @@ pub fn run() {
             commands::wave::wave_save,
             commands::wave::wave_peak,
             commands::wave::wave_new_from_clips,
+            commands::wave::wave_new_from_mix,
             commands::wave::wave_new,
             commands::template::template_list,
             commands::template::template_save,

@@ -715,3 +715,66 @@ mod tests {
         assert_eq!(s.media[0].channels, 2);
     }
 }
+
+/// Multitrack > Mix Down to New File: renders the session's mix (or the
+/// requested range or clips) into a new untitled 32-bit float file and
+/// opens it in the Waveform editor, ready to edit or Save As. Emits
+/// `export-progress` and stops on `export_cancel`; None when cancelled.
+#[tauri::command]
+pub async fn wave_new_from_mix(
+    app: AppHandle,
+    open: State<'_, super::session::OpenSession>,
+    cancel: State<'_, super::export::ExportCancel>,
+    wave: State<'_, OpenWave>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
+    name: String,
+    mut request: MixdownRequest,
+) -> Result<Option<(WaveDoc, mixdown::MixdownResult)>, String> {
+    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    let flag = cancel.0.clone();
+    flag.store(false, std::sync::atomic::Ordering::Relaxed);
+    request.bit_depth = Some(32);
+    request.format = None;
+    let dir = crate::commands::cache::cache_root(&app)?.join("untitled");
+    let progress = app.clone();
+    let (path, result) = spawn_blocking(
+        move || -> Result<(PathBuf, mixdown::MixdownResult), String> {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let path = mixdown::unique_path(&dir, &name, "wav");
+            let mut last = 0u64;
+            let r = mixdown::mixdown(&session, &request, &path, &flag, |done, total| {
+                if done == total || done - last >= total / 100 {
+                    last = done;
+                    let _ = progress.emit(
+                        "export-progress",
+                        serde_json::json!({ "done": done, "total": total }),
+                    );
+                }
+            })
+            .map_err(|e| e.to_string())?;
+            Ok((path, r))
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())??;
+    if result.cancelled {
+        return Ok(None);
+    }
+    let p = path.clone();
+    let info = spawn_blocking(move || codecs::probe(&p))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let session = session_for(&info)?;
+    if playing.is(PlayingDoc::Wave) {
+        transport.stop();
+    }
+    let mut w = wave.0.lock().map_err(|e| e.to_string())?;
+    *w = Some(WaveState {
+        session,
+        path,
+        untitled: true,
+    });
+    Ok(Some((doc_of(w.as_ref().expect("just set")), result)))
+}
