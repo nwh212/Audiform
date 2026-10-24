@@ -286,3 +286,12 @@ describe("numbered slots", () => {
     expect(moveSlotToIndex(c, "c", 0).slots.map((x) => x.id)).toEqual(["c", "a", "b"]);
   });
 });
+
+describe("instrument menu groups", () => {
+  it("groups instruments by their own type, not by being instruments", () => {
+    const p = (name: string, kind: string, vendor = "Maker") => ({ effect: `vst3:${name}`, name, vendor, kind });
+    const { types, makers } = pluginMenuGroups([p("Keys", "Instrument|Piano"), p("Pad", "Instrument|Synth"), p("Kit", "Instrument", "Other Co")]);
+    expect(types.map(([t]) => t)).toEqual(["Piano", "Synth", "Other"]);
+    expect(makers.map(([m]) => m)).toEqual(["Maker", "Other Co"]);
+  });
+});

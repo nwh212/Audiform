@@ -732,7 +732,8 @@ export function pluginMenuGroups(plugins: readonly MenuPlugin[]): { types: [stri
     const parts = p.kind
       .split("|")
       .map((s) => s.trim())
-      .filter((s) => s && s.toLowerCase() !== "fx");
+      // "Fx" and "Instrument" say what every plug-in in that list is anyway.
+      .filter((s) => s && s.toLowerCase() !== "fx" && s.toLowerCase() !== "instrument");
     return parts[0] ?? "Other";
   };
   return { types: group(type), makers: group((p) => p.vendor.trim() || "Other") };

@@ -1158,3 +1158,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Effects view** (the fx button above the headers): each track's and bus's Voice Chain in its header: the chain's power, then the numbered slots, each with its power and name. Click a name to open the effect (a plug-in in its own window), the arrow or an empty slot to add, replace, bypass or remove. Drag an effect to another slot to move it, or onto another track's or bus's slots (or the Voice Chain panel) to copy it with every setting, plug-in settings included. Each change is one undoable step.
 - **Effects in any slot.** An effect can sit in any of the 16 numbered slots, with gaps (`position` on the slot; effects still run top to bottom in list order). Every empty slot in the Voice Chain offers "+ Add effect" for that slot (later ones show on hover). Moving an effect into a taken slot moves the one there down. `.sesx` import keeps each plug-in's slot number, and export writes it.
 - **Dragging uses pointer events**, not the browser's drag and drop: the window's file drop turns that off on Windows, which is why reordering effects in the Voice Chain did not work there.
+
+## 2026-10-24: instrument picker grouped like the Add effect menu
+
+- A MIDI track's instrument is picked from a menu instead of a flat list: instruments by type (Piano, Synth, Sampler and so on, from the plug-in's own categories), then by maker, with No Instrument at the end and the current one checked. The word "Instrument" is left out of the type, as "Fx" is for effects, since every entry is one.

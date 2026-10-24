@@ -26,7 +26,7 @@
   import { effectsCatalog, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
   import HeaderFx from "./HeaderFx.svelte";
   import { rowTarget } from "../voice-chain/slot-drag";
-  import type { MenuPlugin } from "../voice-chain/chain";
+  import { pluginMenuGroups, type MenuPlugin } from "../voice-chain/chain";
   import { effectWindowRequest } from "../voice-chain/effect-window";
   import type { EffectSlotDoc, Op } from "../../stores/session";
   import { pluginsVersion } from "../../stores/plugins";
@@ -191,7 +191,7 @@
   });
 
   // MIDI tracks: the instruments to pick from, the piano roll, the tempo.
-  let instruments = $state<{ effect: string; name: string; vendor: string; hasWindow: boolean }[]>([]);
+  let instruments = $state<{ effect: string; name: string; vendor: string; kind: string; hasWindow: boolean }[]>([]);
   /** For the headers' Effects view: every effect, and the effect plug-ins for the Add menu. */
   let fxCatalog = $state<EffectInfo[]>([]);
   let fxPlugins = $state<MenuPlugin[]>([]);
@@ -244,6 +244,25 @@
     }
     const slot = { id: crypto.randomUUID(), effect, enabled: true, params: {}, preset: null };
     setTrack(track, { instrument: slot }, "Set Instrument");
+  }
+
+  /** The instrument picker: by type, then by maker, as in the Add effect menu. */
+  function openInstrumentMenu(e: MouseEvent, track: TrackDoc) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const current = track.instrument?.effect ?? "";
+    const pick = (effect: string) => () => setInstrument(track, effect);
+    const list = (ps: MenuPlugin[]): ContextItem[] => ps.map((p) => ({ kind: "item", label: p.name, checked: p.effect === current, run: pick(p.effect) }));
+    const { types, makers } = pluginMenuGroups(instruments);
+    const items: ContextItem[] = instruments.length
+      ? [
+          ...types.map(([t, ps]): ContextItem => ({ kind: "sub", label: t, items: list(ps) })),
+          { kind: "sep" },
+          ...makers.map(([m, ps]): ContextItem => ({ kind: "sub", label: m, items: list(ps) })),
+          { kind: "sep" },
+          { kind: "item", label: "No Instrument", disabled: !track.instrument, run: pick("") },
+        ]
+      : [{ kind: "item", label: "No instruments found. Scan in Effects > Plug-in Manager.", disabled: true, run: () => {} }];
+    menu = { x: r.left, y: r.bottom, items };
   }
 
   function openInstrument(track: TrackDoc) {
@@ -2193,16 +2212,16 @@
             {#if !track.collapsed && isMidi(track)}
               {@const inst = track.instrument ? instruments.find((x) => x.effect === track.instrument!.effect) : null}
               <div class="line">
-                <select
+                <button
+                  type="button"
                   class="instrument"
-                  title={track.instrument && !inst ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes"}
-                  value={track.instrument?.effect ?? ""}
-                  onchange={(e) => setInstrument(track, e.currentTarget.value)}
+                  aria-haspopup="menu"
+                  title={track.instrument && !inst ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes. Grouped by type and by maker."}
+                  onclick={(e) => openInstrumentMenu(e, track)}
                 >
-                  <option value="">{instruments.length ? "No instrument" : "No instruments found. Scan in Effects > Plug-in Manager."}</option>
-                  {#if track.instrument && !inst}<option value={track.instrument.effect}>Missing instrument</option>{/if}
-                  {#each instruments as x, k (k)}<option value={x.effect}>{x.name}{x.vendor ? ` (${x.vendor})` : ""}</option>{/each}
-                </select>
+                  <span>{inst ? `${inst.name}${inst.vendor ? ` (${inst.vendor})` : ""}` : track.instrument ? "Missing instrument" : instruments.length ? "No instrument" : "No instruments found"}</span>
+                  <span class="chev" aria-hidden="true">▾</span>
+                </button>
                 <button type="button" class="ms" title="Open the instrument's window" aria-label="Open the instrument's window" disabled={!track.instrument || !inst} onclick={() => openInstrument(track)}>◳</button>
               </div>
             {/if}
@@ -2745,9 +2764,15 @@
     width: 52px;
   }
 
-  select.instrument {
+  button.instrument {
+    display: flex;
     flex: 1;
+    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
     min-width: 0;
+    padding: 0 4px;
+    text-align: left;
     height: 20px;
     border: 1px solid var(--border);
     border-radius: 2px;
@@ -2755,6 +2780,12 @@
     color: var(--text);
     font: inherit;
     font-size: var(--font-size-small);
+  }
+
+  button.instrument span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .toolbar .rate {
