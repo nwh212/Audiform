@@ -1,0 +1,300 @@
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The GeekCast Radio Network, LLC.
+  This file is part of Altered Audio Editor.
+
+  Effects > Plug-in Manager: where VST3 plug-ins are looked for (the
+  standard folders, which can be turned off, and the user's own), a scan,
+  every plug-in found, and every bundle that could not be read and why.
+  Each bundle is read in a process of its own, so one that crashes is
+  only listed as failed.
+-->
+<script lang="ts">
+  import { pluginsRegistry, pluginsScan, pluginsSetFolder, type PluginRegistry } from "./core";
+  import { pluginsVersion } from "../stores/plugins";
+
+  interface Props {
+    /** Asks the user for a folder. */
+    pickFolder: () => Promise<string | null>;
+    onNotice: (text: string) => void;
+    onError: (e: unknown) => void;
+    onClose: () => void;
+  }
+
+  const { pickFolder, onNotice, onError, onClose }: Props = $props();
+
+  let reg = $state<PluginRegistry | null>(null);
+  let scanning = $state(false);
+  let filter = $state("");
+
+  void pluginsRegistry()
+    .then((r) => (reg = r))
+    .catch((e: unknown) => onError(e));
+
+  const shown = $derived(
+    (reg?.plugins ?? []).filter((p) => {
+      const q = filter.trim().toLowerCase();
+      return !q || p.name.toLowerCase().includes(q) || p.vendor.toLowerCase().includes(q) || p.kind.toLowerCase().includes(q);
+    }),
+  );
+
+  async function scan(all: boolean) {
+    if (scanning) return;
+    scanning = true;
+    try {
+      const [report, r] = await pluginsScan(all);
+      reg = r;
+      pluginsVersion.update((n) => n + 1);
+      const failed = report.failed ? `, ${report.failed} could not be read` : "";
+      onNotice(`Plug-in scan: ${report.found} plug-in${report.found === 1 ? "" : "s"} found${failed}.`);
+    } catch (e) {
+      onError(e);
+    } finally {
+      scanning = false;
+    }
+  }
+
+  async function addFolder() {
+    const path = await pickFolder();
+    if (!path) return;
+    try {
+      reg = await pluginsSetFolder(path, true);
+      await scan(false);
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  async function setFolder(path: string, on: boolean) {
+    try {
+      reg = await pluginsSetFolder(path, on);
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  const name = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+</script>
+
+<svelte:window onkeydown={(e) => e.key === "Escape" && !scanning && onClose()} />
+
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="backdrop" onclick={() => !scanning && onClose()}>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pm-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+    <h1 id="pm-title">Plug-in Manager</h1>
+
+    <section>
+      <h2>Folders searched</h2>
+      <ul class="folders">
+        {#each reg?.folders ?? [] as f (f.path)}
+          <li class:off={!f.on}>
+            {#if f.standard}
+              <label title={f.on ? "Searched. Untick to leave this standard folder out." : "Left out. Tick to search it again."}>
+                <input type="checkbox" checked={f.on} onchange={(e) => void setFolder(f.path, e.currentTarget.checked)} />
+                <span class="path">{f.path}</span>
+              </label>
+              <span class="tag">standard</span>
+            {:else}
+              <span class="path" title={f.path}>{f.path}</span>
+              <button type="button" class="small" title="Stop searching this folder" onclick={() => void setFolder(f.path, false)}>Remove</button>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      <div class="row">
+        <button type="button" onclick={() => void addFolder()} disabled={scanning}>Add Folder...</button>
+        <span class="grow"></span>
+        <button type="button" class="primary" onclick={() => void scan(false)} disabled={scanning} title="Read new and changed plug-ins">{scanning ? "Scanning..." : "Scan"}</button>
+        <button type="button" onclick={() => void scan(true)} disabled={scanning} title="Read every plug-in again">Rescan All</button>
+      </div>
+    </section>
+
+    <section class="list">
+      <div class="row">
+        <h2>Plug-ins ({reg?.plugins.length ?? 0})</h2>
+        <span class="grow"></span>
+        <input class="search" type="search" placeholder="Find" aria-label="Find a plug-in" bind:value={filter} />
+      </div>
+      {#if !reg}
+        <p class="note">Loading...</p>
+      {:else if reg.plugins.length === 0}
+        <p class="note">No plug-ins yet. Install VST3 plug-ins (or add the folder they are in) and press Scan.</p>
+      {:else}
+        <div class="table" role="table" aria-label="Plug-ins">
+          <div class="tr th" role="row">
+            <span role="columnheader">Name</span><span role="columnheader">Maker</span><span role="columnheader">Kind</span><span role="columnheader" title="Look-ahead the plug-in adds, compensated during playback and export">Delay</span><span role="columnheader">Window</span>
+          </div>
+          {#each shown as p (p.effect)}
+            <div class="tr" role="row" title={p.bundle}>
+              <span>{p.name}</span><span>{p.vendor}</span><span>{p.kind.replaceAll("|", ", ")}</span><span>{p.latency ? `${p.latency} smp` : "none"}</span><span>{p.hasWindow ? "yes" : "controls only"}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      {#if reg?.failed.length}
+        <h2>Could not be read ({reg.failed.length})</h2>
+        <ul class="failed">
+          {#each reg.failed as f (f.bundle)}
+            <li title={f.bundle}><b>{name(f.bundle)}</b>: {f.error}</li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+
+    <p class="note">
+      Plug-ins appear in the Voice Chain's Add effect list under Plug-ins (VST3). Each runs in a process of its own, so one that crashes is bypassed and the
+      editor carries on. VST2 plug-ins are not supported.
+    </p>
+    <footer>
+      <button type="button" onclick={onClose} disabled={scanning}>Close</button>
+    </footer>
+  </div>
+</div>
+
+<style>
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .dialog {
+    display: grid;
+    gap: 12px;
+    width: min(760px, 94vw);
+    max-height: 88vh;
+    padding: 14px;
+    overflow: auto;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  }
+  h1 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  h2 {
+    margin: 0 0 6px;
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  section {
+    display: grid;
+    gap: 6px;
+  }
+  .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .grow {
+    flex: 1;
+  }
+  .folders,
+  .failed {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .folders li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 3px 6px;
+    background: var(--surface-1);
+  }
+  .folders li.off .path {
+    color: var(--text-faint);
+    text-decoration: line-through;
+  }
+  .folders label {
+    display: flex;
+    flex: 1;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  }
+  .path {
+    flex: 1;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tag {
+    color: var(--text-faint);
+    font-size: 10px;
+  }
+  .table {
+    display: grid;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--border);
+  }
+  .tr {
+    display: grid;
+    grid-template-columns: 2fr 1.4fr 1.6fr 0.8fr 1fr;
+    gap: 8px;
+    padding: 3px 8px;
+    font-size: var(--font-size-small);
+  }
+  .tr:nth-child(even) {
+    background: var(--surface-1);
+  }
+  .tr span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-3);
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .failed li {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+  }
+  .note {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+  }
+  button,
+  input.search {
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-3);
+    color: var(--text);
+    font: inherit;
+  }
+  input.search {
+    width: 180px;
+    background: var(--surface-1);
+  }
+  button.small {
+    height: 20px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+  .primary {
+    border-color: var(--accent);
+  }
+  footer {
+    display: flex;
+    justify-content: flex-end;
+  }
+</style>

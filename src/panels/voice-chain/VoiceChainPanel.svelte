@@ -15,7 +15,8 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
-  import { effectsCatalog, learnNoisePrint, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
@@ -91,9 +92,30 @@
 
   let catalog = $state<EffectInfo[]>([]);
   let loadError = $state<string | null>(null);
-  void effectsCatalog()
-    .then((c) => (catalog = c))
-    .catch((e) => (loadError = String(e)));
+  // Loads again after a plug-in scan.
+  $effect(() =>
+    pluginsVersion.subscribe(() => {
+      void effectsCatalog()
+        .then((c) => (catalog = c))
+        .catch((e) => (loadError = String(e)));
+    }),
+  );
+
+  /** Opens a plug-in's own window (it runs in its own process). */
+  function openPluginWindow(s: EffectSlotDoc) {
+    const name = byId.get(s.effect)?.name ?? "Plug-in";
+    void pluginOpenWindow($state.snapshot(s) as EffectSlotDoc, label ? `${name} - ${label}` : name).catch(onError);
+  }
+
+  /** Starts a stopped plug-in again; it comes back with the next playback. */
+  function restartPlugin(s: EffectSlotDoc) {
+    void pluginRestart(s.id)
+      .then(() => {
+        markStopped(s.id, null);
+        onNotice("The plug-in starts again with the next playback.");
+      })
+      .catch(onError);
+  }
   const byId = $derived(new Map(catalog.map((e) => [e.id, e])));
   const known = $derived(new Set(catalog.map((e) => e.id)));
   const categories = $derived([...new Set(catalog.map((e) => e.category))]);
@@ -260,8 +282,10 @@
     return [
       ...categories.map((c): ContextItem => ({ kind: "sub", label: c, items: catalog.filter((e) => e.category === c).map((e): ContextItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })) })),
       { kind: "sep" },
-      { kind: "item", label: "VST", disabled: true, reason: "Plugin hosting is not built yet.", run: () => {} },
-      { kind: "item", label: "VST3", disabled: true, reason: "Plugin hosting is not built yet.", run: () => {} },
+      ...(catalog.some((e) => e.plugin)
+        ? []
+        : [{ kind: "item", label: "Plug-ins (VST3)", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} } as ContextItem]),
+      { kind: "item", label: "VST (version 2)", disabled: true, reason: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.", run: () => {} },
     ];
   }
   function openSlotMenu(e: MouseEvent, s: EffectSlotDoc | undefined) {
@@ -577,9 +601,17 @@
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.8" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
             </button>
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-            <span class="name" onclick={() => openWindow(s.id)} title={info?.description ?? "Not a built-in effect: kept in the file, skipped on playback."}>
+            <span
+              class="name"
+              class:stopped={$stoppedPlugins.has(s.id)}
+              onclick={() => openWindow(s.id)}
+              title={$stoppedPlugins.get(s.id) ?? info?.description ?? (s.effect.startsWith("vst3:") ? "This plug-in is not installed (or not scanned yet): kept in the file, skipped on playback. See Effects > Plug-in Manager." : "Not a built-in effect: kept in the file, skipped on playback.")}
+            >
               {info?.name ?? s.effect}
             </span>
+            {#if info?.plugin}
+              <button type="button" class="mini" title="Open the plug-in's own window" aria-label="Open the plug-in's own window" onclick={() => openPluginWindow(s)}>◳</button>
+            {/if}
             <button type="button" class="mini" title="Open its settings" aria-label="Open its settings" onclick={() => openWindow(s.id)}>⚙</button>
             <button type="button" class="mini" title="Remove" aria-label="Remove" onclick={() => commit(`Remove ${info?.name ?? "Effect"}`, removeSlot(chain, s.id))}>✕</button>
           {:else if i === chain.slots.length}
@@ -634,6 +666,17 @@
               {#each keyChoices(doc, keyOwner) as k (k.id)}<option value={k.id}>{k.bus ? "Bus: " : ""}{k.name}</option>{/each}
             </select>
           </label>
+        {/if}
+        {#if winInfo.plugin}
+          <div class="learn">
+            {#if $stoppedPlugins.has(winSlot.id)}
+              <span class="hint stopped">{$stoppedPlugins.get(winSlot.id)}</span>
+              <button type="button" onclick={() => restartPlugin(winSlot)}>Restart Plug-in</button>
+            {:else}
+              <button type="button" disabled={!winInfo.hasWindow} title={winInfo.hasWindow ? "Open the plug-in's own window. What you set there is saved with the session." : "This plug-in has no window of its own; use the controls below."} onclick={() => openPluginWindow(winSlot)}>Open Plug-in Window</button>
+              <span class="hint">{winInfo.hasWindow ? "Its own window has every setting. Controls below move it too." : "Controls only."}</span>
+            {/if}
+          </div>
         {/if}
         {#if LEARNS.has(winSlot.effect)}
           {@const len = winSlot.params.printlen ?? 0}
@@ -1067,5 +1110,9 @@
   }
   .empty {
     padding: 12px 8px;
+  }
+  .name.stopped,
+  .hint.stopped {
+    color: var(--danger);
   }
 </style>

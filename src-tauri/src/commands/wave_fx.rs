@@ -220,6 +220,7 @@ mod tests {
             params: [("gain".to_string(), db)].into_iter().collect(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         });
         c
     }
@@ -279,6 +280,7 @@ mod tests {
                 .collect(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         });
         let mut c = ChainProcessor::new(&lim, 48_000).unwrap();
         let lat = c.latency();

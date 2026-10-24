@@ -106,6 +106,9 @@
   import { placeTake, punchStopAfter, recordPlan, sanitizeRecordOptions, type RecordOptions, type RecordPlan } from "./recording";
   import RecordOptionsDialog from "./RecordOptionsDialog.svelte";
   import AddTracksDialog, { type AddTracksValues } from "./AddTracksDialog.svelte";
+  import PluginManagerDialog from "./PluginManagerDialog.svelte";
+  import { PluginSync } from "./plugin-sync";
+  import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
@@ -122,6 +125,8 @@
     exportEmbedChapters,
     generateAudio,
     exportMixdown,
+    pluginEvents,
+    pluginState,
     exportMerge,
     exportRegionCopy,
     templateList,
@@ -647,6 +652,33 @@
     showNotice(`Added Bus ${n}. Route a track to it with the track's output or a send (Sends view in the track headers, or the Mixer).`);
   }
 
+  /** Effects > Plug-in Manager. */
+  let pluginManagerOpen = $state(false);
+
+  /** Brings what is set in plug-in windows into the session (see plugin-sync.ts). */
+  const pluginSync = new PluginSync({
+    doc: () => session.current,
+    events: () => pluginEvents(),
+    state: (id) => pluginState(id),
+    commit: async (ops) => {
+      await session.edit("Plug-in Settings", ops.length === 1 ? ops[0]! : { op: "batch", ops }, sessionHistory);
+    },
+    onStopped: (slot, why) => {
+      markStopped(slot.id, why);
+      showNotice(`A plug-in stopped: ${why} Restart it from its effect window.`);
+    },
+    onLatency: () => {
+      // The plug-in's delay changed: start again where it is, so every track lines up.
+      if (transport.current.playing) void transport.play(transport.current.position).catch(showError);
+    },
+  });
+
+  /** A mixdown with every plug-in's latest settings saved in the session first. */
+  async function exportMix(path: string, req: Parameters<typeof exportMixdown>[1]) {
+    await pluginSync.captureAll().catch(showError);
+    return exportMixdown(path, req);
+  }
+
   /** Gives every `id` field inside a copied object a new value. */
   function freshIds<T>(value: T): T {
     if (Array.isArray(value)) return value.map(freshIds) as T;
@@ -1036,7 +1068,7 @@
       for (let i = 0; i < items.length; i++) {
         const m = items[i]!;
         exporting = { title: `Exporting ${i + 1} of ${items.length}: ${m.name}`, progress: i / items.length, floating: true };
-        const r = await exportMixdown(paths[i]!, { range: [m.position, m.position + m.duration], format });
+        const r = await exportMix(paths[i]!, { range: [m.position, m.position + m.duration], format });
         if (r.cancelled) {
           showNotice(`Export stopped after ${i} of ${items.length} files.`);
           return;
@@ -1140,7 +1172,7 @@
       off = await listen<{ done: number; total: number }>("export-progress", (e) => {
         if (exporting) exporting = { ...exporting, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 };
       });
-      const r = await exportMixdown(path, {
+      const r = await exportMix(path, {
         ...(what.range ? { range: what.range } : {}),
         ...(what.clips ? { clips: what.clips } : {}),
         ...(format ? { format } : {}),
@@ -1208,7 +1240,7 @@
           if (exporting) exporting = { ...exporting, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 };
         });
         const path = `${folder}${sep}${fileSafe(doc.name)} - ${String(i + 1).padStart(2, "0")} ${fileSafe(t.name)}.wav`;
-        const r = await exportMixdown(path, { track: t.id });
+        const r = await exportMix(path, { track: t.id });
         if (r.cancelled) {
           showNotice(`Stem export cancelled after ${done} of ${tracks.length}.`);
           return;
@@ -3864,8 +3896,14 @@
       actions.register({ id: "file.new-session", run: () => askNewSession() }),
       actions.register({ id: "file.save-template", run: () => saveAsTemplate() }),
       actions.register({ id: "file.open", run: () => openAny() }),
-      actions.register({ id: "file.save", run: () => files.save().then(() => undefined) }),
-      actions.register({ id: "file.save-as", run: () => files.saveAs().then(() => undefined) }),
+      actions.register({ id: "file.save", run: () => pluginSync.captureAll().then(() => files.save()).then(() => undefined) }),
+      actions.register({ id: "file.save-as", run: () => pluginSync.captureAll().then(() => files.saveAs()).then(() => undefined) }),
+      actions.register({
+        id: "fx.plugin-manager",
+        run: () => {
+          pluginManagerOpen = true;
+        },
+      }),
       actions.register({ id: "file.save-all", run: () => files.save().then(() => undefined) }),
       actions.register({ id: "file.close", run: () => files.close().then(() => undefined) }),
       actions.register({ id: "file.import-sesx", run: () => files.importSesx().then(() => undefined) }),
@@ -3910,14 +3948,25 @@
     return offs;
   }
 
+  // Effect envelopes need each control's range; plug-ins change after a scan.
+  // Running plug-ins are kept in step with the session while the app is open.
+  $effect(() => {
+    pluginSync.start();
+    const stopCatalog = pluginsVersion.subscribe(() => {
+      void effectsCatalog()
+        .then((c) => {
+          fxCatalog = c;
+          setFxCatalog(c);
+        })
+        .catch(() => {});
+    });
+    return () => {
+      stopCatalog();
+      pluginSync.stop();
+    };
+  });
+
   onMount(() => {
-    // Effect envelopes need each control's range.
-    void effectsCatalog()
-      .then((c) => {
-        fxCatalog = c;
-        setFxCatalog(c);
-      })
-      .catch(() => {});
     void prefs
       .load()
       .then(() => libraries.restore())
@@ -4070,6 +4119,15 @@
     onCancel={() => void exportCancel()}
     onApplyGain={(db) => void applyMasterGain(db).catch(showError)}
     onClose={() => (loud = null)}
+  />
+{/if}
+
+{#if pluginManagerOpen}
+  <PluginManagerDialog
+    pickFolder={() => exportPickFolder(null, "Add a Plug-in Folder")}
+    onNotice={showNotice}
+    onError={showError}
+    onClose={() => (pluginManagerOpen = false)}
   />
 {/if}
 

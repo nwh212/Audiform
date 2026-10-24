@@ -91,6 +91,7 @@ describe("menu model", () => {
       "multitrack.add.stereo",
       "multitrack.add.bus",
       "multitrack.add.bus-mono",
+      "fx.plugin-manager",
       "multitrack.duplicate-track",
       "multitrack.delete-track",
       "multitrack.delete-empty",

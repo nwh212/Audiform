@@ -460,6 +460,7 @@ mod tests {
                 params: Default::default(),
                 preset: None,
                 sidechain: None,
+                plugin_state: None,
             });
         s.markers.push(crate::session::model::Marker {
             id: new_id(),

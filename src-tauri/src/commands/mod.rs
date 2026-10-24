@@ -20,6 +20,7 @@ pub mod links;
 pub mod media;
 pub mod musicfit;
 pub mod peaks;
+pub mod plugins;
 pub mod preferences;
 pub mod quickpass;
 pub mod record;

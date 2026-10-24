@@ -39,6 +39,8 @@ export interface EffectSlotDoc {
   preset: string | null;
   /** Sidechain: the track or bus this effect's detector listens to. Missing listens to its own input. */
   sidechain?: string | null;
+  /** A VST3 plug-in's own settings (set in its window), base64. */
+  plugin_state?: string | null;
 }
 
 /** A Voice Chain on a clip, a track or the master. */

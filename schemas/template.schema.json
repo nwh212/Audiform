@@ -393,6 +393,13 @@
             "format": "double"
           }
         },
+        "plugin_state": {
+          "description": "A VST3 plug-in's own settings (everything set in its window), as the\nplug-in saved them, base64. Only on plug-in slots (`vst3:` effects).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "preset": {
           "description": "Name of the preset last loaded, if any.",
           "type": [

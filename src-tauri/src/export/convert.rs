@@ -363,6 +363,7 @@ mod tests {
                     .collect(),
                 preset: None,
                 sidechain: None,
+                plugin_state: None,
             });
         }
         let fmt = OutputFormat {

@@ -108,6 +108,17 @@ pub fn render_mix(
     session: &Session,
     req: &MixdownRequest,
     cancel: &AtomicBool,
+    progress: impl FnMut(u64, u64),
+    sink: impl FnMut(&[f32]) -> Result<(), MixdownError>,
+) -> Result<Rendered, MixdownError> {
+    // Plug-ins get hosts of their own, so an export never disturbs playback.
+    crate::plugins::instance::fresh(|| render_mix_inner(session, req, cancel, progress, sink))
+}
+
+fn render_mix_inner(
+    session: &Session,
+    req: &MixdownRequest,
+    cancel: &AtomicBool,
     mut progress: impl FnMut(u64, u64),
     mut sink: impl FnMut(&[f32]) -> Result<(), MixdownError>,
 ) -> Result<Rendered, MixdownError> {

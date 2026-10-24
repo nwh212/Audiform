@@ -214,6 +214,7 @@ pub fn ui_catalog() -> Vec<EffectInfo> {
                 params: [(key.to_string(), v)].into_iter().collect(),
                 preset: None,
                 sidechain: None,
+                plugin_state: None,
             };
             build(&slot, 48_000).map_or(0, |p| p.latency())
         };
@@ -226,7 +227,42 @@ pub fn ui_catalog() -> Vec<EffectInfo> {
 }
 
 pub fn info(id: &str) -> Option<EffectInfo> {
+    if crate::plugins::is_plugin(id) {
+        return crate::plugins::find(id).map(|f| crate::plugins::effect_info(&f));
+    }
     catalog().into_iter().find(|e| e.id == id)
+}
+
+/// The built-in effects and the installed plug-ins, for the editor.
+pub fn full_catalog() -> Vec<EffectInfo> {
+    let mut all = ui_catalog();
+    all.extend(crate::plugins::catalog());
+    all
+}
+
+/// A chain's total look-ahead, without starting any plug-in (a running
+/// one reports its own; otherwise the scan's figure).
+pub fn chain_latency(chain: &EffectChain, rate: u32) -> usize {
+    if !chain.enabled {
+        return 0;
+    }
+    chain
+        .slots
+        .iter()
+        .take(MAX_SLOTS)
+        .filter(|s| s.enabled)
+        .map(|s| {
+            if crate::plugins::is_plugin(&s.effect) {
+                if crate::plugins::find(&s.effect).is_some() {
+                    crate::plugins::instance::latency(s)
+                } else {
+                    0
+                }
+            } else {
+                build(s, rate).map_or(0, |p| p.latency())
+            }
+        })
+        .sum()
 }
 
 /// A slot's parameter values, each clamped to its range, with defaults
@@ -250,6 +286,11 @@ impl Params {
                 })
                 .collect(),
         )
+    }
+
+    /// Every value by key.
+    pub fn values(&self) -> impl Iterator<Item = (&'static str, f64)> + '_ {
+        self.0.iter().map(|(k, v)| (*k, *v))
     }
 
     pub fn get(&self, key: &str) -> f64 {
@@ -277,6 +318,11 @@ pub trait Processor: Send {
     /// Takes new settings while playing, keeping its state, for
     /// automation. False when the effect cannot; the chain then rebuilds it.
     fn update(&mut self, _p: &Params) -> bool {
+        false
+    }
+    /// True for a VST3 plug-in, which keeps running between chain builds
+    /// and must not hear the same audio twice.
+    fn is_plugin(&self) -> bool {
         false
     }
     /// Runs with a sidechain key, as long as `buf`: an effect with a
@@ -343,8 +389,13 @@ pub(crate) fn db_to_gain(db: f64) -> f32 {
     10f64.powf(db / 20.0) as f32
 }
 
-/// Builds the processor for one slot, or None for an unknown effect.
+/// Builds the processor for one slot, or None for an unknown effect (or a
+/// plug-in that is not installed or would not start).
 pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
+    if crate::plugins::is_plugin(&slot.effect) {
+        return crate::plugins::instance::processor(slot, rate)
+            .map(|p| Box::new(p) as Box<dyn Processor>);
+    }
     let info = info(&slot.effect)?;
     let p = Params::resolve(&info, &slot.params);
     Some(match info.id {
@@ -460,6 +511,12 @@ impl ChainProcessor {
         self.latency
     }
 
+    /// True when a stage is a running plug-in, which must not be warmed up
+    /// on audio it has already heard.
+    pub fn has_plugins(&self) -> bool {
+        self.stages.iter().any(|s| s.is_plugin())
+    }
+
     /// Changes one setting of one effect while it plays (automation). An
     /// effect that cannot take it in place is rebuilt, unless that would
     /// change the chain's look-ahead.
@@ -483,6 +540,7 @@ impl ChainProcessor {
             params: params.clone(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         };
         if let Some(fresh) = build(&slot, self.rate) {
             if fresh.latency() == self.stages[i].latency() {
@@ -606,6 +664,7 @@ mod tests {
             params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         }
     }
 

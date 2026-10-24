@@ -256,6 +256,7 @@ mod tests {
             params: params.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         };
         PhaseRotate::new(&Params::resolve(&info, &slot.params), 48_000)
     }

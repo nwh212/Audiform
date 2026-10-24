@@ -45,6 +45,14 @@ pub fn output_device_any() -> Option<cpal::Device> {
     output_device(&host).or_else(|| output_device(&cpal::default_host()))
 }
 
+/// The rate playback runs at: the output device's own. 48 kHz when there
+/// is no device.
+pub fn device_rate() -> u32 {
+    output_device_any()
+        .and_then(|d| d.default_output_config().ok())
+        .map_or(48_000, |c| c.config().sample_rate)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

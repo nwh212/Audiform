@@ -15,6 +15,7 @@ pub mod engine;
 pub mod export;
 pub mod library;
 pub mod peaks;
+pub mod plugins;
 pub mod session;
 pub mod sesx;
 
@@ -30,6 +31,13 @@ pub fn run() {
         .manage(commands::wave::OpenWave::default())
         .manage(commands::wave::ParkedWaves::default())
         .manage(commands::wave::Playing::default())
+        .setup(|app| {
+            use tauri::Manager;
+            if let Ok(dir) = app.path().app_config_dir() {
+                plugins::load(&dir);
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -66,6 +74,14 @@ pub fn run() {
             commands::transport::transport_stop,
             commands::transport::transport_status,
             commands::transport::transport_set_mono_check,
+            commands::plugins::plugins_registry,
+            commands::plugins::plugins_scan,
+            commands::plugins::plugins_set_folder,
+            commands::plugins::plugin_open_window,
+            commands::plugins::plugin_close_window,
+            commands::plugins::plugin_events,
+            commands::plugins::plugin_state,
+            commands::plugins::plugin_restart,
             commands::devices::audio_inputs,
             commands::devices::audio_outputs,
             commands::devices::set_audio_output,

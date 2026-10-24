@@ -116,6 +116,8 @@ pub fn session_apply(
 ) -> Result<Applied, String> {
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
     let inverse = ops::apply(&mut s.session, &op).map_err(|e| e.to_string())?;
+    // Plug-ins taken out of the session stop running.
+    crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
     // Playback follows edits: gains at once, timing changes by restarting.
     // Not while the Waveform editor's file is the one playing.
     if playing.is(super::wave::PlayingDoc::Session) {

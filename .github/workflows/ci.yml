@@ -50,15 +50,15 @@ jobs:
 
       - name: cargo fmt
         working-directory: src-tauri
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: cargo clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: cargo test
         working-directory: src-tauri
-        run: cargo test
+        run: cargo test --workspace
 
   # The ASIO driver code only compiles on Windows with LLVM and the ASIO
   # SDK (fetched by cpal's build script), so it gets its own job.
@@ -129,11 +129,11 @@ jobs:
 
       - name: cargo clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: cargo test
         working-directory: src-tauri
-        run: cargo test
+        run: cargo test --workspace
 
   security:
     name: Security and privacy

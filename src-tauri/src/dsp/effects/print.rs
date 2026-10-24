@@ -419,6 +419,7 @@ mod tests {
             params: Default::default(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         };
         for (k, v) in print_params(&print, 1.0) {
             slot.params.insert(k.to_string(), v);
@@ -473,6 +474,7 @@ mod tests {
             params: Default::default(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         };
         for (k, v) in print_params(&print, 0.5) {
             slot.params.insert(k.to_string(), v);
@@ -518,6 +520,7 @@ mod tests {
             params: Default::default(),
             preset: None,
             sidechain: None,
+            plugin_state: None,
         };
         let mut fx = build(&slot, 48_000).unwrap();
         let lat = fx.latency();

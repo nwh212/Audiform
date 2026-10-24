@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) The GeekCast Radio Network, LLC.
+# This file is part of Altered Audio Editor.
+
+# The VST3 plug-in host. It runs in a separate process (the app started
+# again with --plugin-host or --plugin-scan), so a plug-in that crashes
+# or hangs takes down only its own host, never the editor. Talking to
+# plug-ins needs unsafe code, which the app crate forbids; it lives here.
+
+[package]
+name = "altered-plughost"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+vst3 = "0.3"
+libloading = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi"] }

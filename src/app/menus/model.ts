@@ -439,7 +439,7 @@ export const MENUS: readonly Menu[] = [
           placeholder: true,
         }),
       ]),
-      item("fx.plugin-manager", "Plug-in Manager...", { pending: P5 }),
+      item("fx.plugin-manager", "Plug-in Manager..."),
     ],
   },
   {

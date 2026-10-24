@@ -2,10 +2,9 @@
 
 Code ported or adapted from other projects is credited here. Each entry lists the project, the source file, its license, and what was used. Required license notices are kept in the adapted files.
 
-No third-party code has been ported yet.
-
 | Project | Source file | License | What was used | Our file |
 | --- | --- | --- | --- | --- |
+| `vst3` crate (coupler-rs/vst3-rs, Copyright (c) Micah Johnston) | `examples/gain.rs` | MIT or Apache-2.0 | The example gain plug-in, as the base of a test plug-in (look-ahead, saved settings and a crash switch added). Used by the plug-in tests only; never shipped. | `src-tauri/plughost/testplug/src/lib.rs` |
 
 ## Published formulas
 
@@ -32,6 +31,9 @@ Most dependencies are MIT or Apache-2.0 and are listed in `Cargo.lock` and `pack
 | `opus-decoder` | MIT or Apache-2.0 | Opus decoding. A patched copy lives in `src-tauri/vendor/opus-decoder` (faster forward FFT through `rustfft`); see the note there. |
 | ASIO SDK 2.3 (Steinberg, via `cpal`'s `asio` feature, Windows release builds only) | GPL-3.0 (dual licensed by Steinberg; we use the GPLv3 option) | Talking to ASIO audio drivers. ASIO is a trademark of Steinberg Media Technologies GmbH. We do not use the ASIO logo. |
 | `zip` | MIT | Reading zip downloads of recordings. |
+| `vst3` (bindings generated from the VST 3 SDK headers) and `com-scrape-types` | MIT or Apache-2.0 | Hosting VST3 plug-ins, in a separate process (`src-tauri/plughost`). The VST 3 SDK itself is MIT licensed by Steinberg (since 2025). VST is a trademark of Steinberg Media Technologies GmbH; we do not use the VST logo. VST2 is not supported (its SDK is no longer licensed). |
+| `libloading` | ISC | Loading a plug-in's library inside the plug-in host process. |
+| `windows-sys` (Windows only, plug-in host) | MIT or Apache-2.0 | The window a plug-in draws its own controls in. |
 | Symphonia | MPL-2.0 | Decoding WAV, AIFF, FLAC, MP3, AAC, ALAC, Ogg Vorbis and ADPCM. |
 | `windows` (Windows only) | MIT or Apache-2.0 | Calls the AAC encoder built into Windows (Media Foundation) for M4A export. No AAC encoder is bundled; the operating system provides it. |
 

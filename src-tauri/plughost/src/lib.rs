@@ -1,0 +1,347 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) The GeekCast Radio Network, LLC.
+// This file is part of Altered Audio Editor.
+
+//! VST3 plug-in hosting, in its own process.
+//!
+//! The editor starts itself again with `--plugin-host` for every plug-in
+//! it runs, and with `--plugin-scan <bundle>` to list what a bundle
+//! holds. A plug-in that crashes, hangs or misbehaves takes down only that
+//! process: the editor sees the pipe close and carries on without it.
+//!
+//! Threads in a host process:
+//! - the main thread loads the plug-in, sets controls, saves settings and
+//!   runs the plug-in's own window, as VST3 asks of a host's main thread;
+//! - the stdin thread reads requests and processes audio blocks (it is
+//!   the plug-in's audio thread), handing everything else to the main thread.
+//!
+//! See [`protocol`] for what goes over the pipes.
+
+// VST3's C types differ between Windows and other systems (signed or
+// unsigned enums, pointer types), so casts that do nothing on one system
+// are needed on another.
+#![allow(clippy::unnecessary_cast)]
+
+pub mod com;
+pub mod editor;
+pub mod module;
+pub mod plugin;
+pub mod protocol;
+
+use std::io::{self, Write};
+use std::path::Path;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+
+use com::Edit;
+use editor::EditorWindow;
+use plugin::{Audio, Plugin, SendPtr};
+use protocol::{read_frame, write_frame, Message, Request, ScanResult, AUDIO, CONTROL};
+
+/// Runs a host or a scan when the command line asks for one. Returns the
+/// exit code, or None for a normal start of the editor.
+pub fn main_with_args(args: &[String]) -> Option<i32> {
+    match args.get(1).map(String::as_str) {
+        Some("--plugin-host") => Some(serve()),
+        Some("--plugin-scan") => Some(scan(Path::new(args.get(2).map_or("", String::as_str)))),
+        _ => None,
+    }
+}
+
+type Out = Arc<Mutex<io::Stdout>>;
+
+/// Control changes waiting for the audio thread.
+type Queue = Arc<Mutex<Vec<(u32, f64)>>>;
+
+fn send(out: &Out, m: &Message) {
+    if let (Ok(json), Ok(mut o)) = (serde_json::to_vec(m), out.lock()) {
+        let _ = write_frame(&mut *o, CONTROL, &json);
+    }
+}
+
+enum ToMain {
+    Load {
+        req: Request,
+        reply: Sender<Option<SendPtr<Audio>>>,
+    },
+    Request(Request),
+    /// Control values the editor set, to show on the plug-in's controller.
+    Changes(Vec<(u32, f64)>),
+    Quit,
+}
+
+/// Host mode: one plug-in, driven over stdin and stdout.
+pub fn serve() -> i32 {
+    let out: Out = Arc::new(Mutex::new(io::stdout()));
+    let (tx, rx) = mpsc::channel::<ToMain>();
+    let audio_out = out.clone();
+    let reader = thread::Builder::new()
+        .name("plugin-audio".into())
+        .spawn(move || audio_loop(audio_out, tx));
+    main_loop(&out, rx);
+    if let Ok(r) = reader {
+        let _ = r.join();
+    }
+    0
+}
+
+fn audio_loop(out: Out, tx: Sender<ToMain>) {
+    let mut stdin = io::stdin().lock();
+    let mut audio: Option<Audio> = None;
+    let mut buf = Vec::new();
+    let mut changes = Vec::new();
+    let mut samples = Vec::new();
+    let mut reply = Vec::new();
+    loop {
+        match read_frame(&mut stdin, &mut buf) {
+            Ok(Some(AUDIO)) => {
+                if protocol::decode_audio(&buf, &mut changes, &mut samples).is_none() {
+                    break;
+                }
+                if let Some(a) = audio.as_mut() {
+                    a.process(&changes, &mut samples);
+                }
+                if !changes.is_empty() {
+                    let _ = tx.send(ToMain::Changes(changes.clone()));
+                }
+                protocol::encode_samples(&mut reply, &samples);
+                let Ok(mut o) = out.lock() else { break };
+                if write_frame(&mut *o, AUDIO, &reply).is_err() {
+                    break;
+                }
+            }
+            Ok(Some(CONTROL)) => {
+                let Ok(req) = serde_json::from_slice::<Request>(&buf) else {
+                    send(
+                        &out,
+                        &Message::Error {
+                            message: "Bad request.".into(),
+                        },
+                    );
+                    continue;
+                };
+                match req {
+                    Request::Load { .. } => {
+                        let (rtx, rrx) = mpsc::channel();
+                        if tx.send(ToMain::Load { req, reply: rtx }).is_err() {
+                            break;
+                        }
+                        audio = rrx.recv().ok().flatten().map(|a| a.0);
+                    }
+                    Request::GetState => {
+                        // Changes still waiting count in the saved settings.
+                        if let Some(a) = audio.as_mut() {
+                            a.flush(&[]);
+                        }
+                        if tx.send(ToMain::Request(Request::GetState)).is_err() {
+                            break;
+                        }
+                    }
+                    Request::Reset => {
+                        if let Some(a) = audio.as_mut() {
+                            a.reset();
+                        }
+                        send(&out, &Message::Ok);
+                    }
+                    other => {
+                        if tx.send(ToMain::Request(other)).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => break,
+        }
+    }
+    // Processing stops before the plug-in is torn down on the main thread.
+    drop(audio);
+    let _ = tx.send(ToMain::Quit);
+}
+
+fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
+    let mut plugin: Option<Plugin> = None;
+    let mut to_audio: Option<Queue> = None;
+    let mut window: Option<Box<dyn EditorWindow>> = None;
+    loop {
+        if let Some(w) = window.as_mut() {
+            if !w.pump() {
+                window = None;
+                send(out, &Message::EditorClosed);
+            }
+        }
+        if let Some(p) = &plugin {
+            let edits: Vec<Edit> = p
+                .edits
+                .lock()
+                .map(|mut e| std::mem::take(&mut *e))
+                .unwrap_or_default();
+            for e in edits {
+                match e {
+                    Edit::Param(id, v) => {
+                        if let Some(q) = &to_audio {
+                            if let Ok(mut q) = q.lock() {
+                                q.push((id, v));
+                            }
+                        }
+                        send(out, &Message::ParamEdited { id, value: v });
+                    }
+                    Edit::Latency => send(
+                        out,
+                        &Message::LatencyChanged {
+                            latency: p.latency_now(),
+                        },
+                    ),
+                    Edit::Dirty => send(out, &Message::Dirty),
+                    Edit::Resize(w, h) => {
+                        if let Some(win) = window.as_mut() {
+                            win.resize(w, h);
+                        }
+                    }
+                }
+            }
+        }
+        let wait = if window.is_some() { 10 } else { 50 };
+        let cmd = match rx.recv_timeout(Duration::from_millis(wait)) {
+            Ok(c) => c,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+        match cmd {
+            ToMain::Load { req, reply } => {
+                let Request::Load {
+                    path,
+                    cid,
+                    rate,
+                    state,
+                    params,
+                } = req
+                else {
+                    let _ = reply.send(None);
+                    continue;
+                };
+                match Plugin::load(Path::new(&path), &cid, rate, state.as_deref()) {
+                    Ok((p, mut a)) => {
+                        for (id, v) in &params {
+                            p.set_param(*id, *v);
+                        }
+                        a.flush(&params);
+                        send(
+                            out,
+                            &Message::Loaded {
+                                latency: p.latency,
+                                params: p.params.clone(),
+                                has_editor: p.controller.is_some(),
+                            },
+                        );
+                        to_audio = Some(a.from_editor.clone());
+                        plugin = Some(p);
+                        let _ = reply.send(Some(SendPtr(a)));
+                    }
+                    Err(message) => {
+                        send(out, &Message::Error { message });
+                        let _ = reply.send(None);
+                    }
+                }
+            }
+            ToMain::Request(Request::GetState) => match &plugin {
+                Some(p) => send(out, &Message::State { data: p.state() }),
+                None => send(
+                    out,
+                    &Message::Error {
+                        message: "No plug-in loaded.".into(),
+                    },
+                ),
+            },
+            ToMain::Request(Request::OpenEditor { title }) => {
+                if let Some(w) = window.as_mut() {
+                    w.raise();
+                    send(out, &Message::Ok);
+                    continue;
+                }
+                let opened = match plugin
+                    .as_ref()
+                    .and_then(|p| p.controller.as_ref().map(|c| (c, p.edits.clone())))
+                {
+                    Some((c, edits)) => editor::open(c, &title, edits),
+                    None => Err("This plug-in has no window of its own.".into()),
+                };
+                match opened {
+                    Ok(w) => {
+                        window = Some(w);
+                        send(out, &Message::Ok);
+                    }
+                    Err(message) => send(out, &Message::Error { message }),
+                }
+            }
+            ToMain::Request(Request::CloseEditor) => {
+                window = None;
+                send(out, &Message::Ok);
+            }
+            ToMain::Request(_) => send(out, &Message::Ok),
+            ToMain::Changes(list) => {
+                if let Some(p) = &plugin {
+                    for (id, v) in list {
+                        p.set_param(id, v);
+                    }
+                }
+            }
+            ToMain::Quit => break,
+        }
+    }
+    drop(window);
+    drop(plugin);
+    let _ = io::stdout().flush();
+}
+
+/// Scan mode: prints what the bundle holds as JSON ([`ScanResult`]).
+pub fn scan(bundle: &Path) -> i32 {
+    let result = match module::Module::open(bundle) {
+        Err(error) => ScanResult {
+            classes: Vec::new(),
+            error: Some(error),
+        },
+        Ok(m) => {
+            let mut classes = Vec::new();
+            let mut errors = Vec::new();
+            for c in m.classes() {
+                if c.category != module::AUDIO_CLASS {
+                    continue;
+                }
+                // Instruments need notes, which a Voice Chain does not send.
+                let subs = c.sub_categories.to_ascii_lowercase();
+                if subs.contains("instrument") && !subs.contains("fx") {
+                    continue;
+                }
+                let cid = module::cid_hex(&c.cid);
+                match Plugin::load(bundle, &cid, 48_000.0, None) {
+                    Ok((p, a)) => {
+                        drop(a);
+                        classes.push(protocol::ClassInfo {
+                            cid,
+                            name: c.name,
+                            vendor: c.vendor,
+                            version: c.version,
+                            sub_categories: c.sub_categories,
+                            params: p.params.clone(),
+                            latency: p.latency,
+                            has_editor: p.controller.is_some(),
+                        });
+                    }
+                    Err(e) => errors.push(format!("{}: {e}", c.name)),
+                }
+            }
+            ScanResult {
+                error: (classes.is_empty() && !errors.is_empty()).then(|| errors.join("; ")),
+                classes,
+            }
+        }
+    };
+    let text = serde_json::to_string(&result).unwrap_or_default();
+    let mut o = io::stdout();
+    let _ = writeln!(o, "{text}");
+    let _ = o.flush();
+    // Plug-ins may leave threads behind; leave without waiting for them.
+    std::process::exit(0)
+}

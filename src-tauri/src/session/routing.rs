@@ -227,6 +227,7 @@ mod tests {
             params: Default::default(),
             preset: None,
             sidechain: Some(s.tracks[0].id),
+            plugin_state: None,
         };
         s.tracks[1].effects.slots.push(slot.clone());
         assert!(!has_loop(&s));

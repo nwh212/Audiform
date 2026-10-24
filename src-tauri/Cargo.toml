@@ -24,6 +24,8 @@ tauri-build = { version = "2", features = [] }
 # AAC export through the encoder built into the OS (see os-aac/).
 altered-os-aac = { path = "os-aac" }
 tauri = { version = "2", features = [] }
+# VST3 plug-in hosting, run in a separate process (see plughost/).
+altered-plughost = { path = "plughost" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = { version = "1", features = ["uuid1", "chrono04"] }
@@ -51,6 +53,12 @@ zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2
 [dev-dependencies]
 pretty_assertions = "1"
 tempfile = "3"
+
+# The plug-in host is its own crate (it needs unsafe code, forbidden
+# here). The test plug-in under plughost/testplug stays out: it is built
+# by the plug-in tests only.
+[workspace]
+members = ["plughost"]
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -611,6 +611,10 @@ pub struct EffectSlot {
     /// on track and bus chains. None listens to the effect's own input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidechain: Option<Id>,
+    /// A VST3 plug-in's own settings (everything set in its window), as the
+    /// plug-in saved them, base64. Only on plug-in slots (`vst3:` effects).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_state: Option<String>,
 }
 
 /// A span of the timeline.

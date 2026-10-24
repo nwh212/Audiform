@@ -6,5 +6,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // Started again as a plug-in host or scanner: see the plughost crate.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(code) = altered_plughost::main_with_args(&args) {
+        std::process::exit(code);
+    }
     altered_audio_editor_lib::run()
 }

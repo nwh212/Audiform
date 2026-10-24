@@ -99,7 +99,7 @@ Collected from the project's Discord group. Each entry says what we will build, 
 - **Shortcut:** the request says Alt+Drag. New shortcuts need project lead approval, so this is listed, not assigned. Until approved, stretch is a Clip menu command with a length field and a tool-strip mode.
 - **Phase:** P3 or P4 editing. High value for ad work. Early candidate.
 
-### 3. Plugin hosting (not started)
+### 3. Plugin hosting (built 2026-10-24, see decisions.md)
 
 - **VST3** hosting on tracks and the master, then optionally **CLAP** (an open, simpler format). The VST3 SDK is MIT licensed, so hosting inside a GPL app is clean.
 - **VST2 is not planned.** Steinberg stopped licensing the VST2 SDK, so shipping a VST2 host is a legal risk for a public project. We can revisit if the terms change. This is a deliberate decision, logged in `decisions.md`.
@@ -332,7 +332,7 @@ Checked against the code. "Built" means it is in the repo and tested in the sand
 | --- | --- | --- |
 | Scripting, schemas, assistant endpoint | Schemas built (`/schemas`, with a test that keeps them current). Scripting and endpoint not started. | Generated TypeScript definitions. QuickJS script engine. Local stdio and pipe endpoint, off by default, read-only first. No OpenAPI (no HTTP API, no network). |
 | Time stretch and varispeed | Built: Clip > Time Stretch, Alt+drag on a clip edge, pitch kept (WSOLA) or tape-style, about 25 percent either way, exact-length stretch in the Waveform editor (0.1.6). | Formant keeping, a higher quality engine (Rubber Band is GPL, needs a note in `ATTRIBUTION.md`, decide by listening tests on speech). |
-| Plugin hosting (VST3) | Not started. | Separate helper process, shared-memory audio, plugin windows, scan list. VST2 stays out. |
+| Plugin hosting (VST3) | Built (proposed 2026-10-24, see decisions.md). | Separate host process per plug-in (pipes, not shared memory), Plug-in Manager with user folders, plug-in windows on Windows, settings saved in the session. Still open: windows on Linux and macOS, macOS bundles, live input monitoring through plug-ins, plug-in sidechain inputs. VST2 stays out. |
 | ASIO and channel routing | ASIO built (Cargo feature, on in release builds, falls back to the normal driver). Per-channel input picking built. | Hardware testing. Buffer size, sample rate and latency controls. Output routing and a routing matrix. Loopback channels. |
 | MIDI and instruments | Not started. | See the MIDI plan below. |
 | Markers, Playlist, chapters | Built: point, range, chapter, cue, ad slot and social clip markers with colors and notes, Playlist panel, chapter export (files and embedded), Waveform editor cue points. | Clip markers that move with their clip (check), marker keyboard navigation (needs shortcut approval). |

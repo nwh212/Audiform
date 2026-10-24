@@ -1448,6 +1448,7 @@ mod tests {
             params: Default::default(),
             preset: None,
             sidechain: Some(voice),
+            plugin_state: None,
         });
         roundtrip(
             &mut s,
@@ -1597,6 +1598,7 @@ mod tests {
                 params: Default::default(),
                 preset: None,
                 sidechain: None,
+                plugin_state: None,
             });
         }
         roundtrip(
@@ -2359,6 +2361,7 @@ mod tests {
                 params: Default::default(),
                 preset: None,
                 sidechain: None,
+                plugin_state: None,
             });
         let pt = |position, value| EnvelopePoint {
             position,

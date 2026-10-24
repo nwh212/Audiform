@@ -37,7 +37,6 @@ use serde::Serialize;
 use super::graph::{self, Graph, GraphMeters, Levels, Mix};
 use super::plan::{self, Owner};
 use super::render::{ChainUpdate, Renderer};
-use crate::dsp::effects::ChainProcessor;
 use crate::session::model::{EffectChain, Id, Session};
 
 /// Meter readings from the render thread kept for the status call, at most.
@@ -435,7 +434,7 @@ impl Transport {
 /// The chains that changed, when every one keeps its look-ahead (so it
 /// can swap in while playing). None means playback must restart.
 fn chain_update(r: &Running, session: &Session, now: &plan::Chains) -> Option<ChainUpdate> {
-    let latency = |c: &EffectChain| ChainProcessor::new(c, r.out_rate).map_or(0, |p| p.latency());
+    let latency = |c: &EffectChain| crate::dsp::effects::chain_latency(c, r.out_rate);
     let empty = EffectChain::default();
     let mut update = ChainUpdate::default();
     for &(id, owner, hash) in now {

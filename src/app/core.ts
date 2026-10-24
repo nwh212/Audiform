@@ -884,6 +884,63 @@ export interface EffectInfo {
   params: EffectParamInfo[];
   /** Has a level detector that can listen to another track or bus (sidechain). */
   sidechain?: boolean;
+  /** A VST3 plug-in. */
+  plugin?: boolean;
+  /** A plug-in with a window of its own. */
+  hasWindow?: boolean;
+}
+
+/** The Plug-in Manager's list. */
+export interface PluginRegistry {
+  folders: { path: string; standard: boolean; on: boolean }[];
+  plugins: { effect: string; name: string; vendor: string; version: string; kind: string; bundle: string; latency: number; hasWindow: boolean; controls: number }[];
+  failed: { bundle: string; error: string }[];
+}
+
+/** What one running plug-in reported. */
+export interface PluginEvents {
+  slotId: string;
+  /** Controls moved in its window: [key, value 0 to 1]. */
+  edits: [string, number][];
+  dirty: boolean;
+  windowClosed: boolean;
+  latencyChanged: boolean;
+  /** Why it stopped (crashed or hung); it is bypassed. */
+  stopped: string | null;
+}
+
+export function pluginsRegistry(): Promise<PluginRegistry> {
+  return invoke<PluginRegistry>("plugins_registry");
+}
+
+/** Scans the plug-in folders; `all` also rescans bundles that did not change. */
+export function pluginsScan(all: boolean): Promise<[{ scanned: number; found: number; failed: number }, PluginRegistry]> {
+  return invoke("plugins_scan", { all });
+}
+
+/** Adds or removes a plug-in folder (a standard one is turned off or on). */
+export function pluginsSetFolder(path: string, on: boolean): Promise<PluginRegistry> {
+  return invoke<PluginRegistry>("plugins_set_folder", { path, on });
+}
+
+export function pluginOpenWindow(slot: import("../stores/session").EffectSlotDoc, title: string): Promise<void> {
+  return invoke<void>("plugin_open_window", { slot, title });
+}
+
+export function pluginCloseWindow(slotId: string): Promise<void> {
+  return invoke<void>("plugin_close_window", { slotId });
+}
+
+export function pluginEvents(): Promise<PluginEvents[]> {
+  return invoke<PluginEvents[]>("plugin_events");
+}
+
+export function pluginState(slotId: string): Promise<string | null> {
+  return invoke<string | null>("plugin_state", { slotId });
+}
+
+export function pluginRestart(slotId: string): Promise<void> {
+  return invoke<void>("plugin_restart", { slotId });
 }
 
 /** Every built-in effect, with its controls. */

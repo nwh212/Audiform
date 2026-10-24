@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) The GeekCast Radio Network, LLC.
+# This file is part of Altered Audio Editor.
+
+# A tiny VST3 plug-in for testing the plug-in host: gain, a fixed
+# 32-sample look-ahead, saved settings, and a switch that crashes it on
+# purpose. Built by the plug-in tests; never shipped. Based on the gain
+# example of the `vst3` crate (MIT or Apache-2.0, see ATTRIBUTION.md).
+
+[package]
+name = "altered-testplug"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+vst3 = "0.3"
+
+[workspace]

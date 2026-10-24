@@ -87,6 +87,8 @@ pub(crate) fn swap_fx(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32) -> 
     match slot.take() {
         // Not started yet: it primes itself on its first block.
         Some(old) if !old.primed => {}
+        // Plug-ins keep running between chains; they already heard it.
+        Some(_) if fx.chain.has_plugins() => fx.primed = true,
         Some(old) => {
             // Warm up on what the old chain heard; drop the output.
             let mut warm = old.hist;

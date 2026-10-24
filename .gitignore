@@ -29,3 +29,7 @@ SyncToy_*.dat
 /reference/
 *Bugs*.pdf
 Altered*Audio*Bugs*
+
+# Plug-in host build output.
+src-tauri/plughost/target/
+src-tauri/plughost/testplug/target/
