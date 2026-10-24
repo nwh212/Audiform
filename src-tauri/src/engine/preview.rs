@@ -3,7 +3,8 @@
 // This file is part of Altered Audio Editor.
 
 //! Preview playback for Drive Manager and Libraries: one file at a
-//! time on the default output device.
+//! time on the default output device. Also short generated sounds, such
+//! as a note played through a MIDI track's instrument while editing.
 //!
 //! Three threads:
 //! - the caller, which starts and stops playback;
@@ -72,6 +73,19 @@ pub struct PreviewStatus {
     pub position: f64,
 }
 
+/// Fills a block with interleaved samples at the device's rate and
+/// channel count; false once there is nothing more.
+pub type Fill = Box<dyn FnMut(&mut Vec<f32>) -> bool + Send>;
+
+/// Makes a [`Fill`] once the device's channel count and rate are known.
+pub type MakeFill = Box<dyn FnOnce(usize, u32) -> Result<Fill, String> + Send>;
+
+/// What a preview plays.
+enum Input {
+    File(PathBuf, f64),
+    Made(MakeFill),
+}
+
 /// Owns the current preview, if any. Kept in Tauri state.
 #[derive(Default)]
 pub struct PreviewPlayer {
@@ -81,6 +95,19 @@ pub struct PreviewPlayer {
 impl PreviewPlayer {
     /// Stops any preview and starts `path` at `start_seconds`.
     pub fn play(&self, path: &Path, start_seconds: f64) -> Result<(), String> {
+        self.start(
+            Input::File(path.to_path_buf(), start_seconds),
+            path,
+            start_seconds,
+        )
+    }
+
+    /// Stops any preview and plays generated sound (see [`MakeFill`]).
+    pub fn play_made(&self, make: MakeFill) -> Result<(), String> {
+        self.start(Input::Made(make), Path::new(""), 0.0)
+    }
+
+    fn start(&self, input: Input, path: &Path, start_seconds: f64) -> Result<(), String> {
         let mut current = self.current.lock().map_err(|e| e.to_string())?;
         if let Some(mut r) = current.take() {
             r.stop();
@@ -89,10 +116,9 @@ impl PreviewPlayer {
         let shared = Arc::new(Shared::default());
         let (ready_tx, ready_rx) = mpsc::channel::<Result<u32, String>>();
         let thread_shared = shared.clone();
-        let file = path.to_path_buf();
         let thread = thread::Builder::new()
             .name("preview".into())
-            .spawn(move || run(file, start_seconds, thread_shared, ready_tx))
+            .spawn(move || run(input, thread_shared, ready_tx))
             .map_err(|e| e.to_string())?;
 
         // Wait until the device is open so errors reach the caller.
@@ -171,7 +197,7 @@ impl Drop for PreviewPlayer {
 
 /// Body of the preview thread. Owns the device stream, which on some
 /// platforms must stay on the thread that created it.
-fn run(path: PathBuf, start: f64, shared: Arc<Shared>, ready: mpsc::Sender<Result<u32, String>>) {
+fn run(input: Input, shared: Arc<Shared>, ready: mpsc::Sender<Result<u32, String>>) {
     let Some(device) = super::output::output_device_any() else {
         let _ = ready.send(Err("No audio output device found.".into()));
         return;
@@ -188,19 +214,17 @@ fn run(path: PathBuf, start: f64, shared: Arc<Shared>, ready: mpsc::Sender<Resul
     let rate = config.sample_rate;
     let channels = usize::from(config.channels);
 
-    let mut reader = match AudioReader::open(&path, channels, Some(rate)) {
-        Ok(r) => r,
+    let source: Result<Fill, String> = match input {
+        Input::File(path, start) => file_fill(&path, start, channels, rate),
+        Input::Made(make) => make(channels, rate),
+    };
+    let source = match source {
+        Ok(s) => s,
         Err(e) => {
-            let _ = ready.send(Err(e.to_string()));
+            let _ = ready.send(Err(e));
             return;
         }
     };
-    if start > 0.0 {
-        if let Err(e) = reader.seek(start) {
-            let _ = ready.send(Err(e.to_string()));
-            return;
-        }
-    }
 
     let capacity = ((f64::from(rate) * BUFFER_SECONDS) as usize).max(4096) * channels;
     let (producer, consumer) = RingBuffer::<f32>::new(capacity);
@@ -208,7 +232,7 @@ fn run(path: PathBuf, start: f64, shared: Arc<Shared>, ready: mpsc::Sender<Resul
     let decode_shared = shared.clone();
     let decoder = thread::Builder::new()
         .name("preview-decode".into())
-        .spawn(move || decode_loop(reader, producer, decode_shared));
+        .spawn(move || decode_loop(source, producer, decode_shared));
     let decoder = match decoder {
         Ok(d) => d,
         Err(e) => {
@@ -243,19 +267,27 @@ fn run(path: PathBuf, start: f64, shared: Arc<Shared>, ready: mpsc::Sender<Resul
     let _ = decoder.join();
 }
 
-fn decode_loop(mut reader: AudioReader, mut producer: Producer<f32>, shared: Arc<Shared>) {
+/// A file, read at the device's rate and channel count from `start` seconds.
+fn file_fill(path: &Path, start: f64, channels: usize, rate: u32) -> Result<Fill, String> {
+    let mut reader = AudioReader::open(path, channels, Some(rate)).map_err(|e| e.to_string())?;
+    if start > 0.0 {
+        reader.seek(start).map_err(|e| e.to_string())?;
+    }
+    Ok(Box::new(move |block: &mut Vec<f32>| {
+        matches!(reader.read_into(block), Ok(true))
+    }))
+}
+
+fn decode_loop(mut source: Fill, mut producer: Producer<f32>, shared: Arc<Shared>) {
     let mut block = Vec::with_capacity(8192);
     loop {
         if shared.stop.load(Ordering::SeqCst) {
             return;
         }
         block.clear();
-        match reader.read_into(&mut block) {
-            Ok(true) => {}
-            Ok(false) | Err(_) => {
-                shared.decoded_all.store(true, Ordering::SeqCst);
-                return;
-            }
+        if !source(&mut block) {
+            shared.decoded_all.store(true, Ordering::SeqCst);
+            return;
         }
         let mut rest: &[f32] = &block;
         while !rest.is_empty() {

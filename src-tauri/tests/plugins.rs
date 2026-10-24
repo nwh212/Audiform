@@ -283,6 +283,27 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         (at(5_999), at(6_000), at(8_999), at(9_000)),
         (0.0, 0.25, 0.25, 0.0)
     );
+    // Playback of a session without buses runs each track on its own
+    // (faders on the audio thread): the track's effects still apply.
+    {
+        use altered_audio_editor_lib::engine::{graph, plan, render::Renderer};
+        let mut m = graph::Mix::new(
+            Renderer::new(plan::build(&s, 48_000), 0),
+            graph::Graph::new(&s, 48_000, false),
+        );
+        let mut out = vec![Vec::new(); m.outputs()];
+        let mut track = Vec::new();
+        while track.len() < 12_000 * 2 {
+            m.render(1_024, &mut out);
+            track.extend_from_slice(&out[0]);
+        }
+        let at = |i: usize| (track[i * 2] * 1_000.0).round() / 1_000.0;
+        assert_eq!(
+            (at(6_000), at(8_999)),
+            (0.25, 0.25),
+            "playback hears the track's effects"
+        );
+    }
     // Starting in the middle of the note plays it from there.
     let y = mix_range(&s, 7_000, 8_000);
     assert_eq!((y[0] * 1_000.0).round() / 1_000.0, 0.25);
@@ -316,6 +337,28 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         instance::running(inst.id).is_some(),
         "warmed in the background"
     );
+    // A note heard while editing: it sounds, lets go after the hold, and
+    // the preview ends after a short tail.
+    let make = instance::audition(&inst, 60, 1.0, 0.1).expect("starts");
+    let rate = altered_audio_editor_lib::engine::output::device_rate();
+    let mut fill = make(2, rate).unwrap();
+    let mut heard = Vec::new();
+    let mut block = Vec::new();
+    while fill(&mut block) {
+        heard.append(&mut block);
+        assert!(heard.len() < rate as usize * 2 * 5, "it ends");
+    }
+    let frames = heard.len() / 2;
+    let hold = (rate as usize) / 10;
+    assert!(
+        heard[..hold * 2].iter().any(|v| v.abs() > 0.1),
+        "the note sounds"
+    );
+    assert!(
+        heard[(hold + 1_000) * 2..].iter().all(|v| v.abs() < 1e-6),
+        "and lets go"
+    );
+    assert!(frames >= hold + rate as usize / 3, "with a tail");
     instance::retain(&Default::default());
 
     // No instrument: silent, nothing breaks.

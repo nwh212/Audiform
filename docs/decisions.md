@@ -1162,3 +1162,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-24: instrument picker grouped like the Add effect menu
 
 - A MIDI track's instrument is picked from a menu instead of a flat list: instruments by type (Piano, Synth, Sampler and so on, from the plug-in's own categories), then by maker, with No Instrument at the end and the current one checked. The word "Instrument" is left out of the type, as "Fx" is for effects, since every entry is one.
+
+## 2026-10-24: hear notes while editing, right-drag erase, menus that fit the window
+
+- **Hearing notes.** In the piano roll a note sounds through the track's instrument when it is drawn, picked up, moved to another pitch or given a new velocity, and the keys on the left play their note when clicked. The core plays it on the preview output (`midi_audition`): note on, held for the note's length (0.15 to 1 second), note off, then a short tail. The preview player now takes generated sound as well as files. A note cut short by the next one is still let go, so it never hangs on. Nothing plays while the session is playing, since the instrument is busy then. The note is heard without the track's effects.
+- **Erasing.** Holding the right button and dragging over notes erases each one it passes over (a right-click still deletes one). The changes stay one undoable edit with the rest of the piano roll's.
+- **Menus.** A menu or submenu taller than the window scrolls instead of running off the bottom, and submenus are placed against the window beside their row (left of it when there is no room on the right). Scrolling a menu closes its open submenu. Plug-in names sort with numbers in order ("2" before "10").

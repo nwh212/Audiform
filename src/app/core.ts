@@ -269,6 +269,11 @@ export async function mediaFrames(path: string, start: number, count: number): P
   return { channels, data: new Float32Array(bytes.buffer.slice(4, 4 + n * 4)) };
 }
 
+/** Plays one note through a MIDI track's instrument (velocity 0 to 1). False when nothing played: the session is playing, or no instrument. */
+export function midiAudition(trackId: string, pitch: number, velocity: number, seconds: number): Promise<boolean> {
+  return invoke<boolean>("midi_audition", { trackId, pitch, velocity, seconds });
+}
+
 /** What the Phase Wheel compares. */
 export type ScopeSignal = "left" | "right" | "mid" | "side";
 

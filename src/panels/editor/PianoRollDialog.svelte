@@ -5,7 +5,11 @@
 
   A MIDI clip's notes, on a piano roll. Click empty space to add a note
   one grid step long; drag a note's middle to move it, drag either end to
-  stretch it that way, and double-click or right-click it to delete it.
+  stretch it that way, and double-click or right-click it to delete it
+  (hold the right button and drag to erase every note it passes over).
+  Each note sounds through the track's instrument as it is drawn, picked
+  up, moved to another pitch or given a new velocity, and the keys on the
+  left play their note when clicked.
   Shift-click picks several, Shift-drag on empty space picks all in a
   box; moving or stretching one picked note moves or stretches them all.
   Copy and paste (Ctrl+C, Ctrl+V) paste at the last spot clicked. Snap
@@ -28,9 +32,16 @@
     instrument: string | null;
     onApply: (clip: MidiClipDoc) => void;
     onClose: () => void;
+    /** Plays a note through the track's instrument: pitch, velocity (1 to 127), length in seconds. */
+    onAudition?: (pitch: number, velocity: number, seconds: number) => void;
   }
 
-  const { clip: original, tempo, instrument, onApply, onClose }: Props = $props();
+  const { clip: original, tempo, instrument, onApply, onClose, onAudition = () => {} }: Props = $props();
+
+  /** Hears a note, held for its length (within reason). */
+  function hear(n: NoteDoc) {
+    onAudition(n.pitch, n.velocity, Math.min(1, Math.max(0.15, (n.length * 60) / tempo.bpm)));
+  }
 
   // svelte-ignore state_referenced_locally
   let clip = $state<MidiClipDoc>(structuredClone($state.snapshot(original)) as MidiClipDoc);
@@ -93,7 +104,28 @@
     picked = new Set(keep.map((k) => sortedNotes.indexOf(k)).filter((i) => i >= 0));
   }
 
+  /** Right button held and dragged: erases every note it passes over. */
+  function startErase(e: PointerEvent, el: HTMLElement) {
+    e.preventDefault();
+    const eraseAt = (ev: PointerEvent) => {
+      const p = at(ev, el);
+      const i = noteAt(p.beat, p.pitch);
+      if (i >= 0) setNotes(removeNotes(clip.notes, new Set([i])));
+    };
+    eraseAt(e);
+    const up = () => {
+      window.removeEventListener("pointermove", eraseAt, true);
+      window.removeEventListener("pointerup", up, true);
+    };
+    window.addEventListener("pointermove", eraseAt, true);
+    window.addEventListener("pointerup", up, true);
+  }
+
   function onGridDown(e: PointerEvent) {
+    if (e.button === 2) {
+      startErase(e, e.currentTarget as HTMLElement);
+      return;
+    }
     if (e.button !== 0) return;
     const el = e.currentTarget as HTMLElement;
     const p = at(e, el);
@@ -140,6 +172,7 @@
       i = notes.findIndex((x) => x.start === n.start && x.pitch === n.pitch);
       picked = new Set([i]);
       mode = "end";
+      hear(n);
     } else {
       const n = clip.notes[i]!;
       // Near either end stretches that way; the middle moves.
@@ -154,11 +187,13 @@
         return;
       }
       if (!picked.has(i)) picked = new Set([i]);
+      hear(n);
     }
     const base = clip.notes;
     const sel = new Set(picked);
     // The note grabbed: the picked ones follow it, by the same amount.
     const grabbed = base[i]!;
+    let heardPitch = grabbed.pitch;
     const move = (ev: PointerEvent) => {
       const dBeats = (ev.clientX - startX) / zoom;
       if (mode === "move") {
@@ -166,6 +201,12 @@
         const d = step > 0 ? snap(grabbed.start + dBeats, step) - grabbed.start : dBeats;
         const ds = -Math.round((ev.clientY - startY) / ROW);
         clip = { ...clip, notes: moveNotes(base, sel, d, ds) };
+        // Moved to another pitch: hear it there.
+        const now = Math.min(127, Math.max(0, grabbed.pitch + ds));
+        if (now !== heardPitch) {
+          heardPitch = now;
+          hear({ ...grabbed, pitch: now });
+        }
       } else if (mode === "end") {
         const end = grabbed.start + grabbed.length + dBeats;
         const target = step > 0 ? Math.max(grabbed.start + step, snap(end, step)) : Math.max(grabbed.start + MIN_NOTE, end);
@@ -190,6 +231,8 @@
 
   function deleteAt(e: MouseEvent) {
     e.preventDefault();
+    // A right-click already erased on the button press (see startErase).
+    if (e.type === "contextmenu") return;
     const p = at(e, e.currentTarget as HTMLElement);
     const i = noteAt(p.beat, p.pitch);
     if (i >= 0) setNotes(removeNotes(clip.notes, new Set([i])));
@@ -234,9 +277,14 @@
       clip = { ...clip, notes: setVelocity(clip.notes, which, v) };
     };
     set(e);
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", set, true);
       window.removeEventListener("pointerup", up, true);
+      // Hear the note at its new velocity.
+      const r = el.getBoundingClientRect();
+      const beat = (ev.clientX - r.left) / zoom;
+      const n = clip.notes.find((x) => beat >= x.start && beat < x.start + Math.max(x.length, 4 / zoom));
+      if (n) hear(n);
     };
     window.addEventListener("pointermove", set, true);
     window.addEventListener("pointerup", up, true);
@@ -323,7 +371,8 @@
     <div class="roll" bind:this={scroller}>
       <div class="keys" style:height="{128 * ROW}px">
         {#each pitches as p (p)}
-          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{ROW}px">{p % 12 === 0 ? noteName(p) : ""}</div>
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{ROW}px" title={noteName(p)} onpointerdown={() => onAudition(p, 100, 0.4)}>{p % 12 === 0 ? noteName(p) : ""}</div>
         {/each}
       </div>
       <div class="area">
@@ -470,6 +519,7 @@
     background: var(--surface-3);
   }
   .key {
+    cursor: pointer;
     box-sizing: border-box;
     padding-left: 4px;
     border-bottom: 1px solid var(--border);

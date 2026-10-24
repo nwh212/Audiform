@@ -726,7 +726,7 @@ export function pluginMenuGroups(plugins: readonly MenuPlugin[]): { types: [stri
     }
     return [...m.entries()]
       .sort(([a], [b]) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)))
-      .map(([k, list]): [string, MenuPlugin[]] => [k, [...list].sort((a, b) => a.name.localeCompare(b.name))]);
+      .map(([k, list]): [string, MenuPlugin[]] => [k, [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))]);
   };
   const type = (p: MenuPlugin) => {
     const parts = p.kind

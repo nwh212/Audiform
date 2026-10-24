@@ -644,3 +644,123 @@ impl Instrument {
         }
     }
 }
+
+/// Plays one note through a MIDI track's instrument, for hearing notes
+/// while editing them: the note held for `seconds`, then let go, then a
+/// short tail. Starting the instrument can take a while, so this waits
+/// for it here, before any sound plays. If the preview is cut short (by
+/// the next note, say), the note is still let go, so it never hangs on.
+pub fn audition(
+    slot: &EffectSlot,
+    pitch: u8,
+    velocity: f32,
+    seconds: f64,
+) -> Result<crate::engine::preview::MakeFill, String> {
+    let rate = crate::engine::output::device_rate();
+    let host = host_for(slot, rate).ok_or("The instrument could not start.")?;
+    if host.lock().map_err(|e| e.to_string())?.is_dead() {
+        return Err("The instrument stopped. Restart it from the track.".into());
+    }
+    let pending = host
+        .lock()
+        .map(|h| h.differing(&slot_params(slot)))
+        .unwrap_or_default();
+    Ok(Box::new(move |channels: usize, _device_rate: u32| {
+        let hold = (seconds.clamp(0.05, 2.0) * f64::from(rate)) as usize;
+        let total = hold + rate as usize * 2 / 5;
+        let mut note = Audition {
+            host,
+            pitch: pitch.min(127),
+            velocity: velocity.clamp(0.0, 1.0),
+            hold,
+            total,
+            pos: 0,
+            released: false,
+            pending,
+            stereo: Vec::new(),
+        };
+        Ok(
+            Box::new(move |block: &mut Vec<f32>| note.fill(block, channels))
+                as crate::engine::preview::Fill,
+        )
+    }))
+}
+
+struct Audition {
+    host: Arc<Mutex<Host>>,
+    pitch: u8,
+    velocity: f32,
+    hold: usize,
+    total: usize,
+    pos: usize,
+    released: bool,
+    pending: Vec<(u32, f64)>,
+    stereo: Vec<f32>,
+}
+
+impl Audition {
+    const BLOCK: usize = 512;
+
+    fn fill(&mut self, block: &mut Vec<f32>, channels: usize) -> bool {
+        if self.pos >= self.total {
+            return false;
+        }
+        let n = Self::BLOCK.min(self.total - self.pos);
+        let mut notes = Vec::new();
+        if self.pos == 0 {
+            notes.push(NoteEvent {
+                offset: 0,
+                on: true,
+                pitch: self.pitch,
+                velocity: self.velocity,
+            });
+        }
+        if !self.released && self.pos + n > self.hold {
+            notes.push(NoteEvent {
+                offset: (self.hold.saturating_sub(self.pos)) as u32,
+                on: false,
+                pitch: self.pitch,
+                velocity: 0.0,
+            });
+            self.released = true;
+        }
+        self.stereo.clear();
+        self.stereo.resize(n * 2, 0.0);
+        let ok = match self.host.lock() {
+            Ok(mut h) => h.process(&self.pending, &notes, &mut self.stereo),
+            Err(_) => false,
+        };
+        self.pending.clear();
+        if !ok {
+            return false;
+        }
+        for f in self.stereo.chunks_exact(2) {
+            for c in 0..channels.max(1) {
+                block.push(if channels == 1 {
+                    (f[0] + f[1]) * 0.5
+                } else {
+                    f[c.min(1)]
+                });
+            }
+        }
+        self.pos += n;
+        true
+    }
+}
+
+impl Drop for Audition {
+    fn drop(&mut self) {
+        if self.pos > 0 && !self.released {
+            let off = [NoteEvent {
+                offset: 0,
+                on: false,
+                pitch: self.pitch,
+                velocity: 0.0,
+            }];
+            let mut buf = vec![0.0; 64 * 2];
+            if let Ok(mut h) = self.host.lock() {
+                h.process(&[], &off, &mut buf);
+            }
+        }
+    }
+}

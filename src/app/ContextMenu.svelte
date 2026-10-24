@@ -117,11 +117,29 @@
     if (menu && !menu.contains(e.target as Node)) onClose();
   }
 
-  /** Keeps a submenu on screen: flips it to the left edge or lifts it up when it would spill. */
+  /**
+   * Places a submenu beside its row, on screen: to the left when it would
+   * spill off the right, lifted when it would run off the bottom. A menu
+   * taller than the window scrolls (see the max-height in the styles).
+   * Submenus are placed against the window, not their parent, so a
+   * scrolling parent never cuts them off.
+   */
   function fit(node: HTMLElement) {
+    const row = node.parentElement?.getBoundingClientRect();
+    if (!row) return;
     const r = node.getBoundingClientRect();
-    if (r.right > window.innerWidth - 2) node.classList.add("flip");
-    if (r.bottom > window.innerHeight - 2) node.style.top = `${Math.max(-node.offsetTop, window.innerHeight - 2 - r.bottom)}px`;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const left = row.right + r.width > w - 2 ? Math.max(2, row.left - r.width) : row.right;
+    const height = Math.min(r.height, h - 4);
+    const top = Math.max(2, Math.min(row.top - 4, h - 2 - height));
+    node.style.left = `${left}px`;
+    node.style.top = `${top}px`;
+  }
+
+  /** A menu level scrolled: its open submenu no longer sits beside its row, so close it. */
+  function scrolled(depth: number) {
+    if (trail.length > depth + 1) trail = trail.slice(0, depth + 1);
   }
 </script>
 
@@ -148,7 +166,7 @@
           <span class="arrow" aria-hidden="true">&#9656;</span>
         </button>
         {#if trail[depth] === i && trail.length > depth + 1}
-          <div class="context sub" role="menu" use:fit>
+          <div class="context sub" role="menu" use:fit onscroll={() => scrolled(depth + 1)}>
             {@render list(it.items, depth + 1)}
           </div>
         {/if}
@@ -181,6 +199,7 @@
   style:left="{left}px"
   style:top="{top}px"
   onkeydown={onKey}
+  onscroll={() => scrolled(0)}
   oncontextmenu={(e) => e.preventDefault()}
 >
   {@render list(items, 0)}
@@ -204,14 +223,6 @@
 
   .context.sub {
     width: max-content;
-    position: absolute;
-    top: -4px;
-    left: 100%;
-  }
-
-  .context.sub:global(.flip) {
-    left: auto;
-    right: 100%;
   }
 
   .arrow {
@@ -227,6 +238,10 @@
     background: var(--surface-2);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
     outline: none;
+    /* Never taller than the window: a long list scrolls instead. */
+    max-height: calc(100vh - 4px);
+    overflow-y: auto;
+    box-sizing: border-box;
   }
 
   button {

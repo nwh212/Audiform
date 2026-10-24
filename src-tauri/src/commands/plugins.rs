@@ -265,3 +265,38 @@ pub async fn plugin_state(slot_id: Id) -> Result<Option<String>, String> {
 pub fn plugin_restart(slot_id: Id) {
     instance::restart(slot_id);
 }
+
+/// Plays one note through a MIDI track's instrument, so notes can be
+/// heard while they are drawn and moved in the piano roll. Quietly does
+/// nothing while the session plays (the instrument is busy then) or when
+/// the track has no instrument. True when a note played.
+#[tauri::command]
+pub async fn midi_audition(
+    open: tauri::State<'_, super::session::OpenSession>,
+    transport: tauri::State<'_, crate::engine::Transport>,
+    preview: tauri::State<'_, crate::engine::PreviewPlayer>,
+    track_id: Id,
+    pitch: u8,
+    velocity: f32,
+    seconds: f64,
+) -> Result<bool, String> {
+    if transport.is_playing() {
+        return Ok(false);
+    }
+    let slot = {
+        let s = open.0.lock().map_err(|e| e.to_string())?;
+        s.session
+            .tracks
+            .iter()
+            .find(|t| t.id == track_id)
+            .and_then(|t| t.instrument.clone())
+    };
+    let Some(slot) = slot.filter(|s| s.enabled) else {
+        return Ok(false);
+    };
+    let make = spawn_blocking(move || instance::audition(&slot, pitch, velocity, seconds))
+        .await
+        .map_err(|e| e.to_string())??;
+    preview.play_made(make)?;
+    Ok(true)
+}
