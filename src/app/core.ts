@@ -927,7 +927,12 @@ export function onPluginScanProgress(fn: (p: PluginScanProgress) => void): Promi
   return listen<PluginScanProgress>("plugins-scan-progress", (e) => fn(e.payload));
 }
 
-export function pluginsScan(all: boolean): Promise<[{ scanned: number; found: number; failed: number }, PluginRegistry]> {
+/** Stops the scan in progress; what it read so far is kept. */
+export function pluginsScanStop(): Promise<void> {
+  return invoke<void>("plugins_scan_stop");
+}
+
+export function pluginsScan(all: boolean): Promise<[{ scanned: number; found: number; failed: number; stopped: boolean }, PluginRegistry]> {
   return invoke("plugins_scan", { all });
 }
 

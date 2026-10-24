@@ -27,8 +27,10 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use altered_plughost::protocol::{parse_scan_output, ClassInfo, ScanExit, ScanResult};
+use altered_plughost::protocol::{parse_scan_output, ClassInfo, ScanExit, ScanResult, SCAN_PREFIX};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::dsp::effects::EffectInfo;
 
@@ -246,11 +248,68 @@ pub fn host_program() -> Option<PathBuf> {
     std::env::current_exe().ok()
 }
 
-/// Asks a host process what one bundle holds.
-pub fn scan_bundle(bundle: &Path) -> ScanResult {
-    let fail = |e: String| ScanResult {
-        classes: Vec::new(),
-        error: Some(e),
+/// Set to stop a scan in progress (see [`stop_scan`]).
+static STOP_SCAN: AtomicBool = AtomicBool::new(false);
+
+/// Stops the scan in progress: running scan processes are ended and no
+/// more bundles start. What was read so far is kept.
+pub fn stop_scan() {
+    STOP_SCAN.store(true, Ordering::SeqCst);
+}
+
+/// Bytes a pipe has given so far, filled by a thread of its own.
+struct Drained {
+    bytes: Arc<Mutex<Vec<u8>>>,
+    closed: Arc<AtomicBool>,
+}
+
+impl Drained {
+    fn start(pipe: Option<Box<dyn std::io::Read + Send>>) -> Drained {
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let closed = Arc::new(AtomicBool::new(pipe.is_none()));
+        if let Some(mut p) = pipe {
+            let (b, c) = (bytes.clone(), closed.clone());
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                loop {
+                    match p.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => match b.lock() {
+                            Ok(mut v) => v.extend_from_slice(&buf[..n]),
+                            Err(_) => break,
+                        },
+                    }
+                }
+                c.store(true, Ordering::SeqCst);
+            });
+        }
+        Drained { bytes, closed }
+    }
+
+    fn text(&self) -> String {
+        self.bytes
+            .lock()
+            .map(|v| String::from_utf8_lossy(&v).into_owned())
+            .unwrap_or_default()
+    }
+
+    /// Whether the scan has printed its last line.
+    fn finished(&self) -> bool {
+        let done = format!("{SCAN_PREFIX}\"done\"");
+        self.bytes
+            .lock()
+            .map(|v| String::from_utf8_lossy(&v).contains(&done))
+            .unwrap_or(false)
+    }
+}
+
+/// Asks a host process what one bundle holds. None when the scan was stopped.
+pub fn scan_bundle(bundle: &Path) -> Option<ScanResult> {
+    let fail = |e: String| {
+        Some(ScanResult {
+            classes: Vec::new(),
+            error: Some(e),
+        })
     };
     let Some(exe) = host_program() else {
         return fail("The plug-in host could not be found.".into());
@@ -269,19 +328,21 @@ pub fn scan_bundle(bundle: &Path) -> ScanResult {
     // Read while it runs: a plug-in with many controls prints more than
     // the pipe holds, and would otherwise wait on us forever. Plug-ins
     // may print text of their own (not always UTF-8); that is skipped.
-    let drain = |pipe: Option<Box<dyn std::io::Read + Send>>| {
-        pipe.map(|mut p| {
-            std::thread::spawn(move || {
-                let mut bytes = Vec::new();
-                let _ = p.read_to_end(&mut bytes);
-                String::from_utf8_lossy(&bytes).into_owned()
-            })
-        })
-    };
-    let out = drain(child.stdout.take().map(|p| Box::new(p) as _));
-    let err = drain(child.stderr.take().map(|p| Box::new(p) as _));
+    let out = Drained::start(child.stdout.take().map(|p| Box::new(p) as _));
+    let err = Drained::start(child.stderr.take().map(|p| Box::new(p) as _));
     let start = Instant::now();
     let exit = loop {
+        if STOP_SCAN.load(Ordering::SeqCst) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        // Finished: done, even if the plug-in hangs on the way out.
+        if out.finished() {
+            let _ = child.kill();
+            let _ = child.wait();
+            break ScanExit::Code(0);
+        }
         match child.try_wait() {
             Ok(Some(status)) => {
                 break match status.code() {
@@ -298,10 +359,15 @@ pub fn scan_bundle(bundle: &Path) -> ScanResult {
             Err(e) => return fail(e.to_string()),
         }
     };
-    let text = |h: Option<std::thread::JoinHandle<String>>| {
-        h.and_then(|h| h.join().ok()).unwrap_or_default()
-    };
-    parse_scan_output(&text(out), &text(err), exit)
+    // Helper programs a plug-in started can hold its pipes open after it
+    // has gone; take what came within a moment rather than wait on them.
+    let until = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < until
+        && !(out.closed.load(Ordering::SeqCst) && err.closed.load(Ordering::SeqCst))
+    {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Some(parse_scan_output(&out.text(), &err.text(), exit))
 }
 
 /// What a scan did.
@@ -311,6 +377,8 @@ pub struct ScanReport {
     pub scanned: usize,
     pub found: usize,
     pub failed: usize,
+    /// Stopped before the end; the rest are read at the next scan.
+    pub stopped: bool,
 }
 
 /// Scans every search folder. Unchanged bundles are skipped unless `all`.
@@ -344,6 +412,7 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
         })
         .collect();
     let total = todo.len();
+    STOP_SCAN.store(false, Ordering::SeqCst);
     progress(0, total, Path::new(""));
     // A few bundles at a time: most of a scan is waiting on plug-ins
     // starting up (and their licence checks).
@@ -355,9 +424,12 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
             scope.spawn(move || loop {
                 let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let Some((b, _)) = todo.get(i) else { break };
-                if tx.send((i, b.as_path(), None)).is_err()
-                    || tx.send((i, b.as_path(), Some(scan_bundle(b)))).is_err()
-                {
+                if STOP_SCAN.load(Ordering::SeqCst) || tx.send((i, b.as_path(), None)).is_err() {
+                    break;
+                }
+                // A stopped bundle is left unread (and unstamped) for next time.
+                let Some(r) = scan_bundle(b) else { break };
+                if tx.send((i, b.as_path(), Some(r))).is_err() {
                     break;
                 }
             });
@@ -376,6 +448,7 @@ pub fn scan(all: bool, mut progress: impl FnMut(usize, usize, &Path)) -> ScanRep
         }
         done
     });
+    report.stopped = STOP_SCAN.swap(false, Ordering::SeqCst);
     let mut results = results;
     results.sort_by_key(|(i, _)| *i);
     for (i, r) in results {
@@ -573,11 +646,42 @@ mod tests {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::env::set_var("ALTERED_PLUGIN_HOST", &script);
         let start = Instant::now();
-        let r = scan_bundle(Path::new("x.vst3"));
-        std::env::remove_var("ALTERED_PLUGIN_HOST");
+        let r = scan_bundle(Path::new("x.vst3")).unwrap();
         assert_eq!(r.error, None);
         assert_eq!(r.classes[0].vendor.len(), 300_000);
         assert!(start.elapsed() < Duration::from_secs(10));
+
+        // The checks below swap the same host setting, so they run here in turn.
+        let out = dir.path().join("out.json").display().to_string();
+        let run = |body: &str| {
+            std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+            let start = Instant::now();
+            let r = scan_bundle(Path::new("x.vst3"));
+            (r, start.elapsed())
+        };
+
+        // A helper program the plug-in started keeps the pipes open after
+        // the scan has gone: the scan still ends at once.
+        let (r, took) = run(&format!("sleep 30 &\ncat '{out}'"));
+        assert_eq!(r.unwrap().classes.len(), 1);
+        assert!(took < Duration::from_secs(5), "{took:?}");
+
+        // The plug-in hangs on the way out after the scan finished: done anyway.
+        let (r, took) = run(&format!("cat '{out}'\nsleep 30"));
+        assert_eq!(r.unwrap().error, None);
+        assert!(took < Duration::from_secs(5), "{took:?}");
+
+        // Stop Scan ends a bundle that would take long, with no result.
+        let stopper = std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_millis(300));
+            stop_scan();
+        });
+        let (r, took) = run("sleep 30");
+        stopper.join().unwrap();
+        STOP_SCAN.store(false, Ordering::SeqCst);
+        assert!(r.is_none());
+        assert!(took < Duration::from_secs(5), "{took:?}");
+        std::env::remove_var("ALTERED_PLUGIN_HOST");
     }
 
     #[test]

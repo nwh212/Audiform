@@ -1070,3 +1070,10 @@ Proposed as a contribution with the bus and plug-in work (the tester asked for M
 - Clicking a plug-in's name or its settings button (and adding a plug-in) opens the plug-in's own window. The slider list is still there: the ☰ button, or Show Controls in the slot's right-click menu. A plug-in with no window of its own, or one that stopped (so Restart Plug-in can be reached), opens the slider list as before.
 - "+ Add effect" is now a button that opens the effect families as submenus (the same menu as the slot right-click's Replace With). Plug-ins sit under VST3, grouped by type (from the plug-in's own categories, such as Reverb or Dynamics; Other when it has none) and then by maker. VST (version 2) stays listed as not supported.
 - Add MIDI Track is in the Editor's right-click menus too: the empty lane's Track submenu and the track header menu.
+
+## 2026-10-24: plug-in scans can be stopped, and no longer wait on helper programs
+
+- **Tester report: a bulk scan froze.** A scan process that took too long was ended, but the editor then waited for its output pipes to close. Some plug-ins start helper programs (licence checks, background services) that inherit those pipes and keep them open after the scan process is gone, so the wait never ended and the scan never finished. Now, once a scan process has ended, the editor takes what it printed within two seconds and moves on.
+- A scan process that has printed its last line is done, even if the plug-in then hangs while the process closes (some do, unloading their code); the editor ends it at once instead of waiting out the minute.
+- **Stop Scan.** The Plug-in Manager's Scan button becomes Stop Scan while scanning, and closing the window during a scan stops it too. Running scan processes are ended, no new bundles start, everything read so far is kept, and bundles not reached are read at the next Scan.
+- Tests: fake scanners that leave a helper holding the pipes, hang after finishing, or are stopped part way all return within seconds.

@@ -10,7 +10,7 @@
   only listed as failed.
 -->
 <script lang="ts">
-  import { onPluginScanProgress, pluginsRegistry, pluginsScan, pluginsSetFolder, type PluginRegistry, type PluginScanProgress } from "./core";
+  import { onPluginScanProgress, pluginsRegistry, pluginsScan, pluginsScanStop, pluginsSetFolder, type PluginRegistry, type PluginScanProgress } from "./core";
   import { pluginsVersion } from "../stores/plugins";
 
   interface Props {
@@ -49,7 +49,8 @@
       reg = r;
       pluginsVersion.update((n) => n + 1);
       const failed = report.failed ? `, ${report.failed} could not be read` : "";
-      onNotice(`Plug-in scan: ${report.found} plug-in${report.found === 1 ? "" : "s"} found${failed}.`);
+      const stopped = report.stopped ? " Stopped early: Scan again to read the rest." : "";
+      onNotice(`Plug-in scan: ${report.found} plug-in${report.found === 1 ? "" : "s"} found${failed}.${stopped}`);
     } catch (e) {
       onError(e);
     } finally {
@@ -78,13 +79,28 @@
     }
   }
 
+  /** Closing during a scan stops it; what it read so far is kept. */
+  function close() {
+    if (scanning) void pluginsScanStop().catch(() => {});
+    onClose();
+  }
+
+  let stopping = $state(false);
+  function stopScan() {
+    stopping = true;
+    void pluginsScanStop().catch(onError);
+  }
+  $effect(() => {
+    if (!scanning) stopping = false;
+  });
+
   const name = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 </script>
 
-<svelte:window onkeydown={(e) => e.key === "Escape" && !scanning && onClose()} />
+<svelte:window onkeydown={(e) => e.key === "Escape" && close()} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="backdrop" onclick={() => !scanning && onClose()}>
+<div class="backdrop" onclick={close}>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pm-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <h1 id="pm-title">Plug-in Manager</h1>
 
@@ -115,8 +131,12 @@
             Looking for plug-ins...
           {/if}
         </span>
-        <button type="button" class="primary" onclick={() => void scan(false)} disabled={scanning} title="Read new and changed plug-ins">{scanning ? "Scanning..." : "Scan"}</button>
-        <button type="button" onclick={() => void scan(true)} disabled={scanning} title="Read every plug-in again">Rescan All</button>
+        {#if scanning}
+          <button type="button" class="primary" onclick={stopScan} disabled={stopping} title="Stop scanning. What was read so far is kept; Scan reads the rest later.">{stopping ? "Stopping..." : "Stop Scan"}</button>
+        {:else}
+          <button type="button" class="primary" onclick={() => void scan(false)} title="Read new and changed plug-ins, and try failed ones again">Scan</button>
+          <button type="button" onclick={() => void scan(true)} title="Read every plug-in again">Rescan All</button>
+        {/if}
       </div>
     </section>
 
@@ -158,7 +178,7 @@
       editor carries on. VST2 plug-ins are not supported.
     </p>
     <footer>
-      <button type="button" onclick={onClose} disabled={scanning}>Close</button>
+      <button type="button" onclick={close} title={scanning ? "Stops the scan and closes. What was read so far is kept." : undefined}>Close</button>
     </footer>
   </div>
 </div>

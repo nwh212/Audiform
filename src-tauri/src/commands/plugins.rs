@@ -166,6 +166,12 @@ pub async fn plugins_scan(
     .map_err(|e| e.to_string())
 }
 
+/// Stops the scan in progress, keeping what it read so far.
+#[tauri::command]
+pub fn plugins_scan_stop() {
+    plugins::stop_scan();
+}
+
 /// Adds or removes one of the user's folders, or turns a standard one off or on.
 #[tauri::command]
 pub fn plugins_set_folder(path: PathBuf, on: bool) -> RegistryView {

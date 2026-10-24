@@ -77,6 +77,7 @@ pub fn run() {
             commands::plugins::plugins_registry,
             commands::plugins::plugins_scan,
             commands::plugins::plugins_set_folder,
+            commands::plugins::plugins_scan_stop,
             commands::plugins::plugin_open_window,
             commands::plugins::plugin_close_window,
             commands::plugins::plugin_events,
