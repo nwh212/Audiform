@@ -25,7 +25,8 @@ export type PanelId =
   | "markers"
   | "playlist"
   | "loudness-match"
-  | "properties";
+  | "properties"
+  | "phase-wheel";
 
 export type Side = "left" | "right" | "above" | "below";
 
@@ -177,6 +178,13 @@ export const PANELS: readonly PanelDef[] = [
     inDefault: false,
     home: LEFT_TABS,
     pending: "Not built yet.",
+  },
+  {
+    id: "phase-wheel",
+    title: "Phase Wheel",
+    inDefault: false,
+    home: [{ reference: "audio-fx", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
+    pending: null,
   },
 ];
 

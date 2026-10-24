@@ -739,6 +739,7 @@ fn mix<T>(
         }
         mpeak[0] = mpeak[0].max(l.abs());
         mpeak[1] = mpeak[1].max(r.abs());
+        super::scope::push(l, r);
         let frame = &mut out[f * channels..(f + 1) * channels];
         frame[0] = T::from_sample(l);
         if channels > 1 {

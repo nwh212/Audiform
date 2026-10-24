@@ -12,7 +12,7 @@
   import { trackOp } from "../mixer/solo";
   import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
   import SendList from "../mixer/SendList.svelte";
-  import { onDestroy } from "svelte";
+  import { onDestroy, tick as nextFrame } from "svelte";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { FileDropRouter } from "../../app/filedrop";
@@ -159,6 +159,22 @@
   let ruler = $state<HTMLCanvasElement | null>(null);
   let dropping = $state(false);
   let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
+
+  // A newly selected track or bus (a new one is always selected) scrolls into
+  // view if it is off screen, so adding a track below the visible ones shows it.
+  let lastSelected: string | null = null;
+  $effect(() => {
+    const id = ed.selectedTrack;
+    void doc?.tracks.length;
+    void doc?.buses?.length;
+    if (!id || id === lastSelected) return;
+    void nextFrame().then(() => {
+      const row = scroller?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`);
+      if (!row) return; // Not drawn yet: tried again when the rows change.
+      lastSelected = id;
+      row.scrollIntoView({ block: "nearest" });
+    });
+  });
 
   // MIDI tracks: the instruments to pick from, the piano roll, the tempo.
   let instruments = $state<{ effect: string; name: string; vendor: string; hasWindow: boolean }[]>([]);
@@ -2631,18 +2647,22 @@
     pointer-events: none;
   }
 
+  /* On the grab strip, written sideways, so it never covers a control. */
   .fx-tag {
     position: absolute;
-    right: 26px;
     bottom: 3px;
-    z-index: 1;
-    padding: 0 3px;
-    border-radius: 2px;
+    left: 0;
+    z-index: 2;
+    width: 10px;
+    padding: 2px 0;
     background: var(--accent);
     color: #fff;
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 700;
-    line-height: 12px;
+    line-height: 10px;
+    text-align: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
     pointer-events: none;
   }
 

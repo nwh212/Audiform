@@ -69,6 +69,7 @@ pub fn run() {
             commands::peaks::peaks_ensure,
             commands::peaks::peaks_level,
             commands::peaks::media_frames,
+            commands::peaks::scope_phase,
             commands::preferences::preferences_load,
             commands::preferences::preferences_save,
             commands::transport::transport_play,

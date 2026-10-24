@@ -147,3 +147,30 @@ mod tests {
         assert_eq!(read_frames(&path, 9_999, 10).unwrap().len(), 4 + 2 * 4);
     }
 }
+
+/// The Phase Wheel's picture of what is playing now: the newest `size`
+/// frames (one of 1024 to 16384; smaller is lighter), comparing signal
+/// `a` against `b` (left, right, mid or side). Little-endian f32s: the
+/// correlation, then phase, level and pitch for each bin with sound.
+#[tauri::command]
+pub fn scope_phase(
+    size: usize,
+    a: crate::engine::scope::Signal,
+    b: crate::engine::scope::Signal,
+) -> Response {
+    use crate::engine::scope;
+    let n = scope::SIZES
+        .iter()
+        .copied()
+        .find(|s| *s >= size)
+        .unwrap_or(scope::SIZES[scope::SIZES.len() - 1]);
+    let p = scope::analyse(&scope::latest(n), a, b);
+    let mut out = Vec::with_capacity(4 + p.bins.len() * 12);
+    out.extend_from_slice(&p.correlation.to_le_bytes());
+    for bin in p.bins {
+        out.extend_from_slice(&bin.phase.to_le_bytes());
+        out.extend_from_slice(&bin.level.to_le_bytes());
+        out.extend_from_slice(&bin.pitch.to_le_bytes());
+    }
+    Response::new(out)
+}

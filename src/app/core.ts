@@ -269,6 +269,21 @@ export async function mediaFrames(path: string, start: number, count: number): P
   return { channels, data: new Float32Array(bytes.buffer.slice(4, 4 + n * 4)) };
 }
 
+/** What the Phase Wheel compares. */
+export type ScopeSignal = "left" | "right" | "mid" | "side";
+
+/**
+ * The Phase Wheel's picture of what is playing now: the correlation of
+ * `a` and `b`, and per frequency bin its phase difference (radians, 0
+ * in phase), level and pitch (each 0 to 1), packed as triplets.
+ */
+export async function scopePhase(size: number, a: ScopeSignal, b: ScopeSignal): Promise<{ correlation: number; bins: Float32Array }> {
+  const bytes = rawBytes(await invoke<unknown>("scope_phase", { size, a, b }));
+  if (bytes.byteLength < 4) return { correlation: 0, bins: new Float32Array(0) };
+  const all = new Float32Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 4));
+  return { correlation: all[0] ?? 0, bins: all.subarray(1) };
+}
+
 /** The Waveform editor's file: its edit list as a one-track session. */
 export interface WaveDocRaw<S> {
   session: S;

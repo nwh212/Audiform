@@ -38,6 +38,7 @@
   import HistoryPanel from "../panels/history/HistoryPanel.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
   import { peaks, session, transport } from "../stores/open-session";
+  import PhaseWheelPanel from "../panels/phase/PhaseWheelPanel.svelte";
   import LevelsPanel from "../panels/levels/LevelsPanel.svelte";
   import { PreviewMeter } from "../stores/preview-meter";
   import QuickPassPanel from "../panels/quickpass/QuickPassPanel.svelte";
@@ -1539,6 +1540,8 @@
         return { component: asComponent(TimeInfoPanel), props: { session, transport, wave, waveTransport } };
       case "levels":
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter } };
+      case "phase-wheel":
+        return { component: asComponent(PhaseWheelPanel), props: { transport, wave: waveTransport } };
       case "batch-convert":
         return {
           component: asComponent(BatchConvertPanel),
