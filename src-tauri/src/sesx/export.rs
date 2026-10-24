@@ -6,10 +6,11 @@
 //! can take an edit back to an editor that reads that format. It is a
 //! copy for interoperability, never our save format, and it carries less
 //! than our own file: tracks (name, mono or stereo, height, volume, pan,
-//! mute, solo), clips (position, source range, gain, mute, lock, fades)
-//! and the media files they use. Voice Chains, envelopes, loops, time
-//! stretch, buses and markers are left out, and the report counts them so
-//! the user is told.
+//! mute, solo), clips (position, source range, gain, mute, lock, fades,
+//! time stretch and pitch), VST3 plug-ins with their settings (on clips,
+//! tracks and the master) and the media files they use. Built-in effects,
+//! envelopes, loops, buses and markers are left out, and the report
+//! counts them so the user is told.
 //!
 //! The XML layout follows the same documented-by-example structure the
 //! importer reads. Component ids are fresh for every file.
@@ -20,7 +21,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::session::model::{Clip, FadeShape, MediaRef, Session};
+use crate::session::model::{Clip, EffectChain, FadeShape, MediaRef, Session};
 
 /// What was left out, for the notice shown after export.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -28,11 +29,12 @@ use crate::session::model::{Clip, FadeShape, MediaRef, Session};
 pub struct SesxExportReport {
     pub tracks: usize,
     pub clips: usize,
-    /// Track, clip and master Voice Chains with at least one effect.
+    /// Track, clip and master Voice Chains with at least one built-in
+    /// effect (VST3 plug-ins are written).
     pub chains_left_out: usize,
     /// Clips whose volume, pan or effect envelopes were left out.
     pub envelopes_left_out: usize,
-    /// Looped or time-stretched clips, written as plain clips.
+    /// Looped clips, written as plain clips.
     pub clips_simplified: usize,
     pub markers_left_out: usize,
     /// Buses, plus tracks routed to a bus, with sends, or with a
@@ -140,6 +142,85 @@ fn relative(media: &MediaRef, base: &Path) -> Option<String> {
     pathdiff::diff_paths(&media.path, base).map(|p| p.to_string_lossy().replace('\\', "/"))
 }
 
+/// A VST3 effect id as a `.sesx` component id ("3:" and four groups of
+/// eight hex digits). The class id's bytes are in this platform's layout.
+fn vst3_component(effect: &str) -> Option<String> {
+    let hex = effect.strip_prefix(crate::plugins::PREFIX)?;
+    let b = altered_plughost::module::parse_cid(hex)?;
+    let be = |i: usize| u32::from_be_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+    let words = if cfg!(windows) {
+        let a = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+        let hi = u32::from(u16::from_le_bytes([b[4], b[5]]));
+        let lo = u32::from(u16::from_le_bytes([b[6], b[7]]));
+        [a, (hi << 16) | lo, be(8), be(12)]
+    } else {
+        [be(0), be(4), be(8), be(12)]
+    };
+    Some(format!(
+        "3:{:08x} {:08x} {:08x} {:08x}",
+        words[0], words[1], words[2], words[3]
+    ))
+}
+
+/// Our saved plug-in settings (32-bit component length, then both parts)
+/// in the `.sesx` form (64-bit component and controller lengths first).
+fn state_to_chunk(state: &str) -> Option<String> {
+    use altered_plughost::protocol::{base64_decode, base64_encode};
+    let raw = base64_decode(state)?;
+    let comp = u32::from_le_bytes(raw.get(..4)?.try_into().ok()?) as usize;
+    let body = raw.get(4..)?;
+    let ctl = body.len().checked_sub(comp)?;
+    let mut out = (comp as u64).to_le_bytes().to_vec();
+    out.extend_from_slice(&(ctl as u64).to_le_bytes());
+    out.extend_from_slice(body);
+    Some(base64_encode(&out))
+}
+
+/// Writes the VST3 plug-ins of `chain` as an effect rack. Counts the
+/// chain as left out when it holds a built-in effect that is switched on.
+fn rack_xml(out: &mut String, indent: &str, chain: &EffectChain, report: &mut SesxExportReport) {
+    if chain
+        .slots
+        .iter()
+        .any(|s| s.enabled && !crate::plugins::is_plugin(&s.effect))
+    {
+        report.chains_left_out += 1;
+    }
+    let plugins: Vec<_> = chain
+        .slots
+        .iter()
+        .filter_map(|s| Some((s, vst3_component(&s.effect)?)))
+        .collect();
+    if plugins.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, r#"{indent}<effectsRack preFader="true">"#);
+    for (i, (s, id)) in plugins.iter().enumerate() {
+        let name =
+            crate::plugins::find(&s.effect).map_or_else(|| "Plug-in".to_string(), |f| f.info.name);
+        let _ = writeln!(
+            out,
+            r#"{indent}  <slot powered="{}" slotIndex="{i}">"#,
+            s.enabled && chain.enabled
+        );
+        let _ = writeln!(
+            out,
+            r#"{indent}    <component componentGuid="{}" componentID="{id}" name="{}" presetName="(Custom)">"#,
+            guid(),
+            esc(&name)
+        );
+        if let Some(chunk) = s.plugin_state.as_deref().and_then(state_to_chunk) {
+            let _ = writeln!(
+                out,
+                "{indent}      <presetChunkData><![CDATA[{chunk}]]></presetChunkData>"
+            );
+        }
+        let _ = writeln!(out, "{indent}    </component>");
+        let _ = writeln!(out, "{indent}  </slot>");
+    }
+    let _ = writeln!(out, "{indent}</effectsRack>");
+}
+
 fn clip_xml(
     out: &mut String,
     c: &Clip,
@@ -148,7 +229,7 @@ fn clip_xml(
     len: u64,
     report: &mut SesxExportReport,
 ) {
-    if c.looped.is_some() || c.stretch.is_some() {
+    if c.looped.is_some() {
         report.clips_simplified += 1;
     }
     if c.envelopes
@@ -157,16 +238,22 @@ fn clip_xml(
     {
         report.envelopes_left_out += 1;
     }
-    if c.effects.slots.iter().any(|s| s.enabled) {
-        report.chains_left_out += 1;
-    }
-    // A simplified clip keeps its place on the timeline and plays its
+    // A looped clip keeps its place on the timeline and plays its
     // source region once.
     let src_len = c.source_out.saturating_sub(c.source_in);
-    let len = if c.looped.is_some() || c.stretch.is_some() {
+    let stretch = c.stretch.filter(|_| c.looped.is_none());
+    // A stretched clip's source points are written in stretched time.
+    let ratio = stretch.map_or(1.0, |s| s.ratio);
+    let scaled = |v: u64| (v as f64 * ratio).round() as u64;
+    let len = if c.looped.is_some() {
         src_len.min(len)
     } else {
         len
+    };
+    let (src_in, src_span) = if stretch.is_some() {
+        (scaled(c.source_in), len)
+    } else {
+        (c.source_in, src_len.min(len.max(1)))
     };
     let _ = writeln!(
         out,
@@ -174,11 +261,39 @@ fn clip_xml(
         c.start + len,
         c.locked,
         esc(&c.name),
-        c.source_in,
-        c.source_in + src_len.min(len.max(1)),
+        src_in,
+        src_in + src_span,
         c.start,
     );
     components(out, "          ", "clipGain", c.gain_db, c.muted, None);
+    if let Some(s) = stretch {
+        let adv = s
+            .advanced
+            .unwrap_or(crate::session::model::StretchAdvanced {
+                window_ms: 37.0,
+                transient_sensitivity: 40.0,
+                preserve_formants: true,
+                high_precision: true,
+            });
+        let kind = if !s.keep_pitch {
+            "varispeed"
+        } else if s.polyphonic {
+            "normal"
+        } else {
+            "solo"
+        };
+        let _ = writeln!(
+            out,
+            r#"          <clipStretch adaptiveWindowSize="{}" pitchAdjustment="{}" preserveFormants="{}" stretchMode="{}" stretchQuality="{}" stretchRatio="{}" stretchType="{kind}" transientSensitivity="{}"/>"#,
+            adv.window_ms,
+            if s.keep_pitch { s.pitch } else { 0.0 },
+            adv.preserve_formants,
+            if s.rendered { "rendered" } else { "realtime" },
+            if adv.high_precision { "high" } else { "medium" },
+            s.ratio,
+            adv.transient_sensitivity,
+        );
+    }
     let fin = c.fade_in.length.min(len);
     let fout = c.fade_out.length.min(len);
     let _ = writeln!(
@@ -192,6 +307,7 @@ fn clip_xml(
         len - fout,
         fade_type(c.fade_out.shape)
     );
+    rack_xml(out, "          ", &c.effects, report);
     let _ = writeln!(out, "        </audioClip>");
 }
 
@@ -209,9 +325,6 @@ pub fn to_sesx(session: &Session, base: &Path) -> (String, SesxExportReport) {
     let mut clip_no = 0usize;
     const MASTER_ID: u32 = 10_000;
     for (ti, t) in session.tracks.iter().enumerate() {
-        if t.effects.slots.iter().any(|s| s.enabled) {
-            report.chains_left_out += 1;
-        }
         let stereo = matches!(t.channels, crate::session::model::ChannelLayout::Stereo);
         let channel = if stereo { "stereo" } else { "mono" };
         let _ = writeln!(
@@ -246,6 +359,7 @@ pub fn to_sesx(session: &Session, base: &Path) -> (String, SesxExportReport) {
             Some(t.pan),
         );
         let _ = writeln!(tracks, "        </trackAudioParameters>");
+        rack_xml(&mut tracks, "        ", &t.effects, &mut report);
         for c in &t.clips {
             let Some(fi) = media_index(c.media_id) else {
                 continue;
@@ -262,9 +376,6 @@ pub fn to_sesx(session: &Session, base: &Path) -> (String, SesxExportReport) {
         }
         let _ = writeln!(tracks, "      </audioTrack>");
         report.tracks += 1;
-    }
-    if session.master.effects.slots.iter().any(|s| s.enabled) {
-        report.chains_left_out += 1;
     }
     report.routing_left_out = session.buses.len()
         + session
@@ -312,6 +423,12 @@ pub fn to_sesx(session: &Session, base: &Path) -> (String, SesxExportReport) {
         Some(0.0),
     );
     let _ = writeln!(tracks, "        </trackAudioParameters>");
+    rack_xml(
+        &mut tracks,
+        "        ",
+        &session.master.effects,
+        &mut report,
+    );
     let _ = writeln!(tracks, "      </masterTrack>");
 
     let mut files = String::new();
@@ -443,6 +560,52 @@ mod tests {
         assert!(
             xml.contains(r#"relativePath="Audio/host &amp; guest.wav""#),
             "{xml}"
+        );
+    }
+
+    #[test]
+    fn round_trips_stretch_pitch_and_plug_ins() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = session(dir.path());
+        let state = altered_plughost::protocol::base64_encode(
+            &[&3u32.to_le_bytes()[..], b"abcde"].concat(),
+        );
+        s.tracks[0]
+            .effects
+            .slots
+            .push(crate::session::model::EffectSlot {
+                id: new_id(),
+                effect: "vst3:565354415438314175746F2D54756E65".into(),
+                enabled: false,
+                params: Default::default(),
+                preset: None,
+                sidechain: None,
+                plugin_state: Some(state.clone()),
+            });
+        s.tracks[0].clips[0].stretch = Some(crate::session::model::ClipStretch {
+            ratio: 1.25,
+            pitch: -3.0,
+            polyphonic: true,
+            ..Default::default()
+        });
+        let path = dir.path().join("x.sesx");
+        let report = export(&s, &path).unwrap();
+        assert_eq!((report.chains_left_out, report.clips_simplified), (0, 0));
+        let back = crate::sesx::import(&path).unwrap();
+        let t = &back.session.tracks[0];
+        let slot = &t.effects.slots[0];
+        assert_eq!(slot.effect, "vst3:565354415438314175746F2D54756E65");
+        assert!(!slot.enabled);
+        assert_eq!(slot.plugin_state.as_deref(), Some(state.as_str()));
+        let (a, b) = (&s.tracks[0].clips[0], &t.clips[0]);
+        let st = b.stretch.unwrap();
+        assert_eq!(
+            (st.ratio, st.pitch, st.polyphonic, st.keep_pitch),
+            (1.25, -3.0, true, true)
+        );
+        assert_eq!(
+            (b.start, b.source_in, b.source_out),
+            (a.start, a.source_in, a.source_out)
         );
     }
 

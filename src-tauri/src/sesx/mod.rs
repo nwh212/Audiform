@@ -4,11 +4,14 @@
 
 //! Import of `.sesx` multitrack session files.
 //!
-//! Reads what a podcast edit needs to carry over: tracks (name, mono or
-//! stereo, height, mute, solo, arm, volume, pan), clips (position,
-//! source range, fades, lock) and the media files they use. Effects,
-//! buses, sends and automation are not imported; the result says how
-//! many effect racks were skipped so the user is told.
+//! Reads what an edit needs to carry over: tracks (name, mono or
+//! stereo, height, mute, solo, arm, volume, pan, output), buses, clips
+//! (position, source range, fades, lock, time stretch and pitch) and the
+//! media files they use. VST3 plug-ins in effect racks (on clips, tracks,
+//! buses and the master) come across with their saved settings, so they
+//! open as they were. The other editor's own built-in effects and all
+//! automation are left out; the result names the effects that were
+//! skipped so the user is told.
 //!
 //! This reads the user's own session files for interoperability. It
 //! only parses the documented-by-example XML structure; nothing from the
@@ -24,7 +27,8 @@ use thiserror::Error;
 
 use crate::codecs::probe;
 use crate::session::model::{
-    new_id, ChannelLayout, Clip, EffectChain, Fade, FadeShape, Id, MediaRef, Session, Track,
+    new_id, Bus, ChannelLayout, Clip, ClipStretch, EffectChain, EffectSlot, Fade, FadeShape, Id,
+    MediaRef, Output, Session, StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
 };
 
 #[derive(Debug, Error)]
@@ -43,8 +47,18 @@ pub enum SesxError {
 pub struct ImportReport {
     pub tracks: usize,
     pub clips: usize,
-    /// Track, clip and master effects that were left out.
+    /// Track, clip, bus and master effects that were left out.
     pub skipped_effects: usize,
+    /// Their names, each once.
+    pub skipped_names: Vec<String>,
+    pub buses: usize,
+    /// VST3 plug-ins brought in with their settings.
+    pub plugins: usize,
+    /// Plug-ins brought in that are not in the Plug-in Manager's list on
+    /// this computer (not installed, or not scanned yet), each once.
+    pub missing_plugins: Vec<String>,
+    /// Clips with a time stretch or pitch change.
+    pub stretched: usize,
     /// Media files that could not be found. Their clips are still placed.
     pub missing_files: Vec<PathBuf>,
 }
@@ -91,11 +105,168 @@ fn component_param(
         .and_then(|v| v.parse::<f64>().ok())
 }
 
-/// Effects loaded in a rack: slots that hold a component.
-fn count_effects(rack: roxmltree::Node<'_, '_>) -> usize {
-    rack.children()
-        .filter(|s| s.has_tag_name("slot") && s.descendants().any(|d| d.has_tag_name("component")))
-        .count()
+/// Most slots a Voice Chain holds.
+const MAX_SLOTS: usize = 16;
+
+/// Reads an effect rack into a Voice Chain: VST3 plug-ins with their
+/// settings, in slot order. Anything else is counted as skipped.
+fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> EffectChain {
+    let mut chain = EffectChain::default();
+    let mut slots: Vec<(u64, roxmltree::Node<'_, '_>)> = rack
+        .children()
+        .filter(|s| s.has_tag_name("slot"))
+        .filter_map(|s| {
+            let c = s.children().find(|c| c.has_tag_name("component"))?;
+            Some((attr_u64(s, "slotIndex").unwrap_or(u64::MAX), c))
+        })
+        .collect();
+    slots.sort_by_key(|(i, _)| *i);
+    for (_, c) in slots {
+        let name = c.attribute("name").unwrap_or("Effect").to_string();
+        let slot = c.parent().unwrap_or(c);
+        let plugin = c
+            .attribute("componentID")
+            .and_then(vst3_effect)
+            .filter(|_| chain.slots.len() < MAX_SLOTS);
+        let Some(effect) = plugin else {
+            report.skipped_effects += 1;
+            if !report.skipped_names.contains(&name) {
+                report.skipped_names.push(name);
+            }
+            continue;
+        };
+        let state = child(c, "presetChunkData")
+            .and_then(|d| d.text())
+            .and_then(chunk_to_state);
+        if crate::plugins::find(&effect).is_none() && !report.missing_plugins.contains(&name) {
+            report.missing_plugins.push(name.clone());
+        }
+        report.plugins += 1;
+        chain.slots.push(EffectSlot {
+            id: new_id(),
+            effect,
+            enabled: slot.attribute("powered") != Some("false"),
+            params: Default::default(),
+            preset: None,
+            sidechain: None,
+            plugin_state: state,
+        });
+    }
+    chain
+}
+
+/// Reads every effect rack directly inside `n` into one chain.
+fn racks(n: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> EffectChain {
+    let mut chain = EffectChain::default();
+    for r in n.children().filter(|c| c.has_tag_name("effectsRack")) {
+        chain.slots.extend(read_rack(r, report).slots);
+    }
+    if chain.slots.len() > MAX_SLOTS {
+        report.skipped_effects += chain.slots.len() - MAX_SLOTS;
+        chain.slots.truncate(MAX_SLOTS);
+    }
+    chain
+}
+
+/// A VST3 component id in a `.sesx` ("3:" then four groups of eight hex
+/// digits) as our effect id. The class id's bytes are laid out one way
+/// on Windows and another elsewhere; whichever layout a scanned plug-in
+/// uses wins, else this platform's.
+fn vst3_effect(id: &str) -> Option<String> {
+    let words: Vec<u32> = id
+        .strip_prefix("3:")?
+        .split_whitespace()
+        .map(|w| u32::from_str_radix(w, 16).ok())
+        .collect::<Option<_>>()?;
+    let [a, b, c, d] = words[..] else {
+        return None;
+    };
+    let hex = |bytes: Vec<u8>| -> String { bytes.iter().map(|x| format!("{x:02X}")).collect() };
+    let plain = hex([a, b, c, d].iter().flat_map(|w| w.to_be_bytes()).collect());
+    let mut com = a.to_le_bytes().to_vec();
+    com.extend_from_slice(&((b >> 16) as u16).to_le_bytes());
+    com.extend_from_slice(&(b as u16).to_le_bytes());
+    com.extend_from_slice(&c.to_be_bytes());
+    com.extend_from_slice(&d.to_be_bytes());
+    let com = hex(com);
+    let id = |cid: &str| format!("{}{cid}", crate::plugins::PREFIX);
+    for cid in [&plain, &com] {
+        if crate::plugins::find(&id(cid)).is_some() {
+            return Some(id(cid));
+        }
+    }
+    Some(id(if cfg!(windows) { &com } else { &plain }))
+}
+
+/// A plug-in's saved settings in a `.sesx` (base64 of: component length
+/// and controller length as 64-bit numbers, then each part) in the form
+/// our plug-in host reads (base64 of: component length as a 32-bit
+/// number, then the two parts).
+fn chunk_to_state(text: &str) -> Option<String> {
+    use altered_plughost::protocol::{base64_decode, base64_encode};
+    let raw = base64_decode(text)?;
+    let comp = u64::from_le_bytes(raw.get(..8)?.try_into().ok()?) as usize;
+    let ctl = u64::from_le_bytes(raw.get(8..16)?.try_into().ok()?) as usize;
+    if comp.checked_add(ctl)?.checked_add(16)? != raw.len() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(raw.len() - 12);
+    out.extend_from_slice(&u32::try_from(comp).ok()?.to_le_bytes());
+    out.extend_from_slice(&raw[16..]);
+    Some(base64_encode(&out))
+}
+
+/// A clip's `<clipStretch>`: speed, pitch and how. None when absent.
+fn stretch(n: Option<roxmltree::Node<'_, '_>>) -> Option<ClipStretch> {
+    let n = n?;
+    let num = |k: &str| n.attribute(k).and_then(|v| v.trim().parse::<f64>().ok());
+    let ratio = num("stretchRatio").unwrap_or(1.0);
+    let kind = n.attribute("stretchType").unwrap_or("");
+    let varispeed = kind.eq_ignore_ascii_case("varispeed") || kind.eq_ignore_ascii_case("resample");
+    Some(ClipStretch {
+        ratio: if ratio.is_finite() && ratio > 0.0 {
+            ratio.clamp(STRETCH_MIN, STRETCH_MAX)
+        } else {
+            1.0
+        },
+        keep_pitch: !varispeed,
+        pitch: if varispeed {
+            0.0
+        } else {
+            num("pitchAdjustment").unwrap_or(0.0).clamp(-24.0, 24.0)
+        },
+        // "solo" is a single voice; anything else keeps several notes.
+        polyphonic: !varispeed && !kind.eq_ignore_ascii_case("solo"),
+        rendered: n.attribute("stretchMode") == Some("rendered"),
+        advanced: Some(StretchAdvanced {
+            window_ms: num("adaptiveWindowSize").unwrap_or(0.0).clamp(0.0, 200.0),
+            transient_sensitivity: num("transientSensitivity")
+                .unwrap_or(40.0)
+                .clamp(0.0, 100.0),
+            preserve_formants: n.attribute("preserveFormants") == Some("true"),
+            high_precision: n.attribute("stretchQuality") == Some("high"),
+        }),
+    })
+}
+
+/// Level, mute and pan of a track or bus from its parameters.
+fn mix_params(a: roxmltree::Node<'_, '_>) -> (f64, bool, f64) {
+    let muted = component_param(a, "Audition.Mute", "mute").is_some_and(|v| v >= 0.5);
+    let volume = component_param(a, "Audition.Fader", "volume").map_or(0.0, gain_to_db);
+    let pan = component_param(a, "Audition.StereoPanner", "Pan").map_or(0.0, |p| {
+        let p = if p.abs() <= 1.0 { p * 100.0 } else { p };
+        p.clamp(-100.0, 100.0).round()
+    });
+    (volume, muted, pan)
+}
+
+/// Where a track or bus sends its sound: a bus by its `.sesx` id, else the master.
+fn output_of(a: Option<roxmltree::Node<'_, '_>>, buses: &HashMap<String, Id>) -> Output {
+    a.and_then(|a| child(a, "trackOutput"))
+        .filter(|o| o.attribute("type") == Some("trackID"))
+        .and_then(|o| o.attribute("outputID"))
+        .and_then(|id| buses.get(id))
+        .map_or(Output::Master, |bus_id| Output::Bus { bus_id: *bus_id })
 }
 
 fn gain_to_db(gain: f64) -> f64 {
@@ -178,6 +349,53 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
     let mut missing = Vec::new();
 
     let tracks_node = child(session_node, "tracks");
+    // Buses first, so tracks can be routed to them.
+    let mut bus_ids: HashMap<String, Id> = HashMap::new();
+    let bus_nodes: Vec<_> = tracks_node
+        .iter()
+        .flat_map(|n| n.children())
+        .filter(|n| n.has_tag_name("busTrack"))
+        .collect();
+    for b in &bus_nodes {
+        let name = child(*b, "trackParameters")
+            .and_then(|p| child(p, "name"))
+            .and_then(|n| n.text())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("Bus {}", session.buses.len() + 1));
+        let audio = child(*b, "trackAudioParameters");
+        let mono = audio.and_then(|a| a.attribute("audioChannelType")) == Some("mono");
+        let mut bus = Bus::new(
+            name,
+            if mono {
+                ChannelLayout::Mono
+            } else {
+                ChannelLayout::Stereo
+            },
+        );
+        if let Some(a) = audio {
+            (bus.volume_db, bus.muted, bus.pan) = mix_params(a);
+        }
+        if let Some(id) = b.attribute("id") {
+            bus_ids.insert(id.to_string(), bus.id);
+        }
+        // Shown where it sat among the tracks.
+        bus.position = Some(
+            b.prev_siblings()
+                .filter(|n| n.has_tag_name("audioTrack"))
+                .count() as u32,
+        );
+        bus.effects = racks(*b, &mut report);
+        session.buses.push(bus);
+        report.buses += 1;
+    }
+    for (b, bus) in bus_nodes.iter().zip(session.buses.iter_mut()) {
+        bus.output = output_of(child(*b, "trackAudioParameters"), &bus_ids);
+        if let Output::Bus { bus_id } = bus.output {
+            if bus_id == bus.id {
+                bus.output = Output::Master;
+            }
+        }
+    }
     for t in tracks_node
         .iter()
         .flat_map(|n| n.children())
@@ -205,28 +423,22 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         if let Some(a) = audio {
             track.solo = a.attribute("solo") == Some("true");
             track.record_armed = a.attribute("recordArmed") == Some("true");
-            track.muted = component_param(a, "Audition.Mute", "mute").is_some_and(|v| v >= 0.5);
-            if let Some(g) = component_param(a, "Audition.Fader", "volume") {
-                track.volume_db = gain_to_db(g);
-            }
-            if let Some(p) = component_param(a, "Audition.StereoPanner", "Pan") {
-                let p = if p.abs() <= 1.0 { p * 100.0 } else { p };
-                track.pan = p.clamp(-100.0, 100.0).round();
-            }
+            (track.volume_db, track.muted, track.pan) = mix_params(a);
         }
-        // Track effects (clip effects are counted with their clips).
-        report.skipped_effects += t
-            .children()
-            .filter(|n| n.has_tag_name("effectsRack"))
-            .map(count_effects)
-            .sum::<usize>();
+        track.output = output_of(audio, &bus_ids);
+        track.effects = racks(t, &mut report);
 
         for c in t.children().filter(|n| n.has_tag_name("audioClip")) {
             let Some(file_key) = c.attribute("fileID") else {
                 continue;
             };
-            let source_in = attr_u64(c, "sourceInPoint").unwrap_or(0);
-            let source_out = attr_u64(c, "sourceOutPoint").unwrap_or(0);
+            let clip_stretch = stretch(child(c, "clipStretch"));
+            // A stretched clip's source points are in stretched time:
+            // divide by the ratio for points in the file.
+            let ratio = clip_stretch.map_or(1.0, |s| s.ratio);
+            let in_file = |v: u64| (v as f64 / ratio).round() as u64;
+            let source_in = in_file(attr_u64(c, "sourceInPoint").unwrap_or(0));
+            let source_out = in_file(attr_u64(c, "sourceOutPoint").unwrap_or(0));
             if source_out <= source_in {
                 continue;
             }
@@ -252,11 +464,10 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                     m.length = m.length.max(source_out);
                 }
             }
-            report.skipped_effects += c
-                .descendants()
-                .filter(|n| n.has_tag_name("effectsRack"))
-                .map(count_effects)
-                .sum::<usize>();
+            let effects = racks(c, &mut report);
+            if clip_stretch.is_some() {
+                report.stretched += 1;
+            }
             track.clips.push(Clip {
                 id: new_id(),
                 name: c.attribute("name").unwrap_or("Clip").to_string(),
@@ -271,10 +482,10 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 fade_in: fade(child(c, "fadeIn"), true),
                 fade_out: fade(child(c, "fadeOut"), false),
                 envelopes: Vec::new(),
-                effects: EffectChain::default(),
+                effects,
                 group: None,
                 looped: None,
-                stretch: None,
+                stretch: clip_stretch,
                 audio_type: None,
             });
             report.clips += 1;
@@ -283,17 +494,15 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         report.tracks += 1;
     }
 
-    // Master track effects count as skipped too.
     if let Some(master) = tracks_node
         .iter()
         .flat_map(|n| n.children())
         .find(|n| n.has_tag_name("masterTrack"))
     {
-        report.skipped_effects += master
-            .descendants()
-            .filter(|n| n.has_tag_name("effectsRack"))
-            .map(count_effects)
-            .sum::<usize>();
+        if let Some(a) = child(master, "trackAudioParameters") {
+            session.master.volume_db = mix_params(a).0;
+        }
+        session.master.effects = racks(master, &mut report);
     }
 
     Ok(Imported {
@@ -428,6 +637,7 @@ mod tests {
             out.report.skipped_effects, 3,
             "two track effects and one master effect"
         );
+        assert_eq!(out.report.skipped_names, vec!["Noise", "Level", "Limit"]);
 
         let host = &s.tracks[0];
         assert_eq!(host.name, "HOST");
@@ -466,6 +676,72 @@ mod tests {
             "{:?}",
             crate::session::validate::validate(s)
         );
+    }
+
+    #[test]
+    fn brings_in_plug_ins_buses_and_stretched_clips() {
+        use altered_plughost::protocol::{base64_decode, base64_encode};
+        // Settings as saved: 64-bit lengths (3 bytes of component, 2 of controller), then the data.
+        let mut chunk = 3u64.to_le_bytes().to_vec();
+        chunk.extend_from_slice(&2u64.to_le_bytes());
+        chunk.extend_from_slice(b"abcde");
+        let chunk = base64_encode(&chunk);
+        let xml = format!(
+            r#"<sesx><session sampleRate="48000"><tracks>
+  <audioTrack id="10001">
+    <trackParameters><name>VOX</name></trackParameters>
+    <trackAudioParameters audioChannelType="stereo"><trackOutput outputID="10013" type="trackID"/></trackAudioParameters>
+    <effectsRack preFader="true">
+      <slot powered="true" slotIndex="1"><component componentID="3:56535441 54383141 75746f2d 54756e65" name="Tuner"><presetChunkData><![CDATA[{chunk}]]></presetChunkData></component></slot>
+      <slot powered="false" slotIndex="0"><component componentID="8edcd326-33de-4a4d-985b-f1bf48ed1427" name="Built-in EQ"/></slot>
+    </effectsRack>
+    <audioClip fileID="0" name="line" sourceInPoint="10290" sourceOutPoint="20580" startPoint="0" endPoint="10290">
+      <clipStretch adaptiveWindowSize="37" pitchAdjustment="2" preserveFormants="true" stretchMode="realtime" stretchQuality="high" stretchRatio="1.029" stretchType="solo" transientSensitivity="40"/>
+    </audioClip>
+  </audioTrack>
+  <busTrack id="10013"><trackParameters><name>Bus A</name></trackParameters>
+    <trackAudioParameters><trackOutput outputID="10000" type="trackID"/></trackAudioParameters>
+  </busTrack>
+  <masterTrack id="10000"><effectsRack><slot powered="false" slotIndex="0"><component componentID="3:abcdef01 9182faeb 55414478 55334349" name="Room"/></slot></effectsRack></masterTrack>
+</tracks></session><files><file id="0" absolutePath="Z:\x.wav"/></files></sesx>"#
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("x.sesx");
+        std::fs::write(&p, xml).unwrap();
+        let out = import(&p).unwrap();
+        let s = &out.session;
+        assert_eq!(out.report.buses, 1);
+        assert_eq!(out.report.plugins, 2);
+        assert_eq!(out.report.skipped_names, vec!["Built-in EQ".to_string()]);
+        assert_eq!(out.report.stretched, 1);
+        let t = &s.tracks[0];
+        assert_eq!(
+            t.output,
+            Output::Bus {
+                bus_id: s.buses[0].id
+            }
+        );
+        let slot = &t.effects.slots[0];
+        let cid = if cfg!(windows) {
+            "41545356385441317574"
+        } else {
+            "56535441543831417574"
+        };
+        assert!(
+            slot.effect.starts_with(&format!("vst3:{cid}")),
+            "{}",
+            slot.effect
+        );
+        // Our form: a 32-bit component length, then both parts.
+        let state = base64_decode(slot.plugin_state.as_deref().unwrap()).unwrap();
+        assert_eq!(state, [&3u32.to_le_bytes()[..], b"abcde"].concat());
+        assert!(!s.master.effects.slots[0].enabled);
+        // Source points come back in the file's own time.
+        let c = &t.clips[0];
+        let st = c.stretch.unwrap();
+        assert!((st.ratio - 1.029).abs() < 1e-9 && st.keep_pitch && !st.polyphonic);
+        assert_eq!(st.pitch, 2.0);
+        assert_eq!((c.source_in, c.source_out), (10_000, 20_000));
     }
 
     #[test]

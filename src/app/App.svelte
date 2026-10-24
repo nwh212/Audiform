@@ -589,7 +589,11 @@
    * its own track at the start so it can be played and edited right away.
    */
   async function openAny(): Promise<void> {
-    const picked = await filePickOpen();
+    await openPaths(await filePickOpen());
+  }
+
+  /** Opens picked or dropped files: a session (ours or .sesx), plus any audio files. */
+  async function openPaths(picked: string[]): Promise<void> {
     if (picked.length === 0) return;
     const plan = planOpen(picked);
     if (plan.session && !(await files.open(plan.session))) return;
@@ -1512,7 +1516,11 @@
     await exitApp();
   }
 
-  const fileDrop = new FileDropRouter((paths) => void importPaths(paths).catch(showError));
+  // A dropped session file (ours or .sesx) opens wherever it lands.
+  const fileDrop = new FileDropRouter(
+    (paths) => void importPaths(paths).catch(showError),
+    (paths) => void openPaths(paths).catch(showError),
+  );
 
   const asComponent = (c: unknown) => c as Component<Record<string, unknown>>;
 
@@ -3392,9 +3400,9 @@
             if (!done) return;
             const r = done.report;
             const left: string[] = [];
-            if (r.chainsLeftOut) left.push(`${r.chainsLeftOut} Voice ${r.chainsLeftOut === 1 ? "Chain" : "Chains"}`);
+            if (r.chainsLeftOut) left.push(`built-in effects in ${r.chainsLeftOut} Voice ${r.chainsLeftOut === 1 ? "Chain" : "Chains"} (plug-ins are kept)`);
             if (r.envelopesLeftOut) left.push(`envelopes on ${r.envelopesLeftOut} ${r.envelopesLeftOut === 1 ? "clip" : "clips"}`);
-            if (r.clipsSimplified) left.push(`${r.clipsSimplified} looped or stretched ${r.clipsSimplified === 1 ? "clip" : "clips"} (written as plain clips)`);
+            if (r.clipsSimplified) left.push(`${r.clipsSimplified} looped ${r.clipsSimplified === 1 ? "clip" : "clips"} (written as plain clips)`);
             if (r.routingLeftOut) left.push(`bus routing on ${r.routingLeftOut} ${r.routingLeftOut === 1 ? "track or bus" : "tracks and buses"} (every track goes straight to the mix)`);
             if (r.markersLeftOut) left.push(`${r.markersLeftOut} ${r.markersLeftOut === 1 ? "marker" : "markers"}`);
             const name = done.path.split(/[\\/]/).pop();

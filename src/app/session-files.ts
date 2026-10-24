@@ -69,11 +69,17 @@ export function displayName(path: string | null, doc: SessionDoc | null): string
 
 /** One line describing what a .sesx import brought across. */
 export function sesxSummary(r: SesxReport): string {
-  const parts = [
-    `Imported ${r.tracks} ${r.tracks === 1 ? "track" : "tracks"} and ${r.clips} ${r.clips === 1 ? "clip" : "clips"}.`,
-  ];
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const buses = r.buses ? `, ${count(r.buses, "bus", "buses")}` : "";
+  const parts = [`Imported ${count(r.tracks, "track", "tracks")}${buses} and ${count(r.clips, "clip", "clips")}.`];
+  if (r.plugins) parts.push(`${count(r.plugins, "plug-in", "plug-ins")} came across with ${r.plugins === 1 ? "its" : "their"} settings.`);
+  if (r.missingPlugins?.length) {
+    parts.push(`Not found on this computer (install or scan them in the Plug-in Manager): ${r.missingPlugins.join(", ")}.`);
+  }
+  if (r.stretched) parts.push(`${count(r.stretched, "clip keeps its", "clips keep their")} stretch and pitch.`);
   if (r.skippedEffects > 0) {
-    parts.push(`${r.skippedEffects} ${r.skippedEffects === 1 ? "effect was" : "effects were"} left out; rebuild them in Voice Chain (P5).`);
+    const names = r.skippedNames?.length ? ` (${r.skippedNames.join(", ")})` : "";
+    parts.push(`${count(r.skippedEffects, "built-in effect was", "built-in effects were")} left out${names}; rebuild them in Voice Chain.`);
   }
   if (r.missingFiles.length > 0) {
     const n = r.missingFiles.length;

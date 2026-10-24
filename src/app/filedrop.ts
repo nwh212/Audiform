@@ -41,7 +41,14 @@ export class FileDropRouter {
   /** The files being dragged, known from the start of the drag. */
   private paths: string[] = [];
 
-  constructor(private readonly fallback: (paths: string[]) => void) {}
+  /**
+   * `sessions`, when set, takes any drop that includes a session file
+   * (.altaudio or .sesx), wherever it lands, with all the dropped paths.
+   */
+  constructor(
+    private readonly fallback: (paths: string[]) => void,
+    private readonly sessions?: (paths: string[]) => void,
+  ) {}
 
   register(target: DropTarget): () => void {
     this.targets.add(target);
@@ -63,7 +70,8 @@ export class FileDropRouter {
         const target = this.hit(e.x, e.y);
         this.setHovered(null);
         if (e.paths.length === 0) return;
-        if (target) target.onDrop(e.paths, { x: e.x, y: e.y });
+        if (this.sessions && e.paths.some(isSessionFile)) this.sessions(e.paths);
+        else if (target) target.onDrop(e.paths, { x: e.x, y: e.y });
         else this.fallback(e.paths);
         break;
       }
@@ -167,4 +175,9 @@ export async function bindNativeFileDrop(router: FileDropRouter): Promise<() => 
     window.removeEventListener("resize", onResize);
     off();
   };
+}
+
+/** A session file the app opens: our own or a .sesx. */
+export function isSessionFile(path: string): boolean {
+  return /\.(altaudio|sesx)$/i.test(path);
 }

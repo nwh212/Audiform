@@ -3,7 +3,7 @@
 // This file is part of Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { dropScale, FileDropRouter } from "./filedrop";
+import { dropScale, FileDropRouter, isSessionFile } from "./filedrop";
 
 function box(left: number, top: number, width: number, height: number): HTMLElement {
   return {
@@ -74,6 +74,21 @@ describe("FileDropRouter in-app drags", () => {
     expect(router.dragEnd(["y.wav"], 10, 10)).toBe(true);
     expect(dropped).toEqual([["y.wav"]]);
     expect(fallback).toEqual([]);
+  });
+});
+
+describe("session files", () => {
+  it("opens a dropped session wherever it lands", () => {
+    const opened: string[][] = [];
+    const dropped: string[][] = [];
+    const router = new FileDropRouter(() => {}, (p) => opened.push(p));
+    router.register({ element: box(0, 0, 250, 400), onDrop: (p) => dropped.push(p) });
+    router.handle({ type: "drop", paths: ["C:\\Ep 1.SESX", "a.wav"], x: 10, y: 10 });
+    router.handle({ type: "drop", paths: ["b.wav"], x: 10, y: 10 });
+    expect(opened).toEqual([["C:\\Ep 1.SESX", "a.wav"]]);
+    expect(dropped).toEqual([["b.wav"]]);
+    expect(isSessionFile("x.altaudio")).toBe(true);
+    expect(isSessionFile("x.wav")).toBe(false);
   });
 });
 

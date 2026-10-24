@@ -445,6 +445,15 @@ export interface SesxReport {
   tracks: number;
   clips: number;
   skippedEffects: number;
+  /** Names of the effects left out, each once. */
+  skippedNames?: string[];
+  buses?: number;
+  /** VST3 plug-ins brought in with their settings. */
+  plugins?: number;
+  /** Plug-ins brought in that this computer has not scanned. */
+  missingPlugins?: string[];
+  /** Clips with a time stretch or pitch change. */
+  stretched?: number;
   missingFiles: string[];
 }
 
