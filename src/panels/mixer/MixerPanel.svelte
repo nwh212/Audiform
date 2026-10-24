@@ -12,6 +12,7 @@
   import { trackOp } from "./solo";
   import { busOp, isRouted, MASTER_ID } from "./routing";
   import SendList from "./SendList.svelte";
+  import { monoCheck } from "../../stores/mono-check";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { OutputDoc, SendDoc, SessionDoc, SessionStore } from "../../stores/session";
@@ -60,17 +61,18 @@
     muted: boolean;
     solo: boolean;
     record_armed: boolean;
+    mono: boolean;
     output: OutputDoc;
     sends: SendDoc[];
   }
   const strips = $derived<Strip[]>([
     ...(doc?.tracks ?? [])
       .filter((x) => !x.hidden)
-      .map((t): Strip => ({ kind: "track", id: t.id, name: t.name, volume_db: t.volume_db, pan: t.pan, muted: t.muted, solo: t.solo, record_armed: t.record_armed, output: t.output ?? { type: "master" }, sends: t.sends ?? [] })),
-    ...(doc?.buses ?? []).map((b): Strip => ({ kind: "bus", id: b.id, name: b.name, volume_db: b.volume_db, pan: b.pan, muted: b.muted, solo: b.solo, record_armed: false, output: b.output, sends: b.sends })),
+      .map((t): Strip => ({ kind: "track", id: t.id, name: t.name, volume_db: t.volume_db, pan: t.pan, muted: t.muted, solo: t.solo, record_armed: t.record_armed, mono: !!t.mono, output: t.output ?? { type: "master" }, sends: t.sends ?? [] })),
+    ...(doc?.buses ?? []).map((b): Strip => ({ kind: "bus", id: b.id, name: b.name, volume_db: b.volume_db, pan: b.pan, muted: b.muted, solo: b.solo, record_armed: false, mono: !!b.mono, output: b.output, sends: b.sends })),
   ]);
 
-  type StripChanges = Partial<Pick<Strip, "volume_db" | "pan" | "muted" | "solo" | "record_armed" | "name" | "output">>;
+  type StripChanges = Partial<Pick<Strip, "volume_db" | "pan" | "muted" | "solo" | "record_armed" | "name" | "output" | "mono">>;
   function setStrip(st: Strip, changes: StripChanges, label: string) {
     const what = st.kind === "bus" ? label.replace("Track", "Bus") : label;
     const op = st.kind === "bus" ? busOp(doc, st.id, changes) : trackOp(doc, st.id, changes);
@@ -213,6 +215,7 @@
         <div class="buttons">
           <button type="button" class:on={t.muted} class="m" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
           <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo"} aria-pressed={t.solo} onclick={() => setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track")}>S</button>
+          <button type="button" class:on={t.mono} class="mo" title="Mono: folds this strip's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={t.mono} onclick={() => setStrip(t, { mono: !t.mono }, t.mono ? "Track Stereo" : "Track Mono")}>MO</button>
           {#if t.kind === "track"}
             <button type="button" class:on={t.record_armed} class="r" title="Arm for recording" aria-pressed={t.record_armed} onclick={() => setStrip(t, { record_armed: !t.record_armed }, "Arm Track")}>R</button>
           {/if}
@@ -256,6 +259,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="strip master" class:selected={selected === MASTER_ID} onclick={() => editor.selectTrack(MASTER_ID)} title="Click to show the master's Voice Chain">
     <div class="name">Master</div>
+    <button type="button" class="check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}>MONO</button>
     <div class="body">
       <div class="scale" aria-hidden="true">
         {#each SCALE as s (s)}<span style:bottom="{dbToFader(s) * 100}%">{s > 0 ? `+${s}` : s}</span>{/each}
@@ -366,7 +370,7 @@
   .strip.master {
     width: 96px;
     margin: 4px;
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: auto auto 1fr auto auto;
   }
 
   .name {
@@ -437,6 +441,32 @@
   }
 
   .buttons .s.on {
+    background: var(--clip-5);
+    color: #111;
+  }
+
+  .buttons .mo {
+    width: 22px;
+    font-size: 8px;
+  }
+
+  .buttons .mo.on {
+    background: var(--accent-dim);
+    color: #fff;
+  }
+
+  .check {
+    height: 18px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-3);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .check.on {
     background: var(--clip-5);
     color: #111;
   }

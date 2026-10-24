@@ -65,6 +65,7 @@ pub fn run() {
             commands::transport::transport_play,
             commands::transport::transport_stop,
             commands::transport::transport_status,
+            commands::transport::transport_set_mono_check,
             commands::devices::audio_inputs,
             commands::devices::audio_outputs,
             commands::devices::set_audio_output,

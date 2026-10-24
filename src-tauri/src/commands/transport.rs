@@ -72,6 +72,12 @@ pub fn transport_stop(transport: State<'_, Transport>) -> Option<u64> {
     transport.stop()
 }
 
+/// Mono check: hear everything folded to mono (listening only).
+#[tauri::command]
+pub fn transport_set_mono_check(on: bool) {
+    crate::engine::transport::set_mono_check(on);
+}
+
 #[tauri::command]
 pub fn transport_status(transport: State<'_, Transport>) -> TransportStatus {
     transport.status()

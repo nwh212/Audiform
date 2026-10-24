@@ -88,6 +88,8 @@ export interface BusDoc {
   effects: EffectChainDoc;
   /** Shows below this many tracks in the Editor; missing shows it below the last. */
   position?: number | null;
+  /** Folded to mono after its Voice Chain. Missing when off. */
+  mono?: boolean;
   [key: string]: unknown;
 }
 
@@ -180,6 +182,8 @@ export interface TrackDoc {
   record_armed: boolean;
   /** Missing in files where it is off. */
   polarity_inverted?: boolean;
+  /** Folded to mono after its Voice Chain. Missing in files where it is off. */
+  mono?: boolean;
   /** Folded to its name row. Missing in files where it is off. */
   collapsed?: boolean;
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
@@ -320,6 +324,7 @@ export interface TrackChanges {
   volume_db?: number;
   pan?: number;
   polarity_inverted?: boolean;
+  mono?: boolean;
   collapsed?: boolean;
   hidden?: boolean;
   monitor_input?: boolean;
@@ -343,6 +348,7 @@ export interface BusChanges {
   position?: number;
   /** Shows the bus below the last track again. */
   clear_position?: boolean;
+  mono?: boolean;
 }
 
 /** An edit the core understands. */

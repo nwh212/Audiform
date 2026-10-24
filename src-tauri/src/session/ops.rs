@@ -85,6 +85,9 @@ pub struct TrackChanges {
     pub pan: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polarity_inverted: Option<bool>,
+    /// Folds the track to mono after its Voice Chain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mono: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collapsed: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -131,6 +134,9 @@ pub struct BusChanges {
     /// Shows the bus below the last track again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_position: Option<bool>,
+    /// Folds the bus to mono after its Voice Chain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mono: Option<bool>,
 }
 
 /// Changes to one clip. Fields left out are unchanged. `track_id` moves
@@ -576,6 +582,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             if let Some(v) = changes.polarity_inverted {
                 old.polarity_inverted = Some(std::mem::replace(&mut t.polarity_inverted, v));
             }
+            if let Some(v) = changes.mono {
+                old.mono = Some(std::mem::replace(&mut t.mono, v));
+            }
             if let Some(v) = changes.collapsed {
                 old.collapsed = Some(std::mem::replace(&mut t.collapsed, v));
             }
@@ -925,6 +934,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.height {
                 old.height = Some(std::mem::replace(&mut b.height, v.clamp(40, 600)));
+            }
+            if let Some(v) = changes.mono {
+                old.mono = Some(std::mem::replace(&mut b.mono, v));
             }
             if let Some(v) = changes.output {
                 old.output = Some(std::mem::replace(&mut b.output, v));
@@ -1527,6 +1539,27 @@ mod tests {
             },
         );
         assert_eq!(s.buses[0].position, Some(1));
+        roundtrip(
+            &mut s,
+            Op::SetBus {
+                id: verb,
+                changes: BusChanges {
+                    mono: Some(true),
+                    ..BusChanges::default()
+                },
+            },
+        );
+        roundtrip(
+            &mut s,
+            Op::SetTrack {
+                id: music,
+                changes: TrackChanges {
+                    mono: Some(true),
+                    ..TrackChanges::default()
+                },
+            },
+        );
+        assert!(s.buses[0].mono && s.tracks[1].mono);
         // Removing Reverb takes the voice's send with it.
         roundtrip(&mut s, Op::RemoveBus { id: verb });
         assert!(s.tracks[0].sends.is_empty());

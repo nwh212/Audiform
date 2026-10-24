@@ -48,6 +48,8 @@ use crate::session::routing::{self, Node};
 pub struct NodeLevel {
     pub main: [f32; 2],
     pub sends: Vec<[f32; 2]>,
+    /// Fold left and right into one after the chain (the Mono button).
+    pub mono: bool,
 }
 
 /// Every level in the graph. Changes apply live.
@@ -142,7 +144,8 @@ pub fn levels(s: &Session) -> Levels {
                 sign: f32,
                 volume_db: f64,
                 pan: f64,
-                sends: &[crate::session::model::Send]| {
+                sends: &[crate::session::model::Send],
+                mono: bool| {
         let on = if heard { sign } else { 0.0 };
         let fader = db(volume_db);
         let [l, r] = balance(pan);
@@ -157,6 +160,7 @@ pub fn levels(s: &Session) -> Levels {
                     [g * l, g * r]
                 })
                 .collect(),
+            mono,
         }
     };
     Levels {
@@ -166,14 +170,14 @@ pub fn levels(s: &Session) -> Levels {
             .zip(heard_t)
             .map(|(t, h)| {
                 let sign = if t.polarity_inverted { -1.0 } else { 1.0 };
-                node(h, sign, t.volume_db, t.pan, &t.sends)
+                node(h, sign, t.volume_db, t.pan, &t.sends, t.mono)
             })
             .collect(),
         buses: s
             .buses
             .iter()
             .zip(heard_b)
-            .map(|(b, h)| node(h, 1.0, b.volume_db, b.pan, &b.sends))
+            .map(|(b, h)| node(h, 1.0, b.volume_db, b.pan, &b.sends, b.mono))
             .collect(),
     }
 }
@@ -632,10 +636,7 @@ impl Graph {
                 st.in_delay.run(&mut st.input);
             }
             if st.mono {
-                for f in st.input.as_chunks_mut::<2>().0 {
-                    let m = (f[0] + f[1]) * 0.5;
-                    *f = [m, m];
-                }
+                fold_mono(&mut st.input);
             }
             self.fill_keys(&mut st.keys, n);
             run_strip(&mut st);
@@ -643,6 +644,10 @@ impl Graph {
                 Node::Track(i) => (&self.applied.tracks[i], &self.levels.tracks[i]),
                 Node::Bus(i) => (&self.applied.buses[i], &self.levels.buses[i]),
             };
+            if to.mono {
+                // After the chain (and its keys), before the fader, pan and sends.
+                fold_mono(&mut st.pre);
+            }
             for (r, route) in st.routes.iter_mut().enumerate() {
                 scratch.clear();
                 scratch.extend_from_slice(&st.pre);
@@ -704,6 +709,14 @@ impl Graph {
             }
             tap.delay.run(&mut tap.buf);
         }
+    }
+}
+
+/// Left and right averaged onto both sides.
+pub fn fold_mono(buf: &mut [f32]) {
+    for f in buf.as_chunks_mut::<2>().0 {
+        let m = (f[0] + f[1]) * 0.5;
+        *f = [m, m];
     }
 }
 
@@ -1114,6 +1127,35 @@ mod tests {
         assert!((o[0][1_998] - 0.25).abs() < 1e-3);
         m.render(1_000, &mut o);
         assert!((o[0][0] - 0.25).abs() < 1e-3, "and it stays there");
+    }
+
+    #[test]
+    fn mono_folds_a_track_after_its_chain_and_before_its_pan() {
+        let dir = tempfile::tempdir().unwrap();
+        let dc = wav(dir.path(), "dc.wav", |_| 0.5);
+        let mut s = Session::new("t", RATE);
+        track(&mut s, &dc, 0, 0, 48_000);
+        // Hard left before the fold: the right side is silent.
+        s.tracks[0].effects = chain("altaudio.gain", &[("gain", 0.0)]);
+        let mut g = Graph::new(&s, RATE, true);
+        let raw = vec![[0.5f32, 0.0].repeat(64)];
+        let mut out = vec![Vec::new()];
+        g.process(&raw, &mut out);
+        assert_eq!((out[0][10], out[0][11]), (0.5, 0.0));
+        s.tracks[0].mono = true;
+        g.set_levels(levels(&s));
+        g.process(&raw, &mut out);
+        assert_eq!(
+            (out[0][10], out[0][11]),
+            (0.25, 0.25),
+            "folded live, no rebuild"
+        );
+        // Pan still places the folded track.
+        s.tracks[0].pan = -100.0;
+        g.set_levels(levels(&s));
+        g.process(&raw, &mut out);
+        g.process(&raw, &mut out);
+        assert_eq!((out[0][10], out[0][11]), (0.25, 0.0));
     }
 
     #[test]

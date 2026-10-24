@@ -129,6 +129,7 @@ pub fn track() -> Track {
         muted: false,
         solo: true,
         polarity_inverted: false,
+        mono: false,
         record_armed: true,
         monitor_input: false,
         input: Some("Mic 1".into()),
@@ -163,6 +164,7 @@ pub fn bus() -> Bus {
         effects: EffectChain::default(),
         envelopes: Vec::new(),
         position: None,
+        mono: false,
     }
 }
 

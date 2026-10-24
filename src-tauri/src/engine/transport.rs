@@ -47,6 +47,20 @@ const METER_QUEUE: usize = 512;
 /// rendered frame count at its end.
 type BlockPeaks = (u64, GraphMeters);
 
+/// Mono check: the audio thread folds what plays to mono while this is
+/// on, for checking how a mix holds up in mono. Listening only: exports
+/// never see it. Read with a relaxed load, so it applies within one buffer.
+static MONO_CHECK: AtomicBool = AtomicBool::new(false);
+
+/// Turns the mono check on or off, while playing or not.
+pub fn set_mono_check(on: bool) {
+    MONO_CHECK.store(on, Ordering::Relaxed);
+}
+
+pub fn mono_check() -> bool {
+    MONO_CHECK.load(Ordering::Relaxed)
+}
+
 /// Audio rendered ahead of the device, per track.
 const AHEAD_SECONDS: f64 = 0.5;
 /// Frames rendered per step on the render thread.
@@ -379,10 +393,11 @@ impl Transport {
             let master = plan::master_gain(session);
             if r.routed {
                 r.shared.set_gains(&[[1.0, 1.0]], master);
-                r.shared.send_levels(graph::levels(session));
             } else {
                 r.shared.set_gains(&plan::gains(session), master);
             }
+            // Routed: every level. Plain: the graph still folds tracks to mono.
+            r.shared.send_levels(graph::levels(session));
             let now = plan::chains(session);
             if now == r.chains {
                 return Ok(());
@@ -703,6 +718,7 @@ fn mix<T>(
         *p = [0.0, 0.0];
     }
     let master = bits_f32(shared.master.load(Ordering::Relaxed));
+    let mono = MONO_CHECK.load(Ordering::Relaxed);
     let mut mpeak = [0f32; 2];
     for f in 0..n {
         let mut l = 0f32;
@@ -717,6 +733,11 @@ fn mix<T>(
         }
         l *= master;
         r *= master;
+        if mono {
+            let m = (l + r) * 0.5;
+            l = m;
+            r = m;
+        }
         mpeak[0] = mpeak[0].max(l.abs());
         mpeak[1] = mpeak[1].max(r.abs());
         let frame = &mut out[f * channels..(f + 1) * channels];
@@ -828,6 +849,27 @@ mod tests {
             &mut [[0.0; 2]],
         );
         assert_eq!(out, [0.5, 0.0]);
+    }
+
+    #[test]
+    fn mono_check_folds_what_plays() {
+        let shared = Shared::new(1, &[[1.0, 1.0]], 1.0);
+        let (mut p, c) = RingBuffer::<f32>::new(4);
+        p.push(1.0).unwrap();
+        p.push(-0.5).unwrap();
+        let mut consumers = vec![c];
+        let mut out = [0f32; 2];
+        set_mono_check(true);
+        mix(
+            &mut out,
+            2,
+            &mut consumers,
+            &shared,
+            &mut [[0.0; 2]],
+            &mut [[0.0; 2]],
+        );
+        set_mono_check(false);
+        assert_eq!(out, [0.25, 0.25]);
     }
 
     #[test]

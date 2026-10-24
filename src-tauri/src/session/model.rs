@@ -221,6 +221,11 @@ pub struct Track {
     /// file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub polarity_inverted: bool,
+    /// Folds the track's left and right into one centered signal, after
+    /// its Voice Chain and before its fader and pan. Left out of the
+    /// file when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mono: bool,
 
     /// Scaffolding (P4): armed for recording.
     pub record_armed: bool,
@@ -257,6 +262,7 @@ impl Track {
             muted: false,
             solo: false,
             polarity_inverted: false,
+            mono: false,
             record_armed: false,
             monitor_input: false,
             input: None,
@@ -293,6 +299,10 @@ pub struct Bus {
     /// tracks, shows it below the last track. Display only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<u32>,
+    /// Folds the bus's left and right into one centered signal, after its
+    /// Voice Chain and before its fader and pan. Left out of the file when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mono: bool,
 }
 
 impl Bus {
@@ -313,6 +323,7 @@ impl Bus {
             effects: EffectChain::default(),
             envelopes: Vec::new(),
             position: None,
+            mono: false,
         }
     }
 }

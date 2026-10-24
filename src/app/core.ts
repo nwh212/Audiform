@@ -436,6 +436,11 @@ export function transportStop(): Promise<number | null> {
   return invoke<number | null>("transport_stop");
 }
 
+/** Mono check: hear everything folded to mono. Listening only. */
+export function setMonoCheck(on: boolean): Promise<void> {
+  return invoke<void>("transport_set_mono_check", { on });
+}
+
 export function transportStatus(): Promise<TransportStatus> {
   return invoke<TransportStatus>("transport_status");
 }

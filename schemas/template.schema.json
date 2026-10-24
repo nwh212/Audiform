@@ -84,6 +84,10 @@
           "type": "string",
           "format": "uuid"
         },
+        "mono": {
+          "description": "Folds the bus's left and right into one centered signal, after its\nVoice Chain and before its fader and pan. Left out of the file when off.",
+          "type": "boolean"
+        },
         "muted": {
           "type": "boolean"
         },
@@ -1151,6 +1155,10 @@
         },
         "monitor_input": {
           "description": "Scaffolding (P4): input monitoring on.",
+          "type": "boolean"
+        },
+        "mono": {
+          "description": "Folds the track's left and right into one centered signal, after\nits Voice Chain and before its fader and pan. Left out of the\nfile when off.",
           "type": "boolean"
         },
         "muted": {
