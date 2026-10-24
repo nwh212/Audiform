@@ -3010,13 +3010,10 @@
       const to = list.length ? (dir < 0 ? Math.max(...list) : Math.min(...list)) : dir < 0 ? 0 : contentEnd();
       return transport.seek(to);
     };
+    /** Where the session's last clip (audio or MIDI) ends. */
     const contentEnd = () => {
       const doc = session.current;
-      if (!doc) return 0;
-      const media = new Map(doc.media.map((m) => [m.id, m]));
-      let end = 0;
-      for (const t of doc.tracks) for (const c of t.clips) end = Math.max(end, c.start + clipLength(c, media.get(c.media_id), doc.sample_rate));
-      return end;
+      return doc ? sessionEnd(doc) : 0;
     };
     /** Where a "clips to ..." selection starts or ends: the chosen clips, or the playhead when none are chosen. */
     const clipSpan = () => {

@@ -1174,3 +1174,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - The tester heard no reverb from a VST3 reverb on a MIDI track during playback, while built-in effects worked. Checked with a real open-source reverb (Dragonfly Plate Reverb, from the distribution's packages, unpacked into a scratch folder) after the test synth on a MIDI track: its tail rings in export and in playback alike, so the mix path itself is sound (`a_real_reverb_rings_on_a_midi_track`, run with REVERB_DIR set).
 - One weak spot fixed on the way: when a plug-in reported an error from its processing call, the host passed the dry sound through even if the plug-in had filled its outputs. Some plug-ins do report errors while processing normally, so the host now keeps whatever the plug-in wrote, and passes the sound through untouched only when nothing was written.
 - Still open: which reverb and instrument the tester used, to reproduce it on Windows.
+
+## 2026-10-24: mixdown with only MIDI tracks
+
+- Multitrack > Mix Down to New File (and File > Export > Session Mixdown, Go to End, Zoom Out Full) measured the session by its audio clips only, so a session with only MIDI tracks showed them greyed out ("no clips yet"). They now use the session's end with MIDI clips included, as the core's mixdown already did.
