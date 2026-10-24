@@ -602,6 +602,15 @@
     addTracksOpen = false;
     const doc = session.current;
     if (!doc) return;
+    if (v.bus) {
+      const buses = doc.buses ?? [];
+      const names = newTrackNames([...doc.tracks, ...buses].map((t) => t.name), v.count, v.base);
+      const ids = names.map(() => uuid());
+      const ops: Op[] = names.map((name, k) => ({ op: "add_bus", id: ids[k]!, name, stereo: true, index: buses.length + k }));
+      await session.edit(v.count === 1 ? "Add Bus Track" : `Add ${v.count} Bus Tracks`, { op: "batch", ops }, sessionHistory);
+      editor.selectTrack(ids[0]!);
+      return;
+    }
     const sel = editor.current().selectedTrack;
     const i = doc.tracks.findIndex((t) => t.id === sel);
     const start = i >= 0 ? i + 1 : doc.tracks.length;
@@ -624,8 +633,8 @@
       .then(() => editor.selectTrack(id));
   }
 
-  /** Multitrack > Add > Bus Track: a stereo bus at the end of the Mixer, shown there. */
-  async function addBus() {
+  /** Multitrack > Add > Bus Track: a bus at the end of the Mixer, shown there. */
+  async function addBus(stereo = true) {
     const doc = session.current;
     if (!doc) return;
     const buses = doc.buses ?? [];
@@ -633,10 +642,9 @@
     let n = buses.length + 1;
     while (taken.has(`Bus ${n}`)) n++;
     const id = uuid();
-    await session.edit("Add Bus Track", { op: "add_bus", id, name: `Bus ${n}`, stereo: true, index: buses.length }, sessionHistory);
+    await session.edit(stereo ? "Add Bus Track" : "Add Mono Bus Track", { op: "add_bus", id, name: `Bus ${n}`, stereo, index: buses.length }, sessionHistory);
     editor.selectTrack(id);
-    dock.show("mixer");
-    showNotice(`Added Bus ${n}. Pick it as a track's output or send in the Mixer.`);
+    showNotice(`Added Bus ${n}. Route a track to it with the track's output or a send (Sends view in the track headers, or the Mixer).`);
   }
 
   /** Gives every `id` field inside a copied object a new value. */
@@ -675,7 +683,7 @@
         reason: () => "Select a track first.",
       }),
       mk("multitrack.vis.show-all", "Show All Tracks", () => true, () => tracks().some((t) => t.hidden), "No tracks are hidden."),
-      mk("multitrack.vis.only-audio", "Show Only Audio Tracks", () => true, () => tracks().some((t) => t.hidden), "Bus tracks live in the Mixer, so the Editor only lists audio tracks."),
+      mk("multitrack.vis.only-audio", "Show Only Audio Tracks", () => true, () => tracks().some((t) => t.hidden), "Bus tracks always show below the audio tracks."),
       mk("multitrack.vis.only-clips", "Show Only Tracks with Clips", (t) => t.clips.length > 0),
       mk("multitrack.vis.only-selection", "Show Only Tracks with Clips in Selection", (t) => {
         const s = timeSel();
@@ -3038,7 +3046,8 @@
         enabled: () => session.current !== null,
       }),
       actions.register({ id: "multitrack.add.stereo", run: () => addTrack(true) }),
-      actions.register({ id: "multitrack.add.bus", run: () => addBus(), enabled: () => session.current !== null }),
+      actions.register({ id: "multitrack.add.bus", run: () => addBus(true), enabled: () => session.current !== null }),
+      actions.register({ id: "multitrack.add.bus-mono", run: () => addBus(false), enabled: () => session.current !== null }),
       actions.register({
         id: "multitrack.delete-track",
         run: async () => {

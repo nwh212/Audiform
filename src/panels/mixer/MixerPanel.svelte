@@ -10,7 +10,8 @@
 -->
 <script lang="ts">
   import { trackOp } from "./solo";
-  import { busChoices, busOp, isRouted, MASTER_ID, newSend, removeSend, setSend } from "./routing";
+  import { busOp, isRouted, MASTER_ID } from "./routing";
+  import SendList from "./SendList.svelte";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { OutputDoc, SendDoc, SessionDoc, SessionStore } from "../../stores/session";
@@ -74,46 +75,6 @@
     const what = st.kind === "bus" ? label.replace("Track", "Bus") : label;
     const op = st.kind === "bus" ? busOp(doc, st.id, changes) : trackOp(doc, st.id, changes);
     void session.edit(what, op, runner).catch(onError);
-  }
-
-  function setSends(st: Strip, sends: SendDoc[], label: string) {
-    void session.edit(label, { op: "set_sends", owner: st.id, sends }, runner).catch(onError);
-  }
-
-  function setOutput(st: Strip, value: string) {
-    const output: OutputDoc = value === MASTER_ID ? { type: "master" } : { type: "bus", bus_id: value };
-    setStrip(st, { output }, `Route ${st.kind === "bus" ? "Bus" : "Track"} Output`);
-  }
-
-  function addSend(st: Strip, busId: string) {
-    if (!busId) return;
-    setSends(st, [...st.sends, newSend(busId, crypto.randomUUID())], "Add Send");
-  }
-
-  const busName = (id: string) => doc?.buses?.find((b) => b.id === id)?.name ?? "Missing bus";
-
-  /** Horizontal drag on a send's level. Shift for fine steps. */
-  function dragSend(e: PointerEvent, st: Strip, x: SendDoc) {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const startX = e.clientX;
-    const start = x.level_db;
-    let last = start;
-    const move = (ev: PointerEvent) => {
-      const v = Math.min(12, Math.max(-60, Math.round((start + (ev.clientX - startX) * (ev.shiftKey ? 0.05 : 0.25)) * 10) / 10));
-      if (v !== last) {
-        last = v;
-        setSends(st, setSend(st.sends, x.id, { level_db: v }), "Send Level");
-      }
-    };
-    const up = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
   }
 
   let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
@@ -236,65 +197,7 @@
           </div>
         {/if}
         {#if doc}
-          {@const choices = busChoices(doc, t.id)}
-          <div class="routing">
-            <select
-              class="out"
-              aria-label="{t.name} output"
-              title="Where this {t.kind}'s sound goes after its fader"
-              value={t.output.type === "bus" ? t.output.bus_id : MASTER_ID}
-              onclick={(e) => e.stopPropagation()}
-              onchange={(e) => setOutput(t, e.currentTarget.value)}
-            >
-              <option value={MASTER_ID}>To Master</option>
-              {#each choices as b (b.id)}<option value={b.id}>To {b.name}</option>{/each}
-              {#if t.output.type === "bus" && !choices.some((b) => t.output.type === "bus" && b.id === t.output.bus_id)}
-                <option value={t.output.bus_id}>To {busName(t.output.bus_id)}</option>
-              {/if}
-            </select>
-            {#each t.sends as x (x.id)}
-              <div class="send" class:off={!x.enabled}>
-                <div class="srow">
-                  <button type="button" class="sbtn" class:on={x.enabled} title={x.enabled ? "Send on: click to turn off" : "Send off: click to turn on"} aria-pressed={x.enabled} onclick={(e) => { e.stopPropagation(); setSends(t, setSend(t.sends, x.id, { enabled: !x.enabled }), x.enabled ? "Turn Off Send" : "Turn On Send"); }}>●</button>
-                  <span class="sname" title="Send to {busName(x.bus_id)}">{busName(x.bus_id)}</span>
-                  <button type="button" class="sbtn" class:on={x.pre_fader} title={x.pre_fader ? "Pre-fader: ignores this fader and pan. Click for post-fader." : "Post-fader: follows this fader. Click for pre-fader."} aria-pressed={x.pre_fader} onclick={(e) => { e.stopPropagation(); setSends(t, setSend(t.sends, x.id, { pre_fader: !x.pre_fader }), "Send Pre or Post Fader"); }}>P</button>
-                  <button type="button" class="sbtn" title="Remove send" aria-label="Remove send" onclick={(e) => { e.stopPropagation(); setSends(t, removeSend(t.sends, x.id), "Remove Send"); }}>✕</button>
-                </div>
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                  class="slevel"
-                  role="slider"
-                  tabindex="-1"
-                  aria-label="Send level to {busName(x.bus_id)}"
-                  aria-valuemin={-60}
-                  aria-valuemax={12}
-                  aria-valuenow={x.level_db}
-                  title="Send level. Drag sideways, Shift for fine steps, double-click for 0 dB."
-                  onpointerdown={(e) => dragSend(e, t, x)}
-                  ondblclick={() => setSends(t, setSend(t.sends, x.id, { level_db: 0 }), "Send Level")}
-                >
-                  <div class="sfill" style:width="{dbToFader(x.level_db) * 100}%"></div>
-                  <span class="sdb">{formatDb(x.level_db)}</span>
-                </div>
-              </div>
-            {/each}
-            {#if choices.length > 0}
-              <select
-                class="out add"
-                aria-label="Add a send"
-                title="Send a copy of this {t.kind}'s sound to a bus, at its own level"
-                value=""
-                onclick={(e) => e.stopPropagation()}
-                onchange={(e) => {
-                  addSend(t, e.currentTarget.value);
-                  e.currentTarget.value = "";
-                }}
-              >
-                <option value="" disabled>+ Send</option>
-                {#each choices as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
-              </select>
-            {/if}
-          </div>
+          <SendList {doc} {session} {runner} {onError} kind={t.kind} id={t.id} name={t.name} output={t.output} sends={t.sends} />
         {/if}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -446,98 +349,6 @@
     font: inherit;
     font-size: var(--font-size-small);
     box-sizing: border-box;
-  }
-
-  .routing {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .out {
-    width: 100%;
-    min-width: 0;
-    height: 18px;
-    padding: 0 2px;
-    font: inherit;
-    font-size: 10px;
-  }
-
-  .out.add {
-    color: var(--text-dim);
-  }
-
-  .send {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-    font-size: 10px;
-  }
-
-  .send.off .slevel,
-  .send.off .sname {
-    opacity: 0.5;
-  }
-
-  .srow {
-    display: flex;
-    gap: 1px;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .sname {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .slevel {
-    position: relative;
-    height: 12px;
-    overflow: hidden;
-    border-radius: 2px;
-    background: var(--surface-0);
-    cursor: ew-resize;
-  }
-
-  .sfill {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    background: var(--accent-dim);
-  }
-
-  .sdb {
-    position: relative;
-    display: block;
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    line-height: 12px;
-    text-align: center;
-  }
-
-  .sbtn {
-    flex: none;
-    width: 13px;
-    height: 14px;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--text-faint);
-    font: inherit;
-    font-size: 9px;
-    line-height: 1;
-  }
-
-  .sbtn.on {
-    color: var(--accent);
   }
 
   .lag {

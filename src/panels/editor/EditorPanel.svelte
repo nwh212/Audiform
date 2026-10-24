@@ -10,6 +10,8 @@
 <script lang="ts">
   import { settings, zoomRatios } from "../../stores/settings";
   import { trackOp } from "../mixer/solo";
+  import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
+  import SendList from "../mixer/SendList.svelte";
   import { onDestroy } from "svelte";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
@@ -17,7 +19,7 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
-  import { clipLength, stretchOf, type ClipChange, type ClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import { clipLength, stretchOf, type BusDoc, type ClipChange, type ClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
   import { stretchTo } from "./stretch";
   import { clipsAt, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
@@ -120,10 +122,15 @@
   /** Nothing in the session yet and nothing chosen: show a start screen instead of six empty tracks. */
   let startDismissed = $state(false);
   const showStart = $derived(
-    !startDismissed && doc != null && !session.path && doc.markers.length === 0 && doc.tracks.every((t) => t.clips.length === 0),
+    !startDismissed && doc != null && !session.path && doc.markers.length === 0 && (doc.buses?.length ?? 0) === 0 && doc.tracks.every((t) => t.clips.length === 0),
   );
   const shown = $derived(listedTracks(doc?.tracks ?? []));
   const headerTracks = $derived(showStart ? [] : shown);
+  /** Bus tracks, listed after the audio tracks. They hold no clips. */
+  const buses = $derived(showStart ? [] : (doc?.buses ?? []));
+  /** What the track headers show: the mix controls, or the output and sends. */
+  let headerView = $state<"mix" | "sends">("mix");
+  const busHeight = (b: BusDoc) => Math.max(headerView === "sends" ? 96 : 72, b.height);
   const can = (id: string) => {
     void tick;
     return actions.isEnabled(id);
@@ -1173,8 +1180,8 @@
         act("Add Tracks...", "multitrack.add-tracks"),
         off("Add 5.1 Audio Track", "Surround tracks are not planned."),
         sep,
-        off("Add Mono Bus Track", "Bus tracks arrive with effects (P5)."),
-        off("Add Stereo Bus Track", "Bus tracks arrive with effects (P5)."),
+        act("Add Mono Bus Track", "multitrack.add.bus-mono"),
+        act("Add Stereo Bus Track", "multitrack.add.bus"),
         off("Add 5.1 Bus Track", "Surround tracks are not planned."),
         sep,
         act("Delete Empty Tracks", "multitrack.delete-empty"),
@@ -1190,7 +1197,7 @@
         act("Show Only Tracks with Clips within Time Selection", "multitrack.vis.only-selection"),
         act("Show Only Tracks with Clips at Playhead", "multitrack.vis.only-playhead"),
         sep,
-        off("Show Only Bus Tracks", "Bus tracks arrive with effects (P5)."),
+        off("Show Only Bus Tracks", "Not built yet: bus tracks always show below the audio tracks."),
         off("Load and Save Visibility Presets", "Not built yet."),
       ]),
       sub("Insert", [
@@ -1228,6 +1235,58 @@
     ];
   }
 
+  /** Output and send choices for a track's right-click menu. */
+  function routingItems(track: TrackDoc): ContextItem[] {
+    if (!doc) return [];
+    const choices = busChoices(doc, track.id);
+    const sends = track.sends ?? [];
+    const out = track.output ?? { type: "master" as const };
+    const none = (doc.buses?.length ?? 0) === 0 ? "Add a bus first: Multitrack > Add > Bus Track." : "No bus can take this track without feeding back into it.";
+    return [
+      {
+        kind: "sub",
+        label: "Output To",
+        items: [
+          { kind: "item", label: "Master", checked: out.type === "master", run: () => setTrack(track, { output: { type: "master" } }, "Route Track Output") },
+          ...choices.map((b): ContextItem => ({ kind: "item", label: b.name, checked: out.type === "bus" && out.bus_id === b.id, run: () => setTrack(track, { output: { type: "bus", bus_id: b.id } }, "Route Track Output") })),
+        ],
+      },
+      {
+        kind: "sub",
+        label: "Add Send To",
+        disabled: choices.length === 0,
+        reason: choices.length === 0 ? none : null,
+        items: choices.map((b): ContextItem => ({
+          kind: "item",
+          label: b.name,
+          run: () => {
+            void session.edit("Add Send", { op: "set_sends", owner: track.id, sends: [...sends, newSend(b.id, crypto.randomUUID())] }, runner).catch(onError);
+            headerView = "sends";
+          },
+        })),
+      },
+    ];
+  }
+
+  function busItems(b: BusDoc): ContextItem[] {
+    return [
+      { kind: "item", label: "Rename Bus", run: () => (renaming = b.id) },
+      { kind: "item", label: "Delete Bus", run: () => void session.edit("Delete Bus", { op: "remove_bus", id: b.id }, runner).catch(onError) },
+      { kind: "sep" },
+      { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
+    ];
+  }
+
+  function setBus(b: BusDoc, changes: Record<string, unknown>, label: string) {
+    void session.edit(label, busOp(doc, b.id, changes), runner).catch(onError);
+  }
+
+  function commitBusRename(b: BusDoc, value: string) {
+    renaming = null;
+    const v = value.trim();
+    if (v && v !== b.name) setBus(b, { name: v }, "Rename Bus");
+  }
+
   function trackItems(track: TrackDoc): ContextItem[] {
     return [
       { kind: "item", label: "Select All Clips on Track", disabled: track.clips.length === 0, run: () => editor.selectClips(withGroups(doc!, track.clips.map((c) => c.id)), track.id) },
@@ -1238,6 +1297,9 @@
       { kind: "sep" },
       { kind: "item", label: "Add Mono Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.mono"); } },
       { kind: "item", label: "Add Stereo Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.stereo"); } },
+      { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
+      { kind: "sep" },
+      ...routingItems(track),
     ];
   }
 
@@ -1485,6 +1547,7 @@
   <div class="toolbar">
     <button type="button" class="tool text" title={tip("Add Mono Track", "multitrack.add.mono")} onclick={() => run("multitrack.add.mono")}>+ Mono</button>
     <button type="button" class="tool text" title={tip("Add Stereo Track", "multitrack.add.stereo")} onclick={() => run("multitrack.add.stereo")}>+ Stereo</button>
+    <button type="button" class="tool text" title={tip("Add Bus Track", "multitrack.add.bus")} onclick={() => run("multitrack.add.bus")}>+ Bus</button>
     <span class="spacer"></span>
     {#if doc}<span class="rate" title="Session sample rate">{(rate / 1000).toLocaleString("en-US")} kHz</span>{/if}
   </div>
@@ -1509,10 +1572,10 @@
   <div class="ruler-row">
     <div class="corner header-views" style:width="{HEADER_W}px">
       <!-- What the track headers show. Only the mix controls exist so far; the
-           other views arrive with recording (P4) and effects and buses (P5). -->
+           other views arrive with recording (P4) and effects (P5). -->
       {#if ed.selectedClips.size > 1}<span class="selcount" aria-live="polite">{ed.selectedClips.size} clips selected</span>{/if}
       <div class="views" role="radiogroup" aria-label="Track header view">
-        <button type="button" class="view on" role="radio" aria-checked="true" title="Mix: volume, pan, mute, solo and arm">
+        <button type="button" class="view" class:on={headerView === "mix"} role="radio" aria-checked={headerView === "mix"} title="Mix: volume, pan, mute, solo and arm" onclick={() => (headerView = "mix")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2v12M8 2v12M12 2v12" stroke="currentColor" stroke-width="1" opacity="0.6" /><rect x="2.5" y="8" width="3" height="2" fill="currentColor" /><rect x="6.5" y="4.5" width="3" height="2" fill="currentColor" /><rect x="10.5" y="10" width="3" height="2" fill="currentColor" /></svg>
         </button>
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="Inputs and Outputs: arrives with recording (P4)">
@@ -1521,7 +1584,7 @@
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="Effects: arrives with the Voice Chain (P5)">
           <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1.5" y="12" font-size="10" font-style="italic" font-family="serif" fill="currentColor">fx</text></svg>
         </button>
-        <button type="button" class="view" role="radio" aria-checked="false" disabled title="Sends: arrives with buses (P5)">
+        <button type="button" class="view" class:on={headerView === "sends"} role="radio" aria-checked={headerView === "sends"} title="Sends: each track's output (the master or a bus) and its sends to buses" onclick={() => (headerView = "sends")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12h5V4h6M10 1.5L13 4l-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
         </button>
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the Voice Chain (P5)">
@@ -1665,7 +1728,12 @@
                 <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
               </button>
             </div>
-            {#if !track.collapsed}
+            {#if !track.collapsed && headerView === "sends" && doc}
+              <div class="sendview">
+                <SendList {doc} {session} {runner} {onError} kind="track" id={track.id} name={track.name} output={track.output ?? { type: "master" }} sends={track.sends ?? []} />
+              </div>
+            {/if}
+            {#if !track.collapsed && headerView === "mix"}
             <div class="line">
               <Dial
                 value={track.volume_db}
@@ -1691,7 +1759,7 @@
               </button>
             </div>
             {/if}
-            {#if !track.collapsed && shownHeight(track) >= 76}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 76}
               <div class="line">
                 <button type="button" class="pick" title="The input this track records from" onclick={(e) => void openInputMenu(e, track)}>
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
@@ -1700,7 +1768,7 @@
                 </button>
               </div>
             {/if}
-            {#if !track.collapsed && shownHeight(track) >= 94}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 94}
               <div class="line">
                 <select class="auto" value="read" title="Automation mode. Read plays back the track's automation; Off, Write, Latch and Touch arrive with automation (P5).">
                   <option value="off" disabled>Off (arrives with automation)</option>
@@ -1717,6 +1785,57 @@
             {/if}
             <!-- Level meter: the input while armed, otherwise playback. -->
             <TrackMeter levels={meterOf(track)} armed={track.record_armed} onClear={() => transport.clearOver(track.id)} />
+          </div>
+        {/each}
+        {#each buses as b (b.id)}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div
+            class="header bus"
+            class:selected={ed.selectedTrack === b.id}
+            style:--track-color={b.color ?? "var(--clip-3)"}
+            style:height="{busHeight(b)}px"
+            data-header={b.id}
+            onclick={() => editor.selectTrack(b.id)}
+            oncontextmenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              menu = { x: e.clientX, y: e.clientY, items: busItems(b) };
+            }}
+          >
+            <div class="line">
+              <span class="bus-tag" title="Bus track: sums the tracks routed or sent to it, then runs its own Voice Chain and fader">BUS</span>
+              {#if renaming === b.id}
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  class="rename"
+                  type="text"
+                  value={b.name}
+                  autofocus
+                  onblur={(e) => commitBusRename(b, e.currentTarget.value)}
+                  onkeydown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") commitBusRename(b, e.currentTarget.value);
+                    if (e.key === "Escape") renaming = null;
+                  }}
+                />
+              {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span class="name" title="Double-click to rename" ondblclick={() => (renaming = b.id)}>{b.name}</span>
+              {/if}
+              <button type="button" class="ms" class:on={b.muted} title="Mute" aria-pressed={b.muted} onclick={() => setBus(b, { muted: !b.muted }, b.muted ? "Unmute Bus" : "Mute Bus")}>M</button>
+              <button type="button" class="ms solo" class:on={b.solo} title="Solo: plays this bus and everything feeding it" aria-pressed={b.solo} onclick={() => setBus(b, { solo: !b.solo }, b.solo ? "Unsolo Bus" : "Solo Bus")}>S</button>
+            </div>
+            {#if headerView === "mix"}
+              <div class="line">
+                <Dial value={b.volume_db} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={(v) => setBus(b, { volume_db: v }, "Bus Volume")} />
+                <Dial value={b.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setBus(b, { pan: v }, "Bus Pan")} />
+              </div>
+            {:else if doc}
+              <div class="sendview">
+                <SendList {doc} {session} {runner} {onError} kind="bus" id={b.id} name={b.name} output={b.output} sends={b.sends} />
+              </div>
+            {/if}
+            <TrackMeter levels={meterOf(b as unknown as TrackDoc)} armed={false} onClear={() => transport.clearOver(b.id)} />
           </div>
         {/each}
       </div>
@@ -1770,6 +1889,22 @@
                 showFx={ed.showFx}
                 fxLanes={ed.fxLanes}
               />
+            </div>
+          {/each}
+          {#each buses as b (b.id)}
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+            <div
+              class="lane bus-lane"
+              class:selected={ed.selectedTrack === b.id}
+              style:height="{busHeight(b)}px"
+              onclick={() => editor.selectTrack(b.id)}
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                menu = { x: e.clientX, y: e.clientY, items: busItems(b) };
+              }}
+            >
+              <span>Bus {b.name}: no clips. Route tracks here with their output or a send (track header Sends view, the track's right-click menu, or the Mixer).</span>
             </div>
           {/each}
           {#each shownMarkers as m (m.id)}
@@ -2407,6 +2542,45 @@
 
   .lane {
     cursor: default;
+  }
+
+  .bus-lane {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 3px solid var(--track-gap);
+    box-sizing: border-box;
+    background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--clip-3) 7%, transparent) 10px 20px);
+    color: var(--text-faint);
+    font-size: var(--font-size-small);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .bus-lane.selected {
+    background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  .header.bus {
+    background: color-mix(in srgb, var(--header-a) 82%, var(--clip-3) 18%);
+    cursor: default;
+  }
+
+  .bus-tag {
+    flex: none;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: var(--surface-3);
+    color: var(--text-dim);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .sendview {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .below {

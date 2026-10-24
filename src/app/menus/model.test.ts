@@ -90,6 +90,7 @@ describe("menu model", () => {
       "multitrack.add.mono",
       "multitrack.add.stereo",
       "multitrack.add.bus",
+      "multitrack.add.bus-mono",
       "multitrack.duplicate-track",
       "multitrack.delete-track",
       "multitrack.delete-empty",

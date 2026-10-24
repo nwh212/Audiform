@@ -5,8 +5,8 @@
 
   Multitrack > Add Track > Add Tracks: several mono or stereo tracks at
   once, optionally named ("Guest" gives Guest, Guest 2, Guest 3), placed
-  after the selected track. Bus and surround tracks show why they are
-  not offered yet.
+  after the selected track, or bus tracks (added below the audio tracks). Surround
+  tracks show why they are not offered.
 -->
 <script lang="ts">
   import { newTrackNames } from "./track-names";
@@ -14,8 +14,12 @@
   export interface AddTracksValues {
     count: number;
     stereo: boolean;
+    /** Bus tracks instead of audio tracks. */
+    bus: boolean;
     base: string;
   }
+
+  type Kind = "mono" | "stereo" | "bus";
 
   interface Props {
     existing: readonly string[];
@@ -26,10 +30,10 @@
 
   const { existing, afterName, onApply, onClose }: Props = $props();
   let count = $state(2);
-  let stereo = $state(false);
+  let kind = $state<Kind>("mono");
   let base = $state("");
   const n = $derived(Math.max(1, Math.min(32, Math.round(Number(count) || 1))));
-  const preview = $derived(newTrackNames(existing, Math.min(n, 4), base));
+  const preview = $derived(newTrackNames(existing, Math.min(n, 4), base || (kind === "bus" ? "Bus" : "")));
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
@@ -40,17 +44,17 @@
     <h1 id="at-title">Add Tracks</h1>
     <label class="row"><span>How many</span><input type="number" min="1" max="32" bind:value={count} /></label>
     <label class="row"><span>Type</span>
-      <select bind:value={stereo}>
-        <option value={false}>Mono audio (one voice or mic)</option>
-        <option value={true}>Stereo audio (music, beds, mixes)</option>
-        <option disabled>Bus (arrives with effects)</option>
+      <select bind:value={kind}>
+        <option value="mono">Mono audio (one voice or mic)</option>
+        <option value="stereo">Stereo audio (music, beds, mixes)</option>
+        <option value="bus">Stereo bus (groups tracks, takes sends)</option>
         <option disabled>5.1 surround (not planned for podcast work)</option>
       </select>
     </label>
     <label class="row"><span>Name</span><input type="text" placeholder="Track" bind:value={base} /></label>
-    <p class="note">Adds {preview.join(", ")}{n > 4 ? `, and ${n - 4} more` : ""}{afterName ? ` after ${afterName}` : " at the bottom"}.</p>
+    <p class="note">Adds {preview.join(", ")}{n > 4 ? `, and ${n - 4} more` : ""}{kind === "bus" ? " below the audio tracks" : afterName ? ` after ${afterName}` : " at the bottom"}.</p>
     <footer>
-      <button type="button" class="primary" onclick={() => onApply({ count: n, stereo, base })}>Add</button>
+      <button type="button" class="primary" onclick={() => onApply({ count: n, stereo: kind !== "mono", bus: kind === "bus", base: base || (kind === "bus" ? "Bus" : "") })}>Add</button>
       <button type="button" onclick={onClose}>Cancel</button>
     </footer>
   </div>
