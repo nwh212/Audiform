@@ -28,6 +28,9 @@
   import {
     addsOne,
     addSlot,
+    addSlotAt,
+    layoutSlots,
+    moveSlotToIndex,
     applyPreset,
     BUILTIN_PRESETS,
     CATEGORY_COLORS,
@@ -36,7 +39,6 @@
     fromSlider,
     MAX_SLOTS,
     moveSlot,
-    moveSlotTo,
     replaceSlot,
     newSlot,
     paramValue,
@@ -54,6 +56,7 @@
   import ResponseGraph from "./ResponseGraph.svelte";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
+  import { dropEdit, effectMenu, ownerKey, slotOver, startSlotDrag, type SlotSpot } from "./slot-drag";
 
   interface Props {
     session: SessionStore;
@@ -303,51 +306,48 @@
     openSlot(s);
   }
 
-  /** The Add effect button: the families as submenus. */
-  function openAddMenu(e: MouseEvent) {
+  /** Adds an effect into numbered slot `at` (0 first). */
+  function addAt(id: string, at: number) {
+    const info = byId.get(id);
+    if (!info) return;
+    const s = newSlot(info, crypto.randomUUID());
+    commit(`Add ${info.name}`, addSlotAt(chain, s, at));
+    openSlot(s);
+  }
+
+  /** An empty slot's Add button: the families as submenus, adding into that slot. */
+  function openAddMenu(e: MouseEvent, at: number) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    slotMenu = { x: r.left, y: r.bottom, items: familyItems(add) };
+    slotMenu = { x: r.left, y: r.bottom, items: familyItems((id) => addAt(id, at)) };
+  }
+
+  /** Where this chain's slot rows say they belong, for dragging effects between chains. */
+  const owner = $derived(target && !inWave ? ownerKey(target) : "wave");
+  const rows = $derived(layoutSlots(chain));
+  /** A dragged effect let go over a slot: moved here, or copied from another chain. */
+  function dropSlot(s: EffectSlotDoc, to: SlotSpot) {
+    if (to.owner === owner) {
+      commit("Move Effect", moveSlotToIndex(chain, s.id, to.index));
+      return;
+    }
+    if (inWave || !target || !doc) return;
+    const ed = dropEdit(doc, target, $state.snapshot(s) as EffectSlotDoc, to, () => crypto.randomUUID());
+    if (ed) void session.edit(ed.label, ed.op, runner).catch(onError);
+    else onNotice(`A Voice Chain holds ${MAX_SLOTS} effects.`);
   }
 
   // Slot rows: drag to reorder, Alt+Up or Alt+Down on a row, and a right-click menu.
-  let dragId = $state<string | null>(null);
-  let overIndex = $state<number | null>(null);
   let slotMenu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
-  function dropOn(i: number) {
-    const id = dragId;
-    dragId = null;
-    overIndex = null;
-    if (id) commit("Move Effect", moveSlotTo(chain, id, i));
-  }
   function onRowKey(e: KeyboardEvent, id: string) {
     if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
     e.preventDefault();
     commit("Move Effect", moveSlot(chain, id, e.key === "ArrowUp" ? -1 : 1));
   }
-  /** The effects of each family as submenus, for adding at the end or replacing a slot. */
+  /** The effects of each family as submenus, for adding or replacing a slot. */
   function familyItems(pick: (id: string) => void): ContextItem[] {
-    return [
-      ...categories
-        .filter((c) => !catalog.some((e) => e.category === c && e.plugin))
-        .map((c): ContextItem => ({ kind: "sub", label: c, items: catalog.filter((e) => e.category === c).map((e): ContextItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })) })),
-      { kind: "sep" },
-      pluginItems(pick),
-      { kind: "item", label: "VST (version 2)", disabled: true, reason: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.", run: () => {} },
-    ];
+    return effectMenu(catalog, menuPlugins, pick) as ContextItem[];
   }
-  /** VST3 plug-ins: by type, then by maker. */
-  function pluginItems(pick: (id: string) => void): ContextItem {
-    const installed = menuPlugins.filter((p) => byId.has(p.effect));
-    if (!installed.length) return { kind: "item", label: "VST3", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} };
-    const { types, makers } = pluginMenuGroups(installed);
-    const list = (ps: MenuPlugin[]): ContextItem[] => ps.map((p) => ({ kind: "item", label: p.name, run: () => pick(p.effect) }));
-    return {
-      kind: "sub",
-      label: "VST3",
-      items: [...types.map(([t, ps]): ContextItem => ({ kind: "sub", label: t, items: list(ps) })), { kind: "sep" }, ...makers.map(([m, ps]): ContextItem => ({ kind: "sub", label: m, items: list(ps) }))],
-    };
-  }
-  function openSlotMenu(e: MouseEvent, s: EffectSlotDoc | undefined) {
+  function openSlotMenu(e: MouseEvent, s: EffectSlotDoc | undefined, at?: number) {
     e.preventDefault();
     const items: ContextItem[] = [];
     if (s) {
@@ -370,7 +370,7 @@
         },
       );
     } else {
-      items.push(...familyItems(add));
+      items.push(...familyItems((id) => (at === undefined ? add(id) : addAt(id, at))));
     }
     slotMenu = { x: e.clientX, y: e.clientY, items };
   }
@@ -619,38 +619,20 @@
     </div>
 
     <ol class="slots" class:off={!chain.enabled}>
-      {#each Array.from({ length: MAX_SLOTS }, (_, i) => i) as i (i)}
-        {@const s = chain.slots[i]}
+      {#each rows as s, i (i)}
         {@const info = s ? byId.get(s.effect) : undefined}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
         <li
           class:sel={!!s && s.id === slot?.id}
           class:bypassed={!!s && !s.enabled}
-          class:over={overIndex === i && dragId !== null}
-          draggable={!!s}
+          class:over={$slotOver?.owner === owner && $slotOver.index === i}
+          data-slot-owner={owner}
+          data-slot-index={i}
           tabindex={s ? 0 : -1}
-          ondragstart={(e) => {
-            if (!s) return;
-            dragId = s.id;
-            e.dataTransfer?.setData("text/plain", s.id);
-            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-          }}
-          ondragover={(e) => {
-            if (dragId && i < chain.slots.length) {
-              e.preventDefault();
-              overIndex = i;
-            }
-          }}
-          ondrop={(e) => {
-            e.preventDefault();
-            dropOn(i);
-          }}
-          ondragend={() => {
-            dragId = null;
-            overIndex = null;
-          }}
+          title={s ? "Drag to another slot to move it, or onto another track's effects (Editor, Effects view) to copy it" : undefined}
+          onpointerdown={(e) => s && startSlotDrag(e, (to) => dropSlot(s, to))}
           onkeydown={(e) => s && onRowKey(e, s.id)}
-          oncontextmenu={(e) => openSlotMenu(e, s)}
+          oncontextmenu={(e) => openSlotMenu(e, s ?? undefined, i)}
         >
           <span class="n">{i + 1}</span>
           {#if s}
@@ -679,10 +661,8 @@
             {/if}
             <button type="button" class="mini" title={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} aria-label={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} onclick={() => openSlot(s)}>⚙</button>
             <button type="button" class="mini" title="Remove" aria-label="Remove" onclick={() => commit(`Remove ${info?.name ?? "Effect"}`, removeSlot(chain, s.id))}>✕</button>
-          {:else if i === chain.slots.length}
-            <button type="button" class="add" aria-haspopup="menu" onclick={openAddMenu}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
           {:else}
-            <span class="name blank"></span>
+            <button type="button" class="add" class:quiet={i !== chain.slots.length && i > 0 && !rows[i - 1]} aria-haspopup="menu" title="Add an effect in slot {i + 1}" onclick={(e) => openAddMenu(e, i)}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
           {/if}
         </li>
       {/each}
@@ -992,11 +972,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .name.blank {
-    height: 1px;
-    border-bottom: 1px dotted var(--border);
-    cursor: default;
-  }
   .pow {
     flex: none;
     display: grid;
@@ -1019,7 +994,7 @@
   .slots li.over {
     box-shadow: inset 0 2px 0 var(--accent);
   }
-  .slots li[draggable="true"] {
+  .slots li:has(.pow) {
     cursor: grab;
   }
   .add {
@@ -1028,6 +1003,14 @@
     justify-content: space-between;
     color: var(--text-dim);
     text-align: left;
+  }
+  /* Later empty slots: quiet until hovered, so the list stays calm. */
+  .add.quiet {
+    opacity: 0;
+  }
+  li:hover .add.quiet,
+  .add.quiet:focus-visible {
+    opacity: 0.7;
   }
   .mini {
     min-width: 20px;

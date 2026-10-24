@@ -195,7 +195,11 @@ fn rack_xml(out: &mut String, indent: &str, chain: &EffectChain, report: &mut Se
         return;
     }
     let _ = writeln!(out, r#"{indent}<effectsRack preFader="true">"#);
-    for (i, (s, id)) in plugins.iter().enumerate() {
+    let mut next = 0u32;
+    for (s, id) in &plugins {
+        // Keep the numbered slot it shows in.
+        let i = s.position.unwrap_or(next).max(next);
+        next = i + 1;
         let name =
             crate::plugins::find(&s.effect).map_or_else(|| "Plug-in".to_string(), |f| f.info.name);
         let _ = writeln!(
@@ -581,6 +585,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: Some(state.clone()),
+                position: None,
             });
         s.tracks[0].clips[0].stretch = Some(crate::session::model::ClipStretch {
             ratio: 1.25,
@@ -624,6 +629,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                position: None,
             });
         s.markers.push(crate::session::model::Marker {
             id: new_id(),

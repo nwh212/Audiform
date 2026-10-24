@@ -1575,6 +1575,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            position: None,
         };
         roundtrip(
             &mut s,
@@ -1699,6 +1700,7 @@ mod tests {
             preset: None,
             sidechain: Some(voice),
             plugin_state: None,
+            position: None,
         });
         roundtrip(
             &mut s,
@@ -1850,6 +1852,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                position: None,
             });
         }
         roundtrip(
@@ -2627,6 +2630,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                position: None,
             });
         let pt = |position, value| EnvelopePoint {
             position,

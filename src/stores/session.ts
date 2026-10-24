@@ -41,6 +41,8 @@ export interface EffectSlotDoc {
   sidechain?: string | null;
   /** A VST3 plug-in's own settings (set in its window), base64. */
   plugin_state?: string | null;
+  /** Which numbered slot it shows in (0 first), so a chain can leave gaps. Missing follows the one before. */
+  position?: number | null;
 }
 
 /** A Voice Chain on a clip, a track or the master. */

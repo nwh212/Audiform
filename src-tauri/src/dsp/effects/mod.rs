@@ -215,6 +215,7 @@ pub fn ui_catalog() -> Vec<EffectInfo> {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                position: None,
             };
             build(&slot, 48_000).map_or(0, |p| p.latency())
         };
@@ -541,6 +542,7 @@ impl ChainProcessor {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            position: None,
         };
         if let Some(fresh) = build(&slot, self.rate) {
             if fresh.latency() == self.stages[i].latency() {
@@ -665,6 +667,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            position: None,
         }
     }
 

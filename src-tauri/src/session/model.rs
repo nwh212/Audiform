@@ -777,6 +777,11 @@ pub struct EffectSlot {
     /// plug-in saved them, base64. Only on plug-in slots (`vst3:` effects).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin_state: Option<String>,
+    /// Which of the numbered slots it shows in (0 is the first), so a chain
+    /// can leave gaps. Effects still run in list order. None follows the
+    /// one before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<u32>,
 }
 
 /// A span of the timeline.

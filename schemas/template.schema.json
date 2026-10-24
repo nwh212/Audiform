@@ -424,6 +424,15 @@
             "null"
           ]
         },
+        "position": {
+          "description": "Which of the numbered slots it shows in (0 is the first), so a chain\ncan leave gaps. Effects still run in list order. None follows the\none before.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "preset": {
           "description": "Name of the preset last loaded, if any.",
           "type": [

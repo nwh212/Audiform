@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
 import {
   addSlot,
+  addSlotAt,
+  EMPTY_CHAIN,
+  layoutSlots,
+  moveSlotToIndex,
   pluginMenuGroups,
   applyPreset,
   batchPresets,
@@ -249,5 +253,36 @@ describe("plug-in menu groups", () => {
       ["Other", ["Odd"]],
     ]);
     expect(g.makers.map(([k]) => k)).toEqual(["Acme", "Bolt", "Other"]);
+  });
+});
+
+describe("numbered slots", () => {
+  const s = (id: string, position?: number) => ({ id, effect: "x", enabled: true, params: {}, preset: null, ...(position === undefined ? {} : { position }) });
+  const chain = (...slots: ReturnType<typeof s>[]) => ({ ...EMPTY_CHAIN, slots });
+  const ids = (c: { slots: { id: string }[] } | null) => layoutSlots(c as never).map((x) => x?.id ?? "-").join("");
+
+  it("shows effects in their slots, gaps and all", () => {
+    expect(ids(chain(s("a"), s("b")))).toBe("ab" + "-".repeat(14));
+    expect(ids(chain(s("a", 2), s("b"), s("c", 1)))).toBe("--abc" + "-".repeat(11));
+    // Never past the end: the last effects squeeze in.
+    expect(ids(chain(s("a", 15), s("b")))).toBe("-".repeat(14) + "ab");
+  });
+
+  it("adds an effect to any slot", () => {
+    const c = addSlotAt(chain(s("a")), s("n"), 5)!;
+    expect(ids(c)).toBe("a----n" + "-".repeat(10));
+    expect(c.slots.map((x) => x.id)).toEqual(["a", "n"]);
+    // Into an occupied slot: the one there moves down.
+    const d = addSlotAt(c, s("m"), 0)!;
+    expect(ids(d)).toBe("ma---n" + "-".repeat(10));
+  });
+
+  it("moves an effect to another slot, keeping the others in place", () => {
+    const c = chain(s("a"), s("b"), s("c", 5));
+    expect(ids(moveSlotToIndex(c, "a", 3))).toBe("-b-a-c" + "-".repeat(10));
+    expect(moveSlotToIndex(c, "a", 3).slots.map((x) => x.id)).toEqual(["b", "a", "c"]);
+    expect(ids(moveSlotToIndex(c, "c", 0))).toBe("cab" + "-".repeat(13));
+    // Run order follows the slots.
+    expect(moveSlotToIndex(c, "c", 0).slots.map((x) => x.id)).toEqual(["c", "a", "b"]);
   });
 });

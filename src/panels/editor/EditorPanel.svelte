@@ -23,7 +23,12 @@
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
   import { duplicateClips, replaceClip } from "./midi";
-  import { pluginOpenWindow, pluginsRegistry } from "../../app/core";
+  import { effectsCatalog, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
+  import HeaderFx from "./HeaderFx.svelte";
+  import { rowTarget } from "../voice-chain/slot-drag";
+  import type { MenuPlugin } from "../voice-chain/chain";
+  import { effectWindowRequest } from "../voice-chain/effect-window";
+  import type { EffectSlotDoc, Op } from "../../stores/session";
   import { pluginsVersion } from "../../stores/plugins";
   import { stretchTo } from "./stretch";
   import { clipsAt, copyMoved, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
@@ -67,6 +72,8 @@
     waveTransport?: TransportStore;
     /** Waveform editor quick level: dB for the selection or whole file. */
     onWaveLevel?: (db: number) => void;
+    /** Brings the Voice Chain panel forward. */
+    onShowChain?: () => void;
   }
 
   const {
@@ -84,6 +91,7 @@
     waveFile,
     waveTransport,
     onWaveLevel = () => {},
+    onShowChain = () => {},
   }: Props = $props();
 
   let wf = $state<WaveFile | null>(null);
@@ -142,8 +150,14 @@
   /** Bus tracks, listed after the audio tracks. They hold no clips. */
   const buses = $derived(showStart ? [] : (doc?.buses ?? []));
   /** What the track headers show: the mix controls, or the output and sends. */
-  let headerView = $state<"mix" | "sends">("mix");
-  const busHeight = (b: BusDoc) => Math.max(headerView === "sends" ? 96 : 72, b.height);
+  /** What the headers show: mix controls (with input, output and sends as room allows) or the effects. */
+  let headerView = $state<"mix" | "fx">("mix");
+  const busHeight = (b: BusDoc) => Math.max(72, b.height);
+  /** Header heights at which each extra row shows. */
+  const ROW_INPUT = 76;
+  const ROW_OUTPUT = 98;
+  const ROW_AUTO = 120;
+  const ROW_SENDS = 146;
   const can = (id: string) => {
     void tick;
     return actions.isEnabled(id);
@@ -178,14 +192,44 @@
 
   // MIDI tracks: the instruments to pick from, the piano roll, the tempo.
   let instruments = $state<{ effect: string; name: string; vendor: string; hasWindow: boolean }[]>([]);
+  /** For the headers' Effects view: every effect, and the effect plug-ins for the Add menu. */
+  let fxCatalog = $state<EffectInfo[]>([]);
+  let fxPlugins = $state<MenuPlugin[]>([]);
   $effect(() =>
     pluginsVersion.subscribe(() => {
       void pluginsRegistry()
-        // One per id, whatever the list holds, so the picker can never break.
-        .then((r) => (instruments = r.plugins.filter((p, i, all) => p.instrument && all.findIndex((q) => q.effect.toUpperCase() === p.effect.toUpperCase()) === i)))
+        .then((r) => {
+          // One per id, whatever the list holds, so the picker can never break.
+          instruments = r.plugins.filter((p, i, all) => p.instrument && all.findIndex((q) => q.effect.toUpperCase() === p.effect.toUpperCase()) === i);
+          fxPlugins = r.plugins.filter((p) => !p.instrument);
+        })
         .catch(() => (instruments = []));
+      void effectsCatalog()
+        .then((c) => (fxCatalog = c))
+        .catch(() => (fxCatalog = []));
     }),
   );
+
+  /** Opens an effect from a header: a plug-in in its own window, anything else in the Voice Chain. */
+  function openHeaderEffect(rowId: string, rowName: string, slot: EffectSlotDoc) {
+    const info = fxCatalog.find((e) => e.id === slot.effect);
+    if (info?.plugin && info.hasWindow) {
+      void pluginOpenWindow(slot, `${info.name} - ${rowName}`).catch(onError);
+      return;
+    }
+    editor.selectTrack(rowId);
+    onShowChain();
+    effectWindowRequest.set(slot.id);
+  }
+  function headerEdit(label: string, op: Op) {
+    void session.edit(label, op, runner).catch(onError);
+  }
+  /** Where a track's or bus's sound goes: the master or a bus. */
+  function setOutput(kind: "track" | "bus", id: string, value: string) {
+    const o = value === MASTER_ID ? { type: "master" as const } : { type: "bus" as const, bus_id: value };
+    headerEdit(kind === "bus" ? "Route Bus Output" : "Route Track Output", kind === "bus" ? busOp(doc, id, { output: o }) : trackOp(doc, id, { output: o }));
+  }
+  const outName = (o: { type: string; bus_id?: string } | undefined) => (o?.type === "bus" ? (doc?.buses?.find((b) => b.id === o.bus_id)?.name ?? "Missing bus") : "Master");
   let pianoRoll = $state<{ trackId: string; clipId: string } | null>(null);
   const tempo = $derived(doc ? tempoOf(doc) : { bpm: 120, beats_per_bar: 4 });
 
@@ -1548,8 +1592,11 @@
           kind: "item",
           label: b.name,
           run: () => {
-            void session.edit("Add Send", { op: "set_sends", owner: track.id, sends: [...sends, newSend(b.id, crypto.randomUUID())] }, runner).catch(onError);
-            headerView = "sends";
+            // Tall enough to show the send in the header.
+            const ops: Op[] = [{ op: "set_sends", owner: track.id, sends: [...sends, newSend(b.id, crypto.randomUUID())] }];
+            if (!track.collapsed && track.height < ROW_SENDS + 24) ops.push({ op: "set_track", id: track.id, changes: { height: ROW_SENDS + 24 } } as Op);
+            void session.edit("Add Send", ops.length === 1 ? ops[0]! : { op: "batch", ops }, runner).catch(onError);
+            headerView = "mix";
           },
         })),
       },
@@ -1936,17 +1983,14 @@
            other views arrive with recording (P4) and effects (P5). -->
       {#if ed.selectedClips.size > 1}<span class="selcount" aria-live="polite">{ed.selectedClips.size} clips selected</span>{/if}
       <div class="views" role="radiogroup" aria-label="Track header view">
-        <button type="button" class="view" class:on={headerView === "mix"} role="radio" aria-checked={headerView === "mix"} title="Mix: volume, pan, mute, solo and arm" onclick={() => (headerView = "mix")}>
+        <button type="button" class="view" class:on={headerView === "mix"} role="radio" aria-checked={headerView === "mix"} title="Mix: volume, pan, mute, solo and arm, then input, output and sends as the track gets taller" onclick={() => (headerView = "mix")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2v12M8 2v12M12 2v12" stroke="currentColor" stroke-width="1" opacity="0.6" /><rect x="2.5" y="8" width="3" height="2" fill="currentColor" /><rect x="6.5" y="4.5" width="3" height="2" fill="currentColor" /><rect x="10.5" y="10" width="3" height="2" fill="currentColor" /></svg>
         </button>
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="Inputs and Outputs: arrives with recording (P4)">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
         </button>
-        <button type="button" class="view" role="radio" aria-checked="false" disabled title="Effects: arrives with the Voice Chain (P5)">
+        <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's Voice Chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1.5" y="12" font-size="10" font-style="italic" font-family="serif" fill="currentColor">fx</text></svg>
-        </button>
-        <button type="button" class="view" class:on={headerView === "sends"} role="radio" aria-checked={headerView === "sends"} title="Sends: each track's output (the master or a bus) and its sends to buses" onclick={() => (headerView = "sends")}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12h5V4h6M10 1.5L13 4l-3 2.5" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
         </button>
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the Voice Chain (P5)">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="7" width="2.5" height="7" fill="currentColor" /><rect x="6.75" y="3" width="2.5" height="11" fill="currentColor" /><rect x="11.5" y="9" width="2.5" height="5" fill="currentColor" /></svg>
@@ -2108,10 +2152,17 @@
               {/if}
               <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}>MO</button>
             </div>
-            {#if !track.collapsed && headerView === "sends" && doc}
-              <div class="sendview">
-                <SendList {doc} {session} {runner} {onError} kind="track" id={track.id} name={track.name} output={track.output ?? { type: "master" }} sends={track.sends ?? []} />
-              </div>
+            {#if !track.collapsed && headerView === "fx" && doc}
+              <HeaderFx
+                {doc}
+                target={rowTarget(track.id, false)}
+                chain={track.effects}
+                catalog={fxCatalog}
+                plugins={fxPlugins}
+                onEdit={headerEdit}
+                onOpen={(slot) => openHeaderEffect(track.id, track.name, slot)}
+                onMenu={(x, y, items) => (menu = { x, y, items: items as ContextItem[] })}
+              />
             {/if}
             {#if !track.collapsed && headerView === "mix"}
             <div class="line">
@@ -2155,7 +2206,7 @@
                 <button type="button" class="ms" title="Open the instrument's window" aria-label="Open the instrument's window" disabled={!track.instrument || !inst} onclick={() => openInstrument(track)}>◳</button>
               </div>
             {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 76 && !isMidi(track)}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_INPUT && !isMidi(track)}
               <div class="line">
                 <button type="button" class="pick" title="The input this track records from" onclick={(e) => void openInputMenu(e, track)}>
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
@@ -2164,7 +2215,20 @@
                 </button>
               </div>
             {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= 94}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_OUTPUT && doc}
+              {@const out = track.output ?? { type: "master" }}
+              <div class="line">
+                <label class="pick outpick" title="Where this track's sound goes after its fader: the master or a bus">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
+                  <select aria-label="{track.name} output" value={out.type === "bus" ? out.bus_id : MASTER_ID} onchange={(e) => setOutput("track", track.id, e.currentTarget.value)}>
+                    <option value={MASTER_ID}>Master</option>
+                    {#each busChoices(doc, track.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
+                    {#if out.type === "bus" && !busChoices(doc, track.id).some((bc) => out.type === "bus" && bc.id === out.bus_id)}<option value={out.bus_id}>{outName(out)}</option>{/if}
+                  </select>
+                </label>
+              </div>
+            {/if}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_AUTO}
               <div class="line">
                 <select class="auto" value="read" title="Automation mode. Read plays back the track's automation; Off, Write, Latch and Touch arrive with automation (P5).">
                   <option value="off" disabled>Off (arrives with automation)</option>
@@ -2173,6 +2237,11 @@
                   <option value="latch" disabled>Latch (arrives with automation)</option>
                   <option value="touch" disabled>Touch (arrives with automation)</option>
                 </select>
+              </div>
+            {/if}
+            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_SENDS && doc}
+              <div class="sendview">
+                <SendList {doc} {session} {runner} {onError} kind="track" id={track.id} name={track.name} output={track.output ?? { type: "master" }} sends={track.sends ?? []} noOutput />
               </div>
             {/if}
             {#if !track.collapsed}
@@ -2231,10 +2300,33 @@
                 <Dial value={b.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setBus(b, { pan: v }, "Bus Pan")} />
                 <button type="button" class="ms mono" class:on={!!b.mono} title="Mono: folds this bus's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!b.mono} onclick={() => setBus(b, { mono: !b.mono }, b.mono ? "Bus Stereo" : "Bus Mono")}>MONO</button>
               </div>
+              {#if busHeight(b) >= ROW_OUTPUT - 8 && doc}
+                <div class="line">
+                  <label class="pick outpick" title="Where this bus's sound goes after its fader: the master or another bus">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
+                    <select aria-label="{b.name} output" value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
+                      <option value={MASTER_ID}>Master</option>
+                      {#each busChoices(doc, b.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
+                    </select>
+                  </label>
+                </div>
+              {/if}
+              {#if busHeight(b) >= ROW_SENDS - 30 && doc}
+                <div class="sendview">
+                  <SendList {doc} {session} {runner} {onError} kind="bus" id={b.id} name={b.name} output={b.output} sends={b.sends} noOutput />
+                </div>
+              {/if}
             {:else if doc}
-              <div class="sendview">
-                <SendList {doc} {session} {runner} {onError} kind="bus" id={b.id} name={b.name} output={b.output} sends={b.sends} />
-              </div>
+              <HeaderFx
+                {doc}
+                target={rowTarget(b.id, true)}
+                chain={b.effects}
+                catalog={fxCatalog}
+                plugins={fxPlugins}
+                onEdit={headerEdit}
+                onOpen={(slot) => openHeaderEffect(b.id, b.name, slot)}
+                onMenu={(x, y, items) => (menu = { x, y, items: items as ContextItem[] })}
+              />
             {/if}
             <TrackMeter levels={meterOf(b as unknown as TrackDoc)} armed={false} onClear={() => transport.clearOver(b.id)} />
           </div>
@@ -2362,7 +2454,7 @@
                 menu = { x: e.clientX, y: e.clientY, items: busItems(b) };
               }}
             >
-              <span>Bus {b.name}: no clips. Route tracks here with their output or a send (track header Sends view, the track's right-click menu, or the Mixer).</span>
+              <span>Bus {b.name}: no clips. Route tracks here with their output or a send (in the track header when it is tall enough, the track's right-click menu, or the Mixer).</span>
             </div>
             {/if}
           {/each}
@@ -3205,6 +3297,20 @@
     font-size: 8px;
     font-weight: 700;
     letter-spacing: 0.04em;
+  }
+
+  .outpick {
+    position: relative;
+  }
+  .outpick select {
+    flex: 1;
+    min-width: 0;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
   }
 
   .sendview {

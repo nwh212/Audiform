@@ -690,7 +690,7 @@
     const id = uuid();
     await session.edit(stereo ? "Add Bus Track" : "Add Mono Bus Track", { op: "add_bus", id, name: `Bus ${n}`, stereo, index: buses.length }, sessionHistory);
     editor.selectTrack(id);
-    showNotice(`Added Bus ${n}. Route a track to it with the track's output or a send (Sends view in the track headers, or the Mixer).`);
+    showNotice(`Added Bus ${n}. Route a track to it with the track's output or a send (the track header, made taller, the right-click menu, or the Mixer).`);
   }
 
   /** Effects > Plug-in Manager. */
@@ -1612,6 +1612,7 @@
         return {
           component: asComponent(EditorPanel),
           props: {
+            onShowChain: () => dock.show("voice-chain"),
             session,
             runner: sessionHistory,
             peaks,

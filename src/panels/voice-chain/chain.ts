@@ -56,6 +56,71 @@ export function addSlot(
   return { ...chain, slots };
 }
 
+/**
+ * The chain as its numbered slots: each effect in the slot it asked for
+ * (its `position`), or the one after the effect before it. Effects run
+ * in list order, so a slot never comes before an earlier effect's.
+ */
+export function layoutSlots(chain: EffectChainDoc): (EffectSlotDoc | null)[] {
+  const out: (EffectSlotDoc | null)[] = Array.from({ length: MAX_SLOTS }, () => null);
+  const n = chain.slots.length;
+  let next = 0;
+  chain.slots.forEach((s, k) => {
+    // Leave room for the effects still to come.
+    const latest = MAX_SLOTS - (n - k);
+    const at = Math.min(latest, Math.max(next, s.position ?? next));
+    out[at] = s;
+    next = at + 1;
+  });
+  return out;
+}
+
+/** How many effects show before numbered slot `at`, leaving out `skip`. */
+function countBefore(chain: EffectChainDoc, at: number, skip?: string): number {
+  return layoutSlots(chain)
+    .slice(0, at)
+    .filter((s) => s && s.id !== skip).length;
+}
+
+/**
+ * Puts an effect in numbered slot `at`. An effect already there moves
+ * down one. Null when the chain is full.
+ */
+export function addSlotAt(chain: EffectChainDoc, slot: EffectSlotDoc, at: number): EffectChainDoc | null {
+  if (chain.slots.length >= MAX_SLOTS) return null;
+  const to = Math.max(0, Math.min(MAX_SLOTS - 1, at));
+  const slots = pinned(chain);
+  slots.splice(countBefore(chain, to), 0, { ...slot, position: to });
+  return { ...chain, slots: bumped(slots) };
+}
+
+/** Moves an effect to numbered slot `at`; an effect already there moves down one. */
+export function moveSlotToIndex(chain: EffectChainDoc, id: string, at: number): EffectChainDoc {
+  const s = chain.slots.find((x) => x.id === id);
+  if (!s) return chain;
+  const to = Math.max(0, Math.min(MAX_SLOTS - 1, at));
+  const before = countBefore(chain, to, id);
+  const slots = pinned(chain).filter((x) => x.id !== id);
+  slots.splice(before, 0, { ...s, position: to });
+  return { ...chain, slots: bumped(slots) };
+}
+
+/** Every effect pinned to the slot it shows in now, so moving one leaves the rest in place. */
+function pinned(chain: EffectChainDoc): EffectSlotDoc[] {
+  const where = new Map(layoutSlots(chain).flatMap((s, i) => (s ? [[s.id, i] as const] : [])));
+  return chain.slots.map((s) => ({ ...s, position: where.get(s.id) ?? s.position ?? null }));
+}
+
+/** Pushes effects down where one now sits on or above the one before. */
+function bumped(slots: EffectSlotDoc[]): EffectSlotDoc[] {
+  let next = 0;
+  return slots.map((s) => {
+    const at = Math.max(next, s.position ?? next);
+    next = at + 1;
+    return at === s.position ? s : { ...s, position: at };
+  });
+}
+
 export function removeSlot(chain: EffectChainDoc, id: string): EffectChainDoc {
   return { ...chain, slots: chain.slots.filter((s) => s.id !== id) };
 }

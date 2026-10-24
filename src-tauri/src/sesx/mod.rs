@@ -121,7 +121,7 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
         })
         .collect();
     slots.sort_by_key(|(i, _)| *i);
-    for (_, c) in slots {
+    for (index, c) in slots {
         let name = c.attribute("name").unwrap_or("Effect").to_string();
         let slot = c.parent().unwrap_or(c);
         let plugin = c
@@ -150,6 +150,9 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
             preset: None,
             sidechain: None,
             plugin_state: state,
+            position: u32::try_from(index)
+                .ok()
+                .filter(|i| (*i as usize) < MAX_SLOTS),
         });
     }
     chain

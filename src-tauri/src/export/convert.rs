@@ -364,6 +364,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                position: None,
             });
         }
         let fmt = OutputFormat {
