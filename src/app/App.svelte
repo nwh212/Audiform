@@ -1902,10 +1902,12 @@
     const sel = editor.current().selectedClips;
     if (!d || sel.size === 0) return null;
     const changes: ClipChange[] = [];
-    for (let i = 0; i < d.tracks.length; i++) {
-      for (const c of d.tracks[i]!.clips) {
+    // Hidden tracks are skipped, the same as the Editor lists them.
+    const listed = d.tracks.filter((t) => !t.hidden);
+    for (let i = 0; i < listed.length; i++) {
+      for (const c of listed[i]!.clips) {
         if (!sel.has(c.id)) continue;
-        const to = d.tracks[i + dir];
+        const to = listed[i + dir];
         if (!to || c.locked) return null;
         changes.push({ id: c.id, track_id: to.id });
       }
@@ -1917,8 +1919,9 @@
     const d = session.current;
     if (!changes || !d) return;
     await session.edit(dir < 0 ? "Move to Track Above" : "Move to Track Below", { op: "set_clips", changes }, sessionHistory);
-    const first = d.tracks.findIndex((t) => t.clips.some((c) => c.id === changes[0]!.id));
-    const target = d.tracks[first + dir];
+    const listed = d.tracks.filter((t) => !t.hidden);
+    const first = listed.findIndex((t) => t.clips.some((c) => c.id === changes[0]!.id));
+    const target = listed[first + dir];
     if (target) editor.selectClips(editor.current().selectedClips, target.id);
   }
 
