@@ -567,7 +567,15 @@ impl Audio {
         };
         let ok = unsafe { self.processor.process(&mut data) } == kResultOk;
         self.time += n as i64;
-        let Some(main) = self.out_bufs.first().filter(|_| ok) else {
+        // Some plug-ins report an error yet fill their outputs: keep what
+        // they wrote. Only an error with nothing written passes the sound
+        // through untouched.
+        let wrote = || {
+            self.out_bufs
+                .first()
+                .is_some_and(|b| b.iter().any(|c| c[..n].iter().any(|v| *v != 0.0)))
+        };
+        let Some(main) = self.out_bufs.first().filter(|_| ok || wrote()) else {
             return;
         };
         for i in 0..n {

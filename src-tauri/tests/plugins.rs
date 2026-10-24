@@ -369,3 +369,97 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     plugins::set_folder(&folder, false);
     assert_eq!(plugins::scan(true, |_, _, _| {}).found, 0);
 }
+
+/// A real reverb (set REVERB_DIR to a folder of VST3 reverbs) after an
+/// instrument on a MIDI track: its tail must ring on after the note, in
+/// export and in playback alike. Ignored unless asked for.
+#[test]
+#[ignore]
+fn a_real_reverb_rings_on_a_midi_track() {
+    let rev = PathBuf::from(std::env::var("REVERB_DIR").expect("REVERB_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("MyPlugins");
+    bundle(&folder);
+    std::env::set_var(
+        "ALTERED_PLUGIN_HOST",
+        env!("CARGO_BIN_EXE_altered-audio-editor"),
+    );
+    plugins::load(dir.path());
+    plugins::set_folder(&folder, true);
+    plugins::set_folder(&rev, true);
+    let report = plugins::scan(true, |_, _, _| {});
+    println!("scan {report:?} failed {:?}", plugins::snapshot().failed);
+    let info = plugins::catalog()
+        .into_iter()
+        .find(|i| i.name.contains("Plate"))
+        .expect("the reverb is listed");
+    println!("reverb {} {} controls", info.id, info.params.len());
+
+    let mut s = Session::new("m", 48_000);
+    s.bit_depth = 32;
+    let tid = new_id();
+    apply(
+        &mut s,
+        &Op::AddTrack {
+            id: tid,
+            name: "Keys".into(),
+            stereo: true,
+            index: 0,
+            midi: true,
+        },
+    )
+    .unwrap();
+    let mut synth = slot(&[]);
+    synth.effect = SYNTH.into();
+    s.tracks[0].instrument = Some(synth);
+    apply(
+        &mut s,
+        &Op::SetMidiClips {
+            track_id: tid,
+            clips: vec![MidiClip {
+                id: new_id(),
+                name: "c".into(),
+                start: 0.25,
+                length: 4.0,
+                muted: false,
+                color: None,
+                notes: vec![Note {
+                    pitch: 60,
+                    velocity: 127,
+                    start: 0.0,
+                    length: 0.125,
+                }],
+            }],
+        },
+    )
+    .unwrap();
+    // The note plays 6,000 to 9,000; after 10,000 only a tail can sound.
+    let tail = |y: &[f32]| -> f32 { y[10_000 * 2..60_000 * 2].iter().map(|v| v * v).sum::<f32>() };
+    let dry = mix_range(&s, 0, 60_000);
+    // The reverb as the app adds it: every control at its default.
+    let mut fx = slot(&[]);
+    fx.effect = info.id.to_string();
+    fx.params = info
+        .params
+        .iter()
+        .map(|p| (p.key.to_string(), p.default))
+        .collect();
+    s.tracks[0].effects.slots.push(fx);
+    let wet = mix_range(&s, 0, 60_000);
+    println!("export: dry tail {} wet tail {}", tail(&dry), tail(&wet));
+    // Playback of a session without buses.
+    use altered_audio_editor_lib::engine::{graph, plan, render::Renderer};
+    let mut m = graph::Mix::new(
+        Renderer::new(plan::build(&s, 48_000), 0),
+        graph::Graph::new(&s, 48_000, false),
+    );
+    let mut out = vec![Vec::new(); m.outputs()];
+    let mut play = Vec::new();
+    while play.len() < 60_000 * 2 {
+        m.render(1_024, &mut out);
+        play.extend_from_slice(&out[0]);
+    }
+    println!("playback: wet tail {}", tail(&play));
+    assert!(tail(&wet) > tail(&dry) * 10.0 + 1e-3, "export rings");
+    assert!(tail(&play) > tail(&dry) * 10.0 + 1e-3, "playback rings");
+}
