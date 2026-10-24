@@ -162,6 +162,7 @@ pub fn bus() -> Bus {
         sends: Vec::new(),
         effects: EffectChain::default(),
         envelopes: Vec::new(),
+        position: None,
     }
 }
 

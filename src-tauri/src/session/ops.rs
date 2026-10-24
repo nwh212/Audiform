@@ -125,6 +125,12 @@ pub struct BusChanges {
     /// Where the bus's sound goes: the master or another bus.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Output>,
+    /// Where the bus shows among the tracks: below this many tracks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<u32>,
+    /// Shows the bus below the last track again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_position: Option<bool>,
 }
 
 /// Changes to one clip. Fields left out are unchanged. `track_id` moves
@@ -923,6 +929,17 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             if let Some(v) = changes.output {
                 old.output = Some(std::mem::replace(&mut b.output, v));
             }
+            if changes.position.is_some() || changes.clear_position == Some(true) {
+                let new = if changes.clear_position == Some(true) {
+                    None
+                } else {
+                    changes.position
+                };
+                match std::mem::replace(&mut b.position, new) {
+                    Some(p) => old.position = Some(p),
+                    None => old.clear_position = Some(true),
+                }
+            }
             Ok(Op::SetBus {
                 id: *id,
                 changes: old,
@@ -1499,6 +1516,17 @@ mod tests {
         assert_eq!(s, before);
         roundtrip(&mut s, Op::RemoveBus { id: mix });
         roundtrip(&mut s, Op::MoveBus { id: verb, to: 0 });
+        roundtrip(
+            &mut s,
+            Op::SetBus {
+                id: verb,
+                changes: BusChanges {
+                    position: Some(1),
+                    ..BusChanges::default()
+                },
+            },
+        );
+        assert_eq!(s.buses[0].position, Some(1));
         // Removing Reverb takes the voice's send with it.
         roundtrip(&mut s, Op::RemoveBus { id: verb });
         assert!(s.tracks[0].sends.is_empty());

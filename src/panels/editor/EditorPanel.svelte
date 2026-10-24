@@ -25,6 +25,8 @@
   import { shownTracks as listedTracks } from "./visibility";
   import { addPoint, chipBox, chipLabel, envChange, envName, formatValue, fxChoices, fxLaneOf, fxParam, levelAt, movePoint, pointsOf, rangeOf, restValue, snapValue, valueToY, yToValue, type EnvKind } from "./envelope";
   import LaneCanvas from "./LaneCanvas.svelte";
+  import ClipColorDialog from "../../app/ClipColorDialog.svelte";
+  import { laneRows, moveRowOps } from "./rows";
   import Dial from "./Dial.svelte";
   import TrackMeter from "./TrackMeter.svelte";
   import { inputLevels, liveTakes, type LiveTakes } from "../../stores/record";
@@ -126,6 +128,10 @@
   );
   const shown = $derived(listedTracks(doc?.tracks ?? []));
   const headerTracks = $derived(showStart ? [] : shown);
+  const listedIds = $derived(new Set(shown.map((t) => t.id)));
+  /** Tracks with bus tracks placed among them, top to bottom. */
+  const laneList = $derived(laneRows(doc, listedIds));
+  const headerRows = $derived(showStart ? [] : laneList);
   /** Bus tracks, listed after the audio tracks. They hold no clips. */
   const buses = $derived(showStart ? [] : (doc?.buses ?? []));
   /** What the track headers show: the mix controls, or the output and sends. */
@@ -148,6 +154,8 @@
   let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
   let renaming = $state<string | null>(null);
   let dragTrack = $state<{ id: string; overIndex: number; y: number } | null>(null);
+  /** The track or bus whose color is being picked. */
+  let colorFor = $state<{ kind: "track" | "bus"; id: string; current: string | null } | null>(null);
   /** A marker being dragged on the ruler: its id and where it is now. */
   let markerDrag = $state<{ id: string; position: number } | null>(null);
   const shownMarkers = $derived(
@@ -1271,6 +1279,7 @@
   function busItems(b: BusDoc): ContextItem[] {
     return [
       { kind: "item", label: "Rename Bus", run: () => (renaming = b.id) },
+      { kind: "item", label: "Bus Color...", run: () => (colorFor = { kind: "bus", id: b.id, current: b.color }) },
       { kind: "item", label: "Delete Bus", run: () => void session.edit("Delete Bus", { op: "remove_bus", id: b.id }, runner).catch(onError) },
       { kind: "sep" },
       { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
@@ -1292,6 +1301,7 @@
       { kind: "item", label: "Select All Clips on Track", disabled: track.clips.length === 0, run: () => editor.selectClips(withGroups(doc!, track.clips.map((c) => c.id)), track.id) },
       { kind: "sep" },
       { kind: "item", label: "Rename Track", run: () => (renaming = track.id) },
+      { kind: "item", label: "Track Color...", run: () => (colorFor = { kind: "track", id: track.id, current: track.color ?? null }) },
       { kind: "item", label: "Duplicate Track", run: () => { editor.selectTrack(track.id); run("multitrack.duplicate-track"); } },
       { kind: "item", label: "Delete Track", run: () => { editor.selectTrack(track.id); run("multitrack.delete-track"); } },
       { kind: "sep" },
@@ -1324,27 +1334,36 @@
   // Track reordering by dragging the header.
   function onHeaderPointer(e: PointerEvent, track: TrackDoc) {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button, input")) return;
+    startRowDrag(e, track.id, "Move Track");
+  }
+
+  /** Drags a track or bus row (by its header or grab strip) to a new place among all rows. */
+  function startRowDrag(e: PointerEvent, id: string, label: string) {
+    if (e.button !== 0) return;
     e.preventDefault();
-    editor.selectTrack(track.id);
+    e.stopPropagation();
+    editor.selectTrack(id);
     const startY = e.clientY;
     let moved = false;
-    const headers = () => [...(scroller?.querySelectorAll<HTMLElement>("[data-header]") ?? [])];
+    const list = () => [...(scroller?.querySelectorAll<HTMLElement>("[data-row]") ?? [])];
+    let beforeId: string | null = null;
     const move = (ev: PointerEvent) => {
       if (!moved && Math.abs(ev.clientY - startY) < 5) return;
       moved = true;
-      const list = headers();
-      let over = list.length;
-      for (let i = 0; i < list.length; i++) {
-        const b = list[i]!.getBoundingClientRect();
-        if (ev.clientY < b.top + b.height / 2) {
+      const rows = list();
+      let over = rows.length;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]!.getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) {
           over = i;
           break;
         }
       }
+      beforeId = rows[over]?.dataset.row ?? null;
       const sb = scroller!.getBoundingClientRect();
-      const ref = list[over] ?? list[list.length - 1];
-      const y = ref ? (over < list.length ? ref.getBoundingClientRect().top : ref.getBoundingClientRect().bottom) - sb.top + scroller!.scrollTop : 0;
-      dragTrack = { id: track.id, overIndex: over, y };
+      const ref = rows[over] ?? rows[rows.length - 1];
+      const y = ref ? (over < rows.length ? ref.getBoundingClientRect().top : ref.getBoundingClientRect().bottom) - sb.top + scroller!.scrollTop : 0;
+      dragTrack = { id, overIndex: over, y };
     };
     const up = () => {
       window.removeEventListener("pointermove", move, true);
@@ -1352,16 +1371,16 @@
       const d = dragTrack;
       dragTrack = null;
       if (!moved || !d || !doc) return;
-      // overIndex counts the listed (shown) tracks; map it back to the full list.
-      const full = doc.tracks;
-      const from = full.findIndex((t) => t.id === d.id);
-      const before = shown[d.overIndex];
-      const target = before ? full.findIndex((t) => t.id === before.id) : full.length;
-      const to = target > from ? target - 1 : target;
-      if (to !== from) void session.edit("Move Track", { op: "move_track", id: d.id, to }, runner).catch(onError);
+      const ops = moveRowOps(doc, listedIds, id, beforeId);
+      if (ops.length === 0) return;
+      void session.edit(label, ops.length === 1 ? ops[0]! : { op: "batch", ops }, runner).catch(onError);
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
+  }
+
+  function setMasterVolume(db: number) {
+    void session.edit("Master Volume", { op: "set_master_volume", volume_db: db }, runner).catch(onError);
   }
 
   // Length the overview strip scrolls over.
@@ -1665,7 +1684,10 @@
   >
     <div class="rows" bind:clientHeight={rowsH}>
       <div class="headers" style:width="{HEADER_W}px">
-        {#each headerTracks as track, i (track.id)}
+        {#each headerRows as row (row.id)}
+          {#if row.kind === "track"}
+          {@const track = row.track}
+          {@const i = row.i}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="header"
@@ -1673,6 +1695,7 @@
             class:selected={ed.selectedTrack === track.id}
             style:--track-color={trackColor(track.color, i)}
             data-header={track.id}
+            data-row={track.id}
             style:height="{shownHeight(track)}px"
             onpointerdown={(e) => onHeaderPointer(e, track)}
             oncontextmenu={(e) => {
@@ -1681,6 +1704,8 @@
               menu = { x: e.clientX, y: e.clientY, items: trackItems(track) };
             }}
           >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="grab" title="Drag to move the track up or down" onpointerdown={(e) => onHeaderPointer(e, track)}></div>
             <div class="line">
               <button
                 type="button"
@@ -1693,9 +1718,6 @@
               >
                 <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
               </button>
-              <span class="grip" aria-hidden="true" title="Drag to reorder">
-                <svg viewBox="0 0 8 12"><circle cx="2" cy="2" r="1" /><circle cx="6" cy="2" r="1" /><circle cx="2" cy="6" r="1" /><circle cx="6" cy="6" r="1" /><circle cx="2" cy="10" r="1" /><circle cx="6" cy="10" r="1" /></svg>
-              </span>
               {#if renaming === track.id}
                 <!-- svelte-ignore a11y_autofocus -->
                 <input
@@ -1786,15 +1808,16 @@
             <!-- Level meter: the input while armed, otherwise playback. -->
             <TrackMeter levels={meterOf(track)} armed={track.record_armed} onClear={() => transport.clearOver(track.id)} />
           </div>
-        {/each}
-        {#each buses as b (b.id)}
+          {:else}
+          {@const b = row.bus}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div
             class="header bus"
             class:selected={ed.selectedTrack === b.id}
-            style:--track-color={b.color ?? "var(--clip-3)"}
+            style:--track-color={b.color ? trackColor(b.color, 0) : "var(--clip-3)"}
             style:height="{busHeight(b)}px"
-            data-header={b.id}
+            data-bus-header={b.id}
+            data-row={b.id}
             onclick={() => editor.selectTrack(b.id)}
             oncontextmenu={(e) => {
               e.preventDefault();
@@ -1802,6 +1825,8 @@
               menu = { x: e.clientX, y: e.clientY, items: busItems(b) };
             }}
           >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="grab" title="Drag to move the bus up or down" onpointerdown={(e) => startRowDrag(e, b.id, "Move Bus")}></div>
             <div class="line">
               <span class="bus-tag" title="Bus track: sums the tracks routed or sent to it, then runs its own Voice Chain and fader">BUS</span>
               {#if renaming === b.id}
@@ -1837,7 +1862,33 @@
             {/if}
             <TrackMeter levels={meterOf(b as unknown as TrackDoc)} armed={false} onClear={() => transport.clearOver(b.id)} />
           </div>
+          {/if}
         {/each}
+        {#if doc && !showStart}
+          {@const mfx = doc.master?.effects?.slots.filter((x) => x.enabled).length ?? 0}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div
+            class="header master"
+            class:selected={ed.selectedTrack === MASTER_ID}
+            style:height="72px"
+            title="Master: every track and bus ends here. Click to show its Voice Chain."
+            onclick={() => editor.selectTrack(MASTER_ID)}
+            oncontextmenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <div class="line">
+              <span class="bus-tag">OUT</span>
+              <span class="name">Master</span>
+              <button type="button" class="ms fx" class:on={mfx > 0} title={mfx > 0 ? `Master Voice Chain: ${mfx} effect${mfx === 1 ? "" : "s"}. Click to edit.` : "Master Voice Chain: empty. Click to add effects."} onclick={() => editor.selectTrack(MASTER_ID)}>fx</button>
+            </div>
+            <div class="line">
+              <Dial value={doc.master?.volume_db ?? 0} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={setMasterVolume} />
+            </div>
+            <TrackMeter levels={tp?.master ?? null} armed={false} onClear={() => transport.clearOver()} />
+          </div>
+        {/if}
       </div>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="lanes" class:dropping bind:this={lanesEl} bind:clientWidth={lanesWidth} onpointerleave={() => (razor = null)}>
@@ -1855,7 +1906,10 @@
           ></div>
         {/if}
         {#if doc}
-          {#each shown as track, i (track.id)}
+          {#each laneList as row (row.id)}
+            {#if row.kind === "track"}
+            {@const track = row.track}
+            {@const i = row.i}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
               class="lane"
@@ -1890,8 +1944,8 @@
                 fxLanes={ed.fxLanes}
               />
             </div>
-          {/each}
-          {#each buses as b (b.id)}
+            {:else}
+            {@const b = row.bus}
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div
               class="lane bus-lane"
@@ -1906,7 +1960,12 @@
             >
               <span>Bus {b.name}: no clips. Route tracks here with their output or a send (track header Sends view, the track's right-click menu, or the Mixer).</span>
             </div>
+            {/if}
           {/each}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div class="lane bus-lane master-lane" class:selected={ed.selectedTrack === MASTER_ID} style:height="72px" onclick={() => editor.selectTrack(MASTER_ID)}>
+            <span>Master: the whole mix, after every track and bus. Its fader and Voice Chain apply last.</span>
+          </div>
           {#each shownMarkers as m (m.id)}
             {@const mx = xOf(m.position, view)}
             {#if mx >= 0 && mx <= lanesWidth}
@@ -1973,6 +2032,22 @@
 
 {#if envTip}
   <div class="env-tip" style:left="{envTip.x}px" style:top="{envTip.y}px">{envTip.text}</div>
+{/if}
+
+{#if colorFor}
+  {@const target = colorFor}
+  <ClipColorDialog
+    title={target.kind === "bus" ? "Bus Color" : "Track Color"}
+    noneLabel="Default Color"
+    current={target.current}
+    onDone={(c) => {
+      colorFor = null;
+      if (c === null) return;
+      const color = c === "" ? null : c;
+      const op = target.kind === "bus" ? busOp(doc, target.id, { color }) : trackOp(doc, target.id, { color });
+      void session.edit(target.kind === "bus" ? "Bus Color" : "Track Color", op, runner).catch(onError);
+    }}
+  />
 {/if}
 
 {#if menu}
@@ -2287,8 +2362,8 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 3px 24px 3px 9px;
-    border-left: 5px solid var(--track-color, var(--border-strong));
+    padding: 3px 24px 3px 14px;
+    border-left: 0;
     border-bottom: 3px solid var(--track-gap);
     box-sizing: border-box;
     position: relative;
@@ -2426,20 +2501,6 @@
     color: var(--text);
   }
 
-  .grip {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 8px;
-    color: var(--text-faint);
-  }
-
-  .grip svg {
-    width: 6px;
-    height: 10px;
-    fill: currentColor;
-  }
-
   .pick,
   .auto {
     flex: 1;
@@ -2559,6 +2620,41 @@
 
   .bus-lane.selected {
     background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  .grab {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    width: 10px;
+    background: var(--track-color, var(--border-strong));
+    background-image: repeating-linear-gradient(180deg, transparent 0 3px, rgba(0, 0, 0, 0.28) 3px 4px);
+    cursor: grab;
+  }
+
+  .grab:hover {
+    filter: brightness(1.25);
+  }
+
+  .grab:active {
+    cursor: grabbing;
+  }
+
+  .header.master {
+    border-left: 10px solid var(--accent);
+    padding-left: 4px;
+    background: color-mix(in srgb, var(--header-a) 80%, var(--accent) 20%);
+    cursor: default;
+  }
+
+  .ms.fx {
+    font-style: italic;
+  }
+
+  .master-lane {
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
   }
 
   .header.bus {

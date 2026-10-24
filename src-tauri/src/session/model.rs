@@ -288,6 +288,11 @@ pub struct Bus {
     pub sends: Vec<Send>,
     pub effects: EffectChain,
     pub envelopes: Vec<Envelope>,
+    /// Where the bus shows among the tracks in the Editor: below this many
+    /// tracks (0 is above the first). None, or more than there are
+    /// tracks, shows it below the last track. Display only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<u32>,
 }
 
 impl Bus {
@@ -307,6 +312,7 @@ impl Bus {
             sends: Vec::new(),
             effects: EffectChain::default(),
             envelopes: Vec::new(),
+            position: None,
         }
     }
 }

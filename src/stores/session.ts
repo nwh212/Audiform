@@ -86,6 +86,8 @@ export interface BusDoc {
   output: OutputDoc;
   sends: SendDoc[];
   effects: EffectChainDoc;
+  /** Shows below this many tracks in the Editor; missing shows it below the last. */
+  position?: number | null;
   [key: string]: unknown;
 }
 
@@ -337,6 +339,10 @@ export interface BusChanges {
   pan?: number;
   height?: number;
   output?: OutputDoc;
+  /** Shows the bus below this many tracks in the Editor. */
+  position?: number;
+  /** Shows the bus below the last track again. */
+  clear_position?: boolean;
 }
 
 /** An edit the core understands. */

@@ -3,8 +3,8 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Altered Audio Editor.
 
-  Picks a clip color from the clip palette, or the track's color.
-  Escape cancels.
+  Picks a clip or track color from the palette or any custom color, or
+  the default (the track's color for a clip). Escape cancels.
 -->
 <script lang="ts">
   interface Props {
@@ -18,6 +18,7 @@
 
   const { current, onDone, title = "Clip Color", noneLabel = "Use Track Color" }: Props = $props();
   const SWATCHES = ["--clip-1", "--clip-2", "--clip-3", "--clip-4", "--clip-5", "--clip-6"];
+  const custom = $derived(current?.startsWith("#") ? current : "#7fa7d9");
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -35,6 +36,10 @@
         ></button>
       {/each}
     </div>
+    <label class="custom">
+      <span>Other color</span>
+      <input type="color" value={custom} onchange={(e) => onDone(e.currentTarget.value)} />
+    </label>
     <footer>
       <button type="button" class="text" class:on={current === null} onclick={() => onDone("")}>{noneLabel}</button>
       <button type="button" class="text" onclick={() => onDone(null)}>Cancel</button>
@@ -83,6 +88,21 @@
   .swatches button:hover,
   .swatches button.on {
     border-color: #fff;
+  }
+
+  .custom {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: var(--font-size-small);
+  }
+
+  .custom input {
+    width: 48px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    background: none;
   }
 
   footer {
