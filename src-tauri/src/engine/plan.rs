@@ -698,6 +698,17 @@ fn routing_hash(session: &Session) -> u64 {
     mix(u128::from(routed));
     mix(session.space.map_or(0, |s| s.layout as u128 + 1));
     mix(session.space.map_or(0, |s| s.listen as u128));
+    // Automation edits restart playback in place, so they are heard.
+    for envs in session
+        .tracks
+        .iter()
+        .map(|t| &t.envelopes)
+        .chain(session.buses.iter().map(|b| &b.envelopes))
+    {
+        for b in serde_json::to_vec(envs).unwrap_or_default() {
+            mix(u128::from(b));
+        }
+    }
     let output = |o: &crate::session::model::Output| match o {
         crate::session::model::Output::Master => 0,
         crate::session::model::Output::Bus { bus_id } => bus_id.as_u128(),

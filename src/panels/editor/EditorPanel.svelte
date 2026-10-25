@@ -146,6 +146,15 @@
 
   /** Nothing in the session yet and nothing chosen: show a start screen instead of six empty tracks. */
   let startDismissed = $state(false);
+  // A new empty start (the last session closed) shows the start screen again.
+  let startFor: string | null = null;
+  $effect(() => {
+    const id = doc?.id ?? null;
+    if (id !== startFor) {
+      startFor = id;
+      startDismissed = false;
+    }
+  });
   // Only the blank session the app opened with shows the start screen; a
   // new or opened session, or any track or clip added, puts the tracks up.
   const showStart = $derived(!startDismissed && doc != null && session.isScratch(doc));

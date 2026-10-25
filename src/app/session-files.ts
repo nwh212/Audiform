@@ -275,8 +275,10 @@ export class SessionFiles {
       this.d.onSessions?.();
       return true;
     }
+    // The last one closed: back to the empty start, nothing listed.
     const r = await this.d.backend.create();
     await this.replace(r, "New Session", false);
+    this.d.session.markScratch?.();
     this.d.onSessions?.();
     return true;
   }

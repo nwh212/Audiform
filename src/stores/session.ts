@@ -598,6 +598,18 @@ export class SessionStore {
   private launch: { id: string; tracks: string } | null = null;
 
   /**
+   * Treats the open session as the empty one the app starts with: not
+   * listed, not offered for saving, the Editor's start screen showing.
+   * Used when the last open session is closed.
+   */
+  markScratch(): void {
+    const d = this.doc;
+    if (!d || this.filePath !== null) return;
+    this.launch = { id: d.id, tracks: d.tracks.map((t) => t.id).join() };
+    this.notify(d);
+  }
+
+  /**
    * True while the open session is still the blank one the app started
    * with: never saved, its tracks as they were, and nothing in it (files
    * imported into the Files panel do not count). It is not listed, starred

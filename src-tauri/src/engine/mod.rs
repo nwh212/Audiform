@@ -8,6 +8,7 @@
 //! touches the disk. Worker threads prepare audio and hand it over
 //! through lock-free ring buffers; settings arrive as atomics.
 
+pub mod automation;
 pub(crate) mod fx;
 pub mod graph;
 pub mod host;

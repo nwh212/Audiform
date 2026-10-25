@@ -202,11 +202,14 @@ pub fn levels(s: &Session) -> Levels {
             .zip(heard_t)
             .map(|(t, h)| {
                 let sign = if t.polarity_inverted { -1.0 } else { 1.0 };
+                // An automated volume or pan takes the fader's or pan's place.
+                let vol = if super::automation::automates_volume(&t.envelopes) { 0.0 } else { t.volume_db };
+                let pan = if super::automation::automates_pan(&t.envelopes) { 0.0 } else { t.pan };
                 let stereo = t.channels != crate::session::model::ChannelLayout::Mono && !t.mono;
                 let place = (t.output == crate::session::model::Output::Master)
                     .then(|| Place::new(s, t.space.as_ref(), stereo))
                     .flatten();
-                node(h, sign, t.volume_db, t.pan, &t.sends, t.mono, place)
+                node(h, sign, vol, pan, &t.sends, t.mono, place)
             })
             .collect(),
         buses: s
@@ -214,11 +217,13 @@ pub fn levels(s: &Session) -> Levels {
             .iter()
             .zip(heard_b)
             .map(|(b, h)| {
+                let vol = if super::automation::automates_volume(&b.envelopes) { 0.0 } else { b.volume_db };
+                let pan = if super::automation::automates_pan(&b.envelopes) { 0.0 } else { b.pan };
                 let stereo = b.channels != crate::session::model::ChannelLayout::Mono && !b.mono;
                 let place = (b.output == crate::session::model::Output::Master)
                     .then(|| Place::new(s, b.space.as_ref(), stereo))
                     .flatten();
-                node(h, 1.0, b.volume_db, b.pan, &b.sends, b.mono, place)
+                node(h, 1.0, vol, pan, &b.sends, b.mono, place)
             })
             .collect(),
     }
@@ -261,6 +266,8 @@ struct Strip {
     /// The output first, then each send in the session's order.
     routes: Vec<Route>,
     peak: [f32; 2],
+    /// Its volume, pan and effect settings moving over the timeline.
+    auto: Option<super::automation::StripAuto>,
 }
 
 /// Peaks since the last read, 0 to 1 (and above on overs).
@@ -334,6 +341,8 @@ pub struct Graph {
     want_bed: bool,
     /// 3D Space sessions heard on headphones: the bed rendered to two ears.
     binaural: Option<crate::dsp::binaural::Binaural>,
+    /// The timeline frame the next block starts at, for automation.
+    pos: u64,
 }
 
 impl Graph {
@@ -363,6 +372,7 @@ impl Graph {
             .map(|t| Strip {
                 id: t.id,
                 fx: fx(&t.effects),
+                auto: super::automation::StripAuto::new(&t.envelopes, &t.sends, s.sample_rate, rate),
                 ..Strip::default()
             })
             .collect();
@@ -373,6 +383,7 @@ impl Graph {
                     id: b.id,
                     mono: b.channels == ChannelLayout::Mono,
                     fx: fx(&b.effects),
+                    auto: super::automation::StripAuto::new(&b.envelopes, &b.sends, s.sample_rate, rate),
                     ..Strip::default()
                 })
                 .collect()
@@ -578,7 +589,13 @@ impl Graph {
                 .space
                 .filter(|sp| sp.listen == crate::session::model::SpaceListen::Binaural)
                 .map(|sp| crate::dsp::binaural::Binaural::new(sp.layout, rate)),
+            pos: 0,
         }
+    }
+
+    /// Where in the timeline the next block starts (output frames).
+    pub fn set_position(&mut self, frame: u64) {
+        self.pos = frame;
     }
 
     /// 3D Space sessions: speaker channels in the bed (0 otherwise).
@@ -727,7 +744,10 @@ impl Graph {
                     fold_mono(&mut st.input);
                 }
                 self.fill_keys(&mut st.keys, n);
-                run_strip(&mut st);
+                run_strip_at(&mut st, self.pos);
+            }
+            if let Some(a) = st.auto.as_mut().filter(|a| a.moves_level()) {
+                a.fill(self.pos, frames);
             }
             let (from, to) = match node {
                 Node::Track(i) => (&self.applied.tracks[i], &self.levels.tracks[i]),
@@ -750,6 +770,9 @@ impl Graph {
                         )
                     };
                     ramp(&mut scratch, a, b, frames);
+                    if let Some(au) = st.auto.as_ref() {
+                        au.apply(r, &mut scratch);
+                    }
                     if r == 0 {
                         for f in scratch.as_chunks::<2>().0 {
                             st.peak[0] = st.peak[0].max(f[0].abs());
@@ -846,6 +869,7 @@ impl Graph {
             .collect();
         let per = taken.len().div_ceil(threads);
         let position = crate::plugins::instance::block_position();
+        let pos = self.pos;
         let tempo = self.tempo.clone();
         std::thread::scope(|scope| {
             for chunk in taken.chunks_mut(per) {
@@ -855,7 +879,7 @@ impl Graph {
                     crate::plugins::instance::set_block_tempo(Some(tempo));
                     for (i, st) in chunk.iter_mut() {
                         prepare_track(st, &raw[*i][..n]);
-                        run_strip(st);
+                        run_strip_at(st, pos);
                     }
                 });
             }
@@ -909,6 +933,37 @@ fn run_strip(st: &mut Strip) {
     }
 }
 
+/// Runs a strip whose block starts at timeline frame `pos`, moving its
+/// automated effect settings every 256 frames.
+fn run_strip_at(st: &mut Strip, pos: u64) {
+    let lanes = st.auto.as_ref().map_or(0, |a| a.params.len());
+    if lanes == 0 || st.fx.is_none() {
+        run_strip(st);
+        return;
+    }
+    const STEP: usize = 256;
+    std::mem::swap(&mut st.input, &mut st.pre);
+    let (Some(fx), Some(auto)) = (st.fx.as_mut(), st.auto.as_ref()) else {
+        return;
+    };
+    let total = st.pre.len();
+    let mut at = 0;
+    while at < total {
+        let end = (at + STEP * 2).min(total);
+        let frame = pos + (at / 2) as u64;
+        for l in &auto.params {
+            fx.chain.set_param(l.slot, &l.param, f64::from(l.value_at(frame)));
+        }
+        let keys: Vec<(Id, &[f32])> = st
+            .keys
+            .iter()
+            .map(|t| (t.id, &t.buf[at.min(t.buf.len())..end.min(t.buf.len())]))
+            .collect();
+        fx.run_keyed(&mut st.pre[at..end], &keys);
+        at = end;
+    }
+}
+
 /// Multiplies `buf` by a gain moving from `a` to `b` across the block.
 fn ramp(buf: &mut [f32], a: [f32; 2], b: [f32; 2], frames: usize) {
     if a == b {
@@ -949,6 +1004,7 @@ impl Mix {
         while left > 0 && !raw.is_empty() {
             let want = left.min(4_096) as usize;
             crate::plugins::instance::set_block_position(renderer.position() as i64);
+            graph.set_position(renderer.position());
             renderer.render(want, &mut raw);
             graph.process(&raw, &mut sink);
             left -= raw[0].len() as u64 / 2;
@@ -977,6 +1033,7 @@ impl Mix {
         // position) and the tempo there.
         crate::plugins::instance::set_block_position(self.renderer.position() as i64);
         crate::plugins::instance::set_block_tempo(Some(self.graph.tempo().clone()));
+        self.graph.set_position(self.renderer.position());
         self.renderer.render(frames, &mut self.raw);
         self.graph.process(&self.raw, out);
         let n = self.raw[0].len() / 2;

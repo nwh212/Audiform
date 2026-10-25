@@ -94,7 +94,20 @@
     </button>
     <span class="count">{chain.slots.length ? `${chain.slots.length} ${chain.slots.length === 1 ? "effect" : "effects"}` : "No effects"}</span>
   </div>
-  <ol class="slots" class:off={!chain.enabled}>
+  <!-- The wheel here scrolls the tracks, as it does over the rest of the
+       header; this list scrolls by its own scrollbar. -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <ol
+    class="slots"
+    class:off={!chain.enabled}
+    onwheel={(e) => {
+      if (e.ctrlKey || e.altKey || e.shiftKey) return;
+      const tracks = (e.currentTarget as HTMLElement).closest<HTMLElement>(".scroller");
+      if (!tracks) return;
+      e.preventDefault();
+      tracks.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    }}
+  >
     {#each rows as s, i (i)}
       {@const info = s ? byId.get(s.effect) : undefined}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

@@ -171,6 +171,9 @@ pub fn has_loop(s: &Session) -> bool {
 pub fn is_routed(s: &Session) -> bool {
     // 3D Space sessions place every track on the render thread.
     s.space.is_some()
+        // Automation moves levels and settings on the render thread.
+        || s.tracks.iter().any(|t| crate::engine::automation::has_automation(&t.envelopes))
+        || s.buses.iter().any(|b| crate::engine::automation::has_automation(&b.envelopes))
         || crate::dsp::effects::is_active(&s.master.effects)
         || s.tracks
             .iter()
