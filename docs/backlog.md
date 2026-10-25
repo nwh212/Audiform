@@ -453,7 +453,7 @@ Every effect family with the controls testers expect, then multitrack, clips, au
 - Insert video, spot-frame preview while adjusting a clip, video preferences (see the video plan above). Surround output and 5.1 panning are not planned.
 
 ### Export
-- Save all open files as one batch, export a range (whole session, selection, or between markers), include markers and other metadata (built for files), export a session with copies of its media in a folder (collect and save). Not built, except as noted. OMF and Final Cut interchange export is not planned for now: they are large specifications that are hard to verify without the target programs.
+- Save all open files as one batch, export a range (whole session, selection, or between markers), include markers and other metadata (built for files), export a session with copies of its media in a folder (collect and save: built 2026-10-25 as File > Collect Session Media and Settings > Session Media). Not built, except as noted. OMF and Final Cut interchange export is not planned for now: they are large specifications that are hard to verify without the target programs.
 - Format settings: compression (speed against size), constant or variable bitrate, and 16.8 and 24.0 floating point options. Bitrate choices are built for MP3 and AAC; variable bitrate and the float options are not.
 - Close Unused Media: built as Remove Unused Files.
 

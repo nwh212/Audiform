@@ -117,6 +117,7 @@ describe("menu model", () => {
       "view.time.samples",
       "clip.reveal",
       "file.close-unused",
+      "file.collect-media",
       "edit.select-track-clips",
       "file.new-session",
       "file.open",

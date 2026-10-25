@@ -61,6 +61,14 @@ export interface AppSettings {
   /** Keep older copies of the session file in a Backups folder when saving. */
   backups: boolean;
   backupCount: number;
+  /** Copy audio imported into a saved session into its folder: always, ask each time, or never. */
+  copyMedia: "always" | "ask" | "never";
+  /** The folder in the session folder that copies go into. */
+  mediaFolder: string;
+  /** When saving, copy in any audio the session uses from outside its folder. */
+  collectOnSave: boolean;
+  /** Leave files from libraries where they are: libraries keep their own copies. */
+  leaveLibraryFiles: boolean;
   /** Seconds counted down before recording starts; 0 starts at once. */
   countdownSec: number;
   /** Name new markers start with, numbered after it. */
@@ -117,6 +125,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   meterRedDb: -3,
   backups: false,
   backupCount: 5,
+  copyMedia: "always",
+  mediaFolder: "Audio",
+  collectOnSave: true,
+  leaveLibraryFiles: true,
   countdownSec: 0,
   markerName: "Marker",
   timecodeFps: 30,
@@ -189,6 +201,10 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     ),
     backups: bool(o.backups, d.backups),
     backupCount: Math.round(num(o.backupCount, 1, 50, d.backupCount)),
+    copyMedia: o.copyMedia === "ask" || o.copyMedia === "never" ? o.copyMedia : d.copyMedia,
+    mediaFolder: typeof o.mediaFolder === "string" && o.mediaFolder.replace(/[\\/:*?"<>|.]/g, "").trim() ? o.mediaFolder.replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 60) : d.mediaFolder,
+    collectOnSave: bool(o.collectOnSave, d.collectOnSave),
+    leaveLibraryFiles: bool(o.leaveLibraryFiles, d.leaveLibraryFiles),
     countdownSec: Math.round(num(o.countdownSec, 0, 10, d.countdownSec)),
     markerName:
       typeof o.markerName === "string" && o.markerName.trim()

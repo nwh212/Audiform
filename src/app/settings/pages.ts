@@ -27,6 +27,7 @@ export const PAGES = [
   "Audio Devices",
   "Channel Routing",
   "Autosave",
+  "Session Media",
   "Editing",
   "Effects",
   "Cache and Files",

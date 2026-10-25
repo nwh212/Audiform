@@ -77,6 +77,19 @@ export interface AudioInfo {
 }
 
 /** Expands folders into the audio files inside them. Files pass through. */
+export interface CopyInResult {
+  /** Where each file is now, in the order given. */
+  paths: string[];
+  copied: number;
+  reused: number;
+  failed: string[];
+}
+
+/** Copies audio into `folder` in the folder of the session saved at `session`. */
+export function mediaCopyIn(session: string, folder: string, paths: string[]): Promise<CopyInResult> {
+  return invoke<CopyInResult>("media_copy_in", { session, folder, paths });
+}
+
 export function expandMediaPaths(paths: string[]): Promise<string[]> {
   return invoke<string[]>("media_expand", { paths });
 }

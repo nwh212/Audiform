@@ -97,6 +97,9 @@ export class MediaPool {
   private readonly newId: () => string;
   private readonly ignoreCase: boolean;
 
+  /** Where imported files should be used from (a copy in the session folder, say). */
+  private placer: ((paths: string[]) => Promise<string[]>) | null = null;
+
   constructor(private readonly deps: MediaPoolDeps) {
     this.concurrency = Math.max(1, deps.concurrency ?? 4);
     this.newId = deps.newId ?? defaultId;
@@ -126,14 +129,31 @@ export class MediaPool {
   }
 
   /**
+   * Sets the step that decides where newly imported files are used from:
+   * it gets the files not listed yet and returns a path for each, for
+   * example a copy in the session folder. Null uses them where they are.
+   */
+  setPlacer(fn: ((paths: string[]) => Promise<string[]>) | null): void {
+    this.placer = fn;
+  }
+
+  /**
    * Adds files and folders as one undoable step. Folders are searched
    * for audio. Files already in the list are skipped. New files are
    * selected and measured in the background.
    */
   async importPaths(paths: readonly string[], runner: CommandRunner): Promise<ImportResult> {
     if (paths.length === 0) return { added: 0, duplicates: 0, ids: [] };
-    const expanded = await this.deps.expand([...paths]);
+    let expanded = await this.deps.expand([...paths]);
     const present = new Map(this.order.map((id) => [pathKey(this.known.get(id)!.path, this.ignoreCase), id]));
+    if (this.placer) {
+      const fresh = [...new Set(expanded.filter((p) => !present.has(pathKey(p, this.ignoreCase))))];
+      if (fresh.length) {
+        const placed = await this.placer(fresh);
+        const to = new Map(fresh.map((p, i) => [p, placed[i] ?? p]));
+        expanded = expanded.map((p) => to.get(p) ?? p);
+      }
+    }
     const fresh: MediaItem[] = [];
     const all: string[] = [];
     let duplicates = 0;
@@ -234,6 +254,31 @@ export class MediaPool {
     }
     this.emit();
     this.pump();
+  }
+
+  /**
+   * Points files at new paths (their copies in the session folder) as a
+   * command not run yet, to combine with the session's own change into
+   * one undo step. Null when nothing changes.
+   */
+  repathCommand(changes: readonly { id: string; path: string }[], label: string): Command | null {
+    const list = changes.filter((c) => this.known.has(c.id) && this.known.get(c.id)!.path !== c.path);
+    if (!list.length) return null;
+    const back = list.map((c) => ({ id: c.id, path: this.known.get(c.id)!.path }));
+    return {
+      label,
+      do: () => this.repath(list),
+      undo: () => this.repath(back),
+    };
+  }
+
+  private repath(changes: readonly { id: string; path: string }[]): void {
+    for (const { id, path } of changes) {
+      const it = this.known.get(id);
+      if (!it) continue;
+      this.known.set(id, { ...it, path, name: fileName(path), info: it.info ? { ...it.info, path, name: fileName(path) } : null });
+    }
+    this.emit();
   }
 
   /** Ready files, for saving with the session. */

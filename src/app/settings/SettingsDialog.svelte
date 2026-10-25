@@ -114,9 +114,10 @@
     if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
+    else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
     else if (page === "Playback and Recording") Object.assign(d.app, { meterYellowDb: def.meterYellowDb, meterRedDb: def.meterRedDb, meterSpeed: def.meterSpeed });
   }
-  const resettable = $derived(["General", "Appearance", "Autosave", "Playback and Recording"].includes(page));
+  const resettable = $derived(["General", "Appearance", "Autosave", "Session Media", "Playback and Recording"].includes(page));
 </script>
 
 <svelte:window
@@ -238,6 +239,19 @@
             <label class="row" class:dim={!d.app.backups}>Keep the newest <input type="number" min="1" max="50" step="1" bind:value={d.app.backupCount} disabled={!d.app.backups} /> copies</label>
             <p class="note">Each save first copies the previous file into a Backups folder beside the session, named with the date and time.</p>
           </fieldset>
+        {:else if page === "Session Media"}
+          <p class="note">A session can keep every audio file it uses in its own folder, so the folder can be moved, backed up or handed to someone else whole. Your original files are never moved or changed.</p>
+          <fieldset>
+            <legend>When importing audio into a saved session</legend>
+            <label><input type="radio" name="copy-media" value="always" bind:group={d.app.copyMedia} /> Copy it into the session folder</label>
+            <label><input type="radio" name="copy-media" value="ask" bind:group={d.app.copyMedia} /> Ask each time</label>
+            <label><input type="radio" name="copy-media" value="never" bind:group={d.app.copyMedia} /> Leave it where it is</label>
+          </fieldset>
+          <label class="row">Copies go into <input type="text" maxlength="60" bind:value={d.app.mediaFolder} /> in the session folder</label>
+          <label class:dim={d.app.copyMedia === "never"}><input type="checkbox" bind:checked={d.app.collectOnSave} disabled={d.app.copyMedia === "never"} /> When saving, copy in audio still outside the session folder</label>
+          <p class="note">This catches files imported before the session was first saved, and working files such as untitled mixdowns. Recordings already go into the session folder.</p>
+          <label><input type="checkbox" bind:checked={d.app.leaveLibraryFiles} /> Leave library files where they are</label>
+          <p class="note">Libraries keep their own copies. Untick this to copy library audio in too, so the session folder works without the library. File &gt; Collect Session Media copies everything in at any time.</p>
         {:else if page === "Editing"}
           <label class="off"><input type="checkbox" disabled /> Crossfade the edges of cuts and deletes in the Waveform editor <span class="why">Planned with the next Waveform editor batch.</span></label>
           <label class="off"><input type="number" disabled value="1" /> Files processed at once in Batch Convert <span class="why">One at a time for now.</span></label>

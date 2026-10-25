@@ -66,6 +66,7 @@ pub fn run() {
             commands::media::media_unzip,
             commands::media::media_pick_folder,
             commands::media::media_reveal,
+            commands::media::media_copy_in,
             commands::peaks::peaks_ensure,
             commands::peaks::peaks_level,
             commands::peaks::media_frames,

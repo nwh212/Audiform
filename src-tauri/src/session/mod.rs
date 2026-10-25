@@ -4,6 +4,7 @@
 
 //! Session data model, file formats, loading, saving, and migrations.
 
+pub mod collect;
 pub mod document;
 pub mod file;
 pub mod host_profile;

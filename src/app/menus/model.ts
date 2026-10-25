@@ -93,6 +93,7 @@ export const MENUS: readonly Menu[] = [
       item("file.close", "Close"),
       item("file.close-all", "Close All"),
       item("file.close-unused", "Close Unused Media"),
+      item("file.collect-media", "Collect Session Media"),
       sep,
       sub("Export", [
         item("file.export.mixdown", "Session Mixdown..."),

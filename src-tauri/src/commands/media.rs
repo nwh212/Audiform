@@ -114,3 +114,22 @@ pub fn media_reveal(path: PathBuf) -> Result<(), String> {
     }
     tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
 }
+
+/// Copies audio files into the session's folder (`folder` beside
+/// `session`), leaving files already inside the session folder alone.
+/// Returns where each file is now.
+#[tauri::command]
+pub async fn media_copy_in(
+    session: PathBuf,
+    folder: String,
+    paths: Vec<PathBuf>,
+) -> Result<crate::session::collect::CopyResult, String> {
+    use crate::session::collect;
+    spawn_blocking(move || {
+        let dir = collect::media_dir(&session, &folder);
+        let keep = session.parent().unwrap_or(Path::new("")).to_path_buf();
+        collect::copy_in(&paths, &dir, &keep)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}

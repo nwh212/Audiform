@@ -114,6 +114,8 @@
   import { newTrackNames } from "./track-names";
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
   import { CompoundCommand } from "../commands/compound";
+  import { repointPlan, toCopy } from "./session-media";
+  import { pathsIgnoreCase } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
@@ -121,6 +123,7 @@
     sessionClearAutosave,
     sessionDiscardRecovery,
     sessionNew,
+    mediaCopyIn,
     sessionOpen,
     sessionPickOpen,
     filePickOpen,
@@ -1447,6 +1450,54 @@
     });
   }
 
+  // Keeping the session's audio in its own folder (Settings > Session Media).
+  const ignorePathCase = pathsIgnoreCase();
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+  /** Copies `list` into the session folder; maps each path to where it is now. */
+  async function copyIntoSession(list: string[], sessionFile: string): Promise<Map<string, string>> {
+    if (!list.length) return new Map();
+    const r = await mediaCopyIn(sessionFile, settings.current.mediaFolder, list);
+    if (r.failed.length) showNotice(`${plural(r.failed.length, "file")} could not be copied into the session folder and stay where they are: ${r.failed.slice(0, 3).join("; ")}`);
+    return new Map(list.map((p, i) => [p, r.paths[i] ?? p]));
+  }
+
+  mediaPool.setPlacer(async (paths) => {
+    const file = session.path;
+    const s = settings.current;
+    if (!file || s.copyMedia === "never") return paths;
+    const list = toCopy(paths, file, s.leaveLibraryFiles ? libraries.current.libs.map((l) => l.dir) : [], ignorePathCase);
+    if (!list.length) return paths;
+    if (s.copyMedia === "ask") {
+      const v = await ask("Copy into the session folder?", `Copy ${plural(list.length, "file")} into the "${s.mediaFolder}" folder beside this session? The session then uses the copies, and the originals stay where they are.`, [
+        { label: "Copy", value: "copy", primary: true },
+        { label: "Leave Where They Are", value: "leave" },
+      ]);
+      if (v !== "copy") return paths;
+    }
+    const moved = await copyIntoSession(list, file);
+    return paths.map((p) => moved.get(p) ?? p);
+  });
+
+  /**
+   * Copies the audio the session uses from outside its folder into it,
+   * and points the session and the Files panel at the copies as one
+   * undoable step. `everything` includes library files.
+   */
+  async function collectMedia(sessionFile: string, everything: boolean): Promise<number> {
+    const doc = session.current;
+    if (!doc) return 0;
+    const pool = mediaPool.current.items.map((it) => ({ id: it.id, path: it.path }));
+    const leave = everything || !settings.current.leaveLibraryFiles ? [] : libraries.current.libs.map((l) => l.dir);
+    const list = toCopy([...doc.media.map((m) => m.path), ...pool.map((p) => p.path)], sessionFile, leave, ignorePathCase);
+    const moved = await copyIntoSession(list, sessionFile);
+    const plan = repointPlan(doc.media, pool, moved, ignorePathCase);
+    const label = "Collect Session Media";
+    const parts = [...(plan.ops.length ? [session.command(label, { op: "batch", ops: plan.ops })] : []), ...[mediaPool.repathCommand(plan.pool, label)].filter((c) => c !== null)];
+    if (parts.length) await sessionHistory.execute(new CompoundCommand(label, parts));
+    return new Set([...plan.pool.map((p) => p.path), ...plan.ops.flatMap((o) => (o.op === "set_media" ? [o.media.path] : []))]).size;
+  }
+
   const KEY_RECENT = "sessions.recent";
   const KEY_EDITOR = "editor.settings";
 
@@ -1492,6 +1543,16 @@
     },
     notice: (t) => showNotice(t),
     libraries: () => libraries.current.libs.map((l) => l.dir),
+    beforeSave: async (target) => {
+      const s = settings.current;
+      if (!s.collectOnSave || s.copyMedia === "never") return;
+      try {
+        const n = await collectMedia(target, false);
+        if (n) showNotice(`Copied ${plural(n, "file")} into the session folder.`);
+      } catch (e) {
+        showError(e);
+      }
+    },
     onReplaced: (doc) => {
       editor.selectTrack(null);
       // Reopen the libraries this session uses.
@@ -4001,6 +4062,17 @@
         },
         enabled: () => editor.current().selectedClips.size > 0,
         reason: () => "Select a clip first.",
+      }),
+      actions.register({
+        id: "file.collect-media",
+        run: async () => {
+          const file = session.path;
+          if (!file) return;
+          const n = await collectMedia(file, true);
+          showNotice(n ? `Copied ${plural(n, "file")} into the session folder. The session now uses the copies.` : "Every file is already in the session folder.");
+        },
+        enabled: () => !!session.path && mediaPool.size + (session.current?.media.length ?? 0) > 0,
+        reason: () => (session.path ? "No audio in the session." : "Save the session first: its audio is copied into the folder beside it."),
       }),
       actions.register({
         id: "file.close-unused",

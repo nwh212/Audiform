@@ -54,6 +54,8 @@ export interface SessionFilesDeps {
   onReplaced?(doc: SessionDoc): void;
   /** Library folders to record with the session. */
   libraries?(): string[];
+  /** Runs just before saving to `target` (the session file): copies audio into its folder. */
+  beforeSave?(target: string): Promise<void>;
 }
 
 export { isBlank } from "../stores/session";
@@ -213,6 +215,8 @@ export class SessionFiles {
   }
 
   private async saveTo(path: string | null): Promise<boolean> {
+    const target = path ?? this.d.session.path;
+    if (target && this.d.beforeSave) await this.d.beforeSave(target);
     const r = await this.d.backend.save(path, this.mediaRefs(), this.d.libraries?.() ?? []);
     this.d.session.set(r.session, r.path);
     await this.d.stack.markSaved();
