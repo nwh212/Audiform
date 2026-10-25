@@ -42,6 +42,8 @@ export interface EffectSlotDoc {
   sidechain?: string | null;
   /** A VST3 plug-in's own settings (set in its window), base64. */
   plugin_state?: string | null;
+  /** A built-in effect's own data, JSON text: the Amp Model's capture and cabinet. */
+  data?: string | null;
   /** Which numbered slot it shows in (0 first), so a chain can leave gaps. Missing follows the one before. */
   position?: number | null;
 }

@@ -420,6 +420,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         for (k, v) in print_params(&print, 1.0) {
@@ -476,6 +477,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         for (k, v) in print_params(&print, 0.5) {
@@ -523,6 +525,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         let mut fx = build(&slot, 48_000).unwrap();

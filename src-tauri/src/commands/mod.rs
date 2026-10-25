@@ -6,6 +6,7 @@
 //! core modules, return plain data.
 
 pub mod align;
+pub mod amp;
 pub mod app;
 pub mod batch;
 pub mod browse;

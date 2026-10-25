@@ -267,6 +267,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         let flat = response(&slot("altaudio.curve_eq", &[]), 32);

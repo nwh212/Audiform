@@ -93,6 +93,7 @@ fn slot(params: &[(&str, f64)]) -> EffectSlot {
         preset: None,
         sidechain: None,
         plugin_state: None,
+        data: None,
         position: None,
     }
 }

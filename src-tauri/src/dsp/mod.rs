@@ -10,6 +10,7 @@ pub mod effects;
 pub mod elliptic;
 pub mod meters;
 pub mod musicfit;
+pub mod nam;
 pub mod spectral;
 pub mod stft;
 pub mod stretch;

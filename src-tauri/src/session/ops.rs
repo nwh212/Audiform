@@ -108,7 +108,7 @@ pub struct TrackChanges {
     pub output: Option<Output>,
     /// MIDI tracks: the instrument plug-in that plays the notes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instrument: Option<EffectSlot>,
+    pub instrument: Option<Box<EffectSlot>>,
     /// MIDI tracks: takes the instrument out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_instrument: Option<bool>,
@@ -644,10 +644,10 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
                 let new = if changes.clear_instrument == Some(true) {
                     None
                 } else {
-                    changes.instrument.clone()
+                    changes.instrument.as_deref().cloned()
                 };
                 match std::mem::replace(&mut t.instrument, new) {
-                    Some(v) => old.instrument = Some(v),
+                    Some(v) => old.instrument = Some(Box::new(v)),
                     None => old.clear_instrument = Some(true),
                 }
             }
@@ -1584,6 +1584,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         roundtrip(
@@ -1591,7 +1592,7 @@ mod tests {
             Op::SetTrack {
                 id: midi,
                 changes: TrackChanges {
-                    instrument: Some(inst.clone()),
+                    instrument: Some(Box::new(inst.clone())),
                     ..TrackChanges::default()
                 },
             },
@@ -1609,7 +1610,7 @@ mod tests {
         let wrong = Op::SetTrack {
             id: audio,
             changes: TrackChanges {
-                instrument: Some(inst),
+                instrument: Some(Box::new(inst)),
                 ..TrackChanges::default()
             },
         };
@@ -1719,6 +1720,7 @@ mod tests {
             preset: None,
             sidechain: Some(voice),
             plugin_state: None,
+            data: None,
             position: None,
         });
         roundtrip(
@@ -1871,6 +1873,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                data: None,
                 position: None,
             });
         }
@@ -2699,6 +2702,7 @@ mod tests {
                 preset: None,
                 sidechain: None,
                 plugin_state: None,
+                data: None,
                 position: None,
             });
         let pt = |position, value| EnvelopePoint {

@@ -288,6 +288,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         });
         c
@@ -384,6 +385,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         });
         let mut c = ChainProcessor::new(&lim, 48_000).unwrap();

@@ -317,6 +317,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         Params::resolve(&info, &slot.params)

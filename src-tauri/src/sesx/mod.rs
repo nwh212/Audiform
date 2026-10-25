@@ -141,6 +141,7 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
                     preset: None,
                     sidechain: None,
                     plugin_state: None,
+                    data: None,
                     position: u32::try_from(index)
                         .ok()
                         .filter(|i| (*i as usize) < MAX_SLOTS),
@@ -175,6 +176,7 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
             preset: None,
             sidechain: None,
             plugin_state: state,
+            data: None,
             position: u32::try_from(index)
                 .ok()
                 .filter(|i| (*i as usize) < MAX_SLOTS),

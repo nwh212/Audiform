@@ -967,6 +967,11 @@ pub struct EffectSlot {
     /// plug-in saved them, base64. Only on plug-in slots (`vst3:` effects).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin_state: Option<String>,
+    /// A built-in effect's own data that is not a setting, as JSON text:
+    /// the Amp Model's capture and cabinet. Saved with the session and in
+    /// presets, so they never depend on a file elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
     /// Which of the numbered slots it shows in (0 is the first), so a chain
     /// can leave gaps. Effects still run in list order. None follows the
     /// one before.

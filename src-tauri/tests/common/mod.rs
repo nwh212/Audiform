@@ -42,6 +42,7 @@ pub fn effect_chain() -> EffectChain {
             preset: Some("Voice leveler".into()),
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         }],
     }

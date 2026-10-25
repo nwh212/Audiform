@@ -4,6 +4,7 @@ Code ported or adapted from other projects is credited here. Each entry lists th
 
 | Project | Source file | License | What was used | Our file |
 | --- | --- | --- | --- | --- |
+| NeuralAmpModelerCore (sdatkinson/NeuralAmpModelerCore, Copyright (c) 2023 Steven Atkinson) | `NAM/wavenet/model.cpp`, `NAM/lstm.cpp`, `NAM/conv1d.cpp`, `NAM/dsp.cpp`, `NAM/activations.h` | MIT | How a `.nam` capture's weights are laid out and played (the WaveNet and LSTM forward passes, written fresh in Rust), and its quick tanh formula, so captures sound as they do in that project's plug-in. Our output was checked against theirs on their example captures (largest difference about 6e-6). | `src-tauri/src/dsp/nam.rs` |
 | `vst3` crate (coupler-rs/vst3-rs, Copyright (c) Micah Johnston) | `examples/gain.rs` | MIT or Apache-2.0 | The example gain plug-in, as the base of a test plug-in (look-ahead, saved settings and a crash switch added). Used by the plug-in tests only; never shipped. | `src-tauri/plughost/testplug/src/lib.rs` |
 
 ## Published formulas

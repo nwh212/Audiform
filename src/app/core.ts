@@ -550,6 +550,21 @@ export function transportStop(): Promise<number | null> {
   return invoke<number | null>("transport_stop");
 }
 
+/** Shows an Open dialog for an amp capture (.nam) or a cabinet response; null on cancel. */
+export function ampPick(kind: "model" | "ir"): Promise<string | null> {
+  return invoke<string | null>("amp_pick", { kind });
+}
+
+/** Reads a capture into an Amp Model slot's data; returns the new data. */
+export function ampLoadModel(path: string, data: string | null): Promise<string> {
+  return invoke<string>("amp_load_model", { path, data });
+}
+
+/** Reads a cabinet response into an Amp Model slot's data; returns the new data. */
+export function ampLoadIr(path: string, data: string | null): Promise<string> {
+  return invoke<string>("amp_load_ir", { path, data });
+}
+
 /** What the metronome plays, as the core takes it. */
 export interface MetronomeCore {
   on: boolean;

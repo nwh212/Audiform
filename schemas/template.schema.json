@@ -398,6 +398,13 @@
       "description": "Scaffolding (P5): one effect in a Voice Chain.",
       "type": "object",
       "properties": {
+        "data": {
+          "description": "A built-in effect's own data that is not a setting, as JSON text:\nthe Amp Model's capture and cabinet. Saved with the session and in\npresets, so they never depend on a file elsewhere.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "effect": {
           "description": "Internal effect id, for example `altaudio.parametric_eq`.",
           "type": "string"

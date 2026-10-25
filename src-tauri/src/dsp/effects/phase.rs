@@ -257,6 +257,7 @@ mod tests {
             preset: None,
             sidechain: None,
             plugin_state: None,
+            data: None,
             position: None,
         };
         PhaseRotate::new(&Params::resolve(&info, &slot.params), 48_000)
