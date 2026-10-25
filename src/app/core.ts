@@ -274,6 +274,16 @@ export function midiAudition(trackId: string, pitch: number, velocity: number, s
   return invoke<boolean>("midi_audition", { trackId, pitch, velocity, seconds });
 }
 
+/**
+ * The spectrum of what is playing (or, with `at`, of the audio just
+ * before that spot of the session, or of the Waveform editor's file with
+ * `wave`): `points` levels in dBFS from 20 Hz to 20 kHz, even in pitch.
+ */
+export async function scopeSpectrum(size: number, points: number, at: number | null, wave: boolean): Promise<Float32Array> {
+  const bytes = rawBytes(await invoke<unknown>("scope_spectrum", { size, points, at: at === null ? null : Math.max(0, Math.round(at)), wave }));
+  return new Float32Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 4));
+}
+
 /** What the Phase Wheel compares. */
 export type ScopeSignal = "left" | "right" | "mid" | "side";
 
@@ -472,6 +482,8 @@ export interface SesxReport {
   missingPlugins?: string[];
   /** Clips with a time stretch or pitch change. */
   stretched?: number;
+  /** The other editor's built-in effects brought in as ours (its per-frequency phase shifter as Phase Curve). */
+  converted?: number;
   missingFiles: string[];
 }
 
@@ -696,9 +708,14 @@ export async function audioInputs(asio?: boolean): Promise<AudioInput[]> {
 }
 
 /** The spectrogram of the Waveform editor's file between two samples: `rows` rows of `columns` bytes, top row highest. */
-export async function waveSpectrogram(start: number, end: number, columns: number, rows: number): Promise<Uint8Array> {
-  const buf = await invoke<ArrayBuffer>("wave_spectrogram", { start, end, columns, rows });
-  return new Uint8Array(buf);
+/**
+ * The spectrogram of `start..end`. `hz` (optional) gives each row's edges
+ * from the top down, one more than `rows`, for a zoomed or linear axis;
+ * `fft` the analysis frame length (resolution).
+ */
+export async function waveSpectrogram(start: number, end: number, columns: number, rows: number, hz?: number[], fft?: number): Promise<Uint8Array> {
+  const buf = await invoke<ArrayBuffer>("wave_spectrogram", { start, end, columns, rows, hz: hz ?? null, fft: fft ?? null });
+  return rawBytes(buf);
 }
 
 export interface SpectralResult {

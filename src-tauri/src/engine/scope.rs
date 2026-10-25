@@ -213,6 +213,44 @@ pub fn analyse(frames: &[[f32; 2]], a: Signal, b: Signal, rate: u32) -> Phase {
     Phase { correlation, bins }
 }
 
+/// The level of `frames` (left and right averaged) at `points`
+/// frequencies spaced evenly in pitch from 20 Hz to 20 kHz, in dBFS
+/// (a full-scale sine reads about 0). Each point takes the loudest
+/// analysis bin around it, so narrow peaks still show.
+pub fn spectrum(frames: &[[f32; 2]], rate: u32, points: usize) -> Vec<f32> {
+    let n = frames.len();
+    let points = points.clamp(2, 2048);
+    if n < 64 {
+        return vec![-120.0; points];
+    }
+    let mut buf: Vec<f32> = Vec::with_capacity(n);
+    let mut sum = 0f32;
+    for (i, f) in frames.iter().enumerate() {
+        let w = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / n as f32).cos();
+        sum += w;
+        buf.push((f[0] + f[1]) * 0.5 * w);
+    }
+    let fft = RealFftPlanner::<f32>::new().plan_fft_forward(n);
+    let mut out = fft.make_output_vec();
+    if fft.process(&mut buf, &mut out).is_err() {
+        return vec![-120.0; points];
+    }
+    // A full-scale sine peaks at sum / 2 in its bin.
+    let full = (sum / 2.0).max(1e-9);
+    let hz_per_bin = rate.max(1) as f32 / n as f32;
+    let span = (HIGH_HZ / LOW_HZ).ln();
+    (0..points)
+        .map(|k| {
+            let f0 = LOW_HZ * ((k as f32 - 0.5) / (points - 1) as f32 * span).exp();
+            let f1 = LOW_HZ * ((k as f32 + 0.5) / (points - 1) as f32 * span).exp();
+            let b0 = ((f0 / hz_per_bin).floor() as usize).clamp(1, out.len() - 1);
+            let b1 = ((f1 / hz_per_bin).ceil() as usize).clamp(b0 + 1, out.len());
+            let m = out[b0..b1].iter().fold(0f32, |a, c| a.max(c.norm()));
+            (20.0 * (m / full).max(1e-6).log10()).max(-120.0)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +310,20 @@ mod tests {
         // Mid against side of an in-phase signal: side is silent.
         let ms = analyse(&tone(4096, 0.0), Signal::Mid, Signal::Side, 48_000);
         assert_eq!(ms.correlation, 0.0);
+    }
+
+    #[test]
+    fn the_spectrum_peaks_at_a_tone() {
+        // 64 cycles over 4,096 frames at 48 kHz: 750 Hz, at -6 dBFS.
+        let s = spectrum(&tone(4096, 0.0), 48_000, 200);
+        let (i, db) = s.iter().enumerate().fold(
+            (0, f32::MIN),
+            |m, (i, v)| if *v > m.1 { (i, *v) } else { m },
+        );
+        let hz = LOW_HZ * (i as f32 / 199.0 * (HIGH_HZ / LOW_HZ).ln()).exp();
+        assert!((hz / 750.0).log2().abs() < 0.05, "peak at {hz}");
+        assert!((db + 6.0).abs() < 1.5, "level {db}");
+        assert!(s[0] < -60.0, "quiet far from the tone");
     }
 
     #[test]

@@ -64,24 +64,46 @@ pub fn spectrogram(
     columns: usize,
     rows: usize,
 ) -> Vec<u8> {
+    let nyquist = rate as f32 / 2.0;
+    let hz: Vec<f32> = (0..=rows)
+        .map(|r| freq_at(1.0 - r as f32 / rows.max(1) as f32, nyquist))
+        .collect();
+    spectrogram_rows(mono, origin, rate, start, end, columns, &hz, FFT_SIZE)
+}
+
+/// The same with the frequency axis given row by row: `hz` holds each
+/// row's edges from the top down (one more than the rows), so the view
+/// can show any range on any scale. `n` is the frame length (a power of
+/// two): longer frames resolve frequency finer and time coarser.
+#[allow(clippy::too_many_arguments)]
+pub fn spectrogram_rows(
+    mono: &[f32],
+    origin: i64,
+    rate: u32,
+    start: u64,
+    end: u64,
+    columns: usize,
+    hz: &[f32],
+    n: usize,
+) -> Vec<u8> {
+    let rows = hz.len().saturating_sub(1);
     let mut out = vec![0u8; columns * rows];
     if columns == 0 || rows == 0 || end <= start {
         return out;
     }
-    let n = FFT_SIZE;
+    let n = n.clamp(256, 32_768).next_power_of_two();
     let fft = Fft::new(n);
     let win = hann(n);
     let mut frame = vec![0f32; n];
     let mut spec = vec![Complex32::new(0.0, 0.0); n / 2 + 1];
     let mut mags = vec![0f32; n / 2 + 1];
-    let nyquist = rate as f32 / 2.0;
     let bin_hz = rate as f32 / n as f32;
     // Bin ranges per row, top row first.
-    let edges: Vec<(usize, usize)> = (0..rows)
-        .map(|r| {
-            let hi = freq_at(1.0 - r as f32 / rows as f32, nyquist);
-            let lo = freq_at(1.0 - (r + 1) as f32 / rows as f32, nyquist);
-            let b0 = (lo / bin_hz).floor() as usize;
+    let edges: Vec<(usize, usize)> = hz
+        .windows(2)
+        .map(|w| {
+            let (hi, lo) = (w[0].max(w[1]), w[0].min(w[1]));
+            let b0 = (lo / bin_hz).floor().max(0.0) as usize;
             let b1 = ((hi / bin_hz).ceil() as usize).max(b0 + 1);
             (b0.min(n / 2), b1.min(n / 2 + 1))
         })

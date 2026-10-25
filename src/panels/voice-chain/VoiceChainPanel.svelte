@@ -15,11 +15,11 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
+  import Knob from "../../app/Knob.svelte";
   import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
-  import { defaultTrackColor } from "../editor/timeline";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
@@ -54,6 +54,9 @@
   } from "./chain";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import ResponseGraph from "./ResponseGraph.svelte";
+  import EqGraph from "./EqGraph.svelte";
+  import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
+  import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
   import { dropEdit, effectMenu, ownerKey, slotOver, startSlotDrag, type SlotSpot } from "./slot-drag";
@@ -182,22 +185,6 @@
   const onTrackTab = $derived(!inWave && tab === "track");
   const bus = $derived(onTrackTab ? doc?.buses?.find((b) => b.id === ownerId) : undefined);
   const onMaster = $derived(onTrackTab && !!doc && ownerId === MASTER_ID);
-  /**
-   * The color of whatever the panel is working on, as CSS: the clip's
-   * (or its track's) on Clip Effects, the track's or bus's on Track
-   * Effects, the accent for the master. None in the Waveform editor.
-   */
-  const tint = $derived.by((): string | null => {
-    if (inWave || !doc) return null;
-    const css = (c: string) => (c.startsWith("--") ? `var(${c})` : c);
-    const tracks = doc.tracks;
-    const trackColor = (t: typeof track) => (t ? css(t.color ?? defaultTrackColor(Math.max(0, tracks.indexOf(t)))) : null);
-    if (tab === "clip") return clip?.color ? css(clip.color) : trackColor(clipTrack ?? track);
-    if (onMaster) return "var(--accent)";
-    if (bus) return css(bus.color ?? "--clip-3");
-    return trackColor(track);
-  });
-
   // Tell the Editor whose chain this is, so it can mark that row.
   $effect(() => {
     chainTarget.set(onTrackTab ? (onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null)) : null);
@@ -458,6 +445,16 @@
     } else live(apply);
   }
 
+  /** Several controls of one effect moved together (the EQ graph's nodes); one undoable step on release. */
+  function dragParams(s: EffectSlotDoc, changes: [EffectParamInfo, number][], label: string, done: boolean) {
+    const id = s.id;
+    const apply = () => commit(label, changes.reduce((c, [p, v]) => setParam(c, id, p, v), chain));
+    if (done) {
+      settle();
+      apply();
+    } else live(apply);
+  }
+
   /** Input, output and mix: the same, on the chain itself. */
   function dragChain(key: "input_gain_db" | "output_gain_db" | "mix", label: string, shownValue: number, value: number) {
     draft = { key: `chain.${key}`, value: shownValue };
@@ -531,7 +528,7 @@
   };
 </script>
 
-<section class="vc" class:tinted={!!tint} style:--vc-tint={tint} aria-label="Voice Chain">
+<section class="vc" aria-label="Voice Chain">
   <div class="tabs" role="tablist" hidden={inWave}>
     <button type="button" role="tab" aria-selected={tab === "clip"} class:on={tab === "clip"} onclick={() => setTab("clip")}>Clip Effects</button>
     <button type="button" role="tab" aria-selected={tab === "track"} class:on={tab === "track"} onclick={() => setTab("track")}>Track Effects</button>
@@ -682,7 +679,18 @@
         </header>
         <div class="editor">
       {#if winSlot && winInfo}
-                {#if GRAPHED.has(winSlot.effect)}
+                {#if winSlot.effect === "altaudio.parametric_eq"}
+          <EqGraph
+            slot={winSlot}
+            info={winInfo}
+            playing={!!ts?.playing}
+            playhead={ts?.playing ? ts.position : ((inWave ? waveDoc : doc)?.view.playhead ?? 0)}
+            wave={inWave}
+            onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
+          />
+        {:else if winSlot.effect === PHASE_CURVE}
+          <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+        {:else if GRAPHED.has(winSlot.effect)}
           <ResponseGraph slot={winSlot} info={winInfo} onPoint={(pf, f, pg, g, done) => dragPoint(winSlot, pf, f, pg, g, done)} />
         {/if}
         {#if winInfo.sidechain && onTrackTab && doc && keyOwner}
@@ -720,7 +728,7 @@
             </span>
           </div>
         {/if}
-        {#each groups(winInfo) as g (g.name)}
+        {#each groups(winInfo).filter((g) => groupShown(winSlot.effect, winSlot, g.name)) as g (g.name)}
           {#if g.name}<h3>{g.name}</h3>{/if}
           {#each g.params as p (p.key)}
             {@const v = shown(winSlot, p)}
@@ -759,65 +767,64 @@
     {/if}
 
     <div class="bottom">
-      {#each [GAIN("input_gain_db", "Input"), GAIN("output_gain_db", "Output")] as p (p.key)}
-        {@const cur = draft?.key === `chain.${p.key}` ? draft.value : chain[p.key as "input_gain_db" | "output_gain_db"]}
-        <label class="param">
-          <span class="pname">{p.name}</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.001"
+      {#snippet bars(name: string, k: number)}
+        <div class="mbars" aria-label="{name} level">
+          {#each [k, k + 1] as ch (ch)}
+            {@const m = chainMeter?.[ch]}
+            <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
+              <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
+              {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
+            </div>
+          {/each}
+        </div>
+      {/snippet}
+      {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
+        {@const key = p.key as "input_gain_db" | "output_gain_db"}
+        {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
+        <div class="io">
+          <span class="pname">{p.name}:</span>
+          {@render bars(k === 0 ? "In" : "Out", k)}
+          <Knob
+            label="{p.name} gain"
             value={toSlider(p, cur)}
-            oninput={(e) => {
-              const v = fromSlider(p, Number(e.currentTarget.value));
-              dragChain(p.key as "input_gain_db", `Voice Chain ${p.name} Gain`, v, v);
+            home={toSlider(p, 0)}
+            text={formatParam(p, cur)}
+            title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
+            oninput={(t) => {
+              const v = fromSlider(p, t);
+              dragChain(key, `Voice Chain ${p.name} Gain`, v, v);
             }}
-            onchange={(e) => setChain(p.key as "input_gain_db", `Voice Chain ${p.name} Gain`, fromSlider(p, Number(e.currentTarget.value)))}
-            ondblclick={() => setChain(p.key as "input_gain_db", `Voice Chain ${p.name} Gain`, 0)}
-            title="Double-click for 0 dB"
+            oncommit={(t) => setChain(key, `Voice Chain ${p.name} Gain`, fromSlider(p, t))}
           />
           <span class="val">{formatParam(p, cur)}</span>
-        </label>
+        </div>
       {/each}
-      <label class="param">
-          <span class="pname" title="Dry/Wet: how much of the effected sound you hear">Mix</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={mixShown}
-            oninput={(e) => dragChain("mix", "Voice Chain Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
-            onchange={(e) => setChain("mix", "Voice Chain Mix", Number(e.currentTarget.value) / 100)}
-          />
-          <span class="val">{formatParam(MIX, mixShown)}</span>
-        </label>
-      <div class="meters" aria-label="Track chain meters">
-        {#each [["In", 0], ["Out", 2]] as const as [name, k] (name)}
-          <div class="mrow">
-            <span class="pname">{name}</span>
-            <div class="mbars">
-              {#each [k, k + 1] as ch (ch)}
-                {@const m = chainMeter?.[ch]}
-                <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
-                  <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
-                  {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
-                </div>
-              {/each}
-            </div>
-            <span class="val">{dbText(louder(chainMeter?.[k], chainMeter?.[k + 1]))}</span>
-          </div>
-        {/each}
-        <p class="hint">
-          {#if onMaster || bus}{#if !ts?.playing}Meters move while playing.{:else if !chainMeter}This chain does nothing yet, or nothing feeds the {onMaster ? "master" : "bus"}.{:else}{onMaster ? "Master" : "Bus"} chain level going in and coming out.{/if}
-          {:else if !meterTrack}Meters show a track's chain while playing.
-          {:else if tab === "clip" && !inWave}Meters show the track chain of {meterTrack.name}. Clip chains are not metered yet.
-          {:else if !ts?.playing}Meters move while playing.
-          {:else if !chainMeter}This track's chain does nothing yet, so there is nothing to meter.
-          {:else}Track chain level going in and coming out.{/if}
-        </p>
+      <div class="io mixrow">
+        <span class="pname" title="How much of the effected sound you hear">Mix:</span>
+        <span class="end">Dry</span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          aria-label="Mix"
+          value={mixShown}
+          oninput={(e) => dragChain("mix", "Voice Chain Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
+          onchange={(e) => setChain("mix", "Voice Chain Mix", Number(e.currentTarget.value) / 100)}
+          ondblclick={() => setChain("mix", "Voice Chain Mix", 1)}
+          title="Double-click for 100 %"
+        />
+        <span class="end">Wet</span>
+        <span class="val">{formatParam(MIX, mixShown)}</span>
       </div>
+      <p class="hint">
+        {#if onMaster || bus}{#if !ts?.playing}Meters move while playing.{:else if !chainMeter}This chain does nothing yet, or nothing feeds the {onMaster ? "master" : "bus"}.{:else}{onMaster ? "Master" : "Bus"} chain level going in and coming out.{/if}
+        {:else if !meterTrack}Meters show a track's chain while playing.
+        {:else if tab === "clip" && !inWave}Meters show the track chain of {meterTrack.name}. Clip chains are not metered yet.
+        {:else if !ts?.playing}Meters move while playing.
+        {:else if !chainMeter}This track's chain does nothing yet, so there is nothing to meter.
+        {:else}Track chain level going in and coming out.{/if}
+      </p>
       {#if inWave}
         <div class="apply">
           <p class="hint">You hear this chain when you play the file. The file changes only when you apply it, and Undo takes it back.</p>
@@ -849,21 +856,6 @@
     background: var(--surface-1);
     font-size: 12px;
   }
-  /*
-   * Tinted with the color of the track, clip, bus or master being worked
-   * on. The panel's surfaces and outlines are mixed from the theme's
-   * (dark) values and that color, so lighter and darker parts keep their
-   * order. A light theme would use a lighter mix.
-   */
-  .vc.tinted {
-    --surface-0: color-mix(in srgb, var(--vc-tint) 8%, #141416);
-    --surface-1: color-mix(in srgb, var(--vc-tint) 13%, #1b1b1e);
-    --surface-2: color-mix(in srgb, var(--vc-tint) 17%, #232327);
-    --surface-3: color-mix(in srgb, var(--vc-tint) 21%, #2c2c31);
-    --border: color-mix(in srgb, var(--vc-tint) 30%, #34343a);
-    --border-strong: color-mix(in srgb, var(--vc-tint) 42%, #44444b);
-    transition: background-color 120ms;
-  }
   .tabs {
     display: flex;
     border-bottom: 1px solid var(--border);
@@ -883,12 +875,14 @@
   }
   .top {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--border);
   }
   .line {
     display: flex;
+    min-width: 0;
     gap: 4px;
     align-items: center;
   }
@@ -1025,6 +1019,11 @@
     position: fixed;
     z-index: 900;
     width: 380px;
+    /* Graph editors (the Parametric EQ) get room to work in. */
+    &:has(:global(.eq)),
+    &:has(:global(.pc)) {
+      width: 560px;
+    }
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 40px);
     display: flex;
@@ -1105,10 +1104,6 @@
     margin: 0;
     color: var(--text-faint);
   }
-  .meters {
-    display: grid;
-    gap: 3px;
-  }
   .learn {
     display: flex;
     flex-wrap: wrap;
@@ -1129,11 +1124,36 @@
     background: var(--accent);
     color: var(--on-accent, #fff);
   }
-  .mrow {
+  .io {
     display: grid;
-    grid-template-columns: 88px minmax(0, 1fr) 72px;
+    grid-template-columns: 52px minmax(0, 1fr) 28px 64px;
     gap: 6px;
     align-items: center;
+  }
+  .io.mixrow {
+    grid-template-columns: 52px auto minmax(0, 1fr) auto 44px;
+  }
+  .end {
+    color: var(--text-faint);
+  }
+  .io input[type="range"] {
+    appearance: none;
+    height: 4px;
+    margin: 0;
+    border-radius: 2px;
+    background: var(--surface-3);
+    outline-offset: 4px;
+  }
+  .io input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .io input[type="range"]:hover::-webkit-slider-thumb {
+    background: var(--accent);
   }
   .mbars {
     display: grid;

@@ -2,6 +2,11 @@
 
 Newest first. Each entry: date, decision, reason.
 
+## 2026-10-24: first outside contributor, and how his agreement is recorded
+
+Decision: nwh212 (Discord: Broman) is the project's first outside contributor, listed in `CONTRIBUTORS.md`. On Discord on 2026-10-24 he wrote that he has read `CLA.md` and agrees to it for his pull request and his future contributions, licensed under GPL v3.0 or later as `CLA.md` describes. His work (MIDI tracks and the piano roll, plug-in hosting in a separate process, buses, sends and sidechain, the Phase Wheel and Properties panels, session import fixes) is merged on the `next` branch.
+Reason: the agreement bot is the normal way to agree, but he agreed in writing before the merge. A screenshot of the message is kept in the private `private/cla-records/` folder (never committed). For the public record, `CONTRIBUTORS.md` names the agreement. Ask him to also confirm in a comment on the pull request so the agreement lives on GitHub too.
+
 ## 2026-10-14: Formats in and out, Batch Convert, Export Mixdown dialog, per-speaker tracks, system audio, bulk trim, track meters
 
 Decision:
@@ -1186,3 +1191,22 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-24: drag MIDI clips between MIDI tracks
 
 - A MIDI clip dragged up or down onto another MIDI track moves there, keeping its notes and its place in time (plus any sideways move, snapped to beats); that track's instrument plays them. With Alt held it is copied instead (new ids), the same proposed Alt+drag copy gesture as audio clips, which still needs the project lead's approval. The track under the pointer is outlined while dragging. Both tracks change in one undoable step. Audio and bus rows are not drop targets for MIDI clips.
+
+## 2026-10-25: spectrum zoom and options, zoom toward the pointer
+
+- **Restated as behavior** (the request pointed at another editor's spectral display and its right-click menu): the mouse wheel over the Waveform editor's spectrum zooms time, as over the waveform. Over its frequency scale it zooms the frequencies, keeping the frequency under the pointer in place, never past 0 Hz or the Nyquist frequency of the file's sample rate, never narrower than 40 Hz. A right-click on the spectrum offers Zoom In, Zoom Out and Zoom Reset (Frequency); Hertz or Notes on the scale; More Logarithmic, More Linear, Full Logarithmic and Full Linear (five steps between linear and log); Increase and Decrease Spectral Resolution (analysis frames from 512 to 16,384 samples, 2,048 by default); and Spectrogram Colors. No shortcuts are added. The view settings last for the run of the app, across files.
+- **How.** The core's spectrogram takes the view's row edges in Hz and a frame length; without them it draws the edits' fixed log axis as before. Spectral selections stay on that fixed axis, so a box, lasso or brush stays on the same sounds while the view zooms or changes scale.
+- **Zoom toward the pointer.** Over the time ruler (Waveform editor and Multitrack) the wheel always zooms toward the pointer, whatever the wheel anchor setting says for the lanes, and the Waveform ruler zooms even with "wheel zooms" off. The wheel over the track scrollbar zooms the track heights toward the track under the pointer: that spot keeps its place in the view.
+
+## 2026-10-25: Parametric EQ graph editor
+
+- **Restated as behavior** (the request pointed at another editor's parametric equalizer): the Parametric EQ's window opens with a large graph of its response over the sound. Each band is a node: drag it sideways for frequency and up or down for gain (the high-pass and low-pass move sideways only). A band's width (Q) shows as a dashed span with a handle at each end; drag a handle, or turn the mouse wheel over the node, to narrow or widen it. Double-click the high-pass or low-pass node to switch it on or off. Hovering or dragging shows the band's frequency, gain and Q. Behind the curve is the spectrum of what is playing (after the whole chain and the master, 20 Hz to 20 kHz, -96 to 0 dBFS), live while playing; when stopped, the audio just before the playhead (the session's, or the Waveform editor file's). Each drag is one undoable step, the same as the sliders, which stay below the graph.
+- **How.** A new core command (`scope_spectrum`) analyses the playback ring while playing, or renders the mix before the playhead while stopped (the same render the Phase Wheel uses when stopped). The graph is its own component (`EqGraph.svelte`, maths in `eq-graph.ts`); the Voice Chain panel only chooses it for the Parametric EQ, so the change there is small.
+
+## 2026-10-25: Phase Curve
+
+- **Restated as behavior** (the request pointed at another editor's per-frequency phase shifter): a new effect, Phase Curve (Filter and EQ), turns the phase of each frequency by its own angle along a curve of up to eight points, leaving every frequency's level as it was. It is for restoration: lining up a second mic that is out of phase only in some frequencies, or undoing a filter's phase smear. Our own name and layout.
+- **The curve.** Points are frequency and angle. The curve runs straight between them on a log frequency scale, or smoothly through them with Spline on (the default), and holds level beyond the first and last points. Range sets ±180° or ±360°. Channel picks both, left or right. FFT size (1,024 to 65,536 samples, 8,192 by default) sets the frame length: longer follows the curve more finely in the low frequencies, at more look-ahead (reported as latency, so the chain stays in time).
+- **Ready for automation.** Each point is two ordinary numeric controls (`p1_freq`, `p1_phase` up to `p8`), plus `points` for how many are in use, so the points can be automated like any other control once automation recording arrives; the effect already takes new points, spline, range and channel while playing. Only a new FFT size rebuilds it.
+- **Graph editor.** Drag a point; click empty space to add one; double-click or right-click a point to remove it (two always stay); Reset gives a flat curve at 0°. Controls for unused points are hidden below the graph.
+- **.sesx import.** The other editor's phase shifter now comes across as Phase Curve. Its saved settings, read from the tester's sessions, are 32-bit floats: the sample rate; the axis ends at 6 and 7 as shares of half the sample rate; the point count at 10; then each point as two numbers from 0 to 1, position along the axis and phase (0.5 is 0°). The axis is taken as a log scale and the phase range as ±180°; neither is confirmed, and two other settings in it are not yet understood, so channel and FFT size keep our defaults. More than eight points are thinned evenly. The import notice says how many came across.

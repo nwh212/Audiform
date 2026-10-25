@@ -2964,6 +2964,7 @@
       actions.register({ id: "help.website", run: () => openLink(LINKS.website) }),
       actions.register({ id: "help.book", run: () => openLink(LINKS.book) }),
       actions.register({ id: "help.discord", run: () => openLink(LINKS.discord) }),
+      actions.register({ id: "help.update", run: () => openLink(LINKS.releases) }),
       actions.register({ id: "help.github", run: () => openLink(LINKS.github) }),
       actions.register({ id: "help.report", run: () => openLink(LINKS.report) }),
       actions.register({ id: "help.about", run: () => void (aboutOpen = true) }),

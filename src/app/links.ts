@@ -18,6 +18,7 @@ export const LINKS = {
   support: "https://paypal.me/scp21" as string | null,
   /** Source code and issues. */
   github: "https://github.com/geekcastradio/altered-audio-editor",
+  releases: "https://github.com/geekcastradio/altered-audio-editor/releases/latest",
   /** Opens the bug form. */
   report: "https://github.com/geekcastradio/altered-audio-editor/issues/new/choose",
   /** Community chat invite. */

@@ -4,9 +4,13 @@
   This file is part of Altered Audio Editor.
 
   The spectrum under the waveform in the Waveform editor: time across,
-  frequency up (log scale), loudness as color, with an optional pitch
-  line. The spectral tools select areas here (box, lasso, brush) or
-  repair a painted spot straight away.
+  frequency up, loudness as color, with an optional pitch line. The
+  spectral tools select areas here (box, lasso, brush) or repair a
+  painted spot straight away. The mouse wheel over the frequency scale
+  zooms the frequencies around the pointer (never past what the sample
+  rate holds); over the spectrum it zooms time, as over the waveform.
+  Right-click for the frequency zoom, Hertz or note names, a more linear
+  or more logarithmic scale, the analysis resolution and the colors.
 -->
 <script lang="ts">
   import { wavePitch, waveSpectrogram } from "../../app/core";
@@ -14,7 +18,10 @@
   import type { SessionDoc } from "../../stores/session";
   import { spectralSelection } from "../../stores/wave";
   import { sampleAt, xOf, type Viewport } from "./timeline";
-  import { freqAt, fracOf, SPECTRUM_LUT, type SpectralShape } from "./spectrum";
+  import { freqAt, fracOf, freqTicks, FULL_VIEW, rowEdges, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq, type SpectralShape } from "./spectrum";
+  import { FFT_SIZES, spectrumView, type SpectrumViewState } from "../../stores/spectrum-view";
+  import { noteName } from "./midi";
+  import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import { settings } from "../../stores/settings";
   import { SPECTRUM_HIGH, SPECTRUM_LOW, spectrumLut } from "../../app/colors";
 
@@ -36,9 +43,17 @@
     /** Runs a named action (the spectral edits). */
     run: (id: string) => void;
     tip: (label: string, id: string) => string;
+    /** The wheel over the spectrum itself: time zoom and scroll, as over the waveform. */
+    onTimeWheel?: (e: WheelEvent) => void;
+    /** Opens the spectrogram color picker at a point. */
+    onColors?: (x: number, y: number) => void;
   }
 
-  const { doc, view, width, scaleWidth, total, playhead, selection, tool, brushSize, showSpectrum, showPitch, onSeek, onSelectTime, run, tip }: Props = $props();
+  const { doc, view, width, scaleWidth, total, playhead, selection, tool, brushSize, showSpectrum, showPitch, onSeek, onSelectTime, run, tip, onTimeWheel = () => {}, onColors = () => {} }: Props = $props();
+
+  let sv = $state<SpectrumViewState>({ ...FULL_VIEW, notes: false, fft: 2048 });
+  $effect(() => spectrumView.subscribe((v) => (sv = v)));
+  const setSv = (patch: Partial<SpectrumViewState>) => spectrumView.update((v) => ({ ...v, ...patch }));
 
   let height = $state(200);
   let canvas = $state<HTMLCanvasElement | null>(null);
@@ -68,6 +83,8 @@
     const { start, end } = range;
     const columns = Math.max(1, Math.min(2048, Math.round(width)));
     const rows = Math.max(16, Math.min(512, Math.round(height)));
+    const edges = rowEdges(rows, sv, nyquist);
+    const fft = sv.fft;
     void doc;
     const my = ++seq;
     if (end <= start || width <= 0) {
@@ -75,7 +92,7 @@
       return;
     }
     const t = setTimeout(() => {
-      waveSpectrogram(start, end, columns, rows)
+      waveSpectrogram(start, end, columns, rows, edges, fft)
         .then((data) => {
           if (my !== seq) return;
           image = { data, columns, rows, start, end };
@@ -114,16 +131,92 @@
     return () => clearTimeout(t);
   });
 
-  const yOfFrac = (f: number) => (1 - f) * height;
-  const yOf = (hz: number) => yOfFrac(fracOf(hz, nyquist));
-  const fracAtY = (y: number) => 1 - y / height;
+  // Places on screen for frequencies, through the view's scale. Selection
+  // shapes keep the edits' own log axis (`frac` below), so they stay on the
+  // same sounds whatever the view shows.
+  const yOf = (hz: number) => (1 - viewFrac(hz, sv, nyquist)) * height;
+  const yOfFrac = (f: number) => yOf(freqAt(f, nyquist));
+  const fracAtY = (y: number) => fracOf(viewFreq(1 - y / height, sv, nyquist), nyquist);
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
   }
 
+  /** The scale's marks: frequencies in Hz, or note names at their pitches. */
+  function scaleMarks(h: number): [number, string][] {
+    if (!sv.notes) return freqTicks(sv, nyquist, h).map((f) => [f, label(f)]);
+    const [lo, hi] = viewRange(sv, nyquist);
+    const out: [number, string][] = [];
+    let lastY = Infinity;
+    // Every C, or every note when zoomed in far enough to read them.
+    const every = yOf(493.88) - yOf(523.25) >= 14 ? 1 : 12;
+    for (let p = 0; p <= 135; p++) {
+      const f = 440 * Math.pow(2, (p - 69) / 12);
+      if (f <= lo || f >= hi) continue;
+      const y = yOf(f);
+      if (lastY - y < 14) continue;
+      if (every === 12 && p % 12 !== 0) continue;
+      out.push([f, noteName(p)]);
+      lastY = y;
+    }
+    return out;
+  }
+
+  /** The wheel: over the scale it zooms the frequencies around the pointer; over the spectrum, time. */
+  function onWheel(e: WheelEvent) {
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - box.left;
+    if (x <= width) {
+      onTimeWheel(e);
+      return;
+    }
+    e.preventDefault();
+    const hz = viewFreq(1 - (e.clientY - box.top) / height, sv, nyquist);
+    setSv(zoomFreq(sv, hz, e.deltaY > 0 ? 1.25 : 0.8, nyquist));
+  }
+
+  let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
+  const zoomed = $derived(sv.hi !== null || sv.lo > (sv.log >= 0.5 ? 30 : 0) + 1);
+  /** Right-click: frequency zoom, labels, scale, resolution and colors. */
+  function onMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const hz = viewFreq(1 - (e.clientY - box.top) / height, sv, nyquist);
+    const fi = FFT_SIZES.indexOf(sv.fft as (typeof FFT_SIZES)[number]);
+    const logSteps = [0, 0.25, 0.5, 0.75, 1];
+    const li = logSteps.findIndex((k) => Math.abs(k - sv.log) < 0.01);
+    const at = (k: number) => {
+      // A new scale keeps the range in view, fit to that scale's floor.
+      const next = { ...sv, log: k };
+      setSv(k >= 0.5 && sv.lo < 30 && sv.hi === null ? { ...next, lo: 30 } : k < 0.5 && sv.lo === 30 && sv.hi === null ? { ...next, lo: 0 } : next);
+    };
+    menu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { kind: "item", label: "Zoom In (Frequency)", run: () => setSv(zoomFreq(sv, hz, 0.5, nyquist)) },
+        { kind: "item", label: "Zoom Out (Frequency)", disabled: !zoomed, reason: "Showing every frequency already.", run: () => setSv(zoomFreq(sv, hz, 2, nyquist)) },
+        { kind: "item", label: "Zoom Reset (Frequency)", disabled: !zoomed, reason: "Showing every frequency already.", run: () => setSv({ lo: sv.log >= 0.5 ? 30 : 0, hi: null }) },
+        { kind: "sep" },
+        { kind: "item", label: "Hertz", checked: !sv.notes, run: () => setSv({ notes: false }) },
+        { kind: "item", label: "Notes", checked: sv.notes, run: () => setSv({ notes: true }) },
+        { kind: "sep" },
+        { kind: "item", label: "More Logarithmic", disabled: li === logSteps.length - 1, reason: "Fully logarithmic already.", run: () => at(logSteps[Math.min(logSteps.length - 1, (li < 0 ? 2 : li) + 1)]!) },
+        { kind: "item", label: "More Linear", disabled: li === 0, reason: "Fully linear already.", run: () => at(logSteps[Math.max(0, (li < 0 ? 2 : li) - 1)]!) },
+        { kind: "item", label: "Full Logarithmic", checked: sv.log === 1, run: () => at(1) },
+        { kind: "item", label: "Full Linear", checked: sv.log === 0, run: () => at(0) },
+        { kind: "sep" },
+        { kind: "item", label: `Increase Spectral Resolution (${FFT_SIZES[Math.min(FFT_SIZES.length - 1, fi + 1)]})`, disabled: fi === FFT_SIZES.length - 1, reason: "At the finest resolution.", run: () => setSv({ fft: FFT_SIZES[Math.min(FFT_SIZES.length - 1, fi + 1)]! }) },
+        { kind: "item", label: `Decrease Spectral Resolution (${FFT_SIZES[Math.max(0, fi - 1)]})`, disabled: fi === 0, reason: "At the coarsest resolution.", run: () => setSv({ fft: FFT_SIZES[Math.max(0, fi - 1)]! }) },
+        { kind: "sep" },
+        { kind: "item", label: "Spectrogram Colors...", run: () => onColors(e.clientX, e.clientY) },
+      ],
+    };
+  }
+
   function label(hz: number): string {
-    return hz >= 1000 ? `${(hz / 1000).toFixed(hz >= 10_000 ? 0 : 1)}k` : `${Math.round(hz)}`;
+    return hz >= 1000 ? `${+(hz / 1000).toFixed(2)}k` : `${+hz.toFixed(hz < 100 ? 1 : 0)}`;
   }
 
   function drawShape(g: CanvasRenderingContext2D, s: SpectralShape, live: boolean) {
@@ -278,14 +371,13 @@
     g.fillStyle = css("--text-faint");
     g.font = `10px ${css("--font-ui")}`;
     g.textBaseline = "middle";
-    for (const hz of [50, 100, 200, 500, 1000, 2000, 5000, 10_000, 20_000]) {
-      if (hz >= nyquist) continue;
+    for (const [hz, text] of scaleMarks(h)) {
       const y = yOf(hz);
       if (y < 8 || y > h - 6) continue;
       g.fillRect(width, Math.round(y), 4, 1);
-      g.fillText(label(hz), width + 7, y);
+      g.fillText(text, width + 7, y);
     }
-    g.fillText("Hz", width + 7, 7);
+    g.fillText(sv.notes ? "Note" : "Hz", width + 7, 7);
   });
 
   const cursor = $derived(tool === "time" ? "text" : tool === "brush" || tool === "spot" ? "none" : "crosshair");
@@ -393,6 +485,8 @@
       hover = { x: e.clientX - b.left, y: e.clientY - b.top };
     }}
     onpointerleave={() => (hover = null)}
+    onwheel={onWheel}
+    oncontextmenu={onMenu}
   ></canvas>
   {#if note}
     <p class="note">{note}</p>
@@ -407,6 +501,10 @@
     </div>
   {/if}
 </div>
+
+{#if menu}
+  <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+{/if}
 
 <style>
   .spectrum {

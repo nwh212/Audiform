@@ -77,6 +77,7 @@ describe("menu model", () => {
       "fx.invert",
       "fx.reverse",
       "help.discord",
+      "help.update",
       "help.github",
       "help.report",
       "help.about",

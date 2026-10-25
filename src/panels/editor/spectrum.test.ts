@@ -3,7 +3,7 @@
 // This file is part of Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { fracOf, freqAt, MIN_HZ, rasterize, shapesBounds, SPECTRUM_LUT } from "./spectrum";
+import { fracOf, freqAt, freqTicks, FULL_VIEW, MIN_HZ, MIN_SPAN, rasterize, shapesBounds, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq } from "./spectrum";
 
 describe("spectrum axis", () => {
   it("is log spaced and round-trips", () => {
@@ -51,5 +51,39 @@ describe("spectral selection masks", () => {
   it("is null for nothing", () => {
     expect(rasterize([])).toBeNull();
     expect(shapesBounds([{ kind: "lasso", points: [] }])).toBeNull();
+  });
+});
+
+describe("the spectrum view's frequency axis", () => {
+  const ny = 24_000;
+  it("matches the edits' log axis when fully zoomed out", () => {
+    for (const f of [0, 0.25, 0.5, 1]) expect(viewFreq(f, FULL_VIEW, ny)).toBeCloseTo(freqAt(f, ny), 3);
+  });
+  it("goes from frequency to place and back, linear or log", () => {
+    for (const log of [0, 0.5, 1]) {
+      const v = { lo: 100, hi: 8_000, log };
+      expect(viewFrac(viewFreq(0.3, v, ny), v, ny)).toBeCloseTo(0.3, 4);
+    }
+  });
+  it("zooms around the pointer, within 0 Hz and the Nyquist frequency", () => {
+    const v = zoomFreq(FULL_VIEW, 1_000, 0.5, ny);
+    const [lo, hi] = viewRange(v, ny);
+    expect(lo).toBeGreaterThan(30);
+    expect(hi).toBeLessThan(ny);
+    // 1 kHz stays where it was.
+    expect(viewFrac(1_000, v, ny)).toBeCloseTo(viewFrac(1_000, FULL_VIEW, ny), 2);
+    // Never narrower than the minimum, never past the top.
+    let w = v;
+    for (let i = 0; i < 60; i++) w = zoomFreq(w, 1_000, 0.5, ny);
+    const [a, b] = viewRange(w, ny);
+    expect(b - a).toBeGreaterThanOrEqual(MIN_SPAN - 1e-6);
+    let out = v;
+    for (let i = 0; i < 60; i++) out = zoomFreq(out, 1_000, 2, ny);
+    expect(out.hi).toBeNull();
+  });
+  it("labels the axis with spaced marks", () => {
+    const t = freqTicks(FULL_VIEW, ny, 300);
+    expect(t).toContain(1_000);
+    expect(freqTicks({ lo: 400, hi: 600, log: 0 }, ny, 300).every((f) => f >= 400 && f <= 600)).toBe(true);
   });
 });

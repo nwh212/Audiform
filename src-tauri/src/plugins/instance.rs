@@ -734,7 +734,7 @@ impl Audition {
         if !ok {
             return false;
         }
-        for f in self.stereo.chunks_exact(2) {
+        for f in self.stereo.as_chunks::<2>().0 {
             for c in 0..channels.max(1) {
                 block.push(if channels == 1 {
                     (f[0] + f[1]) * 0.5

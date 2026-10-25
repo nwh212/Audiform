@@ -125,6 +125,8 @@ pub async fn wave_spectrogram(
     end: u64,
     columns: u32,
     rows: u32,
+    hz: Option<Vec<f32>>,
+    fft: Option<u32>,
 ) -> Result<Response, String> {
     let session = snapshot(&wave)?;
     let rate = session.sample_rate;
@@ -133,8 +135,21 @@ pub async fn wave_spectrogram(
     }
     let columns = columns.clamp(1, 4096) as usize;
     let rows = rows.clamp(1, 1024) as usize;
+    let n = fft.map_or(FFT_SIZE, |f| {
+        (f as usize).clamp(256, 32_768).next_power_of_two()
+    });
+    // The view's own axis (a zoomed range, a linear or log scale), or the edits' log axis.
+    let nyquist = rate as f32 / 2.0;
+    let hz: Vec<f32> = match hz {
+        Some(h) if h.len() >= 2 && h.len() <= 1025 => {
+            h.into_iter().map(|v| v.clamp(0.0, nyquist)).collect()
+        }
+        _ => (0..=rows)
+            .map(|r| spectral::freq_at(1.0 - r as f32 / rows as f32, nyquist))
+            .collect(),
+    };
     let bytes = spawn_blocking(move || {
-        let pad = FFT_SIZE as i64;
+        let pad = n as i64;
         let from = start as i64 - pad;
         let stereo = render(&session, from, end as i64 + pad);
         let mono: Vec<f32> = stereo
@@ -143,7 +158,7 @@ pub async fn wave_spectrogram(
             .iter()
             .map(|f| (f[0] + f[1]) * 0.5)
             .collect();
-        spectral::spectrogram(&mono, from, rate, start, end, columns, rows)
+        spectral::spectrogram_rows(&mono, from, rate, start, end, columns, &hz, n)
     })
     .await
     .map_err(|e| e.to_string())?;

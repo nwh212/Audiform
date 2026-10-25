@@ -18,6 +18,7 @@ mod dynamics;
 mod eq;
 mod filters;
 mod phase;
+pub mod phase_curve;
 mod pitch;
 pub mod print;
 mod restore;
@@ -174,6 +175,7 @@ pub fn catalog() -> Vec<EffectInfo> {
         filters::precision_info(),
         filters::curve_info(),
         phase::phase_info(),
+        phase_curve::phase_curve_info(),
         dynamics::compressor_info(),
         dynamics::limiter_info(),
         dynamics::gate_info(),
@@ -425,6 +427,7 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.center_remover" => Box::new(filters::CenterRemover::new(&p, rate)),
         "altaudio.pitch_shift" => Box::new(pitch::PitchShift::new(&p, rate)),
         "altaudio.phase_rotate" => Box::new(phase::PhaseRotate::new(&p, rate)),
+        "altaudio.phase_curve" => Box::new(phase_curve::PhaseCurve::new(&p, rate)),
         _ => return None,
     })
 }

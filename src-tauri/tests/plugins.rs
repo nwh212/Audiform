@@ -18,8 +18,25 @@ use altered_audio_editor_lib::session::model::{
 };
 use altered_audio_editor_lib::session::ops::{apply, ClipSpec, Op};
 
-const EFFECT: &str = "vst3:41A17E2D7E5700018A1B2C3D4E5F6071";
-const SYNTH: &str = "vst3:41A17E2D7E5700038A1B2C3D4E5F6073";
+/// The id a scanned plug-in gets. The byte order of a class id differs
+/// between Windows and elsewhere, so the tests ask the registry by name
+/// rather than hard-code it.
+fn id_of(name: &str) -> String {
+    plugins::snapshot()
+        .plugins
+        .iter()
+        .find(|p| p.info.name == name)
+        .map(|p| format!("vst3:{}", p.info.cid))
+        .unwrap_or_else(|| format!("vst3:missing-{name}"))
+}
+
+fn effect_id() -> String {
+    id_of("Altered Test Gain")
+}
+
+fn synth_id() -> String {
+    id_of("Altered Test Synth")
+}
 
 /// Builds the test plug-in and puts it in a bundle inside `dir`.
 fn bundle(dir: &Path) -> PathBuf {
@@ -70,7 +87,7 @@ fn click(dir: &Path) -> PathBuf {
 fn slot(params: &[(&str, f64)]) -> EffectSlot {
     EffectSlot {
         id: new_id(),
-        effect: EFFECT.into(),
+        effect: effect_id(),
         enabled: true,
         params: params.iter().map(|(k, v)| ((*k).to_string(), *v)).collect(),
         preset: None,
@@ -173,7 +190,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     );
     assert!(dir.path().join("plugins.json").is_file());
     let info =
-        altered_audio_editor_lib::dsp::effects::info(EFFECT).expect("a plug-in is an effect");
+        altered_audio_editor_lib::dsp::effects::info(&effect_id()).expect("a plug-in is an effect");
     assert_eq!(info.name, "Altered Test Gain");
     assert_eq!(info.params[0].key, "p0");
     // The synth is an instrument: offered to MIDI tracks, not Voice Chains.
@@ -184,7 +201,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
             .collect::<Vec<_>>(),
         ["Altered Test Synth"]
     );
-    assert!(plugins::catalog().iter().all(|i| i.id != SYNTH));
+    assert!(plugins::catalog().iter().all(|i| i.id != synth_id()));
     // A rescan skips the unchanged bundle.
     assert_eq!(plugins::scan(false, |_, _, _| {}).scanned, 0);
 
@@ -253,7 +270,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     )
     .unwrap();
     let mut synth = slot(&[]);
-    synth.effect = SYNTH.into();
+    synth.effect = synth_id();
     s.tracks[0].instrument = Some(synth);
     s.tracks[0].effects.slots.push(slot(&[("p0", 0.5)]));
     apply(
@@ -410,7 +427,7 @@ fn a_real_reverb_rings_on_a_midi_track() {
     )
     .unwrap();
     let mut synth = slot(&[]);
-    synth.effect = SYNTH.into();
+    synth.effect = synth_id();
     s.tracks[0].instrument = Some(synth);
     apply(
         &mut s,

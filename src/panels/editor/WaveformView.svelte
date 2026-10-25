@@ -597,13 +597,15 @@
   function onWheel(e: WheelEvent) {
     if (!area) return;
     const x = Math.max(0, Math.min(width, xIn(e, area)));
+    // Over the time ruler the wheel always zooms, toward the pointer.
+    const overRuler = e.currentTarget === ruler;
     if (e.altKey) {
       e.preventDefault();
       zoom(e.deltaY < 0 ? "amp-in" : "amp-out");
-    } else if (e.ctrlKey || (settings.current.wheelZooms && !e.shiftKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX))) {
+    } else if (overRuler || e.ctrlKey || (settings.current.wheelZooms && !e.shiftKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX))) {
       e.preventDefault();
       const r = zoomRatios();
-      const at = settings.current.wheelAnchor === "playhead" ? Math.max(0, Math.min(width, xOf(playhead, view))) : x;
+      const at = settings.current.wheelAnchor === "playhead" && !overRuler ? Math.max(0, Math.min(width, xOf(playhead, view))) : x;
       const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, outermost(), SAMPLE_SPP);
       setView({ spp: z.spp, scroll: z.scroll });
     } else {
@@ -787,6 +789,8 @@
         onSelectTime={(sel) => setView({ selection: sel })}
         {run}
         {tip}
+        onTimeWheel={onWheel}
+        onColors={(x, y) => (colorPop = { x, y })}
       />
     {/if}
     <div class="hbar">

@@ -23,6 +23,124 @@ export function fracOf(hz: number, nyquist: number): number {
   return Math.min(1, Math.log(hz / MIN_HZ) / Math.log(top / MIN_HZ));
 }
 
+/**
+ * How the spectrum view shows frequency: the range in view (`lo` to `hi`
+ * Hz; `hi` null is the Nyquist frequency) and how logarithmic the scale
+ * is, from 0 (linear, even in Hz) to 1 (log, even in pitch). Selections
+ * are kept on the edits' own log axis (`freqAt`, `fracOf`), so they stay
+ * put whatever the view shows.
+ */
+export interface FreqView {
+  lo: number;
+  hi: number | null;
+  log: number;
+}
+
+export const FULL_VIEW: FreqView = { lo: MIN_HZ, hi: null, log: 1 };
+/** Lowest frequency a log scale shows. */
+const LOG_FLOOR = 10;
+/** The narrowest range zooming in goes to, in Hz. */
+export const MIN_SPAN = 40;
+
+/** The view's range, settled for a file at `nyquist`. */
+export function viewRange(v: FreqView, nyquist: number): [number, number] {
+  const hi = Math.min(nyquist, v.hi ?? nyquist);
+  const lo = Math.max(0, Math.min(v.lo, hi - MIN_SPAN));
+  return [lo, Math.max(hi, lo + MIN_SPAN)];
+}
+
+/** Frequency at `frac` up the view (0 bottom, 1 top). */
+export function viewFreq(frac: number, v: FreqView, nyquist: number): number {
+  const [lo, hi] = viewRange(v, nyquist);
+  const t = Math.min(1, Math.max(0, frac));
+  const lin = lo + (hi - lo) * t;
+  const l0 = Math.max(lo, LOG_FLOOR);
+  const lg = l0 * Math.pow(Math.max(hi, l0 + 1) / l0, t);
+  const k = Math.min(1, Math.max(0, v.log));
+  return (1 - k) * lin + k * lg;
+}
+
+/** How far up the view `hz` sits, 0 to 1 (outside the range: below 0 or above 1). */
+export function viewFrac(hz: number, v: FreqView, nyquist: number): number {
+  const [lo, hi] = viewRange(v, nyquist);
+  if (hz <= lo) return hz < lo ? -0.001 : 0;
+  if (hz >= hi) return hz > hi ? 1.001 : 1;
+  let a = 0;
+  let b = 1;
+  // The scale only ever rises, so halving finds the spot.
+  for (let i = 0; i < 40; i++) {
+    const m = (a + b) / 2;
+    if (viewFreq(m, v, nyquist) < hz) a = m;
+    else b = m;
+  }
+  return (a + b) / 2;
+}
+
+/** Each row's edges, top row first: `rows + 1` frequencies, for the core's spectrogram. */
+export function rowEdges(rows: number, v: FreqView, nyquist: number): number[] {
+  return Array.from({ length: rows + 1 }, (_, r) => viewFreq(1 - r / rows, v, nyquist));
+}
+
+/**
+ * Zooms the frequency axis by `factor` (below 1 closer) around `hz`, so
+ * that frequency stays where it is. Never past 0 Hz or the Nyquist
+ * frequency, never narrower than MIN_SPAN.
+ */
+export function zoomFreq(v: FreqView, hz: number, factor: number, nyquist: number): FreqView {
+  const [lo, hi] = viewRange(v, nyquist);
+  const at = Math.min(hi, Math.max(lo, hz));
+  let nlo: number;
+  let nhi: number;
+  if (v.log >= 0.5) {
+    // Even in pitch: zoom in ratios.
+    const l0 = Math.max(lo, LOG_FLOOR);
+    const a = Math.max(at, l0);
+    nlo = a * Math.pow(l0 / a, factor);
+    nhi = a * Math.pow(hi / a, factor);
+    if (lo < LOG_FLOOR && factor >= 1) nlo = Math.min(nlo, lo);
+  } else {
+    nlo = at - (at - lo) * factor;
+    nhi = at + (hi - at) * factor;
+  }
+  if (nhi - nlo < MIN_SPAN) {
+    const mid = Math.min(nyquist - MIN_SPAN / 2, Math.max(MIN_SPAN / 2, (nlo + nhi) / 2));
+    nlo = mid - MIN_SPAN / 2;
+    nhi = mid + MIN_SPAN / 2;
+  }
+  nlo = Math.max(v.log >= 0.5 ? Math.min(MIN_HZ, nlo) : 0, nlo);
+  nhi = Math.min(nyquist, nhi);
+  // Zoomed all the way out: back to the full range.
+  const full = nlo <= (v.log >= 0.5 ? MIN_HZ : 0) + 1 && nhi >= nyquist - 1;
+  return { ...v, lo: full ? (v.log >= 0.5 ? MIN_HZ : 0) : Math.max(0, nlo), hi: full ? null : nhi };
+}
+
+/** Scale marks for the view: well-spaced frequencies with labels. */
+export function freqTicks(v: FreqView, nyquist: number, height: number, minGap = 16): number[] {
+  const [lo, hi] = viewRange(v, nyquist);
+  const nice = [1, 2, 3, 5];
+  const out: number[] = [];
+  if (v.log >= 0.5) {
+    for (let d = 1; d <= 100_000; d *= 10) for (const m of nice) out.push(m * d);
+  } else {
+    const span = hi - lo;
+    const want = Math.max(2, Math.floor(height / (minGap * 2)));
+    const raw = span / want;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw) ?? raw;
+    for (let f = Math.ceil(lo / step) * step; f <= hi; f += step) out.push(Math.round(f * 1000) / 1000);
+  }
+  const kept: number[] = [];
+  let lastY = Infinity;
+  for (const f of out.filter((f) => f > lo && f < hi).sort((a, b) => a - b)) {
+    const y = (1 - viewFrac(f, v, nyquist)) * height;
+    if (lastY - y >= minGap) {
+      kept.push(f);
+      lastY = y;
+    }
+  }
+  return kept;
+}
+
 /** Color stops from silent to loud: near black, indigo, teal, amber, warm white. */
 const STOPS: [number, [number, number, number]][] = [
   [0, [8, 8, 13]],

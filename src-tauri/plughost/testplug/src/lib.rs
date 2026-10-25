@@ -597,11 +597,11 @@ impl IAudioProcessorTrait for TestSynth {
             while next < events.len() && events[next].sampleOffset as usize <= i {
                 let e = &events[next];
                 match e.r#type as u32 {
-                    Event_::EventTypes_::kNoteOnEvent => {
+                    t if t == Event_::EventTypes_::kNoteOnEvent as u32 => {
                         h.0.push(e.__field0.noteOn.pitch);
                         h.1 = e.__field0.noteOn.velocity;
                     }
-                    Event_::EventTypes_::kNoteOffEvent => {
+                    t if t == Event_::EventTypes_::kNoteOffEvent as u32 => {
                         let p = e.__field0.noteOff.pitch;
                         if let Some(k) = h.0.iter().position(|x| *x == p) {
                             h.0.remove(k);

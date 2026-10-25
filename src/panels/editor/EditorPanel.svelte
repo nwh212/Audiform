@@ -752,7 +752,8 @@
       e.preventDefault();
       const r = zoomRatios();
       const mouse = Math.max(0, e.clientX - left);
-      const at = settings.current.wheelAnchor === "playhead" ? Math.max(0, Math.min(lanesEl!.clientWidth, xOf(playhead, view))) : mouse;
+      // Over the ruler the zoom always goes toward the pointer.
+      const at = settings.current.wheelAnchor === "playhead" && !overRuler ? Math.max(0, Math.min(lanesEl!.clientWidth, xOf(playhead, view))) : mouse;
       const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, maxSppFor(lanesWidth, contentEnd, rate));
       setView({ spp: z.spp, scroll: z.scroll });
     };
@@ -797,12 +798,16 @@
     const cur = uniformPreview ?? open[0]!.height;
     const h = Math.max(40, Math.min(600, Math.round(cur * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
     if (h === cur) return;
-    // Keep the middle of the view on the same spot.
+    // Zoom toward the track the pointer is over on the bar: that spot of
+    // the session keeps its place in the view.
     const sc = scroller;
-    const mid = (sc.scrollTop + sc.clientHeight / 2) / Math.max(1, sc.scrollHeight);
+    const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const share = Math.min(1, Math.max(0, (e.clientY - bar.top) / Math.max(1, bar.height)));
+    const spot = share * sc.scrollHeight;
+    const offset = Math.min(sc.clientHeight, Math.max(0, spot - sc.scrollTop));
     uniformPreview = h;
     void nextFrame().then(() => {
-      sc.scrollTop = mid * sc.scrollHeight - sc.clientHeight / 2;
+      sc.scrollTop = share * sc.scrollHeight - offset;
     });
     clearTimeout(vbarTimer);
     vbarTimer = setTimeout(() => {

@@ -165,7 +165,7 @@ pub async fn scope_phase_at(
     b: crate::engine::scope::Signal,
     wave: bool,
 ) -> Result<Response, String> {
-    use crate::engine::{graph, plan, render::Renderer, scope};
+    use crate::engine::scope;
     let session = if wave {
         let w = open_wave.0.lock().map_err(|e| e.to_string())?;
         match w.as_ref() {
@@ -182,31 +182,81 @@ pub async fn scope_phase_at(
     };
     let n = window(size);
     let rate = session.sample_rate.max(1);
-    let p = spawn_blocking(move || {
-        let start = position.saturating_sub(n as u64);
-        let master = plan::master_gain(&session);
-        let mut mix = graph::Mix::new(
-            Renderer::new(plan::build(&session, rate), start),
-            graph::Graph::new(&session, rate, true),
-        );
-        let mut out = vec![Vec::new(); mix.outputs()];
-        let mut frames: Vec<[f32; 2]> = Vec::with_capacity(n);
-        while frames.len() < n {
-            let got = mix.render((n - frames.len()).min(4_096), &mut out);
-            if got == 0 {
-                break;
-            }
-            frames.extend(
-                out[0][..got * 2]
-                    .chunks_exact(2)
-                    .map(|f| [f[0] * master, f[1] * master]),
-            );
-        }
-        scope::analyse(&frames, a, b, rate)
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let p = spawn_blocking(move || scope::analyse(&mix_before(&session, position, n), a, b, rate))
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(phase_bytes(&p))
+}
+
+/// The `n` frames of `session`'s mix that end at `position`, after the master fader.
+fn mix_before(session: &crate::session::model::Session, position: u64, n: usize) -> Vec<[f32; 2]> {
+    use crate::engine::{graph, plan, render::Renderer};
+    let rate = session.sample_rate.max(1);
+    let start = position.saturating_sub(n as u64);
+    let master = plan::master_gain(session);
+    let mut mix = graph::Mix::new(
+        Renderer::new(plan::build(session, rate), start),
+        graph::Graph::new(session, rate, true),
+    );
+    let mut out = vec![Vec::new(); mix.outputs()];
+    let mut frames: Vec<[f32; 2]> = Vec::with_capacity(n);
+    while frames.len() < n {
+        let got = mix.render((n - frames.len()).min(4_096), &mut out);
+        if got == 0 {
+            break;
+        }
+        frames.extend(
+            out[0][..got * 2]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|f| [f[0] * master, f[1] * master]),
+        );
+    }
+    frames
+}
+
+/// The spectrum of what is playing, for drawing behind an EQ's curve:
+/// `points` levels in dBFS from 20 Hz to 20 kHz, even in pitch. While
+/// stopped (`at` set), the audio just before that spot of the session, or
+/// of the Waveform editor's file with `wave`.
+#[tauri::command]
+pub async fn scope_spectrum(
+    open: tauri::State<'_, super::session::OpenSession>,
+    open_wave: tauri::State<'_, super::wave::OpenWave>,
+    size: usize,
+    points: usize,
+    at: Option<u64>,
+    wave: bool,
+) -> Result<Response, String> {
+    use crate::engine::scope;
+    let n = window(size);
+    let levels = match at {
+        None => scope::spectrum(&scope::latest(n), scope::rate(), points),
+        Some(position) => {
+            let session = if wave {
+                let w = open_wave.0.lock().map_err(|e| e.to_string())?;
+                match w.as_ref() {
+                    Some(w) => w.session.clone(),
+                    None => return Ok(Response::new(Vec::new())),
+                }
+            } else {
+                open.0.lock().map_err(|e| e.to_string())?.session.clone()
+            };
+            let rate = session.sample_rate.max(1);
+            spawn_blocking(move || {
+                scope::spectrum(&mix_before(&session, position, n), rate, points)
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+    };
+    Ok(Response::new(
+        levels
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect::<Vec<u8>>(),
+    ))
 }
 
 fn window(size: usize) -> usize {

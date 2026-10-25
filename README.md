@@ -81,6 +81,8 @@ Altered Audio Editor is free. If it helps your show, you can support it at [payp
 
 Bug fixes and features are welcome through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
 
+Thanks to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
 ## Build from source (Windows)
 
 First time on this machine? Follow [docs/setup-windows.md](docs/setup-windows.md). It covers installing Rust, Node and the Microsoft build tools step by step.

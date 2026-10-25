@@ -11,8 +11,22 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use altered_plughost::protocol::*;
 
-const CID: &str = "41A17E2D7E5700018A1B2C3D4E5F6071";
-const SYNTH: &str = "41A17E2D7E5700038A1B2C3D4E5F6073";
+/// The class id a scan reports for a test plug-in. Its first eight bytes
+/// are written in a different order on Windows than elsewhere, so the
+/// tests ask the scan rather than hard-code it.
+fn cid_of(bundle: &Path, name: &str) -> String {
+    let out = Command::new(env!("CARGO_BIN_EXE_altered-plughost"))
+        .arg("--plugin-scan")
+        .arg(bundle)
+        .output()
+        .unwrap();
+    scan_result(&out)
+        .classes
+        .into_iter()
+        .find(|c| c.name == name)
+        .unwrap_or_else(|| panic!("no class named {name}"))
+        .cid
+}
 
 /// Builds the test plug-in once and returns its bundle. Tests run at the
 /// same time, so the first builds and copies it and the rest wait, never
@@ -121,7 +135,8 @@ impl Host {
     }
 
     fn load(&mut self, bundle: &Path, state: Option<String>, params: Vec<(u32, f64)>) -> Message {
-        self.load_class(bundle, CID, state, params)
+        let cid = cid_of(bundle, "Altered Test Gain");
+        self.load_class(bundle, &cid, state, params)
     }
 
     fn load_class(
@@ -196,10 +211,8 @@ fn scans_processes_saves_and_survives_a_crash() {
         (scan.classes[1].name.as_str(), scan.classes[1].instrument),
         ("Altered Test Synth", true)
     );
-    assert_eq!(
-        (c.cid.as_str(), c.name.as_str(), c.latency),
-        (CID, "Altered Test Gain", 32)
-    );
+    assert_eq!((c.name.as_str(), c.latency), ("Altered Test Gain", 32));
+    assert!(c.cid.ends_with("8A1B2C3D4E5F6071"), "{}", c.cid);
     assert_eq!(
         c.params
             .iter()
@@ -297,7 +310,12 @@ fn scans_processes_saves_and_survives_a_crash() {
 fn plays_notes_on_an_instrument_at_their_frames() {
     let bundle = test_bundle();
     let mut h = Host::start();
-    match h.load_class(&bundle, SYNTH, None, vec![]) {
+    match h.load_class(
+        &bundle,
+        &cid_of(&bundle, "Altered Test Synth"),
+        None,
+        vec![],
+    ) {
         Message::Loaded {
             instrument,
             latency,

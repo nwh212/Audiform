@@ -59,6 +59,9 @@ pub struct ImportReport {
     pub missing_plugins: Vec<String>,
     /// Clips with a time stretch or pitch change.
     pub stretched: usize,
+    /// The other editor's built-in effects brought in as ours (its
+    /// per-frequency phase shifter as Phase Curve).
+    pub converted: usize,
     /// Media files that could not be found. Their clips are still placed.
     pub missing_files: Vec<PathBuf>,
 }
@@ -124,6 +127,28 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
     for (index, c) in slots {
         let name = c.attribute("name").unwrap_or("Effect").to_string();
         let slot = c.parent().unwrap_or(c);
+        // The other editor's per-frequency phase shifter comes across as our Phase Curve.
+        if c.attribute("componentID") == Some(PHASE_SHIFTER_ID) && chain.slots.len() < MAX_SLOTS {
+            if let Some(params) = child(c, "presetChunkData")
+                .and_then(|d| d.text())
+                .and_then(phase_curve_params)
+            {
+                chain.slots.push(EffectSlot {
+                    id: new_id(),
+                    effect: "altaudio.phase_curve".into(),
+                    enabled: slot.attribute("powered") != Some("false"),
+                    params,
+                    preset: None,
+                    sidechain: None,
+                    plugin_state: None,
+                    position: u32::try_from(index)
+                        .ok()
+                        .filter(|i| (*i as usize) < MAX_SLOTS),
+                });
+                report.converted += 1;
+                continue;
+            }
+        }
         let plugin = c
             .attribute("componentID")
             .and_then(vst3_effect)
@@ -156,6 +181,57 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
         });
     }
     chain
+}
+
+/// The component id the other editor gives its per-frequency phase shifter.
+const PHASE_SHIFTER_ID: &str = "7354704a-d87c-11e0-b05b-763c4824019b";
+
+/// Phase Curve settings from that effect's saved settings (base64 of
+/// little-endian 32-bit floats). Read from the tester's sessions: the
+/// sample rate first; the low and high ends of the frequency axis at 6
+/// and 7, as shares of half the sample rate; the number of points at 10;
+/// then from 11 each point as two numbers from 0 to 1: where it sits
+/// along the axis (taken as a log scale) and its phase (0.5 is 0°, the
+/// ends ±180°). More points than Phase Curve holds are thinned evenly,
+/// keeping the first and last.
+fn phase_curve_params(text: &str) -> Option<std::collections::BTreeMap<String, f64>> {
+    use crate::dsp::effects::phase_curve::{FREQ_KEYS, MAX_POINTS, PHASE_KEYS};
+    let raw = altered_plughost::protocol::base64_decode(text)?;
+    let f: Vec<f64> = raw
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f64::from(f32::from_le_bytes(*b)))
+        .collect();
+    let rate = *f.first()?;
+    let count = *f.get(10)? as usize;
+    if !(8_000.0..=768_000.0).contains(&rate) || count < 2 || f.len() < 11 + count * 2 {
+        return None;
+    }
+    let nyquist = rate / 2.0;
+    let lo = (f[6] * nyquist).clamp(10.0, nyquist);
+    let hi = (f[7] * nyquist).clamp(lo + 1.0, nyquist);
+    let all: Vec<(f64, f64)> = (0..count)
+        .map(|i| {
+            let x = f[11 + i * 2].clamp(0.0, 1.0);
+            let y = f[12 + i * 2].clamp(0.0, 1.0);
+            (lo * (hi / lo).powf(x), (y - 0.5) * 360.0)
+        })
+        .collect();
+    let keep: Vec<(f64, f64)> = if all.len() <= MAX_POINTS {
+        all
+    } else {
+        (0..MAX_POINTS)
+            .map(|k| all[(k * (all.len() - 1) + (MAX_POINTS - 1) / 2) / (MAX_POINTS - 1)])
+            .collect()
+    };
+    let mut out = std::collections::BTreeMap::new();
+    out.insert("points".to_string(), keep.len() as f64);
+    for (i, (hz, deg)) in keep.iter().enumerate() {
+        out.insert(FREQ_KEYS[i].to_string(), (hz * 10.0).round() / 10.0);
+        out.insert(PHASE_KEYS[i].to_string(), (deg * 10.0).round() / 10.0);
+    }
+    Some(out)
 }
 
 /// Reads every effect rack directly inside `n` into one chain.
@@ -751,6 +827,24 @@ mod tests {
         assert!((st.ratio - 1.029).abs() < 1e-9 && st.keep_pitch && !st.polyphonic);
         assert_eq!(st.pitch, 2.0);
         assert_eq!((c.source_in, c.source_out), (10_000, 20_000));
+    }
+
+    #[test]
+    fn brings_in_the_phase_shifter_as_phase_curve() {
+        // As saved in the tester's session: six points from 20 Hz up.
+        let p = phase_curve_params("AEQsRwAAgD8AAIA/ED74PAAAAAAAAIA/uMVtOgAAgD8AAAAAAAAAAAAAwEAAAAAAAAAAP1OBhD4AADo/t6IPPwAASD+VLU4/AABmP0/ZYj8AAIA/AACAPwAAgD8=").unwrap();
+        assert_eq!(p["points"], 6.0);
+        assert_eq!((p["p1_freq"], p["p1_phase"]), (20.0, 0.0));
+        assert_eq!(p["p6_freq"], 22_050.0);
+        assert_eq!(p["p6_phase"], 180.0);
+        // The second point: 0.2588 up a log axis from 20 Hz, phase +81.6°.
+        assert!(
+            (p["p2_freq"] - 20.0 * (22_050f64 / 20.0).powf(0.2588)).abs() < 1.0,
+            "{}",
+            p["p2_freq"]
+        );
+        assert!((p["p2_phase"] - 81.6).abs() < 0.2, "{}", p["p2_phase"]);
+        assert!(phase_curve_params("bm90IGEgY2h1bms=").is_none());
     }
 
     #[test]

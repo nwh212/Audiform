@@ -76,6 +76,7 @@ export function sesxSummary(r: SesxReport): string {
   if (r.missingPlugins?.length) {
     parts.push(`Not found on this computer (install or scan them in the Plug-in Manager): ${r.missingPlugins.join(", ")}.`);
   }
+  if (r.converted) parts.push(`${count(r.converted, "phase shifter came", "phase shifters came")} across as Phase Curve.`);
   if (r.stretched) parts.push(`${count(r.stretched, "clip keeps its", "clips keep their")} stretch and pitch.`);
   if (r.skippedEffects > 0) {
     const names = r.skippedNames?.length ? ` (${r.skippedNames.join(", ")})` : "";
