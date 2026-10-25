@@ -2,9 +2,10 @@
 # Copyright (c) The GeekCast Radio Network, LLC.
 # This file is part of Altered Audio Editor.
 
-# Test build of this branch: the Windows installer and portable exe, and
-# an experimental Linux AppImage and deb, as downloadable artifacts. Not
-# part of the pull request.
+# Test build of this branch: the Windows installer and portable exe on
+# every push, and an experimental Linux AppImage and deb when asked for
+# (Actions > Test build > Run workflow), as downloadable artifacts. Not
+# part of the pull request. Releases (release.yml) always build Linux.
 
 name: Test build
 
@@ -65,6 +66,8 @@ jobs:
 
   linux:
     name: Linux test build (experimental)
+    # Only when run by hand, to save build time on every push.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
