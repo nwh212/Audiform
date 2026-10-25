@@ -295,6 +295,9 @@ pub struct TransportStatus {
     pub bus_meters: Vec<[f32; 2]>,
     pub bus_chain_meters: Vec<Option<[f32; 4]>>,
     pub master_chain_meter: Option<[f32; 4]>,
+    /// 3D Space sessions: the master's speaker channels, after its fader,
+    /// in the layout's channel order. Empty otherwise.
+    pub bed_meters: Vec<f32>,
 }
 
 #[derive(Default)]
@@ -340,6 +343,7 @@ impl Transport {
             bus_meters: Vec::new(),
             bus_chain_meters: Vec::new(),
             master_chain_meter: None,
+            bed_meters: Vec::new(),
         };
         let Ok(cur) = self.current.lock() else {
             return idle;
@@ -378,6 +382,10 @@ impl Transport {
             bus_meters: g.buses,
             bus_chain_meters: g.bus_chains,
             master_chain_meter: g.master_chain,
+            bed_meters: {
+                let m = bits_f32(r.shared.master.load(Ordering::Relaxed));
+                g.bed.iter().map(|v| v * m).collect()
+            },
         }
     }
 

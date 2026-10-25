@@ -1276,9 +1276,19 @@
       ]
     },
     "SpacePos": {
-      "description": "A spot in the room. x runs left (-1) to right (1), y back (-1) to\nfront (1), z floor (0) to ceiling (1).",
+      "description": "A spot in the room. x runs left (-1) to right (1), y back (-1) to\nfront (1), z ear level (0) to ceiling (1), and below ear level down\nto -1.",
       "type": "object",
       "properties": {
+        "lfe": {
+          "description": "How much of it also feeds the low-frequency channel, 0 (none) to 1\n(full level), low-passed at 120 Hz.",
+          "type": "number",
+          "format": "double"
+        },
+        "rotation": {
+          "description": "Stereo sources: the pair turned around its spot, in degrees,\nclockwise seen from above (90 puts the left side in front).",
+          "type": "number",
+          "format": "double"
+        },
         "size": {
           "description": "0 is a point; 1 fills the room.",
           "type": "number",
@@ -1554,6 +1564,10 @@
           "items": {
             "$ref": "#/$defs/Send"
           }
+        },
+        "show_automation": {
+          "description": "Its automation lanes show under it in the Editor. Left out of the\nfile when off.",
+          "type": "boolean"
         },
         "solo": {
           "type": "boolean"

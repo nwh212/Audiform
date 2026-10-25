@@ -68,7 +68,12 @@ pub struct StripAuto {
 impl StripAuto {
     /// The automation for a track's or bus's envelopes and sends, or None
     /// when nothing moves.
-    pub fn new(envs: &[Envelope], sends: &[Send], session_rate: u32, out_rate: u32) -> Option<StripAuto> {
+    pub fn new(
+        envs: &[Envelope],
+        sends: &[Send],
+        session_rate: u32,
+        out_rate: u32,
+    ) -> Option<StripAuto> {
         if !has_automation(envs) {
             return None;
         }
@@ -80,7 +85,9 @@ impl StripAuto {
             match e.target {
                 EnvelopeTarget::Volume => a.volume = Some(lane(e, session_rate, out_rate)),
                 EnvelopeTarget::Pan => a.pan = Some(lane(e, session_rate, out_rate)),
-                EnvelopeTarget::EffectParam { .. } => a.params.push(lane(e, session_rate, out_rate)),
+                EnvelopeTarget::EffectParam { .. } => {
+                    a.params.push(lane(e, session_rate, out_rate))
+                }
             }
         }
         Some(a)

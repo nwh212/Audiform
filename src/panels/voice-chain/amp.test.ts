@@ -19,7 +19,8 @@ describe("amp model summary", () => {
   });
 
   it("says when a capture will not play", () => {
-    expect(ampSummary(JSON.stringify({ model: { architecture: "SlimmableContainer" } })).problem).toMatch(/not supported/);
+    expect(ampSummary(JSON.stringify({ model: { architecture: "Sequential" } })).problem).toMatch(/not supported/);
+    expect(ampSummary(JSON.stringify({ model: { architecture: "SlimmableContainer" } })).problem).toBeNull();
     expect(ampSummary(null)).toEqual({ model: null, ir: null, problem: null });
   });
 });

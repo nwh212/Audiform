@@ -62,6 +62,8 @@ pub struct NodeLevel {
 pub struct Place {
     pub bed: [Vec<f32>; 2],
     pub fold: [[f32; 2]; 2],
+    /// How much feeds the low-frequency channel (its index), from both sides.
+    pub lfe: Option<(usize, f32)>,
 }
 
 impl Place {
@@ -73,9 +75,13 @@ impl Place {
         let layout = s.space?.layout;
         let pos = pos.copied().unwrap_or_default().tidy();
         let [l, r] = crate::dsp::space::source_gains(layout, &pos, stereo);
+        let lfe = crate::dsp::space::lfe_channel(layout)
+            .filter(|_| pos.lfe > 0.0)
+            .map(|c| (c, pos.lfe as f32 * 0.5));
         Some(Arc::new(Place {
             bed: [l, r],
             fold: crate::dsp::space::fold_gains(&pos, stereo),
+            lfe,
         }))
     }
 }
@@ -203,8 +209,16 @@ pub fn levels(s: &Session) -> Levels {
             .map(|(t, h)| {
                 let sign = if t.polarity_inverted { -1.0 } else { 1.0 };
                 // An automated volume or pan takes the fader's or pan's place.
-                let vol = if super::automation::automates_volume(&t.envelopes) { 0.0 } else { t.volume_db };
-                let pan = if super::automation::automates_pan(&t.envelopes) { 0.0 } else { t.pan };
+                let vol = if super::automation::automates_volume(&t.envelopes) {
+                    0.0
+                } else {
+                    t.volume_db
+                };
+                let pan = if super::automation::automates_pan(&t.envelopes) {
+                    0.0
+                } else {
+                    t.pan
+                };
                 let stereo = t.channels != crate::session::model::ChannelLayout::Mono && !t.mono;
                 let place = (t.output == crate::session::model::Output::Master)
                     .then(|| Place::new(s, t.space.as_ref(), stereo))
@@ -217,8 +231,16 @@ pub fn levels(s: &Session) -> Levels {
             .iter()
             .zip(heard_b)
             .map(|(b, h)| {
-                let vol = if super::automation::automates_volume(&b.envelopes) { 0.0 } else { b.volume_db };
-                let pan = if super::automation::automates_pan(&b.envelopes) { 0.0 } else { b.pan };
+                let vol = if super::automation::automates_volume(&b.envelopes) {
+                    0.0
+                } else {
+                    b.volume_db
+                };
+                let pan = if super::automation::automates_pan(&b.envelopes) {
+                    0.0
+                } else {
+                    b.pan
+                };
                 let stereo = b.channels != crate::session::model::ChannelLayout::Mono && !b.mono;
                 let place = (b.output == crate::session::model::Output::Master)
                     .then(|| Place::new(s, b.space.as_ref(), stereo))
@@ -281,6 +303,8 @@ pub struct GraphMeters {
     pub buses: Vec<[f32; 2]>,
     pub bus_chains: Vec<Option<[f32; 4]>>,
     pub master_chain: Option<[f32; 4]>,
+    /// 3D Space sessions: each speaker channel of the master, before its fader.
+    pub bed: Vec<f32>,
 }
 
 impl GraphMeters {
@@ -316,6 +340,12 @@ impl GraphMeters {
         pairs(&mut self.buses, &other.buses);
         chains(&mut self.bus_chains, &other.bus_chains);
         one(&mut self.master_chain, &other.master_chain);
+        if self.bed.len() < other.bed.len() {
+            self.bed.resize(other.bed.len(), 0.0);
+        }
+        for (a, b) in self.bed.iter_mut().zip(&other.bed) {
+            *a = a.max(*b);
+        }
     }
 }
 
@@ -343,6 +373,10 @@ pub struct Graph {
     binaural: Option<crate::dsp::binaural::Binaural>,
     /// The timeline frame the next block starts at, for automation.
     pos: u64,
+    /// 3D Space sessions: each speaker's peak since the last read.
+    bed_peak: Vec<f32>,
+    /// The low-frequency channel's index and its low pass.
+    lfe_lp: Option<(usize, [crate::dsp::biquad::Biquad; 2])>,
 }
 
 impl Graph {
@@ -372,7 +406,12 @@ impl Graph {
             .map(|t| Strip {
                 id: t.id,
                 fx: fx(&t.effects),
-                auto: super::automation::StripAuto::new(&t.envelopes, &t.sends, s.sample_rate, rate),
+                auto: super::automation::StripAuto::new(
+                    &t.envelopes,
+                    &t.sends,
+                    s.sample_rate,
+                    rate,
+                ),
                 ..Strip::default()
             })
             .collect();
@@ -383,7 +422,12 @@ impl Graph {
                     id: b.id,
                     mono: b.channels == ChannelLayout::Mono,
                     fx: fx(&b.effects),
-                    auto: super::automation::StripAuto::new(&b.envelopes, &b.sends, s.sample_rate, rate),
+                    auto: super::automation::StripAuto::new(
+                        &b.envelopes,
+                        &b.sends,
+                        s.sample_rate,
+                        rate,
+                    ),
                     ..Strip::default()
                 })
                 .collect()
@@ -590,6 +634,16 @@ impl Graph {
                 .filter(|sp| sp.listen == crate::session::model::SpaceListen::Binaural)
                 .map(|sp| crate::dsp::binaural::Binaural::new(sp.layout, rate)),
             pos: 0,
+            bed_peak: Vec::new(),
+            lfe_lp: s
+                .space
+                .and_then(|sp| crate::dsp::space::lfe_channel(sp.layout))
+                .map(|c| {
+                    use crate::dsp::biquad::{Biquad, Coeffs, Shape};
+                    let q = crate::dsp::biquad::butterworth_qs(2);
+                    let lp = |q: f64| Biquad::new(Coeffs::new(Shape::LowPass, rate, 120.0, q, 0.0));
+                    (c, [lp(q[0]), lp(q[1])])
+                }),
         }
     }
 
@@ -695,6 +749,7 @@ impl Graph {
                 .collect(),
             bus_chains: self.buses.iter_mut().map(chain).collect(),
             master_chain: chain(&mut self.master),
+            bed: std::mem::take(&mut self.bed_peak),
         }
     }
 
@@ -719,7 +774,8 @@ impl Graph {
         self.master.input.clear();
         self.master.input.resize(n, 0.0);
         let nb = self.bed_channels;
-        let make_bed = self.want_bed || self.binaural.is_some();
+        // 3D sessions always make the bed: its channels are metered.
+        let make_bed = nb > 0;
         if make_bed {
             self.bed.clear();
             self.bed.resize(frames * nb, 0.0);
@@ -802,6 +858,13 @@ impl Graph {
                                     o[c] += v[0] * gl[c] + v[1] * gr[c];
                                 }
                             }
+                            if let Some((c, g)) = p.lfe {
+                                for (o, v) in
+                                    self.bed.chunks_exact_mut(nb).zip(scratch.chunks_exact(2))
+                                {
+                                    o[c] += (v[0] + v[1]) * g;
+                                }
+                            }
                         }
                         continue;
                     }
@@ -820,6 +883,24 @@ impl Graph {
             match node {
                 Node::Track(i) => self.tracks[i] = st,
                 Node::Bus(i) => self.buses[i] = st,
+            }
+        }
+        if nb > 0 {
+            // The low-frequency channel carries only lows: 120 Hz, steep.
+            if let Some((c, lp)) = self.lfe_lp.as_mut() {
+                let c = *c;
+                for f in self.bed.chunks_exact_mut(nb) {
+                    let x = lp[0].run(f[c]);
+                    f[c] = lp[1].run(x);
+                }
+            }
+            if self.bed_peak.len() != nb {
+                self.bed_peak = vec![0.0; nb];
+            }
+            for f in self.bed.chunks_exact(nb) {
+                for (p, v) in self.bed_peak.iter_mut().zip(f) {
+                    *p = p.max(v.abs());
+                }
             }
         }
         if self.routed && nb > 0 {
@@ -952,7 +1033,8 @@ fn run_strip_at(st: &mut Strip, pos: u64) {
         let end = (at + STEP * 2).min(total);
         let frame = pos + (at / 2) as u64;
         for l in &auto.params {
-            fx.chain.set_param(l.slot, &l.param, f64::from(l.value_at(frame)));
+            fx.chain
+                .set_param(l.slot, &l.param, f64::from(l.value_at(frame)));
         }
         let keys: Vec<(Id, &[f32])> = st
             .keys

@@ -214,6 +214,8 @@ export interface TrackDoc {
   space?: SpacePosDoc | null;
   /** Folded to its name row. Missing in files where it is off. */
   collapsed?: boolean;
+  /** Its automation lanes show under it. */
+  show_automation?: boolean;
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
   hidden?: boolean;
   monitor_input?: boolean;
@@ -271,6 +273,8 @@ export interface SpacePosDoc {
   size: number;
   /** Stereo sources: how far apart their left and right sit, 0 to 1. */
   width: number;
+  /** Stereo sources: the pair turned around its spot, degrees, -180 to 180 (clockwise seen from above). */
+  rotation?: number;
 }
 export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1 };
 
@@ -418,6 +422,8 @@ export interface TrackChanges {
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
   collapsed?: boolean;
+  /** Its automation lanes show under it. */
+  show_automation?: boolean;
   hidden?: boolean;
   monitor_input?: boolean;
   input?: string | null;
@@ -488,6 +494,7 @@ export type Op =
   | { op: "set_midi_clips"; track_id: string; clips: MidiClipDoc[] }
   | { op: "set_tempo"; tempo: TempoDoc }
   | { op: "set_space"; space: SpaceDoc | null }
+  | { op: "set_envelopes"; owner: string; envelopes: EnvelopeDoc[] }
   | { op: "batch"; ops: Op[] };
 
 export interface SessionBackend {

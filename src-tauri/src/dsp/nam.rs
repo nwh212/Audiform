@@ -46,6 +46,29 @@ pub fn parse(text: &str) -> Result<(Model, ModelInfo), String> {
 pub fn parse_value(v: &Value) -> Result<(Model, ModelInfo), String> {
     let kind = v["architecture"].as_str().unwrap_or("").to_string();
     let meta = &v["metadata"];
+    // A container holds the same capture at several sizes; play the full
+    // one (the last), as the reference player does unless asked otherwise.
+    if kind == "SlimmableContainer" || kind == "Container" {
+        let subs = v["config"]["submodels"]
+            .as_array()
+            .filter(|a| !a.is_empty())
+            .ok_or("The capture holds no models.")?;
+        let full = &subs[subs.len() - 1]["model"];
+        let (model, inner) = parse_value(full)?;
+        return Ok((
+            model,
+            ModelInfo {
+                kind: inner.kind,
+                rate: v["sample_rate"].as_f64().or(inner.rate),
+                loudness: meta["loudness"].as_f64().or(inner.loudness),
+                name: meta["name"]
+                    .as_str()
+                    .map(str::to_string)
+                    .filter(|s| !s.is_empty())
+                    .or(inner.name),
+            },
+        ));
+    }
     let info = ModelInfo {
         kind: kind.clone(),
         rate: v["sample_rate"].as_f64(),
@@ -137,7 +160,7 @@ enum Act {
     Relu,
     Sigmoid,
     Hardtanh,
-    LeakyRelu,
+    LeakyRelu(f32),
     Silu,
 }
 
@@ -149,7 +172,7 @@ impl Act {
             "ReLU" => Act::Relu,
             "Sigmoid" => Act::Sigmoid,
             "Hardtanh" => Act::Hardtanh,
-            "LeakyReLU" => Act::LeakyRelu,
+            "LeakyReLU" => Act::LeakyRelu(v["negative_slope"].as_f64().unwrap_or(0.01) as f32),
             "SiLU" | "Swish" => Act::Silu,
             other => {
                 return Err(format!(
@@ -166,11 +189,11 @@ impl Act {
             Act::Relu => x.max(0.0),
             Act::Sigmoid => sigmoid(x),
             Act::Hardtanh => x.clamp(-1.0, 1.0),
-            Act::LeakyRelu => {
+            Act::LeakyRelu(slope) => {
                 if x > 0.0 {
                     x
                 } else {
-                    0.01 * x
+                    slope * x
                 }
             }
             Act::Silu => x * sigmoid(x),
@@ -200,20 +223,45 @@ fn fast_sigmoid(x: f32) -> f32 {
     0.5 * (fast_tanh(x * 0.5) + 1.0)
 }
 
-/// One dilated layer: conv over its input's past, plus the input signal
-/// mixed in, an activation, a 1x1 back to its width added to its input.
+/// `y += a * x`, element by element (the compiler turns this into vector code).
+#[inline]
+fn axpy(y: &mut [f32], a: f32, x: &[f32]) {
+    for (y, x) in y.iter_mut().zip(x) {
+        *y += a * x;
+    }
+}
+
+/// A causal convolution's weights, kept as [tap][out][in] so each tap's
+/// rows are contiguous; the file stores them as [out][in][tap].
+fn taps_from_file(raw: &[f32], outs: usize, ins: usize, kernel: usize) -> Vec<f32> {
+    let mut w = vec![0f32; kernel * outs * ins];
+    for o in 0..outs {
+        for i in 0..ins {
+            for k in 0..kernel {
+                w[(k * outs + o) * ins + i] = raw[(o * ins + i) * kernel + k];
+            }
+        }
+    }
+    w
+}
+
+/// One dilated layer: a conv over its input's past (to `bottleneck`
+/// channels, twice that when gated), the input signal mixed in, an
+/// activation, then a 1x1 back to the array's width added to its input.
 #[derive(Debug, Clone)]
 struct Layer {
+    kernel: usize,
     dilation: usize,
-    /// Conv weights by tap, then output, then input: [k][o][i].
+    act: Act,
+    gated: bool,
+    /// Conv weights [k][o][i] and bias.
     conv: Vec<f32>,
     conv_b: Vec<f32>,
     /// Input signal mixed in: [o][c].
     mixin: Vec<f32>,
-    /// 1x1 after the activation: [o][i], and its bias.
+    /// 1x1 after the activation, bottleneck to channels: [o][i], and its bias.
     out: Vec<f32>,
     out_b: Vec<f32>,
-    gated: bool,
     /// The layer's input, one row per channel: `look` frames of past,
     /// then the block. Rows are `look + BLOCK` long.
     hist: Vec<f32>,
@@ -226,32 +274,36 @@ impl Layer {
     }
 }
 
-/// `y += a * x`, element by element (the compiler turns this into vector code).
-#[inline]
-fn axpy(y: &mut [f32], a: f32, x: &[f32]) {
-    for (y, x) in y.iter_mut().zip(x) {
-        *y += a * x;
-    }
-}
-
 #[derive(Debug, Clone)]
 struct LayerArray {
     input: usize,
     cond: usize,
     channels: usize,
+    bottleneck: usize,
     head: usize,
-    kernel: usize,
-    act: Act,
+    head_kernel: usize,
     /// Input to channels: [o][i].
     rechannel: Vec<f32>,
     layers: Vec<Layer>,
-    /// Channels to head: [o][i], and its bias when it has one.
+    /// Head conv, bottleneck to head size: [k][o][i], and its bias.
     head_w: Vec<f32>,
     head_b: Option<Vec<f32>>,
+    /// What the layers add up for the head, one row per bottleneck
+    /// channel: `head_look` frames of past, then the block.
+    hin: Vec<f32>,
+    head_look: usize,
+}
+
+impl LayerArray {
+    fn head_stride(&self) -> usize {
+        self.head_look + BLOCK
+    }
 }
 
 /// A WaveNet capture: layer arrays one after another, each adding to a
-/// head that becomes the output.
+/// head that becomes the output. Reads both layouts: the first one
+/// (every layer alike, a one-tap head) and the 2026 one (each layer its
+/// own kernel and activation, a narrower bottleneck, a longer head).
 #[derive(Debug, Clone)]
 pub struct WaveNet {
     arrays: Vec<LayerArray>,
@@ -260,7 +312,6 @@ pub struct WaveNet {
     // Scratch, sized once; one row of BLOCK per channel.
     cond: Vec<f32>,
     z: Vec<f32>,
-    head_in: Vec<f32>,
     head_out: Vec<f32>,
     array_out: Vec<f32>,
 }
@@ -272,85 +323,160 @@ fn usize_of(v: &Value, key: &str) -> Result<usize, String> {
         .ok_or_else(|| format!("The model's settings lack {key}."))
 }
 
+/// A per-layer setting: a list with one entry per layer, or one value for all.
+fn per_layer<'a>(v: &'a Value, n: usize) -> Vec<&'a Value> {
+    match v.as_array() {
+        Some(a) if a.len() == n => a.iter().collect(),
+        _ => vec![v; n],
+    }
+}
+
 impl WaveNet {
     fn new(config: &Value, weights: &[f32]) -> Result<WaveNet, String> {
         if !config["head"].is_null() {
-            return Err(
-                "This WaveNet model has a separate head, which is not supported yet.".into(),
-            );
+            return Err("This WaveNet model has a separate head, which is not supported yet.".into());
         }
-        let specs = config["layers"]
-            .as_array()
-            .ok_or("The model's settings lack layers.")?;
+        if !config["condition_dsp"].is_null() {
+            return Err("This WaveNet model shapes its input with another model, which is not supported yet.".into());
+        }
+        let specs = config["layers"].as_array().ok_or("The model's settings lack layers.")?;
         let mut r = Reader { w: weights, at: 0 };
         let mut arrays = Vec::new();
         let mut prewarm = 1;
+        let unsupported = || "This WaveNet model uses features not supported yet.".to_string();
         for s in specs {
-            // Newer files describe layers differently; those are not read here.
-            if s.get("kernel_sizes").is_some() || s["head"].is_object() {
-                return Err("This is a newer WaveNet model, which is not supported yet.".into());
+            // Features of the newer layout this player does not have.
+            for key in [
+                "conv_pre_film",
+                "conv_post_film",
+                "input_mixin_pre_film",
+                "input_mixin_post_film",
+                "activation_pre_film",
+                "activation_post_film",
+                "layer1x1_post_film",
+                "head1x1_post_film",
+                "head1x1",
+            ] {
+                if s[key]["active"].as_bool() == Some(true) {
+                    return Err(unsupported());
+                }
+            }
+            if s["layer1x1"]["active"].as_bool() == Some(false)
+                || s["layer1x1"]["groups"].as_u64().is_some_and(|g| g != 1)
+                || s["groups_input"].as_u64().is_some_and(|g| g != 1)
+                || s["groups_input_mixin"].as_u64().is_some_and(|g| g != 1)
+                || !(s["slimmable"].is_null())
+            {
+                return Err(unsupported());
             }
             let input = usize_of(s, "input_size")?;
             let cond = usize_of(s, "condition_size")?;
             let channels = usize_of(s, "channels")?;
-            let head = usize_of(s, "head_size")?;
-            let kernel = usize_of(s, "kernel_size")?;
-            let gated = s["gated"].as_bool().unwrap_or(false);
-            let head_bias = s["head_bias"].as_bool().unwrap_or(false);
-            let act = Act::parse(&s["activation"])?;
+            let bottleneck = s["bottleneck"].as_u64().map_or(channels, |b| b as usize);
             let dilations: Vec<usize> = s["dilations"]
                 .as_array()
                 .ok_or("The model's settings lack dilations.")?
                 .iter()
                 .map(|d| d.as_u64().unwrap_or(1) as usize)
                 .collect();
-            let zc = if gated { 2 * channels } else { channels };
+            let n = dilations.len();
+            // Kernel sizes: one for all (first layout) or one per layer.
+            let kernels: Vec<usize> = if let Some(k) = s["kernel_size"].as_u64() {
+                vec![k as usize; n]
+            } else {
+                per_layer(&s["kernel_sizes"], n)
+                    .iter()
+                    .map(|k| k.as_u64().map(|k| k as usize).ok_or("The model's settings lack kernel sizes."))
+                    .collect::<Result<_, _>>()?
+            };
+            let acts: Vec<Act> = per_layer(&s["activation"], n)
+                .into_iter()
+                .map(Act::parse)
+                .collect::<Result<_, _>>()?;
+            let gated: Vec<bool> = if let Some(g) = s["gated"].as_bool() {
+                vec![g; n]
+            } else if s["gating_mode"].is_null() {
+                vec![false; n]
+            } else {
+                per_layer(&s["gating_mode"], n)
+                    .iter()
+                    .map(|g| match g.as_str() {
+                        Some("none") | None => Ok(false),
+                        Some("gated") => Ok(true),
+                        Some(_) => Err(unsupported()),
+                    })
+                    .collect::<Result<_, _>>()?
+            };
+            if gated.iter().any(|&g| g)
+                && per_layer(&s["secondary_activation"], n)
+                    .iter()
+                    .any(|a| !a.is_null() && Act::parse(a).ok() != Some(Act::Sigmoid))
+            {
+                return Err(unsupported());
+            }
+            // The head: a one-tap 1x1 (first layout) or a short conv.
+            let (head, head_kernel, head_bias, head_dilation) = if s["head"].is_object() {
+                let h = &s["head"];
+                (
+                    usize_of(h, "out_channels")?,
+                    h["kernel_size"].as_u64().unwrap_or(1) as usize,
+                    h["bias"].as_bool().unwrap_or(false),
+                    h["dilation"].as_u64().unwrap_or(1) as usize,
+                )
+            } else {
+                (
+                    usize_of(s, "head_size")?,
+                    1,
+                    s["head_bias"].as_bool().unwrap_or(false),
+                    1,
+                )
+            };
+            if head_dilation != 1 {
+                return Err(unsupported());
+            }
             let rechannel = r.take(channels * input)?;
             let mut layers = Vec::new();
-            for &d in &dilations {
-                // File order is [o][i][k]; kept here as [k][o][i] so each
-                // tap's rows are contiguous.
-                let raw = r.take(zc * channels * kernel)?;
-                let mut conv = vec![0f32; kernel * zc * channels];
-                for o in 0..zc {
-                    for i in 0..channels {
-                        for k in 0..kernel {
-                            conv[(k * zc + o) * channels + i] =
-                                raw[(o * channels + i) * kernel + k];
-                        }
-                    }
-                }
+            for i in 0..n {
+                let (kernel, d) = (kernels[i], dilations[i]);
+                let zc = if gated[i] { 2 * bottleneck } else { bottleneck };
+                let conv = taps_from_file(&r.take(zc * channels * kernel)?, zc, channels, kernel);
                 let conv_b = r.take(zc)?;
                 let mixin = r.take(zc * cond)?;
-                let out = r.take(channels * channels)?;
+                let out = r.take(channels * bottleneck)?;
                 let out_b = r.take(channels)?;
-                let look = (kernel - 1) * d;
+                let look = (kernel.max(1) - 1) * d;
                 prewarm += look;
                 layers.push(Layer {
+                    kernel,
                     dilation: d,
+                    act: acts[i],
+                    gated: gated[i],
                     conv,
                     conv_b,
                     mixin,
                     out,
                     out_b,
-                    gated,
                     hist: vec![0.0; (look + BLOCK) * channels],
                     look,
                 });
             }
-            let head_w = r.take(head * channels)?;
+            let head_w = taps_from_file(&r.take(head * bottleneck * head_kernel)?, head, bottleneck, head_kernel);
             let head_b = if head_bias { Some(r.take(head)?) } else { None };
+            let head_look = head_kernel.max(1) - 1;
+            prewarm += head_look;
             arrays.push(LayerArray {
                 input,
                 cond,
                 channels,
+                bottleneck,
                 head,
-                kernel,
-                act,
+                head_kernel,
                 rechannel,
                 layers,
                 head_w,
                 head_b,
+                hin: vec![0.0; (head_look + BLOCK) * bottleneck],
+                head_look,
             });
         }
         let head_scale = r.take(1)?[0];
@@ -359,7 +485,7 @@ impl WaveNet {
         }
         // Each array's head feeds the next one's head; check the sizes line up.
         for w in arrays.windows(2) {
-            if w[0].head != w[1].channels {
+            if w[0].head != w[1].bottleneck {
                 return Err("The model's layer sizes do not line up.".into());
             }
         }
@@ -372,7 +498,7 @@ impl WaveNet {
         }
         let widest = arrays
             .iter()
-            .map(|a| a.channels.max(a.head) * 2)
+            .map(|a| a.channels.max(a.head).max(a.bottleneck) * 2)
             .max()
             .unwrap_or(1);
         Ok(WaveNet {
@@ -381,7 +507,6 @@ impl WaveNet {
             prewarm,
             cond: vec![0.0; BLOCK],
             z: vec![0.0; BLOCK * widest],
-            head_in: vec![0.0; BLOCK * widest],
             head_out: vec![0.0; BLOCK * widest],
             array_out: vec![0.0; BLOCK * widest],
         })
@@ -389,6 +514,7 @@ impl WaveNet {
 
     fn clear(&mut self) {
         for a in &mut self.arrays {
+            a.hin.fill(0.0);
             for l in &mut a.layers {
                 l.hist.fill(0.0);
             }
@@ -404,7 +530,7 @@ impl WaveNet {
         let row = |c: usize| c * BLOCK..c * BLOCK + n;
         for ai in 0..self.arrays.len() {
             let a = &mut self.arrays[ai];
-            let ch = a.channels;
+            let (ch, bn) = (a.channels, a.bottleneck);
             // This array's input (the signal, or the last array's output),
             // rechanneled into the first layer's history.
             {
@@ -415,36 +541,33 @@ impl WaveNet {
                     dst.fill(0.0);
                     for i in 0..a.input {
                         let w = a.rechannel[o * a.input + i];
-                        let src = if ai == 0 {
-                            cond
-                        } else {
-                            &self.array_out[row(i)]
-                        };
+                        let src = if ai == 0 { cond } else { &self.array_out[row(i)] };
                         axpy(dst, w, src);
                     }
                 }
             }
             // Head input: zero for the first array, else the last array's head.
-            for o in 0..ch {
+            let (hs, hl) = (a.head_stride(), a.head_look);
+            for o in 0..bn {
+                let dst = &mut a.hin[o * hs + hl..o * hs + hl + n];
                 if ai == 0 {
-                    self.head_in[row(o)].fill(0.0);
+                    dst.fill(0.0);
                 } else {
-                    let r = row(o);
-                    self.head_in[r.clone()].copy_from_slice(&self.head_out[r]);
+                    dst.copy_from_slice(&self.head_out[row(o)]);
                 }
             }
             let nl = a.layers.len();
             for li in 0..nl {
                 let (cur, rest) = a.layers[li..].split_first_mut().expect("in range");
-                let zc = if cur.gated { 2 * ch } else { ch };
+                let zc = if cur.gated { 2 * bn } else { bn };
                 let (stride, look) = (cur.stride(), cur.look);
                 // Dilated conv over the input's past, plus the signal mixed in.
                 for o in 0..zc {
                     let z = &mut self.z[o * BLOCK..o * BLOCK + n];
                     z.fill(cur.conv_b[o]);
-                    for k in 0..a.kernel {
+                    for k in 0..cur.kernel {
                         // Tap k reads (kernel - 1 - k) dilations back.
-                        let from = look - (a.kernel - 1 - k) * cur.dilation;
+                        let from = look - (cur.kernel - 1 - k) * cur.dilation;
                         let taps = &cur.conv[(k * zc + o) * ch..(k * zc + o + 1) * ch];
                         for (i, w) in taps.iter().enumerate() {
                             let x = &cur.hist[i * stride + from..i * stride + from + n];
@@ -454,22 +577,21 @@ impl WaveNet {
                     axpy(z, cur.mixin[o], cond);
                 }
                 if cur.gated {
-                    let (top, bottom) = self.z.split_at_mut(ch * BLOCK);
-                    for o in 0..ch {
+                    let (top, bottom) = self.z.split_at_mut(bn * BLOCK);
+                    for o in 0..bn {
                         for (t, b) in top[row(o)].iter_mut().zip(&bottom[row(o)]) {
-                            *t = a.act.apply(*t) * sigmoid(*b);
+                            *t = cur.act.apply(*t) * sigmoid(*b);
                         }
                     }
                 } else {
-                    for o in 0..ch {
+                    for o in 0..bn {
                         for v in &mut self.z[row(o)] {
-                            *v = a.act.apply(*v);
+                            *v = cur.act.apply(*v);
                         }
                     }
                 }
-                for o in 0..ch {
-                    let r = row(o);
-                    axpy(&mut self.head_in[r.clone()], 1.0, &self.z[r]);
+                for o in 0..bn {
+                    axpy(&mut a.hin[o * hs + hl..o * hs + hl + n], 1.0, &self.z[row(o)]);
                 }
                 // Next layer's input (or this array's output): input + 1x1(z).
                 for o in 0..ch {
@@ -485,22 +607,25 @@ impl WaveNet {
                     for (d, x) in dest.iter_mut().zip(input) {
                         *d = x + b;
                     }
-                    for i in 0..ch {
-                        axpy(dest, cur.out[o * ch + i], &self.z[row(i)]);
+                    for i in 0..bn {
+                        axpy(dest, cur.out[o * bn + i], &self.z[row(i)]);
                     }
                 }
             }
-            // Head: channels to head size.
+            // Head: a short causal conv from the bottleneck to the head size.
             for o in 0..a.head {
                 let b = a.head_b.as_ref().map_or(0.0, |b| b[o]);
-                let (out, inp) = (&mut self.head_out, &self.head_in);
-                let dst = &mut out[o * BLOCK..o * BLOCK + n];
+                let dst = &mut self.head_out[o * BLOCK..o * BLOCK + n];
                 dst.fill(b);
-                for i in 0..ch {
-                    axpy(dst, a.head_w[o * ch + i], &inp[i * BLOCK..i * BLOCK + n]);
+                for k in 0..a.head_kernel {
+                    let from = hl - (a.head_kernel - 1 - k);
+                    let taps = &a.head_w[(k * a.head + o) * bn..(k * a.head + o + 1) * bn];
+                    for (i, w) in taps.iter().enumerate() {
+                        axpy(dst, *w, &a.hin[i * hs + from..i * hs + from + n]);
+                    }
                 }
             }
-            // Keep each layer's last `look` frames for the next block.
+            // Keep each layer's (and the head's) last frames for the next block.
             for l in &mut a.layers {
                 let (stride, look) = (l.stride(), l.look);
                 if look > 0 {
@@ -508,6 +633,12 @@ impl WaveNet {
                         let r = c * stride;
                         l.hist.copy_within(r + n..r + n + look, r);
                     }
+                }
+            }
+            if hl > 0 {
+                for c in 0..bn {
+                    let r = c * hs;
+                    a.hin.copy_within(r + n..r + n + hl, r);
                 }
             }
         }
@@ -665,9 +796,10 @@ mod tests {
 
     #[test]
     fn says_which_models_it_cannot_play() {
-        let e =
-            parse(r#"{"architecture":"SlimmableContainer","config":{},"weights":[]}"#).unwrap_err();
+        let e = parse(r#"{"architecture":"Sequential","config":{},"weights":[]}"#).unwrap_err();
         assert!(e.contains("not supported"), "{e}");
+        let e = parse(r#"{"architecture":"SlimmableContainer","config":{"submodels":[]},"weights":[]}"#).unwrap_err();
+        assert!(e.contains("no models"), "{e}");
         assert!(parse("not json").is_err());
     }
 
@@ -678,7 +810,7 @@ mod tests {
     #[ignore]
     fn matches_the_reference() {
         let dir = std::env::var("NAM_REF").expect("NAM_REF");
-        for name in ["wavenet_a1_standard", "wavenet", "lstm"] {
+        for name in ["wavenet_a1_standard", "wavenet", "lstm", "A2", "ac30"] {
             let text =
                 std::fs::read_to_string(format!("{dir}/core/example_models/{name}.nam")).unwrap();
             let want: Vec<f32> = std::fs::read_to_string(format!("{dir}/ref_{name}.txt"))

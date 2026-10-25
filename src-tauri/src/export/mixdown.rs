@@ -471,6 +471,7 @@ mod tests {
         s.tracks[0].space = Some(SpacePos {
             x: -1.0,
             y: 1.0,
+            lfe: 1.0,
             ..SpacePos::default()
         });
         s.tracks[1].space = Some(SpacePos {
@@ -489,6 +490,9 @@ mod tests {
         let x: Vec<f32> = r.into_samples::<f32>().map(Result::unwrap).collect();
         let at = |frame: usize, ch: usize| (x[frame * 6 + ch] * 1_000.0).round() / 1_000.0;
         assert_eq!((at(1_000, 0), at(1_000, 1), at(1_000, 2)), (0.25, 0.0, 0.0));
+        // A's steady tone also feeds the low-frequency channel, through its low pass.
+        assert_eq!(at(10_000, 3), 0.25);
+        assert_eq!(at(100_000, 3), 0.0);
         // B shares the two surrounds at -3 dB each.
         assert_eq!((at(100_000, 4), at(100_000, 5)), (0.177, 0.177));
         assert_eq!(at(100_000, 0), 0.0);

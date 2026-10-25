@@ -497,6 +497,10 @@ pub struct Track {
     /// Folded down to its name row in the Editor. Left out of the file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub collapsed: bool,
+    /// Its automation lanes show under it in the Editor. Left out of the
+    /// file when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub show_automation: bool,
     /// Hidden from the Editor and Mixer lists. The track still plays and
     /// mixes. Left out of the file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -557,6 +561,7 @@ impl Track {
             color: None,
             height: 96,
             collapsed: false,
+            show_automation: false,
             hidden: false,
             volume_db: 0.0,
             pan: 0.0,
@@ -698,7 +703,8 @@ pub struct Space {
 }
 
 /// A spot in the room. x runs left (-1) to right (1), y back (-1) to
-/// front (1), z floor (0) to ceiling (1).
+/// front (1), z ear level (0) to ceiling (1), and below ear level down
+/// to -1.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SpacePos {
     pub x: f64,
@@ -712,6 +718,18 @@ pub struct SpacePos {
     /// sides sit, 0 (together) to 1 (a full room width apart each way).
     #[serde(default = "full_width")]
     pub width: f64,
+    /// Stereo sources: the pair turned around its spot, in degrees,
+    /// clockwise seen from above (90 puts the left side in front).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub rotation: f64,
+    /// How much of it also feeds the low-frequency channel, 0 (none) to 1
+    /// (full level), low-passed at 120 Hz.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub lfe: f64,
+}
+
+fn is_zero_f64(v: &f64) -> bool {
+    *v == 0.0
 }
 
 fn full_width() -> f64 {
@@ -727,6 +745,8 @@ impl Default for SpacePos {
             z: 0.0,
             size: 0.0,
             width: 1.0,
+            rotation: 0.0,
+            lfe: 0.0,
         }
     }
 }
@@ -738,9 +758,13 @@ impl SpacePos {
         SpacePos {
             x: c(self.x, -1.0, 1.0, 0.0),
             y: c(self.y, -1.0, 1.0, 1.0),
-            z: c(self.z, 0.0, 1.0, 0.0),
+            // Below 0 is below ear level: speaker layouts play it from their
+            // ear-level speakers, having none lower.
+            z: c(self.z, -1.0, 1.0, 0.0),
             size: c(self.size, 0.0, 1.0, 0.0),
             width: c(self.width, 0.0, 1.0, 1.0),
+            rotation: c(self.rotation, -180.0, 180.0, 0.0),
+            lfe: c(self.lfe, 0.0, 1.0, 0.0),
         }
     }
 }
@@ -1171,6 +1195,8 @@ mod tests {
             z: 0.75,
             size: 0.1,
             width: 0.5,
+            rotation: 30.0,
+            lfe: 0.25,
         });
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains(r#""layout":"7.1.2""#));

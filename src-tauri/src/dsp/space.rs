@@ -113,6 +113,11 @@ const TBR: Speaker = Speaker {
     at: Some([1.0, -1.0, 1.0]),
 };
 
+/// Where the low-frequency channel is in a layout's channels, if it has one.
+pub fn lfe_channel(layout: SpaceLayout) -> Option<usize> {
+    speakers(layout).iter().position(|s| s.at.is_none())
+}
+
 /// A layout's speakers, in WAV channel order (by channel bit).
 pub fn speakers(layout: SpaceLayout) -> &'static [Speaker] {
     match layout {
@@ -181,7 +186,12 @@ pub fn point_gains(layout: SpaceLayout, x: f32, y: f32, z: f32, size: f32) -> Ve
     let sp = speakers(layout);
     let mut g = vec![0f32; sp.len()];
     let has_top = sp.iter().any(|s| s.at.is_some_and(|a| a[2] > 0.5));
-    let (floor, top) = if has_top { share(z) } else { (1.0, 0.0) };
+    // Below ear level plays from the ear-level speakers: there are none lower.
+    let (floor, top) = if has_top {
+        share(z.max(0.0))
+    } else {
+        (1.0, 0.0)
+    };
     for (layer, lg) in [(0.0f32, floor), (1.0f32, top)] {
         if lg <= 0.0 {
             continue;
@@ -251,11 +261,22 @@ pub fn source_gains(layout: SpaceLayout, pos: &SpacePos, stereo: bool) -> [Vec<f
             .collect();
         return [g.clone(), g];
     }
-    let w = pos.width as f32;
+    let [l, r] = sides(pos);
     [
-        point_gains(layout, (x - w).clamp(-1.0, 1.0), y, z, size),
-        point_gains(layout, (x + w).clamp(-1.0, 1.0), y, z, size),
+        point_gains(layout, l[0], l[1], z, size),
+        point_gains(layout, r[0], r[1], z, size),
     ]
+}
+
+/// Where a stereo source's left and right sides sit (x, y): `width` either
+/// side of its spot, the pair turned by its rotation, kept in the room.
+pub fn sides(pos: &SpacePos) -> [[f32; 2]; 2] {
+    let (x, y, w) = (pos.x as f32, pos.y as f32, pos.width as f32);
+    let a = (pos.rotation as f32).to_radians();
+    // From the spot to the right side; clockwise seen from above (front up).
+    let (dx, dy) = (w * a.cos(), -w * a.sin());
+    let keep = |v: f32| v.clamp(-1.0, 1.0);
+    [[keep(x - dx), keep(y - dy)], [keep(x + dx), keep(y + dy)]]
 }
 
 /// Stereo gains for listening: each point folded by where it sits left to
@@ -269,10 +290,8 @@ pub fn fold_gains(pos: &SpacePos, stereo: bool) -> [[f32; 2]; 2] {
         let [l, r] = lr(pos.x);
         return [[l * 0.5, r * 0.5]; 2];
     }
-    [
-        lr((pos.x - pos.width).clamp(-1.0, 1.0)),
-        lr((pos.x + pos.width).clamp(-1.0, 1.0)),
-    ]
+    let [l, r] = sides(pos);
+    [lr(f64::from(l[0])), lr(f64::from(r[0]))]
 }
 
 #[cfg(test)]
@@ -314,10 +333,27 @@ mod tests {
         }
         // Halfway between left and center: both at -3 dB.
         let g = point_gains(SpaceLayout::Surround51, -0.5, 1.0, 0.0, 0.0);
-        assert!((g[0] - g[2]).abs() < 1e-6 && (g[0] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-3);
+        assert!(
+            (g[0] - g[2]).abs() < 1e-6 && (g[0] - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-3
+        );
         // A layout without height keeps a raised sound on the floor.
         let g = point_gains(SpaceLayout::Surround51, 0.0, 1.0, 1.0, 0.0);
         assert!((g[2] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_turned_pair_moves_its_sides() {
+        let pos = SpacePos {
+            x: 0.0,
+            y: 0.0,
+            width: 0.5,
+            rotation: 90.0,
+            ..SpacePos::default()
+        };
+        let [l, r] = sides(&pos);
+        // A quarter turn clockwise: the left side in front, the right behind.
+        assert!(l[0].abs() < 1e-6 && (l[1] - 0.5).abs() < 1e-6, "{l:?}");
+        assert!(r[0].abs() < 1e-6 && (r[1] + 0.5).abs() < 1e-6, "{r:?}");
     }
 
     #[test]

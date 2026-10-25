@@ -35,6 +35,8 @@
   const set = (p: EffectParamInfo, v: number, done: boolean) => onParams([[p, Math.max(p.min, Math.min(p.max, v))]], `${info.name} ${p.name}`, done);
   const sum = $derived(ampSummary(slot.data ?? null));
   let busy = $state(false);
+  /** Why the last load failed, shown in the window until the next one. */
+  let failed = $state<string | null>(null);
 
   async function load(kind: "model" | "ir") {
     if (busy) return;
@@ -42,9 +44,11 @@
     try {
       const path = await ampPick(kind);
       if (!path) return;
+      failed = null;
       const data = kind === "model" ? await ampLoadModel(path, slot.data ?? null) : await ampLoadIr(path, slot.data ?? null);
       onData(data, kind === "model" ? "Load Amp Capture" : "Load Cabinet");
     } catch (e) {
+      failed = `${kind === "model" ? "That capture" : "That cabinet"} did not load: ${e instanceof Error ? e.message : String(e)}`;
       onError(e);
     } finally {
       busy = false;
@@ -89,6 +93,7 @@
         {#if sum.model}<button type="button" onclick={() => clear("model")}>Clear</button>{/if}
       </span>
     </div>
+    {#if failed}<p class="warn">{failed}</p>{/if}
     {#if sum.problem}<p class="warn">{sum.problem}</p>{/if}
     {#if sum.model?.rate && Math.abs(sum.model.rate - rate) > 1}
       <p class="warn">This capture was made at {(sum.model.rate / 1000).toLocaleString("en-US")} kHz and plays here at {(rate / 1000).toLocaleString("en-US")} kHz, so its tone shifts a little. A session at {(sum.model.rate / 1000).toLocaleString("en-US")} kHz plays it exactly.</p>

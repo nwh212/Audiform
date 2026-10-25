@@ -94,6 +94,9 @@ pub struct TrackChanges {
     pub mono: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collapsed: Option<bool>,
+    /// Shows or hides its automation lanes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_automation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hidden: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -393,6 +396,12 @@ pub enum Op {
     SetTempo {
         tempo: Tempo,
     },
+    /// Replaces the automation envelopes of a track or bus (volume, pan
+    /// and effect settings over the session's timeline).
+    SetEnvelopes {
+        owner: Id,
+        envelopes: Vec<Envelope>,
+    },
     /// Makes the session a 3D Space session with this speaker layout, or
     /// an ordinary one again (None). Track and bus spots are kept.
     SetSpace {
@@ -631,6 +640,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.collapsed {
                 old.collapsed = Some(std::mem::replace(&mut t.collapsed, v));
+            }
+            if let Some(v) = changes.show_automation {
+                old.show_automation = Some(std::mem::replace(&mut t.show_automation, v));
             }
             if let Some(v) = changes.hidden {
                 old.hidden = Some(std::mem::replace(&mut t.hidden, v));
@@ -1037,6 +1049,21 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             Ok(Op::SetMidiClips {
                 track_id: *track_id,
                 clips: old,
+            })
+        }
+        Op::SetEnvelopes { owner, envelopes } => {
+            let tidy: Vec<Envelope> = envelopes.iter().map(tidy_envelope).collect();
+            let slot = if let Some(t) = s.tracks.iter_mut().find(|t| t.id == *owner) {
+                &mut t.envelopes
+            } else if let Some(b) = s.buses.iter_mut().find(|b| b.id == *owner) {
+                &mut b.envelopes
+            } else {
+                return Err(OpError::NoTrack(*owner));
+            };
+            let old = std::mem::replace(slot, tidy);
+            Ok(Op::SetEnvelopes {
+                owner: *owner,
+                envelopes: old,
             })
         }
         Op::SetSpace { space } => {
@@ -1486,6 +1513,29 @@ pub fn set_view(s: &mut Session, view: SessionView) {
     s.view = view;
 }
 
+/// An automation envelope with its points in time order and its values
+/// in range: volume -96 to +24 dB, pan -100 to 100.
+fn tidy_envelope(e: &Envelope) -> Envelope {
+    let (lo, hi) = match e.target {
+        EnvelopeTarget::Volume => (-96.0, 24.0),
+        EnvelopeTarget::Pan => (-100.0, 100.0),
+        EnvelopeTarget::EffectParam { .. } => (f64::MIN, f64::MAX),
+    };
+    let mut points: Vec<EnvelopePoint> = e
+        .points
+        .iter()
+        .filter(|p| p.value.is_finite())
+        .map(|p| EnvelopePoint {
+            value: p.value.clamp(lo, hi),
+            ..*p
+        })
+        .collect();
+    points.sort_by_key(|p| p.position);
+    Envelope {
+        points,
+        ..e.clone()
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
