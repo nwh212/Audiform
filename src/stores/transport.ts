@@ -50,6 +50,8 @@ export interface TransportState {
   tracks: Record<string, [MeterLevel, MeterLevel]>;
   /** Voice Chain meters by track or bus id, and `master` for the master chain: left in, right in, left out, right out. Only chains that do something. */
   chains: Record<string, [MeterLevel, MeterLevel, MeterLevel, MeterLevel]>;
+  /** 3D Space sessions: the master's speaker channels in the layout's order, after its fader. Missing otherwise. */
+  bed?: MeterLevel[];
 }
 
 /** How lively the level meters are: Settings > Playback and Recording. */
@@ -240,6 +242,7 @@ export class TransportStore {
       tracks,
       chains,
       master: [this.meter("m:0", this.state.master[0], s.master[0]), this.meter("m:1", this.state.master[1], s.master[1])],
+      bed: (s.bedMeters ?? []).map((v, k) => this.meter(`bed:${k}`, this.state.bed?.[k] ?? quiet(), v)),
     });
   }
 

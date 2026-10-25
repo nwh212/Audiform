@@ -16,7 +16,7 @@
   import { editor, type EditorState } from "../../stores/editor";
   import { SPACE_LAYOUTS, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
-  import { fromView, LAYOUT_NAMES, sides, speakerSpots, tidyPos, toView } from "./space";
+  import { fromView, LAYOUT_NAMES, rotationToward, sides, speakerSpots, tidyPos, toView } from "./space";
 
   interface Props {
     session: SessionStore;
@@ -122,11 +122,21 @@
     el.setPointerCapture(e.pointerId);
     const r = room.getBoundingClientRect();
     const start = s.pos;
-    // Grabbing one side of a stereo pair moves the pair, keeping the grab point under the pointer.
-    const offset = side === 0 ? 0 : side * start.width;
+    // Alt and a side of a pair: turn the pair around its spot.
+    const turning = e.altKey && side !== 0;
+    // Grabbing one side of a pair moves the pair, keeping the grab point under the pointer.
+    const [sl, sr] = sides(start);
+    const grab: [number, number] = side === -1 ? sl : side === 1 ? sr : [start.x, start.y];
+    const off: [number, number] = [grab[0] - start.x, grab[1] - start.y];
     const move = (ev: PointerEvent) => {
       const [x, y] = fromView(ev.clientX - r.left, ev.clientY - r.top, size);
-      const pos = tidyPos({ ...start, x: x - offset, y });
+      let pos: SpacePosDoc;
+      if (turning) {
+        const toward = rotationToward(start, x, y);
+        pos = tidyPos({ ...start, rotation: side === 1 ? toward : ((toward + 360) % 360) - 180 });
+      } else {
+        pos = tidyPos({ ...start, x: x - off[0], y: y - off[1] });
+      }
       live = { id: s.id, pos };
       sendPos(s, pos);
     };
@@ -141,10 +151,17 @@
     el.addEventListener("pointercancel", up);
   }
 
+  /** The wheel over a dot raises or lowers it; with Shift it turns a pair. */
   function onDotWheel(e: WheelEvent, s: Source) {
     e.preventDefault();
     editor.selectTrack(s.id);
-    setPos(s, { z: s.pos.z + (e.deltaY < 0 ? 0.05 : -0.05) });
+    const up = e.deltaY < 0;
+    if (e.shiftKey && s.stereo) {
+      let rot = (s.pos.rotation ?? 0) + (up ? 5 : -5);
+      if (rot > 180) rot -= 360;
+      if (rot < -180) rot += 360;
+      setPos(s, { rotation: rot });
+    } else setPos(s, { z: s.pos.z + (up ? 0.05 : -0.05) });
   }
 
   const corners = $derived([...toView(-1, 1, size), ...toView(1, -1, size)]);
@@ -152,7 +169,16 @@
   const y0 = $derived(corners[1]!);
   const x1 = $derived(corners[2]!);
   const y1 = $derived(corners[3]!);
-  const dotR = (p: SpacePosDoc) => 7 + p.z * 5 + p.size * 10;
+  // Dots grow with the room, a little with height, and with size.
+  const unit = $derived(Math.max(6, size * 0.014));
+  const dotR = (p: SpacePosDoc) => unit * (1 + Math.max(0, p.z) * 0.5 + p.size * 1.2);
+  const deg = (v: number) => `${Math.round(v)}°`;
+  /** A speaker's name, placed outside the room so dots and names never cover it. */
+  function spkLabel(sp: { x: number; y: number }, sx: number, sy: number): { x: number; y: number; anchor: string } {
+    if (sp.y >= 0.99) return { x: sx, y: sy - 12, anchor: "middle" };
+    if (sp.y <= -0.99) return { x: sx, y: sy + 20, anchor: "middle" };
+    return { x: sx + (sp.x < 0 ? -12 : 12), y: sy + 4, anchor: sp.x < 0 ? "end" : "start" };
+  }
   const pct = (v: number) => `${Math.round(v * 100)}%`;
 </script>
 
@@ -189,59 +215,86 @@
     <div class="body">
       <div class="roombox" bind:clientWidth={boxW} bind:clientHeight={boxH}>
         <svg bind:this={room} width={size} height={size} class="room" role="application" aria-label="Room, seen from above. Front is at the top.">
-          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} class="walls" />
+          <defs>
+            <radialGradient id="floor" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="var(--surface-2)" />
+              <stop offset="100%" stop-color="var(--surface-0)" />
+            </radialGradient>
+          </defs>
+          <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx="6" class="walls" />
+          {#each [0.33, 0.66, 1] as k (k)}
+            <circle cx={(x0 + x1) / 2} cy={(y0 + y1) / 2} r={((x1 - x0) / 2) * k} class="ring" />
+          {/each}
           <line x1={(x0 + x1) / 2} x2={(x0 + x1) / 2} y1={y0} y2={y1} class="axis" />
           <line x1={x0} x2={x1} y1={(y0 + y1) / 2} y2={(y0 + y1) / 2} class="axis" />
-          <text x={(x0 + x1) / 2} y={y0 - 20} class="front">FRONT</text>
+          <text x={(x0 + x1) / 2} y={y0 - 26} class="front">FRONT</text>
+          <!-- The listener, facing front. -->
+          <g class="head" transform="translate({(x0 + x1) / 2} {(y0 + y1) / 2})">
+            <path d="M -5 -{unit * 1.2} L 0 -{unit * 1.9} L 5 -{unit * 1.2} Z" />
+            <circle r={unit * 1.3} />
+            <ellipse cx={-unit * 1.35} rx={unit * 0.3} ry={unit * 0.55} />
+            <ellipse cx={unit * 1.35} rx={unit * 0.3} ry={unit * 0.55} />
+          </g>
           {#each spots as sp (sp.name)}
             {@const [sx, sy] = toView(sp.x, sp.y, size)}
             {#if sp.z > 0}
-              <g class="spk top" transform="translate({sx + (sp.x < 0 ? 14 : -14)} {sy + (sp.y > 0 ? 14 : sp.y < 0 ? -14 : 0)})">
-                <rect x="-6" y="-6" width="12" height="12" transform="rotate(45)" /><text y="20">{sp.name}</text>
+              {@const tx = sx + (sp.x < 0 ? unit * 2.4 : -unit * 2.4)}
+              {@const ty = sy + (sp.y > 0 ? unit * 2.4 : sp.y < 0 ? -unit * 2.4 : 0)}
+              <g class="spk top" transform="translate({tx} {ty})">
+                <rect x={-unit * 0.8} y={-unit * 0.8} width={unit * 1.6} height={unit * 1.6} transform="rotate(45)" />
               </g>
+              <text x={tx} y={ty + (sp.y > 0 ? unit * 2.6 : -unit * 1.8)} class="spk-name top">{sp.name}</text>
             {:else}
+              {@const lab = spkLabel(sp, sx, sy)}
               <g class="spk" transform="translate({sx} {sy})">
-                <rect x="-7" y="-7" width="14" height="14" rx="2" /><text y={sp.y > 0 ? -11 : 20}>{sp.name}</text>
+                <rect x={-unit} y={-unit} width={unit * 2} height={unit * 2} rx="3" />
+                <circle r={unit * 0.45} class="cone" />
               </g>
+              <text x={lab.x} y={lab.y} text-anchor={lab.anchor} class="spk-name">{sp.name}</text>
             {/if}
           {/each}
           {#each sources as s (s.id)}
             {@const r = dotR(s.pos)}
             {@const on = ed.selectedTrack === s.id}
             {@const [nx, ny] = toView(s.pos.x, s.pos.y, size)}
-            {#if s.stereo}
-              {@const [lx, rx] = sides(s.pos)}
-              {@const [ax, ay] = toView(lx, s.pos.y, size)}
-              {@const [bx, by] = toView(rx, s.pos.y, size)}
+            {@const together = s.stereo && s.pos.width < 0.02}
+            {#if s.stereo && !together}
+              {@const [l, rr] = sides(s.pos)}
+              {@const [ax, ay] = toView(l[0], l[1], size)}
+              {@const [bx, by] = toView(rr[0], rr[1], size)}
               <line x1={ax} y1={ay} x2={bx} y2={by} class="pair" class:on style:stroke={s.color} />
               {#each [[ax, ay, -1, "L"], [bx, by, 1, "R"]] as [px, py, side, lab] (lab)}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <g class="dot" class:on transform="translate({px} {py})" onpointerdown={(e) => onDotDown(e, s, side as -1 | 1)} onwheel={(e) => onDotWheel(e, s)}>
-                  <title>{s.name} ({lab}): drag to move, wheel to raise or lower</title>
-                  {#if s.pos.z > 0.02}<circle r={r + 4} class="lift" style:stroke={s.color} />{/if}
-                  <circle r={r * 0.8} style:fill={s.color} />
-                  <text dy="3.5">{lab}</text>
+                  <title>{s.name} ({lab}): drag to move, Alt and drag to turn the pair, the wheel to raise or lower (Shift and the wheel to turn)</title>
+                  {#if s.pos.z > 0.02}<circle r={r * 0.8 + 4} class="lift" style:stroke={s.color} />{/if}
+                  <circle r={r * 0.8} class="body" style:fill={s.color} />
+                  <text dy={unit * 0.35} style:font-size="{Math.max(8, unit * 0.95)}px">{lab}</text>
                 </g>
               {/each}
             {:else}
-              {@const [px, py] = toView(s.pos.x, s.pos.y, size)}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <g class="dot" class:on transform="translate({px} {py})" onpointerdown={(e) => onDotDown(e, s, 0)} onwheel={(e) => onDotWheel(e, s)}>
-                <title>{s.name}: drag to move, wheel to raise or lower</title>
+              <g class="dot" class:on transform="translate({nx} {ny})" onpointerdown={(e) => onDotDown(e, s, 0)} onwheel={(e) => onDotWheel(e, s)}>
+                <title>{s.name}: drag to move, the wheel to raise or lower</title>
                 {#if s.pos.z > 0.02}<circle r={r + 4} class="lift" style:stroke={s.color} />{/if}
-                <circle r={r} style:fill={s.color} />
+                <circle r={r} class="body" style:fill={s.color} />
+                {#if together}<text dy={unit * 0.35} style:font-size="{Math.max(7, unit * 0.8)}px">LR</text>{/if}
               </g>
             {/if}
-            <text x={nx} y={ny + r + 13} class="label" class:on>{s.name}</text>
+            {@const tag = `${s.name}${Math.abs(s.pos.z) > 0.02 ? (s.pos.z > 0 ? ` ↑${Math.round(s.pos.z * 100)}%` : ` ↓${Math.round(-s.pos.z * 100)}%`) : ""}${(s.pos.lfe ?? 0) > 0 ? " · LFE" : ""}`}
+            <g class="tag" class:on transform="translate({nx} {ny + r + unit * 1.6})">
+              <rect x={-(tag.length * 3.1 + 6)} y="-9" width={tag.length * 6.2 + 12} height="14" rx="7" />
+              <text dy="2">{tag}</text>
+            </g>
           {/each}
         </svg>
       </div>
       <div class="side">
         {#if picked}
           <div class="name" style:border-color={picked.color}>{picked.name}</div>
-          <label class="ctl" title={heights ? "How high it sits: floor to ceiling" : "This layout has no height speakers; height is kept for layouts that do"}>
+          <label class="ctl" title={heights ? "How high it sits: ceiling (100%) to ear level (0) and below. Speaker layouts have no speakers below ear level, so below 0 plays from the ear-level ones." : "This layout has no height speakers; height is kept for layouts that do"}>
             <span>Height</span>
-            <input type="range" min="0" max="1" step="0.01" value={picked.pos.z} oninput={(e) => setPos(picked, { z: Number(e.currentTarget.value) })} />
+            <input type="range" min="-1" max="1" step="0.01" value={picked.pos.z} oninput={(e) => setPos(picked, { z: Number(e.currentTarget.value) })} />
             <span class="val">{pct(picked.pos.z)}</span>
           </label>
           <label class="ctl" title="0 is a point; turn it up to spread the sound over more of the room">
@@ -255,7 +308,17 @@
               <input type="range" min="0" max="1" step="0.01" value={picked.pos.width} oninput={(e) => setPos(picked, { width: Number(e.currentTarget.value) })} />
               <span class="val">{pct(picked.pos.width)}</span>
             </label>
+            <label class="ctl" title="Turns the pair around its spot, clockwise seen from above. Also Alt and drag a side, or Shift and the wheel over it.">
+              <span>Rotation</span>
+              <input type="range" min="-180" max="180" step="1" value={picked.pos.rotation ?? 0} oninput={(e) => setPos(picked, { rotation: Number(e.currentTarget.value) })} ondblclick={() => setPos(picked, { rotation: 0 })} />
+              <span class="val">{deg(picked.pos.rotation ?? 0)}</span>
+            </label>
           {/if}
+          <label class="ctl" title="Also sends it to the low-frequency (subwoofer) channel, low-passed at 120 Hz. For kick, bass, booms. Layouts without that channel (2.0) leave it out.">
+            <span>LFE send</span>
+            <input type="range" min="0" max="1" step="0.01" value={picked.pos.lfe ?? 0} oninput={(e) => setPos(picked, { lfe: Number(e.currentTarget.value) })} />
+            <span class="val">{(picked.pos.lfe ?? 0) > 0 ? `${(20 * Math.log10(picked.pos.lfe ?? 0)).toFixed(1)} dB` : "Off"}</span>
+          </label>
           <label class="ctl">
             <span>Left / right</span>
             <input type="range" min="-1" max="1" step="0.01" value={picked.pos.x} oninput={(e) => setPos(picked, { x: Number(e.currentTarget.value) })} />
@@ -266,9 +329,9 @@
             <input type="range" min="-1" max="1" step="0.01" value={picked.pos.y} oninput={(e) => setPos(picked, { y: Number(e.currentTarget.value) })} />
             <span class="val">{picked.pos.y.toFixed(2)}</span>
           </label>
-          <button type="button" class="quiet" onclick={() => setPos(picked, { x: 0, y: 1, z: 0, size: 0, width: 1 })}>Back to Front Center</button>
+          <button type="button" class="quiet" onclick={() => setPos(picked, { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0 })}>Back to Front Center</button>
         {:else}
-          <p class="hint">Click a dot (or a track) to set its height, size and width. Tracks routed to a bus play where the bus sits.</p>
+          <p class="hint">Click a dot (or a track) to set its height, size, width, rotation and LFE send. Drag dots to move them; the wheel raises or lowers one; Alt and drag (or Shift and the wheel) turns a stereo pair. Tracks routed to a bus play where the bus sits.</p>
         {/if}
       </div>
     </div>
@@ -343,9 +406,51 @@
     user-select: none;
   }
   .walls {
-    fill: color-mix(in srgb, var(--text) 3%, var(--surface-0));
+    fill: url(#floor);
     stroke: var(--border-strong);
     stroke-width: 1.5;
+  }
+  .ring {
+    fill: none;
+    stroke: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+  .head circle,
+  .head ellipse,
+  .head path {
+    fill: color-mix(in srgb, var(--text) 18%, var(--surface-2));
+    stroke: color-mix(in srgb, var(--text) 35%, transparent);
+  }
+  .spk .cone {
+    fill: color-mix(in srgb, var(--text) 25%, var(--surface-2));
+    stroke: none;
+  }
+  .spk-name {
+    fill: var(--text-faint);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+  .spk-name.top {
+    font-style: italic;
+  }
+  .tag rect {
+    fill: color-mix(in srgb, var(--surface-0) 80%, transparent);
+    stroke: color-mix(in srgb, var(--text) 12%, transparent);
+  }
+  .tag text {
+    fill: var(--text-dim);
+    font-size: 10px;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .tag.on text {
+    fill: var(--text);
+    font-weight: 600;
+  }
+  .tag {
+    pointer-events: none;
+  }
+  .dot.on .body {
+    filter: drop-shadow(0 0 4px currentColor);
   }
   .axis {
     stroke: color-mix(in srgb, var(--text) 8%, transparent);
@@ -365,11 +470,7 @@
     fill: none;
     stroke-dasharray: 2 2;
   }
-  .spk text {
-    fill: var(--text-faint);
-    font-size: 9px;
-    text-anchor: middle;
-  }
+
   .dot {
     cursor: grab;
   }
@@ -388,7 +489,6 @@
   }
   .dot text {
     fill: #0e0e10;
-    font-size: 9px;
     font-weight: 700;
     text-anchor: middle;
     pointer-events: none;
@@ -399,15 +499,6 @@
   }
   .pair.on {
     opacity: 0.9;
-  }
-  .label {
-    fill: var(--text-dim);
-    font-size: 10px;
-    text-anchor: middle;
-    pointer-events: none;
-  }
-  .label.on {
-    fill: var(--text);
   }
   .narrow .body {
     flex-direction: column;

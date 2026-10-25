@@ -1701,7 +1701,7 @@
       case "time-info":
         return { component: asComponent(TimeInfoPanel), props: { session, transport, wave, waveTransport } };
       case "levels":
-        return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter } };
+        return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter, session } };
       case "space":
         return { component: asComponent(SpacePanel), props: { session, runner: sessionHistory, onError: showError } };
       case "phase-wheel":

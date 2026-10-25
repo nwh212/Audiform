@@ -16,6 +16,7 @@
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { OutputDoc, SendDoc, SessionDoc, SessionStore } from "../../stores/session";
+  import { channelNames } from "../space/space";
   import type { MeterLevel, TransportState, TransportStore } from "../../stores/transport";
   import { editor } from "../../stores/editor";
   import { dbToFader, faderToDb, formatDb, formatPan } from "./fader";
@@ -30,6 +31,8 @@
   const { session, transport, runner, onError = console.error }: Props = $props();
 
   let doc = $state<SessionDoc | null>(null);
+  /** 3D Space sessions: the master's speaker channel names, in order. */
+  const bedNames = $derived(doc?.space ? channelNames(doc.space.layout) : []);
   $effect(() =>
     session.subscribe((d) => {
       doc = d;
@@ -286,14 +289,26 @@
         <div class="unity" style:bottom="{dbToFader(0) * 100}%"></div>
         <div class="cap" style:bottom="{dbToFader(masterDb) * 100}%"></div>
       </div>
-      <div class="meter wide" aria-hidden="true">
-        {#each [0, 1] as const as ch (ch)}
-          <div class="mbar">
-            <div class="mcover" style:height="{100 - levelOf(tp?.master[ch])}%"></div>
-            {#if (tp?.master[ch].peak ?? 0) > 0}<div class="mpeak" style:bottom="{peakOf(tp?.master[ch])}%"></div>{/if}
-          </div>
-        {/each}
-      </div>
+      {#if bedNames.length > 2 && tp?.bed?.length === bedNames.length}
+        <!-- 3D Space sessions: one bar per speaker channel, named on hover. -->
+        <div class="meter bed" aria-hidden="true">
+          {#each tp.bed as m, k (k)}
+            <div class="mbar" title={bedNames[k]}>
+              <div class="mcover" style:height="{100 - levelOf(m)}%"></div>
+              {#if m.peak > 0}<div class="mpeak" style:bottom="{peakOf(m)}%"></div>{/if}
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="meter wide" aria-hidden="true">
+          {#each [0, 1] as const as ch (ch)}
+            <div class="mbar">
+              <div class="mcover" style:height="{100 - levelOf(tp?.master[ch])}%"></div>
+              {#if (tp?.master[ch].peak ?? 0) > 0}<div class="mpeak" style:bottom="{peakOf(tp?.master[ch])}%"></div>{/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
     <div class="db">{formatDb(masterDb)}</div>
     {#if routed}
@@ -555,6 +570,10 @@
 
   .meter.wide .mbar {
     width: 8px;
+  }
+
+  .meter.bed .mbar {
+    width: 3px;
   }
 
   .mcover {

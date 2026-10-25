@@ -275,8 +275,10 @@ export interface SpacePosDoc {
   width: number;
   /** Stereo sources: the pair turned around its spot, degrees, -180 to 180 (clockwise seen from above). */
   rotation?: number;
+  /** How much also feeds the low-frequency channel, 0 to 1. */
+  lfe?: number;
 }
-export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1 };
+export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, lfe: 0 };
 
 export { BPM_MAX, BPM_MIN, DEFAULT_TEMPO, type TempoChangeDoc, type TempoDoc } from "./tempo";
 

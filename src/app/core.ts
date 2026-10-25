@@ -536,6 +536,8 @@ export interface TransportStatus {
   busMeters?: [number, number][];
   busChainMeters?: ([number, number, number, number] | null)[];
   masterChainMeter?: [number, number, number, number] | null;
+  /** 3D Space sessions: the master's speaker channels, after its fader, in the layout's order. */
+  bedMeters?: number[];
 }
 
 /** How playback treats the time selection. */

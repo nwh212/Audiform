@@ -60,7 +60,16 @@ export const LAYOUT_NAMES: Record<SpaceLayout, string> = {
 export function tidyPos(p: Partial<SpacePosDoc> | null | undefined): SpacePosDoc {
   const d = DEFAULT_SPACE_POS;
   const c = (v: number | undefined, lo: number, hi: number, def: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
-  return { x: c(p?.x, -1, 1, d.x), y: c(p?.y, -1, 1, d.y), z: c(p?.z, 0, 1, d.z), size: c(p?.size, 0, 1, d.size), width: c(p?.width, 0, 1, d.width) };
+  return {
+    x: c(p?.x, -1, 1, d.x),
+    y: c(p?.y, -1, 1, d.y),
+    // Below 0 is below ear level.
+    z: c(p?.z, -1, 1, d.z),
+    size: c(p?.size, 0, 1, d.size),
+    width: c(p?.width, 0, 1, d.width),
+    rotation: c(p?.rotation, -180, 180, 0),
+    lfe: c(p?.lfe, 0, 1, 0),
+  };
 }
 
 /** The room view: room units (-1 to 1) to pixels in a square `size` across, front at the top, with a margin. */
@@ -79,7 +88,45 @@ export function fromView(px: number, py: number, size: number): [number, number]
   return [Math.min(1, Math.max(-1, x)), Math.min(1, Math.max(-1, y))];
 }
 
-/** Where a stereo source's two sides sit, left to right. */
-export function sides(p: SpacePosDoc): [number, number] {
-  return [Math.max(-1, p.x - p.width), Math.min(1, p.x + p.width)];
+/**
+ * Where a stereo source's two sides sit, [x, y] each: `width` either side
+ * of its spot, the pair turned by its rotation (clockwise seen from above),
+ * kept in the room. The core's `dsp/space.rs` works it out the same way.
+ */
+export function sides(p: SpacePosDoc): [[number, number], [number, number]] {
+  const a = ((p.rotation ?? 0) * Math.PI) / 180;
+  const dx = p.width * Math.cos(a);
+  const dy = -p.width * Math.sin(a);
+  const keep = (v: number) => Math.min(1, Math.max(-1, v));
+  return [
+    [keep(p.x - dx), keep(p.y - dy)],
+    [keep(p.x + dx), keep(p.y + dy)],
+  ];
+}
+
+/** The rotation (degrees) that puts a pair's right side toward (x, y) from its spot. */
+export function rotationToward(p: SpacePosDoc, x: number, y: number): number {
+  const deg = (Math.atan2(-(y - p.y), x - p.x) * 180) / Math.PI;
+  return Math.round(deg);
+}
+
+/** Every channel of a layout in file order, the low-frequency one included (as the core's `speakers`). */
+export function channelNames(layout: SpaceLayout): string[] {
+  const base = ["L", "R", "C", "LFE"];
+  switch (layout) {
+    case "2.0":
+      return ["L", "R"];
+    case "5.1":
+      return [...base, "Ls", "Rs"];
+    case "7.1":
+      return [...base, "Lrs", "Rrs", "Lss", "Rss"];
+    case "5.1.2":
+      return [...base, "Ls", "Rs", "Ltm", "Rtm"];
+    case "7.1.2":
+      return [...base, "Lrs", "Rrs", "Lss", "Rss", "Ltm", "Rtm"];
+    case "5.1.4":
+      return [...base, "Ls", "Rs", "Ltf", "Rtf", "Ltr", "Rtr"];
+    case "7.1.4":
+      return [...base, "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr"];
+  }
 }

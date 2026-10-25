@@ -11,15 +11,26 @@
 <script lang="ts">
   import type { PreviewMeter, PreviewMeterState } from "../../stores/preview-meter";
   import { meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
+  import type { SessionStore, SpaceLayout } from "../../stores/session";
+  import { channelNames } from "../space/space";
 
   interface Props {
     transport: TransportStore;
     /** The Waveform editor's transport. */
     wave?: TransportStore | null;
     preview?: PreviewMeter | null;
+    /** The open session: in 3D Space sessions every speaker channel shows. */
+    session?: SessionStore | null;
   }
 
-  const { transport, wave = null, preview = null }: Props = $props();
+  const { transport, wave = null, preview = null, session = null }: Props = $props();
+
+  let space = $state<SpaceLayout | null>(null);
+  $effect(() =>
+    session?.subscribe((d) => {
+      space = d?.space?.layout ?? null;
+    }),
+  );
 
   type Source = "multi" | "wave" | "preview";
   let multiS = $state<TransportState | null>(null);
@@ -47,6 +58,13 @@
   );
   const source = $derived<Source>(waveS?.playing ? "wave" : multiS?.playing ? "multi" : previewS?.playing ? "preview" : lastSource);
   const s = $derived<{ master: [MeterLevel, MeterLevel] } | null>(source === "wave" ? waveS : source === "preview" ? previewS : multiS);
+  /** 3D Space sessions: one row per speaker channel of the master. */
+  const rows = $derived.by((): { label: string; m: MeterLevel | undefined; name: string }[] => {
+    const bed = source === "multi" ? multiS?.bed : undefined;
+    const names = space ? channelNames(space) : [];
+    if (bed && bed.length > 0 && names.length === bed.length) return bed.map((m, k) => ({ label: names[k]!, m, name: `${names[k]} level` }));
+    return [0, 1].map((ch) => ({ label: ch === 0 ? "L" : "R", m: s?.master[ch], name: ch === 0 ? "Left level" : "Right level" }));
+  });
   function clearOver() {
     if (source === "wave") wave?.clearOver();
     else if (source === "preview") preview?.clearOver();
@@ -63,15 +81,15 @@
   }
 </script>
 
-<section class="levels" aria-label="Levels">
-  {#each [0, 1] as const as ch (ch)}
-    {@const m = s?.master[ch]}
+<section class="levels" class:many={rows.length > 2} style:--rows={rows.length} aria-label="Levels">
+  {#each rows as row (row.label)}
+    {@const m = row.m}
     <div class="row">
-      <span class="ch">{ch === 0 ? "L" : "R"}</span>
+      <span class="ch">{row.label}</span>
       <div
         class="bar"
         role="meter"
-        aria-label={ch === 0 ? "Left level" : "Right level"}
+        aria-label={row.name}
         aria-valuemin={-60}
         aria-valuemax={0}
         aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}
@@ -111,10 +129,22 @@
     background: var(--surface-1);
   }
 
+  .levels.many {
+    gap: 1px;
+  }
+
+  .levels.many .bar {
+    height: max(3px, min(9px, calc((100% - 30px) / var(--rows))));
+  }
+
+  .levels.many .ch {
+    font-size: 9px;
+  }
+
   .row,
   .scale {
     display: grid;
-    grid-template-columns: 14px 1fr 12px 44px;
+    grid-template-columns: 26px 1fr 12px 44px;
     gap: 6px;
     align-items: center;
   }
