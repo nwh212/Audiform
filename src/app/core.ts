@@ -550,6 +550,20 @@ export function transportStop(): Promise<number | null> {
   return invoke<number | null>("transport_stop");
 }
 
+/** What the metronome plays, as the core takes it. */
+export interface MetronomeCore {
+  on: boolean;
+  levelDb: number;
+  sound: "tick" | "wood" | "beep" | "shaker";
+  accent: boolean;
+  subdivide: "none" | "halves" | "triplets" | "quarters";
+}
+
+/** The metronome's settings; heard within the audio already rendered ahead. */
+export function setMetronome(settings: MetronomeCore): Promise<void> {
+  return invoke<void>("transport_set_metronome", { settings });
+}
+
 /** Mono check: hear everything folded to mono. Listening only. */
 export function setMonoCheck(on: boolean): Promise<void> {
   return invoke<void>("transport_set_mono_check", { on });

@@ -23,6 +23,7 @@
 </script>
 <script lang="ts">
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
+  import { barBeats, segmentAtBeat } from "../../stores/tempo";
   import { GRIDS, MIN_NOTE, addNote, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
@@ -40,7 +41,7 @@
 
   /** Hears a note, held for its length (within reason). */
   function hear(n: NoteDoc) {
-    onAudition(n.pitch, n.velocity, Math.min(1, Math.max(0.15, (n.length * 60) / tempo.bpm)));
+    onAudition(n.pitch, n.velocity, Math.min(1, Math.max(0.15, (n.length * 60) / segmentAtBeat(tempo, original.start + n.start).bpm)));
   }
 
   // svelte-ignore state_referenced_locally
@@ -59,11 +60,13 @@
   let drawLength = $state(0.25);
 
   const ROW = 14;
-  const step = $derived(snapOn ? gridBeats(grid, tempo) : 0);
+  const step = $derived(snapOn ? gridBeats(grid, tempo, original.start) : 0);
+  /** Beats in a bar where the clip starts. */
+  const barLen = $derived(barBeats(segmentAtBeat(tempo, original.start)));
   const changed = $derived(JSON.stringify($state.snapshot(clip)) !== JSON.stringify(original));
   /** The grid runs two bars past the clip's end (or its last note), so there is room to work. */
   const widthPx = $derived(
-    (Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * tempo.beats_per_bar) * zoom,
+    (Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * barLen) * zoom,
   );
 
   let scroller = $state<HTMLDivElement | null>(null);
@@ -257,7 +260,7 @@
     const r = pasteNotes(clip.notes, clipboard, at);
     // Pasted past the end: the clip grows to the next bar line, so they play.
     const end = at + spanOf(clipboard);
-    const bar = Math.max(1, tempo.beats_per_bar);
+    const bar = barLen;
     clip = { ...clip, notes: r.notes, length: end > clip.length ? Math.ceil(end / bar - 1e-9) * bar : clip.length };
     picked = r.pasted;
     cursor = at + spanOf(clipboard);
@@ -382,7 +385,7 @@
           style:width="{widthPx}px"
           style:height="{128 * ROW}px"
           style:--beat="{zoom}px"
-          style:--bar="{zoom * tempo.beats_per_bar}px"
+          style:--bar="{zoom * barLen}px"
           style:--row="{ROW}px"
           onpointerdown={onGridDown}
           ondblclick={deleteAt}

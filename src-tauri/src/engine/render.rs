@@ -412,7 +412,7 @@ impl Playing {
     /// Starts the instrument for playback from output frame `start`,
     /// primed so its first sound heard is the sound at `start`.
     fn open(midi: &MidiPlan, start: u64, rate: u32) -> Playing {
-        let inst = Instrument::start(&midi.instrument, rate, midi.tempo);
+        let inst = Instrument::start(&midi.instrument, rate, &midi.tempo);
         let chase = midi
             .notes
             .iter()

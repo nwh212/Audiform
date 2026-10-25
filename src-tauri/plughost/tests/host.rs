@@ -329,7 +329,10 @@ fn plays_notes_on_an_instrument_at_their_frames() {
     assert_eq!(
         h.request(&Request::Tempo {
             bpm: 90.0,
-            beats_per_bar: 3
+            beats_per_bar: 3,
+            beat_unit: 8,
+            start: 0,
+            start_music: 0.0,
         }),
         Message::Ok
     );

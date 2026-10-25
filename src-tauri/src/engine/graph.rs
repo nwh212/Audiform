@@ -35,11 +35,12 @@
 //! restart while their look-ahead stays the same.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::fx::{swap_fx, Fx};
 use super::render::{ChainUpdate, Renderer};
 use crate::dsp::effects::Delay;
-use crate::session::model::{ChannelLayout, EffectChain, Id, Session};
+use crate::session::model::{ChannelLayout, EffectChain, Id, Session, Tempo};
 use crate::session::routing::{self, Node};
 
 /// Levels for one track or bus, as left and right multipliers on the
@@ -282,6 +283,8 @@ pub struct Graph {
     /// The levels the last block ended on, so changes ramp in.
     applied: Levels,
     scratch: Vec<f32>,
+    /// The session's tempo map, told to plug-ins as playback crosses changes.
+    tempo: Arc<Tempo>,
 }
 
 impl Graph {
@@ -516,7 +519,13 @@ impl Graph {
             applied: lv.clone(),
             levels: lv,
             scratch: Vec::new(),
+            tempo: Arc::new(s.tempo.clone()),
         }
+    }
+
+    /// The session's tempo map.
+    pub fn tempo(&self) -> &Arc<Tempo> {
+        &self.tempo
     }
 
     /// How far the graph delays the mix, in frames.
@@ -724,10 +733,13 @@ impl Graph {
             .collect();
         let per = taken.len().div_ceil(threads);
         let position = crate::plugins::instance::block_position();
+        let tempo = self.tempo.clone();
         std::thread::scope(|scope| {
             for chunk in taken.chunks_mut(per) {
+                let tempo = tempo.clone();
                 scope.spawn(move || {
                     crate::plugins::instance::set_block_position(position);
+                    crate::plugins::instance::set_block_tempo(Some(tempo));
                     for (i, st) in chunk.iter_mut() {
                         prepare_track(st, &raw[*i][..n]);
                         run_strip(st);
@@ -820,6 +832,7 @@ impl Mix {
         let mut raw = vec![Vec::new(); renderer.track_count()];
         let mut sink = vec![Vec::new(); graph.outputs()];
         let mut left = graph.lead();
+        crate::plugins::instance::set_block_tempo(Some(graph.tempo().clone()));
         while left > 0 && !raw.is_empty() {
             let want = left.min(4_096) as usize;
             crate::plugins::instance::set_block_position(renderer.position() as i64);
@@ -847,8 +860,10 @@ impl Mix {
             self.rendered += frames as u64;
             return frames;
         }
-        // Plug-ins are told where in the timeline this block is (their song position).
+        // Plug-ins are told where in the timeline this block is (their song
+        // position) and the tempo there.
         crate::plugins::instance::set_block_position(self.renderer.position() as i64);
+        crate::plugins::instance::set_block_tempo(Some(self.graph.tempo().clone()));
         self.renderer.render(frames, &mut self.raw);
         self.graph.process(&self.raw, out);
         let n = self.raw[0].len() / 2;
@@ -860,6 +875,11 @@ impl Mix {
     /// with the frames the device has played.
     pub fn rendered(&self) -> u64 {
         self.rendered
+    }
+
+    /// The timeline frame the next block starts at.
+    pub fn position(&self) -> u64 {
+        self.renderer.position()
     }
 
     pub fn outputs(&self) -> usize {

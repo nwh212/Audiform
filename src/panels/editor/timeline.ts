@@ -8,6 +8,7 @@
  */
 
 import { settings } from "../../stores/settings";
+import { DEFAULT_TEMPO, barAt, barStart, beatsToSeconds, secondsToBeats, segmentAtBeat, segments, unitBeats, type TempoDoc } from "../../stores/tempo";
 export interface Viewport {
   /** Session samples per screen pixel. */
   spp: number;
@@ -176,14 +177,11 @@ export function formatIn(
   return formatClock(samples, rate);
 }
 
-/** The tempo bars and beats are shown in: the session's, set by the Multitrack editor. */
-export interface BarTempo {
-  bpm: number;
-  beats_per_bar: number;
-}
-let displayTempo: BarTempo = { bpm: 120, beats_per_bar: 4 };
+/** The tempo map bars and beats are shown in: the session's, set by the Multitrack editor. */
+export type BarTempo = TempoDoc;
+let displayTempo: BarTempo = DEFAULT_TEMPO;
 export function setDisplayTempo(t: BarTempo | null | undefined): void {
-  if (t && t.bpm > 0 && t.beats_per_bar > 0) displayTempo = { bpm: t.bpm, beats_per_bar: t.beats_per_bar };
+  displayTempo = t && t.bpm > 0 && t.beats_per_bar > 0 ? t : DEFAULT_TEMPO;
 }
 export function getDisplayTempo(): BarTempo {
   return displayTempo;
@@ -192,18 +190,22 @@ export function getDisplayTempo(): BarTempo {
 /** Ticks (fractions of a beat) shown in bar.beat.tick: 960 to a beat. */
 export const TICKS_PER_BEAT = 960;
 
-/** Bars and beats as bar.beat.tick, counted from 1 (1.1.000 is the start). */
+/** Bars and beats as bar.beat.tick, counted from 1 (1.1.000 is the start). Beats are the time signature's own (eighths in 6/8). */
 export function formatBars(samples: number, rate: number, t: BarTempo): string {
   const neg = samples < 0;
-  const beats = (Math.abs(samples) / rate) * (t.bpm / 60);
-  const per = Math.max(1, Math.round(t.beats_per_bar));
-  let whole = Math.floor(beats);
-  let tick = Math.round((beats - whole) * TICKS_PER_BEAT);
+  const at = barAt(t, secondsToBeats(t, Math.abs(samples) / rate));
+  let bar = at.bar;
+  let whole = Math.floor(at.beat + 1e-9);
+  let tick = Math.round((at.beat - whole) * TICKS_PER_BEAT);
   if (tick >= TICKS_PER_BEAT) {
     whole += 1;
     tick = 0;
   }
-  const body = `${Math.floor(whole / per) + 1}.${(whole % per) + 1}.${String(tick).padStart(3, "0")}`;
+  if (whole >= at.seg.beats_per_bar) {
+    bar += 1;
+    whole = 0;
+  }
+  const body = `${bar + 1}.${whole + 1}.${String(tick).padStart(3, "0")}`;
   return neg ? `-${body}` : body;
 }
 
@@ -215,39 +217,83 @@ export function parseBars(text: string, rate: number, t: BarTempo): number | nul
   const beat = m[2] === undefined ? 1 : Number(m[2]);
   const tick = m[3] === undefined ? 0 : Number(m[3]);
   if (bar < 1 || beat < 1) return null;
-  const beats = (bar - 1) * Math.max(1, Math.round(t.beats_per_bar)) + (beat - 1) + tick / TICKS_PER_BEAT;
-  return Math.round(((beats * 60) / t.bpm) * rate);
+  const start = barStart(t, bar - 1);
+  const seg = segmentAtBeat(t, start);
+  const beats = start + (beat - 1 + tick / TICKS_PER_BEAT) * unitBeats(seg);
+  return Math.round(beatsToSeconds(t, beats) * rate);
 }
 
-/** Ruler ticks on bars and beats: labeled bars (or beats when zoomed in), at least `minGap` pixels apart. */
+/** Ruler ticks on bars and beats, through tempo and time signature changes: labeled bars (or beats when zoomed in), at least `minGap` pixels apart. */
 export function barTicks(v: Viewport, width: number, rate: number, t: BarTempo, minGap = 70): Tick[] {
-  const per = Math.max(1, Math.round(t.beats_per_bar));
-  const beatSamples = (60 / t.bpm) * rate;
-  const pxPerBeat = beatSamples / v.spp;
-  // Labeled step in beats: a quarter beat up to 64 bars.
-  const choices = [0.25, 0.5, 1, per, per * 2, per * 4, per * 8, per * 16, per * 32, per * 64];
-  const step = choices.find((b) => b * pxPerBeat >= minGap) ?? per * 128;
-  const minor = step >= per ? (step === per ? 1 : step / 4) : step / 2;
-  const first = Math.floor(v.scroll / beatSamples / minor) * minor;
-  const last = (v.scroll + width * v.spp) / beatSamples;
+  const t0 = v.scroll / rate;
+  const t1 = (v.scroll + width * v.spp) / rate;
+  const segs = segments(t);
   const ticks: Tick[] = [];
-  const perMajor = Math.max(1, Math.round(step / minor));
-  const firstIndex = Math.round(first / minor);
-  const n = Math.ceil((last - first) / minor) + 1;
-  for (let i = 0; i <= n; i++) {
-    const k = firstIndex + i;
-    const b = k * minor;
-    const x = (b * beatSamples - v.scroll) / v.spp;
-    if (x < -1 || x > width + 1) continue;
-    let label: string | null = null;
-    if (k % perMajor === 0) {
-      const bar = Math.floor(b / per + 1e-9) + 1;
-      const inBar = b - (bar - 1) * per;
-      label = step >= per ? String(bar) : Number.isInteger(Math.round(inBar * 1000) / 1000) ? `${bar}.${Math.round(inBar) + 1}` : null;
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!;
+    const segEnd = segs[i + 1]?.seconds ?? Infinity;
+    if (segEnd <= t0) continue;
+    if (seg.seconds > t1) break;
+    const per = Math.max(1, seg.beats_per_bar);
+    const unitSec = (unitBeats(seg) * 60) / seg.bpm;
+    const pxPerUnit = (unitSec * rate) / v.spp;
+    // Labeled step in beats of the time signature: a quarter beat up to 64 bars.
+    const choices = [0.25, 0.5, 1, per, per * 2, per * 4, per * 8, per * 16, per * 32, per * 64];
+    const step = choices.find((b) => b * pxPerUnit >= minGap) ?? per * 128;
+    const minor = step >= per ? (step === per ? 1 : step / 4) : step / 2;
+    const barsPerLabel = step / per;
+    let k = Math.max(0, Math.floor((t0 - seg.seconds) / unitSec / minor));
+    for (;;) {
+      const u = k * minor;
+      const time = seg.seconds + u * unitSec;
+      if (time >= segEnd - 1e-9 || time > t1 + unitSec * minor) break;
+      k++;
+      const x = (time * rate - v.scroll) / v.spp;
+      if (x < -1 || x > width + 1) continue;
+      const bars = Math.floor(u / per + 1e-9);
+      const bar = seg.bar + bars;
+      const inBar = Math.round((u - bars * per) * 1000) / 1000;
+      let label: string | null = null;
+      if (step >= per) {
+        if (inBar === 0 && bar % barsPerLabel === 0) label = String(bar + 1);
+      } else if ((k - 1) % 2 === 0 && Number.isInteger(inBar)) {
+        label = `${bar + 1}.${inBar + 1}`;
+      }
+      ticks.push({ x, label });
     }
-    ticks.push({ x, label });
   }
   return ticks;
+}
+
+/** Bar lines (and beat lines when they are at least `minBeatPx` apart) across the view, for grids behind clips. */
+export function gridLines(v: Viewport, width: number, rate: number, t: BarTempo, minBeatPx = 6): { x: number; bar: boolean }[] {
+  const t0 = v.scroll / rate;
+  const t1 = (v.scroll + width * v.spp) / rate;
+  const segs = segments(t);
+  const out: { x: number; bar: boolean }[] = [];
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!;
+    const segEnd = segs[i + 1]?.seconds ?? Infinity;
+    if (segEnd <= t0) continue;
+    if (seg.seconds > t1) break;
+    const per = Math.max(1, seg.beats_per_bar);
+    const unitSec = (unitBeats(seg) * 60) / seg.bpm;
+    const pxPerUnit = (unitSec * rate) / v.spp;
+    const beats = pxPerUnit >= minBeatPx;
+    // Too dense even for bars: every few bars.
+    const every = beats ? 1 : per * Math.max(1, 2 ** Math.ceil(Math.log2(Math.max(1, minBeatPx / (pxPerUnit * per)))));
+    let k = Math.max(0, Math.floor((t0 - seg.seconds) / unitSec / every));
+    for (;;) {
+      const u = k * every;
+      const time = seg.seconds + u * unitSec;
+      if (time >= segEnd - 1e-9 || time > t1) break;
+      k++;
+      const x = (time * rate - v.scroll) / v.spp;
+      if (x < -1) continue;
+      out.push({ x, bar: Math.abs(u / per - Math.round(u / per)) < 1e-6 });
+    }
+  }
+  return out;
 }
 
 /** Ruler ticks in the chosen display format: bars and beats, or clock time. */

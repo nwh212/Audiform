@@ -19,10 +19,10 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
-  import { BPM_MAX, BPM_MIN, clipLength, isMidi, midiEnd, stretchOf, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import { clipLength, isMidi, midiEnd, stretchOf, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
-  import { duplicateClips, replaceClip, transferClips } from "./midi";
+  import { duplicateClips, newClip, replaceClip, transferClips } from "./midi";
   import { effectsCatalog, midiAudition, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
   import HeaderFx from "./HeaderFx.svelte";
   import { rowTarget } from "../voice-chain/slot-drag";
@@ -50,6 +50,8 @@
   import { laneWidths } from "../time-info/time-info";
   import WaveformView from "./WaveformView.svelte";
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
+  import TempoStrip from "./TempoStrip.svelte";
+  import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
   import type { Readable } from "svelte/store";
   import type { WaveFile } from "../../stores/wave";
   import OverviewStrip from "./OverviewStrip.svelte";
@@ -297,11 +299,9 @@
     void pluginOpenWindow(track.instrument, `${name}: ${track.name}`).catch(onError);
   }
 
-  function setTempo(bpm: number, beatsPerBar: number) {
-    const b = Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(bpm * 100) / 100));
-    const n = Math.min(32, Math.max(1, Math.round(beatsPerBar)));
-    if (!Number.isFinite(b) || (b === tempo.bpm && n === tempo.beats_per_bar)) return;
-    void session.edit("Tempo", { op: "set_tempo", bpm: b, beats_per_bar: n }, runner).catch(onError);
+  /** Replaces the tempo map (tempo, time signature and their changes) as one undoable step. */
+  function setTempoMap(t: TempoDoc, label: string) {
+    void session.edit(label, { op: "set_tempo", tempo: { bpm: t.bpm, beats_per_bar: t.beats_per_bar, beat_unit: t.beat_unit ?? 4, changes: t.changes ?? [] } }, runner).catch(onError);
   }
 
   function midiClipItems(track: TrackDoc, clip: MidiClipDoc | null, beat: number): ContextItem[] {
@@ -313,8 +313,7 @@
           label: "New MIDI Clip Here",
           run: () => {
             const id = crypto.randomUUID();
-            const start = Math.floor(beat / tempo.beats_per_bar) * tempo.beats_per_bar;
-            setMidiClips(track, [...clips, { id, name: "MIDI", start, length: tempo.beats_per_bar, notes: [] }].sort((a, b) => a.start - b.start), "New MIDI Clip");
+            setMidiClips(track, [...clips, newClip(id, beat, tempo)].sort((a, b) => a.start - b.start), "New MIDI Clip");
             editor.selectClips([id], track.id);
           },
         },
@@ -711,6 +710,15 @@
             },
           },
           { kind: "item", label: "Add Range Marker", disabled: !can("edit.marker.range"), run: () => run("edit.marker.range") },
+          {
+            kind: "item",
+            label: "Add Tempo Change at Nearest Bar",
+            run: () => {
+              const bar = Math.max(1, nearestBar(tempo, secondsToBeats(tempo, at / rate)));
+              const r = addChange(tempo, bar, crypto.randomUUID());
+              if (r.tempo !== tempo) setTempoMap(r.tempo, "Add Tempo Change");
+            },
+          },
           { kind: "sep" },
           ...timeDisplayItems(),
         ];
@@ -2003,27 +2011,6 @@
     <button type="button" class="tool text" title={tip("Add MIDI Track", "multitrack.add.midi")} onclick={() => run("multitrack.add.midi")}>+ MIDI</button>
     <button type="button" class="tool text" title={tip("Add Bus Track", "multitrack.add.bus")} onclick={() => run("multitrack.add.bus")}>+ Bus</button>
     <span class="spacer"></span>
-    {#if doc}
-      <label class="tempo" title="Session tempo. MIDI clips and notes follow it.">
-        <input
-          type="number"
-          min={BPM_MIN}
-          max={BPM_MAX}
-          step="1"
-          aria-label="Tempo in beats per minute"
-          value={tempo.bpm}
-          onchange={(e) => setTempo(Number(e.currentTarget.value), tempo.beats_per_bar)}
-          onkeydown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
-        />
-        <span>BPM</span>
-        <select aria-label="Beats per bar" title="Beats per bar" value={tempo.beats_per_bar} onchange={(e) => setTempo(tempo.bpm, Number(e.currentTarget.value))}>
-          {#each [2, 3, 4, 5, 6, 7, 9, 12] as n (n)}<option value={n}>{n}/4</option>{/each}
-        </select>
-      </label>
-    {/if}
     {#if doc}<span class="rate" title="Session sample rate">{(rate / 1000).toLocaleString("en-US")} kHz</span>{/if}
   </div>
 
@@ -2064,9 +2051,6 @@
         </button>
       </div>
       <div class="toggles" role="group" aria-label="Timeline options">
-        <button type="button" class="view" disabled title="Metronome: arrives with recording (P4)" aria-label="Metronome">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h4l3 12H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><path d="M8 11l3.5-6" stroke="currentColor" stroke-width="1.3" /></svg>
-        </button>
         <button
           type="button"
           class="view"
@@ -2113,6 +2097,12 @@
       {/if}
     </div>
   </div>
+  {#if doc && ((tempo.changes?.length ?? 0) > 0 || ed.timeFormat === "bars")}
+    <div class="ruler-row tempo-row">
+      <div class="corner tempo-corner" style:width="{HEADER_W}px" title="Tempo and time signature changes. The tempo and time signature where the playhead is are next to the metronome, under the tracks.">Tempo</div>
+      <TempoStrip {tempo} {view} width={lanesWidth} {rate} onChange={setTempoMap} onMenu={(e, items) => (menu = { x: e.clientX, y: e.clientY, items })} />
+    </div>
+  {/if}
 
   <div class="vwrap">
   {#if showStart}
@@ -2592,6 +2582,8 @@
     zoom={onZoom}
     amplitude
     tracks
+    tempo={doc ? tempo : null}
+    onTempo={setTempoMap}
   />
 </section>
 {/if}
@@ -2791,31 +2783,6 @@
     margin-left: auto;
   }
 
-  .toolbar .tempo {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    margin-right: 6px;
-    color: var(--text-faint);
-    font-size: var(--font-size-small);
-  }
-
-  .toolbar .tempo input,
-  .toolbar .tempo select {
-    height: 20px;
-    box-sizing: border-box;
-    padding: 0 3px;
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    background: var(--surface-2);
-    color: var(--text);
-    font: inherit;
-  }
-
-  .toolbar .tempo input {
-    width: 52px;
-  }
-
   button.instrument {
     display: flex;
     flex: 1;
@@ -2852,6 +2819,15 @@
     display: flex;
     flex: 1;
     min-width: 0;
+  }
+
+  .tempo-corner {
+    height: 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .razor-mark {

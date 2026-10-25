@@ -10,6 +10,7 @@
  * Field names match the `.altaudio` file format (snake_case).
  */
 
+import { DEFAULT_TEMPO, beatsToSeconds, type TempoDoc } from "./tempo";
 import type { Command } from "../commands";
 import type { CommandRunner } from "./media-pool";
 
@@ -247,14 +248,7 @@ export interface MidiClipDoc {
   notes: NoteDoc[];
 }
 
-export interface TempoDoc {
-  bpm: number;
-  beats_per_bar: number;
-}
-
-export const DEFAULT_TEMPO: TempoDoc = { bpm: 120, beats_per_bar: 4 };
-export const BPM_MIN = 20;
-export const BPM_MAX = 400;
+export { BPM_MAX, BPM_MIN, DEFAULT_TEMPO, type TempoChangeDoc, type TempoDoc } from "./tempo";
 
 /** The session's tempo (the default when the file has none). */
 export const tempoOf = (doc: SessionDoc): TempoDoc => (doc.tempo as TempoDoc | undefined) ?? DEFAULT_TEMPO;
@@ -460,7 +454,7 @@ export type Op =
   | { op: "set_bus"; id: string; changes: BusChanges }
   | { op: "set_sends"; owner: string; sends: SendDoc[] }
   | { op: "set_midi_clips"; track_id: string; clips: MidiClipDoc[] }
-  | { op: "set_tempo"; bpm: number; beats_per_bar: number }
+  | { op: "set_tempo"; tempo: TempoDoc }
   | { op: "batch"; ops: Op[] };
 
 export interface SessionBackend {
@@ -506,10 +500,9 @@ export function isBlank(doc: SessionDoc | null): boolean {
 /** End of the last MIDI clip, in session samples (the core's sums). */
 export function midiEnd(doc: SessionDoc, rate = doc.sample_rate): number {
   const t = tempoOf(doc);
-  const bpm = Math.min(BPM_MAX, Math.max(BPM_MIN, t.bpm));
   let end = 0;
   for (const tr of doc.tracks)
-    for (const c of tr.midi_clips ?? []) end = Math.max(end, Math.round(((c.start + c.length) * 60 * rate) / bpm));
+    for (const c of tr.midi_clips ?? []) end = Math.max(end, Math.round(beatsToSeconds(t, c.start + c.length) * rate));
   return end;
 }
 

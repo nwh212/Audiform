@@ -387,7 +387,7 @@ pub struct MidiPlan {
 }
 
 /// What a MIDI track plays, or None when it has no instrument (silent).
-fn midi_plan(t: &Track, tempo: Tempo, out_rate: u32) -> Option<MidiPlan> {
+fn midi_plan(t: &Track, tempo: &Tempo, out_rate: u32) -> Option<MidiPlan> {
     if t.kind != TrackKind::Midi {
         return None;
     }
@@ -415,7 +415,7 @@ fn midi_plan(t: &Track, tempo: Tempo, out_rate: u32) -> Option<MidiPlan> {
     offs.sort_unstable();
     Some(MidiPlan {
         instrument,
-        tempo,
+        tempo: tempo.clone(),
         notes,
         offs,
     })
@@ -456,7 +456,7 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
         .iter()
         .map(|t| TrackPlan {
             id: t.id,
-            midi: midi_plan(t, session.tempo, out_rate),
+            midi: midi_plan(t, &session.tempo, out_rate),
             clips: t
                 .clips
                 .iter()
@@ -750,8 +750,12 @@ fn midi_hash(session: &Session) -> u64 {
         h ^= v;
         h = h.wrapping_mul(0x100_0000_01b3);
     };
-    mix(session.tempo.bpm.to_bits());
-    mix(u64::from(session.tempo.beats_per_bar));
+    for seg in session.tempo.segments() {
+        mix(u64::from(seg.bar));
+        mix(seg.bpm.to_bits());
+        mix(u64::from(seg.beats_per_bar));
+        mix(u64::from(seg.beat_unit));
+    }
     for t in session.tracks.iter().filter(|t| t.kind == TrackKind::Midi) {
         mix(t.id.as_u128() as u64);
         if let Some(i) = &t.instrument {

@@ -35,6 +35,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use serde::Serialize;
 
 use super::graph::{self, Graph, GraphMeters, Levels, Mix};
+use super::metronome::Click;
 use super::plan::{self, Owner};
 use super::render::{ChainUpdate, Renderer};
 use crate::session::model::{EffectChain, Id, Session};
@@ -580,6 +581,25 @@ fn run(
     }
     let mut mix = Mix::new(renderer, Graph::new(&session, out_rate, routed));
     let rings = mix.outputs();
+    // The metronome, on its own ring so faders and meters leave it alone.
+    let mut click = Ticker {
+        click: Click::new(&session.tempo, out_rate),
+        start: start_frame,
+        jump: jump.map(|j| {
+            let r = session.sample_rate;
+            match j {
+                Jump::Loop { start, end } => Jump::Loop {
+                    start: plan::to_out(start, r, out_rate),
+                    end: plan::to_out(end, r, out_rate),
+                },
+                Jump::Skip { start, end } => Jump::Skip {
+                    start: plan::to_out(start, r, out_rate),
+                    end: plan::to_out(end, r, out_rate),
+                },
+            }
+        }),
+        buf: Vec::with_capacity(BLOCK * 2),
+    };
 
     let cap = ((f64::from(out_rate) * AHEAD_SECONDS) as usize).max(BLOCK * 2) * 2;
     let mut producers = Vec::with_capacity(rings);
@@ -589,19 +609,25 @@ fn run(
         producers.push(p);
         consumers.push(c);
     }
+    let (mut click_out, click_in) = RingBuffer::<f32>::new(cap);
 
     // Fill ahead before the device starts, so playback starts clean.
     let mut blocks: Vec<Vec<f32>> = vec![Vec::with_capacity(BLOCK * 2); rings];
-    while producers.iter().all(|p| p.slots() >= BLOCK * 2) {
-        mix.render(BLOCK, &mut blocks);
-        push_all(&mut producers, &blocks);
+    while producers.iter().all(|p| p.slots() >= BLOCK * 2) && click_out.slots() >= BLOCK * 2 {
+        render_block(
+            &mut mix,
+            &mut blocks,
+            &mut producers,
+            &mut click,
+            &mut click_out,
+        );
         shared.push_meters(&mut mix);
     }
 
     let render_shared = shared.clone();
     let render = thread::Builder::new()
         .name("transport-render".into())
-        .spawn(move || render_loop(mix, producers, blocks, render_shared));
+        .spawn(move || render_loop(mix, producers, blocks, click, click_out, render_shared));
     let render = match render {
         Ok(r) => r,
         Err(e) => {
@@ -611,10 +637,38 @@ fn run(
     };
 
     let stream = match format {
-        SampleFormat::F32 => build::<f32>(&device, config, consumers, shared.clone(), channels),
-        SampleFormat::I16 => build::<i16>(&device, config, consumers, shared.clone(), channels),
-        SampleFormat::I32 => build::<i32>(&device, config, consumers, shared.clone(), channels),
-        SampleFormat::U16 => build::<u16>(&device, config, consumers, shared.clone(), channels),
+        SampleFormat::F32 => build::<f32>(
+            &device,
+            config,
+            consumers,
+            click_in,
+            shared.clone(),
+            channels,
+        ),
+        SampleFormat::I16 => build::<i16>(
+            &device,
+            config,
+            consumers,
+            click_in,
+            shared.clone(),
+            channels,
+        ),
+        SampleFormat::I32 => build::<i32>(
+            &device,
+            config,
+            consumers,
+            click_in,
+            shared.clone(),
+            channels,
+        ),
+        SampleFormat::U16 => build::<u16>(
+            &device,
+            config,
+            consumers,
+            click_in,
+            shared.clone(),
+            channels,
+        ),
         other => Err(format!("Unsupported output sample format: {other}")),
     };
     let stream = match stream.and_then(|s| s.play().map(|_| s).map_err(|e| e.to_string())) {
@@ -642,10 +696,68 @@ fn push_all(producers: &mut [Producer<f32>], blocks: &[Vec<f32>]) {
     }
 }
 
+/// The metronome for the frames the mix hands out, at their timeline
+/// position (output frames), through loops and skips.
+struct Ticker {
+    click: Click,
+    start: u64,
+    jump: Option<Jump>,
+    buf: Vec<f32>,
+}
+
+impl Ticker {
+    /// Frames from `linear` (start plus frames played) to the next jump.
+    fn until_jump(&self, linear: u64) -> u64 {
+        match self.jump.filter(|j| j.points(self.start).is_some()) {
+            Some(Jump::Loop { start, end }) if linear >= end => {
+                let len = end - start;
+                len - (linear - end) % len
+            }
+            Some(Jump::Loop { end, .. }) => end - linear,
+            Some(Jump::Skip { start, .. }) if linear < start => start - linear,
+            _ => u64::MAX,
+        }
+    }
+
+    /// The click for the `frames` frames after `rendered` frames played.
+    fn render(&mut self, rendered: u64, frames: usize) {
+        self.buf.clear();
+        self.buf.resize(frames * 2, 0.0);
+        let mut done = 0;
+        while done < frames {
+            let pos = Jump::position(self.jump, self.start, rendered + done as u64);
+            // Stop short where the timeline jumps.
+            let left = self.until_jump(self.start + rendered + done as u64);
+            let n = (frames - done).min(usize::try_from(left).unwrap_or(usize::MAX).max(1));
+            self.click
+                .render(pos, &mut self.buf[done * 2..(done + n) * 2]);
+            done += n;
+        }
+    }
+}
+
+/// Renders one block of the mix and its click, and queues both.
+fn render_block(
+    mix: &mut Mix,
+    blocks: &mut [Vec<f32>],
+    producers: &mut [Producer<f32>],
+    click: &mut Ticker,
+    click_out: &mut Producer<f32>,
+) {
+    let rendered = mix.rendered();
+    let n = mix.render(BLOCK, blocks);
+    push_all(producers, blocks);
+    click.render(rendered, n);
+    let (_, left) = click_out.push_partial_slice(&click.buf);
+    debug_assert!(left.is_empty(), "room was checked first");
+}
+
 fn render_loop(
     mut mix: Mix,
     mut producers: Vec<Producer<f32>>,
     mut blocks: Vec<Vec<f32>>,
+    mut click: Ticker,
+    mut click_out: Producer<f32>,
     shared: Arc<Shared>,
 ) {
     while !shared.stop.load(Ordering::SeqCst) {
@@ -656,9 +768,14 @@ fn render_loop(
         if let Some(levels) = shared.take_levels() {
             mix.graph().set_levels(levels);
         }
-        if producers.iter().all(|p| p.slots() >= BLOCK * 2) {
-            mix.render(BLOCK, &mut blocks);
-            push_all(&mut producers, &blocks);
+        if producers.iter().all(|p| p.slots() >= BLOCK * 2) && click_out.slots() >= BLOCK * 2 {
+            render_block(
+                &mut mix,
+                &mut blocks,
+                &mut producers,
+                &mut click,
+                &mut click_out,
+            );
             shared.push_meters(&mut mix);
         } else {
             thread::sleep(Duration::from_millis(5));
@@ -670,6 +787,7 @@ fn build<T>(
     device: &cpal::Device,
     config: StreamConfig,
     mut consumers: Vec<Consumer<f32>>,
+    mut click: Consumer<f32>,
     shared: Arc<Shared>,
     channels: usize,
 ) -> Result<cpal::Stream, String>
@@ -688,6 +806,7 @@ where
                     out,
                     channels,
                     &mut consumers,
+                    &mut click,
                     &shared,
                     &mut gains,
                     &mut peaks,
@@ -704,6 +823,7 @@ fn mix<T>(
     out: &mut [T],
     channels: usize,
     consumers: &mut [Consumer<f32>],
+    click: &mut Consumer<f32>,
     shared: &Shared,
     gains: &mut [[f32; 2]],
     peaks: &mut [[f32; 2]],
@@ -712,7 +832,12 @@ fn mix<T>(
 {
     let channels = channels.max(1);
     let frames = out.len() / channels;
-    let avail = consumers.iter().map(|c| c.slots() / 2).min().unwrap_or(0);
+    let avail = consumers
+        .iter()
+        .map(|c| c.slots() / 2)
+        .min()
+        .unwrap_or(0)
+        .min(click.slots() / 2);
     let n = avail.min(frames);
     for (g, a) in gains.iter_mut().zip(&shared.gains) {
         g[0] = bits_f32(a[0].load(Ordering::Relaxed));
@@ -745,6 +870,9 @@ fn mix<T>(
         mpeak[0] = mpeak[0].max(l.abs());
         mpeak[1] = mpeak[1].max(r.abs());
         super::scope::push(l, r);
+        // The metronome after the master fader, meters and scope.
+        l += click.pop().unwrap_or(0.0);
+        r += click.pop().unwrap_or(0.0);
         let frame = &mut out[f * channels..(f + 1) * channels];
         frame[0] = T::from_sample(l);
         if channels > 1 {
@@ -819,7 +947,15 @@ mod tests {
         let mut gains = vec![[0.0; 2]; 2];
         let mut peaks = vec![[0.0; 2]; 2];
         let mut out = [9.0f32; 6];
-        mix(&mut out, 2, &mut consumers, &shared, &mut gains, &mut peaks);
+        mix(
+            &mut out,
+            2,
+            &mut consumers,
+            &mut quiet(),
+            &shared,
+            &mut gains,
+            &mut peaks,
+        );
         // Two frames mixed, the third is silence because the rings ran dry.
         assert_eq!(out, [0.5, 0.25, -0.25, -0.125, 0.0, 0.0]);
         assert_eq!(shared.played.load(Ordering::Relaxed), 2);
@@ -836,6 +972,39 @@ mod tests {
         );
     }
 
+    /// A metronome ring with silence waiting.
+    fn quiet() -> Consumer<f32> {
+        let (mut p, c) = RingBuffer::<f32>::new(64);
+        while p.push(0.0).is_ok() {}
+        c
+    }
+
+    #[test]
+    fn the_click_plays_after_the_master_fader_and_meters() {
+        let shared = Shared::new(1, &[[1.0, 1.0]], 0.5);
+        let (mut p, c) = RingBuffer::<f32>::new(4);
+        p.push(0.4).unwrap();
+        p.push(0.4).unwrap();
+        let (mut cp, cc) = RingBuffer::<f32>::new(4);
+        cp.push(0.3).unwrap();
+        cp.push(0.3).unwrap();
+        let mut out = [0f32; 2];
+        mix(
+            &mut out,
+            2,
+            &mut [c],
+            &mut { cc },
+            &shared,
+            &mut [[0.0; 2]],
+            &mut [[0.0; 2]],
+        );
+        assert_eq!(out, [0.5, 0.5]);
+        assert_eq!(
+            bits_f32(shared.master_meter[0].load(Ordering::Relaxed)),
+            0.2
+        );
+    }
+
     #[test]
     fn gain_updates_apply_without_restart() {
         let shared = Shared::new(1, &[[1.0, 1.0]], 1.0);
@@ -849,6 +1018,7 @@ mod tests {
             &mut out,
             2,
             &mut consumers,
+            &mut quiet(),
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
@@ -869,6 +1039,7 @@ mod tests {
             &mut out,
             2,
             &mut consumers,
+            &mut quiet(),
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
@@ -888,6 +1059,7 @@ mod tests {
             &mut out,
             4,
             &mut [c],
+            &mut quiet(),
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],

@@ -6,6 +6,7 @@
   App shell: menu bar, docking layout, status bar.
 -->
 <script lang="ts">
+  import { metronomeRecording, startMetronome } from "../stores/metronome";
   import { onMount, type Component } from "svelte";
   import {
     workspaceDelete,
@@ -2452,6 +2453,7 @@
         holdEnd(true);
         if (plan.punch) showNotice(`Punch-in: recording stops at the end of the time selection.`);
         liveTakes.set({ at, rate: 0, waves: {}, tick: 0 });
+        metronomeRecording(true);
         void transport.play(at);
       }
       recPeakMax = 0;
@@ -2460,6 +2462,7 @@
     } catch (e) {
       take = null;
       holdEnd(false);
+      metronomeRecording(false);
       liveTakes.set(null);
       showError(e);
     }
@@ -2548,6 +2551,7 @@
     take = null;
     holdEnd(false);
     stopInputPoll();
+    metronomeRecording(false);
     recording.set({ active: false, seconds: 0, peak: 0 });
     let takes;
     try {
@@ -4329,6 +4333,7 @@
         restoreSettings(prefs.raw(KEY_EDITOR));
         settings.set(sanitizeSettings(prefs.raw(KEY_SETTINGS)));
         applyAppSettings(settings.current, false);
+        offs.push(startMetronome());
         // Settings changed outside the Settings window (a view's right-click colors) are kept too.
         let lastSettings = JSON.stringify(settings.current);
         offs.push(

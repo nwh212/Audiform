@@ -17,8 +17,7 @@ use uuid::Uuid;
 use super::model::{
     AudioType, Bus, ChannelLayout, Clip, ClipLoop, ClipStretch, EffectChain, EffectSlot, Envelope,
     EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef, MidiClip, Output, Send,
-    Session, SessionView, Tempo, Track, TrackKind, TrackRole, BPM_MAX, BPM_MIN, STRETCH_MAX,
-    STRETCH_MIN,
+    Session, SessionView, Tempo, Track, TrackKind, TrackRole, STRETCH_MAX, STRETCH_MIN,
 };
 
 /// Points for one effect setting's envelope on a clip.
@@ -385,8 +384,7 @@ pub enum Op {
     },
     /// The session's tempo and meter. MIDI clips and notes follow it.
     SetTempo {
-        bpm: f64,
-        beats_per_bar: u32,
+        tempo: Tempo,
     },
     /// Replaces the aux sends of a track or bus.
     SetSends {
@@ -1023,22 +1021,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
                 clips: old,
             })
         }
-        Op::SetTempo { bpm, beats_per_bar } => {
-            let old = std::mem::replace(
-                &mut s.tempo,
-                Tempo {
-                    bpm: if bpm.is_finite() {
-                        bpm.clamp(BPM_MIN, BPM_MAX)
-                    } else {
-                        120.0
-                    },
-                    beats_per_bar: (*beats_per_bar).clamp(1, 16),
-                },
-            );
-            Ok(Op::SetTempo {
-                bpm: old.bpm,
-                beats_per_bar: old.beats_per_bar,
-            })
+        Op::SetTempo { tempo } => {
+            let old = std::mem::replace(&mut s.tempo, tempo.tidy());
+            Ok(Op::SetTempo { tempo: old })
         }
         Op::SetSends { owner, sends } => {
             for x in sends {
@@ -1633,19 +1618,29 @@ mod tests {
         roundtrip(
             &mut s,
             Op::SetTempo {
-                bpm: 90.0,
-                beats_per_bar: 3,
+                tempo: Tempo {
+                    bpm: 90.0,
+                    beats_per_bar: 3,
+                    ..Tempo::default()
+                },
             },
         );
         apply(
             &mut s,
             &Op::SetTempo {
-                bpm: 9_000.0,
-                beats_per_bar: 0,
+                tempo: Tempo {
+                    bpm: 9_000.0,
+                    beats_per_bar: 0,
+                    beat_unit: 6,
+                    changes: Vec::new(),
+                },
             },
         )
         .unwrap();
-        assert_eq!((s.tempo.bpm, s.tempo.beats_per_bar), (400.0, 1));
+        assert_eq!(
+            (s.tempo.bpm, s.tempo.beats_per_bar, s.tempo.beat_unit),
+            (400.0, 1, 8)
+        );
         assert_eq!(s.tempo.samples(1.0, 48_000), 7_200);
     }
 

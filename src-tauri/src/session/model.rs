@@ -120,13 +120,42 @@ impl Session {
     }
 }
 
-/// The session's tempo and meter.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+/// The session's tempo and meter: where it starts, and any changes later
+/// in the song. MIDI clips, bars and beats, and the metronome follow it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tempo {
     /// Beats (quarter notes) per minute.
     pub bpm: f64,
-    /// Beats in a bar, for example 4 in 4/4 or 3 in 3/4.
+    /// Beats in a bar, the top of the time signature: 4 in 4/4, 6 in 6/8.
     pub beats_per_bar: u32,
+    /// The note one beat is, the bottom of the time signature: 4 in 4/4,
+    /// 8 in 6/8. Files from before time signature changes get 4.
+    #[serde(default = "quarter", skip_serializing_if = "is_quarter")]
+    pub beat_unit: u32,
+    /// Tempo and time signature changes, in bar order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<TempoChange>,
+}
+
+fn quarter() -> u32 {
+    4
+}
+
+fn is_quarter(v: &u32) -> bool {
+    *v == 4
+}
+
+/// A tempo and time signature change at the start of a bar.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TempoChange {
+    pub id: Id,
+    /// Bars from the start of the session where it takes over: 1 is the
+    /// second bar. Always 1 or more.
+    pub bar: u32,
+    pub bpm: f64,
+    pub beats_per_bar: u32,
+    #[serde(default = "quarter")]
+    pub beat_unit: u32,
 }
 
 impl Default for Tempo {
@@ -134,6 +163,8 @@ impl Default for Tempo {
         Self {
             bpm: 120.0,
             beats_per_bar: 4,
+            beat_unit: 4,
+            changes: Vec::new(),
         }
     }
 }
@@ -142,19 +173,170 @@ impl Default for Tempo {
 pub const BPM_MIN: f64 = 20.0;
 pub const BPM_MAX: f64 = 400.0;
 
+/// One stretch of the tempo map with a single tempo and time signature.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TempoSegment {
+    /// Bars from the session start where it begins.
+    pub bar: u32,
+    /// Beats (quarter notes) from the session start where it begins.
+    pub beat: f64,
+    /// Seconds from the session start where it begins.
+    pub seconds: f64,
+    pub bpm: f64,
+    pub beats_per_bar: u32,
+    pub beat_unit: u32,
+}
+
+impl TempoSegment {
+    /// Quarter notes in one bar.
+    pub fn bar_beats(&self) -> f64 {
+        f64::from(self.beats_per_bar) * 4.0 / f64::from(self.beat_unit)
+    }
+
+    /// Quarter notes in one beat of the time signature (0.5 in 6/8).
+    pub fn unit_beats(&self) -> f64 {
+        4.0 / f64::from(self.beat_unit)
+    }
+
+    fn seconds_at(&self, beats: f64) -> f64 {
+        self.seconds + (beats - self.beat) * 60.0 / self.bpm
+    }
+}
+
+/// A beat unit the time signature can use: a power of two from 1 to 32.
+pub fn tidy_beat_unit(unit: u32) -> u32 {
+    match unit {
+        0..=1 => 1,
+        u if u >= 32 => 32,
+        u => {
+            let up = u.next_power_of_two();
+            if up - u <= u - up / 2 {
+                up
+            } else {
+                up / 2
+            }
+        }
+    }
+}
+
+fn tidy_bpm(bpm: f64) -> f64 {
+    if bpm.is_finite() {
+        bpm.clamp(BPM_MIN, BPM_MAX)
+    } else {
+        120.0
+    }
+}
+
 impl Tempo {
     pub fn is_default(&self) -> bool {
         *self == Tempo::default()
     }
 
+    /// The same map with every value in range and the changes in bar
+    /// order, one per bar (the later one wins), none at the first bar.
+    pub fn tidy(&self) -> Tempo {
+        let mut changes: Vec<TempoChange> = self
+            .changes
+            .iter()
+            .filter(|c| c.bar >= 1)
+            .map(|c| TempoChange {
+                id: c.id,
+                bar: c.bar.min(100_000),
+                bpm: tidy_bpm(c.bpm),
+                beats_per_bar: c.beats_per_bar.clamp(1, 32),
+                beat_unit: tidy_beat_unit(c.beat_unit),
+            })
+            .collect();
+        changes.reverse();
+        changes.sort_by_key(|c| c.bar);
+        changes.dedup_by_key(|c| c.bar);
+        Tempo {
+            bpm: tidy_bpm(self.bpm),
+            beats_per_bar: self.beats_per_bar.clamp(1, 32),
+            beat_unit: tidy_beat_unit(self.beat_unit),
+            changes,
+        }
+    }
+
+    /// The stretches of the map, in order. Never empty.
+    pub fn segments(&self) -> impl Iterator<Item = TempoSegment> + '_ {
+        let first = TempoSegment {
+            bar: 0,
+            beat: 0.0,
+            seconds: 0.0,
+            bpm: tidy_bpm(self.bpm),
+            beats_per_bar: self.beats_per_bar.max(1),
+            beat_unit: self.beat_unit.max(1),
+        };
+        let mut prev: Option<TempoSegment> = None;
+        let mut next = 0;
+        std::iter::from_fn(move || {
+            let Some(p) = prev else {
+                prev = Some(first);
+                return prev;
+            };
+            // Changes out of order (a hand-edited file) are passed over.
+            while let Some(c) = self.changes.get(next) {
+                next += 1;
+                if c.bar <= p.bar {
+                    continue;
+                }
+                let beat = p.beat + f64::from(c.bar - p.bar) * p.bar_beats();
+                let seg = TempoSegment {
+                    bar: c.bar,
+                    beat,
+                    seconds: p.seconds_at(beat),
+                    bpm: tidy_bpm(c.bpm),
+                    beats_per_bar: c.beats_per_bar.max(1),
+                    beat_unit: c.beat_unit.max(1),
+                };
+                prev = Some(seg);
+                return prev;
+            }
+            None
+        })
+    }
+
+    /// The stretch playing at `beats` from the start.
+    pub fn segment_at_beat(&self, beats: f64) -> TempoSegment {
+        let mut seg = self.segments().next().expect("never empty");
+        for s in self.segments().skip(1) {
+            if s.beat > beats {
+                break;
+            }
+            seg = s;
+        }
+        seg
+    }
+
+    /// The stretch playing `seconds` from the start.
+    pub fn segment_at_seconds(&self, seconds: f64) -> TempoSegment {
+        let mut seg = self.segments().next().expect("never empty");
+        for s in self.segments().skip(1) {
+            if s.seconds > seconds {
+                break;
+            }
+            seg = s;
+        }
+        seg
+    }
+
+    /// Beats to seconds.
+    pub fn seconds(&self, beats: f64) -> f64 {
+        let beats = beats.max(0.0);
+        self.segment_at_beat(beats).seconds_at(beats)
+    }
+
     /// Beats to samples at `rate`.
     pub fn samples(&self, beats: f64, rate: u32) -> u64 {
-        (beats.max(0.0) * 60.0 / self.bpm.clamp(BPM_MIN, BPM_MAX) * f64::from(rate)).round() as u64
+        (self.seconds(beats) * f64::from(rate)).round() as u64
     }
 
     /// Samples at `rate` to beats.
     pub fn beats(&self, samples: u64, rate: u32) -> f64 {
-        samples as f64 / f64::from(rate.max(1)) * self.bpm.clamp(BPM_MIN, BPM_MAX) / 60.0
+        let t = samples as f64 / f64::from(rate.max(1));
+        let s = self.segment_at_seconds(t);
+        s.beat + (t - s.seconds) * s.bpm / 60.0
     }
 }
 
@@ -851,6 +1033,54 @@ pub struct EpisodeMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tempo_map_follows_changes_at_bars() {
+        // Two bars of 4/4 at 120 (4 s), then 6/8 at 60.
+        let t = Tempo {
+            changes: vec![TempoChange {
+                id: new_id(),
+                bar: 2,
+                bpm: 60.0,
+                beats_per_bar: 6,
+                beat_unit: 8,
+            }],
+            ..Tempo::default()
+        };
+        let segs: Vec<_> = t.segments().map(|s| (s.bar, s.beat, s.seconds)).collect();
+        assert_eq!(segs, vec![(0, 0.0, 0.0), (2, 8.0, 4.0)]);
+        assert_eq!(t.samples(8.0, 1_000), 4_000);
+        // A quarter note at 60 is a second.
+        assert_eq!(t.samples(11.0, 1_000), 7_000);
+        assert!((t.beats(7_000, 1_000) - 11.0).abs() < 1e-9);
+        assert_eq!(t.segment_at_seconds(3.9).bpm, 120.0);
+        assert_eq!(t.segment_at_seconds(4.0).beat_unit, 8);
+        // Files from before time signatures read as 4/4 with no changes.
+        let old: Tempo = serde_json::from_str(r#"{"bpm":90,"beats_per_bar":3}"#).unwrap();
+        assert_eq!((old.beat_unit, old.changes.len()), (4, 0));
+    }
+
+    #[test]
+    fn tidy_tempo_keeps_one_change_per_bar_in_order() {
+        let c = |bar, bpm| TempoChange {
+            id: new_id(),
+            bar,
+            bpm,
+            beats_per_bar: 4,
+            beat_unit: 4,
+        };
+        let t = Tempo {
+            changes: vec![c(5, 90.0), c(0, 70.0), c(2, 100.0), c(5, 95.0)],
+            beat_unit: 3,
+            ..Tempo::default()
+        }
+        .tidy();
+        let got: Vec<_> = t.changes.iter().map(|c| (c.bar, c.bpm)).collect();
+        assert_eq!(got, vec![(2, 100.0), (5, 95.0)]);
+        assert_eq!(t.beat_unit, 4);
+        assert_eq!(tidy_beat_unit(6), 8);
+        assert_eq!(tidy_beat_unit(64), 32);
+    }
 
     #[test]
     fn strip_effects_clears_every_chain() {

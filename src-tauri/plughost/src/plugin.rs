@@ -18,7 +18,7 @@ use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
     kIsHidden, kIsProgramChange, kIsReadOnly,
 };
 use vst3::Steinberg::Vst::ProcessContext_::StatesAndFlags_::{
-    kPlaying, kTempoValid, kTimeSigValid,
+    kBarPositionValid, kPlaying, kProjectTimeMusicValid, kTempoValid, kTimeSigValid,
 };
 use vst3::Steinberg::Vst::ProcessModes_::kRealtime;
 use vst3::Steinberg::Vst::SymbolicSampleSizes_::kSample32;
@@ -37,6 +37,29 @@ use vst3::{ComPtr, ComWrapper, Interface};
 use crate::com::{from_wstring, Edit, EventList, Handler, HostApp, MemStream, ParamChanges};
 use crate::module::{parse_cid, Module};
 use crate::protocol::{base64_decode, base64_encode, NoteEvent, ParamInfo, MAX_BLOCK};
+
+/// The tempo and time signature the plug-in is told, from timeline frame
+/// `start` (at `start_music` quarter notes) on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tempo {
+    pub bpm: f64,
+    pub beats_per_bar: u32,
+    pub beat_unit: u32,
+    pub start: i64,
+    pub start_music: f64,
+}
+
+impl Default for Tempo {
+    fn default() -> Self {
+        Self {
+            bpm: 120.0,
+            beats_per_bar: 4,
+            beat_unit: 4,
+            start: 0,
+            start_music: 0.0,
+        }
+    }
+}
 
 /// A COM pointer moved to another thread. VST3 allows processing on
 /// another thread than setup; the plug-in is responsible for the rest.
@@ -73,7 +96,7 @@ pub struct Audio {
     /// Takes note events.
     events: bool,
     /// Tempo and beats per bar, told to the plug-in with every block.
-    tempo: (f64, i32),
+    tempo: Tempo,
     /// Control changes from the plug-in's window, for the next block.
     pub from_editor: Arc<Mutex<Vec<(u32, f64)>>>,
 }
@@ -245,7 +268,7 @@ impl Plugin {
                 ins,
                 time: 0,
                 events,
-                tempo: (120.0, 4),
+                tempo: Tempo::default(),
                 from_editor: Arc::new(Mutex::new(Vec::new())),
             };
             Ok((
@@ -476,8 +499,13 @@ impl Audio {
     }
 
     /// The tempo the plug-in is told (for synced delays, arpeggios and the like).
-    pub fn set_tempo(&mut self, bpm: f64, beats_per_bar: i32) {
-        self.tempo = (bpm.clamp(1.0, 999.0), beats_per_bar.clamp(1, 32));
+    pub fn set_tempo(&mut self, tempo: Tempo) {
+        self.tempo = Tempo {
+            bpm: tempo.bpm.clamp(1.0, 999.0),
+            beats_per_bar: tempo.beats_per_bar.clamp(1, 32),
+            beat_unit: tempo.beat_unit.clamp(1, 32),
+            ..tempo
+        };
     }
 
     fn block(&mut self, changes: &[(u32, f64)], events: Vec<Event>, io: &mut [f32]) {
@@ -539,14 +567,25 @@ impl Audio {
             events: events.into(),
         });
         let mut ctx: ProcessContext = unsafe { std::mem::zeroed() };
-        ctx.state = (kPlaying | kTempoValid | kTimeSigValid) as u32;
+        ctx.state =
+            (kPlaying | kTempoValid | kTimeSigValid | kProjectTimeMusicValid | kBarPositionValid)
+                as u32;
         ctx.sampleRate = self.rate;
         ctx.projectTimeSamples = self.time;
         ctx.continousTimeSamples = self.time;
-        ctx.tempo = self.tempo.0;
-        ctx.projectTimeMusic = self.time as f64 / self.rate * self.tempo.0 / 60.0;
-        ctx.timeSigNumerator = self.tempo.1;
-        ctx.timeSigDenominator = 4;
+        let t = self.tempo;
+        ctx.tempo = t.bpm;
+        ctx.projectTimeMusic =
+            t.start_music + (self.time - t.start) as f64 / self.rate * t.bpm / 60.0;
+        // Tempo stretches start on a bar, so bars count from there.
+        let bar = f64::from(t.beats_per_bar) * 4.0 / f64::from(t.beat_unit);
+        ctx.barPositionMusic = t.start_music
+            + ((ctx.projectTimeMusic - t.start_music) / bar)
+                .floor()
+                .max(0.0)
+                * bar;
+        ctx.timeSigNumerator = t.beats_per_bar as i32;
+        ctx.timeSigDenominator = t.beat_unit as i32;
         let mut data = ProcessData {
             processMode: kRealtime as i32,
             symbolicSampleSize: kSample32 as i32,

@@ -16,6 +16,10 @@
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { formatIn } from "./timeline";
   import { recordControl, recording, type RecordingState } from "../../stores/record";
+  import type { TempoDoc } from "../../stores/session";
+  import { addChange, bpmText, editSegment, meterText, nearestBar, parseMeter, secondsToBeats, segmentAtSeconds, BPM_MAX, BPM_MIN } from "../../stores/tempo";
+  import { METRONOME_SOUNDS, METRONOME_SUBDIVIDE, settings, type MetronomePrefs } from "../../stores/settings";
+  import { setMetronomePrefs } from "../../stores/metronome";
 
   interface Props {
     transport: TransportStore;
@@ -31,9 +35,62 @@
     amplitude?: boolean;
     /** Show track height zoom (Multitrack editor). */
     tracks?: boolean;
+    /** The session's tempo map, for the metronome group (Multitrack editor). */
+    tempo?: TempoDoc | null;
+    onTempo?: (t: TempoDoc, label: string) => void;
   }
 
-  const { transport, rate, playhead, end, hasSelection, shortcutFor = () => undefined, zoom, amplitude = false, tracks = false }: Props = $props();
+  const { transport, rate, playhead, end, hasSelection, shortcutFor = () => undefined, zoom, amplitude = false, tracks = false, tempo = null, onTempo = () => {} }: Props = $props();
+
+  // The metronome, with the tempo and time signature where the playhead is.
+  let met = $state<MetronomePrefs>(settings.current.metronome);
+  $effect(() =>
+    settings.subscribe((s) => {
+      met = s.metronome;
+    }),
+  );
+  const seg = $derived(tempo ? segmentAtSeconds(tempo, Math.max(0, playhead) / Math.max(1, rate)) : null);
+  let metMenu = $state<{ x: number; y: number } | null>(null);
+
+  function commitBpm(el: HTMLInputElement) {
+    if (!tempo || !seg) return;
+    const b = Number(el.value.replace(",", "."));
+    if (!Number.isFinite(b) || b <= 0) {
+      el.value = bpmText(seg.bpm);
+      return;
+    }
+    const bpm = Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(b * 100) / 100));
+    el.value = bpmText(bpm);
+    if (bpm !== seg.bpm) onTempo(editSegment(tempo, seg, { bpm }), "Tempo");
+  }
+
+  function commitMeter(el: HTMLInputElement) {
+    if (!tempo || !seg) return;
+    const m = parseMeter(el.value);
+    if (!m) {
+      el.value = meterText(seg);
+      return;
+    }
+    el.value = meterText(m);
+    if (m.beats_per_bar !== seg.beats_per_bar || m.beat_unit !== seg.beat_unit) onTempo(editSegment(tempo, seg, m), "Time Signature");
+  }
+
+  function addChangeAtPlayhead() {
+    if (!tempo) return;
+    const bar = Math.max(1, nearestBar(tempo, secondsToBeats(tempo, playhead / rate)));
+    const r = addChange(tempo, bar, crypto.randomUUID());
+    if (r.tempo !== tempo) onTempo(r.tempo, "Add Tempo Change");
+  }
+
+  const fieldKeys = (e: KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+    if (e.key === "Escape") {
+      const el = e.currentTarget as HTMLInputElement;
+      el.value = el.defaultValue;
+      el.blur();
+    }
+  };
 
   /** Loop Playback and Skip Selection act on the time selection. A change while playing restarts from the same spot. */
   function togglePlayMode(mode: "loop" | "skip") {
@@ -86,6 +143,7 @@
 </script>
 
 <div class="bar">
+  <div class="left">
   <button
     type="button"
     class="clock"
@@ -94,6 +152,50 @@
   >
     {clock}
   </button>
+  {#if tempo && seg}
+    <div class="metronome" role="group" aria-label="Metronome, tempo and time signature">
+      <button
+        type="button"
+        class="tool"
+        class:on={met.on}
+        title="Metronome: click on every beat {met.when === 'recording' ? 'while recording' : 'during playback and recording'}{met.on ? ' (on)' : ''}. Right-click for its sound, level and more. Never in an export."
+        aria-label="Metronome"
+        aria-pressed={met.on}
+        onclick={() => setMetronomePrefs({ on: !met.on })}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          metMenu = { x: e.clientX, y: e.clientY };
+        }}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.8 2.2h4.4l2.8 11.3H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><path d="M3.6 11h8.8" stroke="currentColor" stroke-width="1" /><path d="M8 11l3.2-6.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /><circle cx="10.3" cy="6.4" r="1" fill="currentColor" /></svg>
+      </button>
+      <button type="button" class="tool more" title="Metronome settings" aria-label="Metronome settings" onclick={(e) => (metMenu = { x: e.clientX, y: e.clientY })}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5L8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
+      </button>
+      {#key `${seg.id}:${seg.bpm}`}
+        <input
+          class="field bpm"
+          value={bpmText(seg.bpm)}
+          aria-label="Tempo in beats per minute"
+          title={seg.id ? `Tempo from bar ${seg.bar + 1}, where the playhead is. Changes later in the song are on the Tempo strip under the ruler.` : "Tempo where the playhead is. Changes later in the song are on the Tempo strip under the ruler (right-click the ruler to add one)."}
+          onchange={(e) => commitBpm(e.currentTarget)}
+          onkeydown={fieldKeys}
+        />
+      {/key}
+      <span class="unit">BPM</span>
+      {#key `${seg.id}:${meterText(seg)}`}
+        <input
+          class="field meter"
+          value={meterText(seg)}
+          aria-label="Time signature"
+          title="Time signature where the playhead is, such as 4/4, 3/4 or 6/8. Bars and beats, the metronome and MIDI clips follow it."
+          onchange={(e) => commitMeter(e.currentTarget)}
+          onkeydown={fieldKeys}
+        />
+      {/key}
+    </div>
+  {/if}
+  </div>
 
   <div class="transport" role="group" aria-label="Transport">
     <button type="button" class="tool" title={tip("Stop", "multitrack.stop")} aria-label="Stop" onclick={stopAll}>
@@ -200,6 +302,50 @@
   </div>
 </div>
 
+{#if metMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+  <div class="scrim" onclick={() => (metMenu = null)} oncontextmenu={(e) => { e.preventDefault(); metMenu = null; }}></div>
+  <div
+    class="met-pop"
+    role="dialog"
+    aria-label="Metronome settings"
+    tabindex="-1"
+    style:left="{Math.min(metMenu.x, window.innerWidth - 270)}px"
+    style:bottom="{Math.max(8, window.innerHeight - metMenu.y + 8)}px"
+    onkeydown={(e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") metMenu = null;
+    }}
+  >
+    <div class="pop-title">Metronome</div>
+    <label class="row"><input type="checkbox" checked={met.on} onchange={(e) => setMetronomePrefs({ on: e.currentTarget.checked })} /> Metronome on</label>
+    <label class="row">Click
+      <select value={met.when} onchange={(e) => setMetronomePrefs({ when: e.currentTarget.value === "recording" ? "recording" : "always" })}>
+        <option value="always">Playback and recording</option>
+        <option value="recording">Recording only</option>
+      </select>
+    </label>
+    <label class="row">Sound
+      <select value={met.sound} onchange={(e) => setMetronomePrefs({ sound: e.currentTarget.value as MetronomePrefs["sound"] })}>
+        {#each METRONOME_SOUNDS as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+      </select>
+    </label>
+    <label class="row">Level
+      <input type="range" min="-40" max="6" step="0.5" value={met.levelDb} oninput={(e) => setMetronomePrefs({ levelDb: Number(e.currentTarget.value) })} />
+      <span class="num">{met.levelDb.toFixed(1)} dB</span>
+    </label>
+    <label class="row">Between beats
+      <select value={met.subdivide} onchange={(e) => setMetronomePrefs({ subdivide: e.currentTarget.value as MetronomePrefs["subdivide"] })}>
+        {#each METRONOME_SUBDIVIDE as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+      </select>
+    </label>
+    <label class="row"><input type="checkbox" checked={met.accent} onchange={(e) => setMetronomePrefs({ accent: e.currentTarget.checked })} /> Higher click on the first beat of each bar</label>
+    <div class="pop-sep"></div>
+    <button type="button" class="pop-btn" onclick={() => { addChangeAtPlayhead(); metMenu = null; }}>Add Tempo Change at Nearest Bar</button>
+    <p class="pop-note">The click plays through your speakers or headphones only. It is never in a mixdown or export.</p>
+  </div>
+{/if}
+
 <style>
   .bar {
     display: grid;
@@ -234,6 +380,114 @@
 
   .bar > :first-child {
     justify-self: start;
+  }
+
+  .left {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .metronome {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    color: var(--text-faint);
+    font-size: var(--font-size-small);
+  }
+
+  .metronome .tool.more {
+    width: 14px;
+    margin-left: -3px;
+  }
+
+  .metronome .tool.more svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .field {
+    height: 20px;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--surface-2);
+    color: var(--value);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-small);
+    text-align: right;
+  }
+
+  .field.bpm {
+    width: 54px;
+  }
+
+  .field.meter {
+    width: 40px;
+    margin-left: 4px;
+    text-align: center;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+  }
+
+  .met-pop {
+    position: fixed;
+    z-index: 91;
+    display: grid;
+    gap: 6px;
+    width: 260px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-2);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    font-size: var(--font-size-small);
+  }
+
+  .met-pop .pop-title {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .met-pop .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--text-dim);
+  }
+
+  .met-pop select,
+  .met-pop input[type="range"] {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .met-pop .num {
+    width: 52px;
+    color: var(--value);
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+
+  .met-pop .pop-sep {
+    height: 1px;
+    background: var(--border);
+  }
+
+  .met-pop .pop-btn {
+    justify-self: start;
+  }
+
+  .met-pop .pop-note {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 10px;
   }
 
   .zoom {

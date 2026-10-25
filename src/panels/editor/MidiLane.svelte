@@ -15,7 +15,7 @@
   import { dragGain, gainText } from "./clip-gain";
   import type { MidiClipDoc, TempoDoc, TrackDoc } from "../../stores/session";
   import { beatsToSamples, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted } from "./midi";
-  import { xOf, type Viewport } from "./timeline";
+  import { gridLines, xOf, type Viewport } from "./timeline";
 
   interface Props {
     track: TrackDoc;
@@ -167,13 +167,8 @@
     onMenu(e, hit, beat);
   }
 
-  /** Bar and beat lines, drawn as a background that scrolls with the view. */
-  const grid = $derived.by(() => {
-    const beat = pxPerBeat;
-    const bar = beat * Math.max(1, tempo.beats_per_bar);
-    const offset = -((view.scroll / view.spp) % bar);
-    return { beat, bar, offset, beats: beat >= 6 };
-  });
+  /** Bar and beat lines, following tempo and time signature changes. */
+  const lines = $derived(gridLines(view, width, rate, tempo));
 
   function noteBoxes(c: MidiClipDoc) {
     const [lo, hi] = pitchRange(c.notes);
@@ -196,15 +191,14 @@
   class:drop={dropTarget}
   data-midi-lane={track.id}
   style:height="{height}px"
-  style:--grid-bar="{grid.bar}px"
-  style:--grid-beat="{grid.beat}px"
-  style:--grid-x="{grid.offset}px"
   style:--track-color={color}
-  class:beats={grid.beats}
   onpointerdown={onDown}
   ondblclick={onDouble}
   oncontextmenu={onContext}
 >
+  <svg class="grid" width={width} height={height} aria-hidden="true">
+    {#each lines as l, i (i)}<line x1={Math.round(l.x) + 0.5} x2={Math.round(l.x) + 0.5} y1="0" y2={height} class:bar={l.bar} />{/each}
+  </svg>
   {#each clips as c (c.id)}
     {@const s = shown(c)}
     {@const left = xOfBeat(s.start)}
@@ -250,24 +244,22 @@
     overflow: hidden;
     box-sizing: border-box;
     border-bottom: 3px solid var(--track-gap);
-    background-image: linear-gradient(to right, color-mix(in srgb, var(--text) 13%, transparent) 1px, transparent 1px);
-    background-size: var(--grid-bar) 100%;
-    background-position: var(--grid-x) 0;
     user-select: none;
   }
   .midi-lane.drop {
     box-shadow: inset 0 0 0 2px var(--accent);
   }
-  .midi-lane.beats {
-    background-image:
-      linear-gradient(to right, color-mix(in srgb, var(--text) 13%, transparent) 1px, transparent 1px),
-      linear-gradient(to right, color-mix(in srgb, var(--text) 5%, transparent) 1px, transparent 1px);
-    background-size:
-      var(--grid-bar) 100%,
-      var(--grid-beat) 100%;
-    background-position:
-      var(--grid-x) 0,
-      var(--grid-x) 0;
+  .grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .grid line {
+    stroke: color-mix(in srgb, var(--text) 5%, transparent);
+    stroke-width: 1;
+  }
+  .grid line.bar {
+    stroke: color-mix(in srgb, var(--text) 13%, transparent);
   }
   .clip {
     position: absolute;

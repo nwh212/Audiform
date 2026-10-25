@@ -30,6 +30,10 @@ pub const AUDIO: u8 = 2;
 /// needs one.
 pub const SELECT: u8 = 3;
 
+fn quarter() -> u32 {
+    4
+}
+
 fn is_zero(v: &u64) -> bool {
     *v == 0
 }
@@ -248,10 +252,18 @@ pub enum Request {
     CloseEditor,
     /// Removes the selected plug-in from the process (others carry on).
     Unload,
-    /// The session's tempo, told to the plug-in with every block.
+    /// The session's tempo and time signature, told to the plug-in with
+    /// every block, from timeline frame `start` (at `start_music` quarter
+    /// notes) until the next one.
     Tempo {
         bpm: f64,
         beats_per_bar: u32,
+        #[serde(default = "quarter")]
+        beat_unit: u32,
+        #[serde(default)]
+        start: i64,
+        #[serde(default)]
+        start_music: f64,
     },
 }
 

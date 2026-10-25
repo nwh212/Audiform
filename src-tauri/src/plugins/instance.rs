@@ -14,7 +14,7 @@
 //! fails to start, its slot passes audio through untouched and reports
 //! the problem; the editor and every other plug-in carry on.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -32,7 +32,7 @@ use serde::Serialize;
 
 use super::{find, host_program, param_id, Found};
 use crate::dsp::effects::{Params, Processor};
-use crate::session::model::{EffectSlot, Id, Tempo};
+use crate::session::model::{EffectSlot, Id, Tempo, TempoSegment};
 
 /// Longest a plug-in may take to process one block before it counts as hung.
 pub const PROCESS_TIMEOUT: Duration = Duration::from_secs(4);
@@ -322,6 +322,9 @@ pub struct Host {
     pub params: Vec<ParamInfo>,
     pub has_editor: bool,
     buf: Vec<u8>,
+    rate: u32,
+    /// The stretch of the tempo map the plug-in was last told.
+    told: Option<TempoSegment>,
 }
 
 impl Host {
@@ -361,6 +364,8 @@ impl Host {
             params: Vec::new(),
             has_editor: false,
             buf: Vec::new(),
+            rate,
+            told: None,
         };
         let load = Request::Load {
             path: found.bundle.to_string_lossy().into_owned(),
@@ -424,7 +429,20 @@ impl Host {
                 k.extend(changes.iter().copied());
             }
         }
-        encode_audio(&mut self.buf, block_position(), changes, notes, io);
+        let position = block_position();
+        if position >= 0 {
+            // Tempo changes reach the plug-in as playback crosses them.
+            if let Some(seg) = BLOCK_TEMPO.with(|t| {
+                t.borrow()
+                    .as_ref()
+                    .map(|t| t.segment_at_seconds(position as f64 / f64::from(self.rate.max(1))))
+            }) {
+                if self.told != Some(seg) {
+                    self.tell_tempo(seg);
+                }
+            }
+        }
+        encode_audio(&mut self.buf, position, changes, notes, io);
         if !self.conn.write(self.id, AUDIO, &self.buf) {
             self.stop("The plug-in crashed and is bypassed.");
             return false;
@@ -492,11 +510,21 @@ impl Host {
         let _ = self.request(&Request::Reset, REQUEST_TIMEOUT);
     }
 
-    pub fn set_tempo(&mut self, tempo: Tempo) {
+    /// Tells the plug-in the tempo and time signature where playback starts.
+    pub fn set_tempo(&mut self, tempo: &Tempo) {
+        let seg = tempo.segments().next().expect("never empty");
+        self.tell_tempo(seg);
+    }
+
+    fn tell_tempo(&mut self, seg: TempoSegment) {
+        self.told = Some(seg);
         let _ = self.request(
             &Request::Tempo {
-                bpm: tempo.bpm,
-                beats_per_bar: tempo.beats_per_bar,
+                bpm: seg.bpm,
+                beats_per_bar: seg.beats_per_bar,
+                beat_unit: seg.beat_unit,
+                start: (seg.seconds * f64::from(self.rate)).round() as i64,
+                start_music: seg.beat,
             },
             REQUEST_TIMEOUT,
         );
@@ -521,6 +549,22 @@ thread_local! {
     /// The timeline frame of the block being rendered on this thread, for
     /// plug-ins' song position; -1 when unknown (previews, auditions).
     static BLOCK_POS: Cell<i64> = const { Cell::new(-1) };
+}
+
+thread_local! {
+    /// The tempo map of the mix being rendered on this thread, so
+    /// plug-ins follow its tempo and time signature changes.
+    static BLOCK_TEMPO: RefCell<Option<Arc<Tempo>>> = const { RefCell::new(None) };
+}
+
+/// Sets the tempo map of the mix rendered on this thread.
+pub fn set_block_tempo(tempo: Option<Arc<Tempo>>) {
+    BLOCK_TEMPO.with(|t| *t.borrow_mut() = tempo);
+}
+
+/// The tempo map of the mix rendered on this thread.
+pub fn block_tempo() -> Option<Arc<Tempo>> {
+    BLOCK_TEMPO.with(|t| t.borrow().clone())
 }
 
 /// Sets the timeline frame of the block about to be rendered on this thread.
@@ -827,7 +871,7 @@ pub struct Instrument {
 impl Instrument {
     /// Starts (or picks up) the slot's instrument, told the session's
     /// tempo, with every note let go.
-    pub fn start(slot: &EffectSlot, rate: u32, tempo: Tempo) -> Instrument {
+    pub fn start(slot: &EffectSlot, rate: u32, tempo: &Tempo) -> Instrument {
         let host = host_for(slot, rate);
         let (latency, pending) = match host.as_ref().and_then(|h| h.lock().ok()) {
             Some(mut h) => {

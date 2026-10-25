@@ -79,7 +79,34 @@ export interface AppSettings {
   timecodeFps: number;
   /** The Phase Wheel's choices, kept for every file and session. */
   phaseWheel: PhaseWheelPrefs;
+  /** The metronome, kept between runs. */
+  metronome: MetronomePrefs;
 }
+
+export type MetronomeSound = "tick" | "wood" | "beep" | "shaker";
+export type MetronomeSubdivide = "none" | "halves" | "triplets" | "quarters";
+export interface MetronomePrefs {
+  on: boolean;
+  /** Click during playback and recording, or while recording only. */
+  when: "always" | "recording";
+  levelDb: number;
+  sound: MetronomeSound;
+  /** The first beat of each bar clicks higher. */
+  accent: boolean;
+  subdivide: MetronomeSubdivide;
+}
+export const METRONOME_SOUNDS: { value: MetronomeSound; label: string }[] = [
+  { value: "tick", label: "Tick" },
+  { value: "wood", label: "Wood" },
+  { value: "beep", label: "Beep" },
+  { value: "shaker", label: "Shaker" },
+];
+export const METRONOME_SUBDIVIDE: { value: MetronomeSubdivide; label: string }[] = [
+  { value: "none", label: "Beats only" },
+  { value: "halves", label: "Halves" },
+  { value: "triplets", label: "Triplets" },
+  { value: "quarters", label: "Quarters" },
+];
 
 export type PhaseSignal = "left" | "right" | "mid" | "side";
 export interface PhaseWheelPrefs {
@@ -136,6 +163,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markerName: "Marker",
   timecodeFps: 30,
   phaseWheel: { size: 4096, fps: 60, a: "left", b: "right" },
+  metronome: { on: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -218,6 +246,21 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       ? (o.timecodeFps as number)
       : d.timecodeFps,
     phaseWheel: phasePrefs(o.phaseWheel),
+    metronome: metronomePrefs(o.metronome),
+  };
+}
+
+function metronomePrefs(raw: unknown): MetronomePrefs {
+  const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const d = DEFAULT_SETTINGS.metronome;
+  const lvl = typeof m.levelDb === "number" && Number.isFinite(m.levelDb) ? Math.min(6, Math.max(-60, m.levelDb)) : d.levelDb;
+  return {
+    on: typeof m.on === "boolean" ? m.on : d.on,
+    when: m.when === "recording" ? "recording" : "always",
+    levelDb: Math.round(lvl * 10) / 10,
+    sound: METRONOME_SOUNDS.some((x) => x.value === m.sound) ? (m.sound as MetronomeSound) : d.sound,
+    accent: typeof m.accent === "boolean" ? m.accent : d.accent,
+    subdivide: METRONOME_SUBDIVIDE.some((x) => x.value === m.subdivide) ? (m.subdivide as MetronomeSubdivide) : d.subdivide,
   };
 }
 

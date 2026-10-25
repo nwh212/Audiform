@@ -1189,11 +1189,17 @@
       ]
     },
     "Tempo": {
-      "description": "The session's tempo and meter.",
+      "description": "The session's tempo and meter: where it starts, and any changes later\nin the song. MIDI clips, bars and beats, and the metronome follow it.",
       "type": "object",
       "properties": {
+        "beat_unit": {
+          "description": "The note one beat is, the bottom of the time signature: 4 in 4/4,\n8 in 6/8. Files from before time signature changes get 4.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "beats_per_bar": {
-          "description": "Beats in a bar, for example 4 in 4/4 or 3 in 3/4.",
+          "description": "Beats in a bar, the top of the time signature: 4 in 4/4, 6 in 6/8.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
@@ -1202,9 +1208,53 @@
           "description": "Beats (quarter notes) per minute.",
           "type": "number",
           "format": "double"
+        },
+        "changes": {
+          "description": "Tempo and time signature changes, in bar order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TempoChange"
+          }
         }
       },
       "required": [
+        "bpm",
+        "beats_per_bar"
+      ]
+    },
+    "TempoChange": {
+      "description": "A tempo and time signature change at the start of a bar.",
+      "type": "object",
+      "properties": {
+        "bar": {
+          "description": "Bars from the start of the session where it takes over: 1 is the\nsecond bar. Always 1 or more.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "beat_unit": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 4,
+          "minimum": 0
+        },
+        "beats_per_bar": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "bpm": {
+          "type": "number",
+          "format": "double"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id",
+        "bar",
         "bpm",
         "beats_per_bar"
       ]

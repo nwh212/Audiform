@@ -78,6 +78,12 @@ pub fn transport_set_mono_check(on: bool) {
     crate::engine::transport::set_mono_check(on);
 }
 
+/// The metronome's settings, while playing or not.
+#[tauri::command]
+pub fn transport_set_metronome(settings: crate::engine::metronome::Settings) {
+    crate::engine::metronome::set(settings);
+}
+
 #[tauri::command]
 pub fn transport_status(transport: State<'_, Transport>) -> TransportStatus {
     transport.status()

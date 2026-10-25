@@ -160,4 +160,26 @@ describe("bars and beats", () => {
     const ticks = barTicks({ spp: 1000, scroll: 0 }, 400, 48_000, t);
     expect(ticks.filter((k) => k.label).map((k) => k.label)).toEqual(["1", "2", "3", "4", "5"]);
   });
+
+  it("follows tempo and time signature changes", async () => {
+    const { formatBars, parseBars, barTicks, gridLines } = await import("./timeline");
+    // Two bars of 4/4 at 120 (4 s), then 6/8 at 60: an eighth is half a second, a bar 3 s.
+    const t = { bpm: 120, beats_per_bar: 4, changes: [{ id: "a", bar: 2, bpm: 60, beats_per_bar: 6, beat_unit: 8 }] };
+    const rate = 1_000;
+    expect(formatBars(4_000, rate, t)).toBe("3.1.000");
+    expect(formatBars(4_500, rate, t)).toBe("3.2.000");
+    expect(formatBars(7_000, rate, t)).toBe("4.1.000");
+    expect(parseBars("4", rate, t)).toBe(7_000);
+    expect(parseBars("3.3", rate, t)).toBe(5_000);
+    const labels = barTicks({ spp: 10, scroll: 0 }, 1_000, rate, t).filter((k) => k.label);
+    expect(labels.map((k) => [k.label, Math.round(k.x)])).toEqual([
+      ["1", 0],
+      ["2", 200],
+      ["3", 400],
+      ["4", 700],
+      ["5", 1_000],
+    ]);
+    const bars = gridLines({ spp: 10, scroll: 0 }, 1_000, rate, t).filter((l) => l.bar);
+    expect(bars.map((l) => Math.round(l.x))).toEqual([0, 200, 400, 700, 1_000]);
+  });
 });

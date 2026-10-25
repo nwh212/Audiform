@@ -14,7 +14,7 @@ use std::sync::atomic::AtomicBool;
 use altered_audio_editor_lib::export::mixdown::{render_mix, MixdownRequest};
 use altered_audio_editor_lib::plugins::{self, instance};
 use altered_audio_editor_lib::session::model::{
-    new_id, ChannelLayout, EffectSlot, MediaRef, MidiClip, Note, Session, Track,
+    new_id, ChannelLayout, EffectSlot, MediaRef, MidiClip, Note, Session, Tempo, Track,
 };
 use altered_audio_editor_lib::session::ops::{apply, ClipSpec, Op};
 
@@ -358,8 +358,10 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     apply(
         &mut s,
         &Op::SetTempo {
-            bpm: 60.0,
-            beats_per_bar: 4,
+            tempo: Tempo {
+                bpm: 60.0,
+                ..Tempo::default()
+            },
         },
     )
     .unwrap();

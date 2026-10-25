@@ -9,18 +9,17 @@
  * samples (the same sums as here) when it plays them.
  */
 
-import { BPM_MAX, BPM_MIN, type MidiClipDoc, type NoteDoc, type Op, type SessionDoc, type TempoDoc } from "../../stores/session";
+import type { MidiClipDoc, NoteDoc, Op, SessionDoc, TempoDoc } from "../../stores/session";
+import { barAt, barBeats, barStart, beatsToSeconds, secondsToBeats, segmentAtBeat } from "../../stores/tempo";
 
-const bpmOf = (t: TempoDoc) => Math.min(BPM_MAX, Math.max(BPM_MIN, t.bpm));
-
-/** Beats to session samples. */
+/** Beats to session samples, through the tempo map. */
 export function beatsToSamples(beats: number, t: TempoDoc, rate: number): number {
-  return Math.round((Math.max(0, beats) * 60 * rate) / bpmOf(t));
+  return Math.round(beatsToSeconds(t, beats) * rate);
 }
 
-/** Session samples to beats. */
+/** Session samples to beats, through the tempo map. */
 export function samplesToBeats(samples: number, t: TempoDoc, rate: number): number {
-  return (samples / Math.max(1, rate)) * (bpmOf(t) / 60);
+  return secondsToBeats(t, samples / Math.max(1, rate));
 }
 
 /** Rounds to the nearest multiple of `grid` beats (0 leaves it alone). */
@@ -47,9 +46,9 @@ export const GRIDS: { label: string; beats: number }[] = [
   { label: "Off", beats: -1 },
 ];
 
-/** The grid size in beats: "1 bar" is the bar length, "Off" is none. */
-export function gridBeats(grid: number, t: TempoDoc): number {
-  if (grid === 0) return t.beats_per_bar;
+/** The grid size in beats: "1 bar" is the bar length (where `at` beats falls), "Off" is none. */
+export function gridBeats(grid: number, t: TempoDoc, at = 0): number {
+  if (grid === 0) return barBeats(segmentAtBeat(t, at));
   return grid < 0 ? 0 : grid;
 }
 
@@ -64,7 +63,9 @@ export const isBlackKey = (pitch: number) => [1, 3, 6, 8, 10].includes(((pitch %
 
 /** A new empty clip one bar long, starting at the bar that holds `atBeats`. */
 export function newClip(id: string, atBeats: number, t: TempoDoc, name = "MIDI"): MidiClipDoc {
-  return { id, name, start: snapDown(Math.max(0, atBeats), t.beats_per_bar), length: t.beats_per_bar, notes: [] };
+  const { bar } = barAt(t, Math.max(0, atBeats));
+  const start = barStart(t, bar);
+  return { id, name, start, length: barStart(t, bar + 1) - start, notes: [] };
 }
 
 /** The clip under a timeline position in beats, latest-starting first. */

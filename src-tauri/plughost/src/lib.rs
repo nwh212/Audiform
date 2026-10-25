@@ -211,9 +211,21 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                             break;
                         }
                     }
-                    Request::Tempo { bpm, beats_per_bar } => {
+                    Request::Tempo {
+                        bpm,
+                        beats_per_bar,
+                        beat_unit,
+                        start,
+                        start_music,
+                    } => {
                         if let Some(a) = audio.get_mut(&cur) {
-                            a.set_tempo(bpm, beats_per_bar as i32);
+                            a.set_tempo(plugin::Tempo {
+                                bpm,
+                                beats_per_bar,
+                                beat_unit,
+                                start,
+                                start_music,
+                            });
                         }
                         send(&out, cur, &Message::Ok);
                     }
