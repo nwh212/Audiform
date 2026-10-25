@@ -4462,6 +4462,7 @@
     onNotice={showNotice}
     onError={showError}
     onClose={() => (pluginManagerOpen = false)}
+    beforeRestart={() => pluginSync.captureAll()}
   />
 {/if}
 

@@ -82,6 +82,10 @@ pub struct Registry {
     /// Each scanned bundle's modified time, so a rescan skips the unchanged.
     #[serde(default)]
     pub stamps: BTreeMap<PathBuf, u64>,
+    /// Makers whose plug-ins run together in one process (lower case).
+    /// None until changed: then a built-in list of makers known to need it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_makers: Option<Vec<String>>,
 }
 
 fn registry() -> &'static RwLock<Registry> {
@@ -111,9 +115,24 @@ pub fn load(config_dir: &Path) {
     if let Ok(mut f) = config_file().lock() {
         *f = Some(file);
     }
+    instance::set_shared_makers(
+        reg.shared_makers
+            .clone()
+            .unwrap_or_else(instance::default_shared_makers),
+    );
     if let Ok(mut r) = registry().write() {
         *r = reg;
     }
+}
+
+/// Sets the makers whose plug-ins run together in one process, and saves it.
+pub fn set_shared_makers(makers: Vec<String>) -> Registry {
+    let mut reg = snapshot();
+    reg.shared_makers = Some(makers.clone());
+    instance::set_shared_makers(makers);
+    save(&reg);
+    set(reg.clone());
+    reg
 }
 
 fn save(reg: &Registry) {

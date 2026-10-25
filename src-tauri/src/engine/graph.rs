@@ -723,9 +723,11 @@ impl Graph {
             .map(|&i| (i, std::mem::take(&mut self.tracks[i])))
             .collect();
         let per = taken.len().div_ceil(threads);
+        let position = crate::plugins::instance::block_position();
         std::thread::scope(|scope| {
             for chunk in taken.chunks_mut(per) {
                 scope.spawn(move || {
+                    crate::plugins::instance::set_block_position(position);
                     for (i, st) in chunk.iter_mut() {
                         prepare_track(st, &raw[*i][..n]);
                         run_strip(st);
@@ -820,6 +822,7 @@ impl Mix {
         let mut left = graph.lead();
         while left > 0 && !raw.is_empty() {
             let want = left.min(4_096) as usize;
+            crate::plugins::instance::set_block_position(renderer.position() as i64);
             renderer.render(want, &mut raw);
             graph.process(&raw, &mut sink);
             left -= raw[0].len() as u64 / 2;
@@ -844,6 +847,8 @@ impl Mix {
             self.rendered += frames as u64;
             return frames;
         }
+        // Plug-ins are told where in the timeline this block is (their song position).
+        crate::plugins::instance::set_block_position(self.renderer.position() as i64);
         self.renderer.render(frames, &mut self.raw);
         self.graph.process(&self.raw, out);
         let n = self.raw[0].len() / 2;

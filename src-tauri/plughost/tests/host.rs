@@ -119,7 +119,7 @@ impl Host {
         samples: &[f32],
     ) -> Option<Vec<f32>> {
         let mut body = Vec::new();
-        encode_audio(&mut body, changes, notes, samples);
+        encode_audio(&mut body, -1, changes, notes, samples);
         write_frame(&mut self.stdin, AUDIO, &body).ok()?;
         let mut buf = Vec::new();
         loop {
@@ -296,7 +296,10 @@ fn scans_processes_saves_and_survives_a_crash() {
 
     // No window on this system (or this plug-in): an error, not a hang.
     assert!(matches!(
-        h.request(&Request::OpenEditor { title: "x".into() }),
+        h.request(&Request::OpenEditor {
+            title: "x".into(),
+            owner: 0
+        }),
         Message::Error { .. }
     ));
 
@@ -368,4 +371,74 @@ fn plays_notes_on_an_instrument_at_their_frames() {
     assert_eq!(h.request(&Request::Reset), Message::Ok);
     let y = h.play(&[], &[], &silent).unwrap();
     assert_eq!(y[0], 0.0);
+}
+
+#[test]
+fn one_process_runs_several_plugins_each_on_its_own() {
+    let bundle = test_bundle();
+    let cid = cid_of(&bundle, "Altered Test Gain");
+    let mut h = Host::start();
+    let mut buf = Vec::new();
+    // The next CONTROL or AUDIO frame, with the plug-in it is for.
+    let mut cur = 0u32;
+    let mut next = |h: &mut Host| -> (u32, u8, Vec<u8>) {
+        loop {
+            let kind = read_frame(&mut h.stdout, &mut buf)
+                .unwrap()
+                .expect("host still running");
+            if kind == SELECT {
+                cur = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+                continue;
+            }
+            return (cur, kind, buf.clone());
+        }
+    };
+    let select =
+        |h: &mut Host, id: u32| write_frame(&mut h.stdin, SELECT, &id.to_le_bytes()).unwrap();
+    for (id, gain) in [(0u32, 0.5f64), (1, 0.25)] {
+        select(&mut h, id);
+        let load = Request::Load {
+            path: bundle.to_string_lossy().into_owned(),
+            cid: cid.clone(),
+            rate: 48_000.0,
+            state: None,
+            params: vec![(0, gain)],
+        };
+        write_frame(&mut h.stdin, CONTROL, &serde_json::to_vec(&load).unwrap()).unwrap();
+        let (from, kind, body) = next(&mut h);
+        assert_eq!((from, kind), (id, CONTROL));
+        assert!(matches!(
+            serde_json::from_slice::<Message>(&body).unwrap(),
+            Message::Loaded { .. }
+        ));
+    }
+    // Each plug-in keeps its own gain, and each reply says whose it is.
+    for (id, want) in [(1u32, 0.25f32), (0, 0.5), (1, 0.25)] {
+        select(&mut h, id);
+        let mut body = Vec::new();
+        encode_audio(&mut body, 0, &[], &[], &impulse(256, 10));
+        write_frame(&mut h.stdin, AUDIO, &body).unwrap();
+        let (from, kind, out) = next(&mut h);
+        assert_eq!((from, kind), (id, AUDIO));
+        let mut y = Vec::new();
+        decode_samples(&out, &mut y);
+        assert_eq!(peak_at(&y), (42, want));
+    }
+    // Unloading one leaves the other playing.
+    select(&mut h, 0);
+    write_frame(
+        &mut h.stdin,
+        CONTROL,
+        &serde_json::to_vec(&Request::Unload).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(next(&mut h).1, CONTROL);
+    select(&mut h, 1);
+    let mut body = Vec::new();
+    encode_audio(&mut body, 0, &[], &[], &impulse(256, 10));
+    write_frame(&mut h.stdin, AUDIO, &body).unwrap();
+    let (from, _, out) = next(&mut h);
+    let mut y = Vec::new();
+    decode_samples(&out, &mut y);
+    assert_eq!((from, peak_at(&y).1), (1, 0.25));
 }

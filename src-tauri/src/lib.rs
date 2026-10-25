@@ -81,6 +81,7 @@ pub fn run() {
             commands::transport::transport_status,
             commands::transport::transport_set_mono_check,
             commands::plugins::plugins_registry,
+            commands::plugins::plugins_set_shared,
             commands::plugins::plugins_scan,
             commands::plugins::plugins_set_folder,
             commands::plugins::plugins_scan_stop,

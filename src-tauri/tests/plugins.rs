@@ -210,6 +210,30 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let s = session(dir.path(), slot(&[("p0", 0.5)]));
     assert_eq!(peak(&mix(&s)), (6_000, 0.5));
 
+    // A maker set to run together: two of its plug-ins share one process,
+    // each keeping its own settings (half, then half again).
+    let vendor = plugins::snapshot()
+        .plugins
+        .iter()
+        .find(|p| p.info.name == "Altered Test Gain")
+        .unwrap()
+        .info
+        .vendor
+        .clone();
+    instance::set_shared_makers(vec![vendor]);
+    let t0 = std::time::Instant::now();
+    let before = instance::shared_processes_started();
+    let mut two = session(dir.path(), slot(&[("p0", 0.5)]));
+    two.tracks[0].effects.slots.push(slot(&[("p0", 0.5)]));
+    assert_eq!(peak(&mix(&two)), (6_000, 0.25));
+    assert_eq!(
+        instance::shared_processes_started() - before,
+        1,
+        "one process for both"
+    );
+    instance::set_shared_makers(vec![]);
+    eprintln!("SHARED TOOK {:?}", t0.elapsed());
+
     // Playback's pooled host: settings come back out and load into a new one.
     let mut fx = slot(&[("p0", 0.25)]);
     let p = instance::processor(&fx, 48_000).expect("starts");

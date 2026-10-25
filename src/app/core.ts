@@ -1027,6 +1027,13 @@ export interface PluginRegistry {
   folders: { path: string; standard: boolean; on: boolean }[];
   plugins: { effect: string; name: string; vendor: string; version: string; kind: string; bundle: string; latency: number; hasWindow: boolean; instrument: boolean; note?: string | null; controls: number }[];
   failed: { bundle: string; error: string }[];
+  /** Makers whose plug-ins run together in one process (lower case). */
+  shared: string[];
+}
+
+/** Sets the makers whose plug-ins run together in one process. */
+export function pluginsSetShared(makers: string[]): Promise<PluginRegistry> {
+  return invoke<PluginRegistry>("plugins_set_shared", { makers });
 }
 
 /** What one running plug-in reported. */

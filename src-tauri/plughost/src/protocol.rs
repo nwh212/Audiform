@@ -23,6 +23,12 @@ use serde::{Deserialize, Serialize};
 
 pub const CONTROL: u8 = 1;
 pub const AUDIO: u8 = 2;
+/// Which plug-in in the process the frames after it are for (a little-
+/// endian u32), in either direction. A host process can run several
+/// plug-ins (from one maker, so they can find each other); frames before
+/// any SELECT are for plug-in 0, so a process with one plug-in never
+/// needs one.
+pub const SELECT: u8 = 3;
 
 fn is_zero(v: &u64) -> bool {
     *v == 0
@@ -240,6 +246,8 @@ pub enum Request {
         owner: u64,
     },
     CloseEditor,
+    /// Removes the selected plug-in from the process (others carry on).
+    Unload,
     /// The session's tempo, told to the plug-in with every block.
     Tempo {
         bpm: f64,
@@ -311,14 +319,18 @@ pub fn read_frame(r: &mut impl Read, buf: &mut Vec<u8>) -> io::Result<Option<u8>
     Ok(Some(head[0]))
 }
 
-/// An audio request: frames, parameter changes and interleaved samples.
+/// An audio request: the timeline position of its first frame (-1 when
+/// unknown: the plug-in keeps counting on), frames, parameter changes and
+/// interleaved samples.
 pub fn encode_audio(
     out: &mut Vec<u8>,
+    position: i64,
     changes: &[(u32, f64)],
     notes: &[NoteEvent],
     samples: &[f32],
 ) {
     out.clear();
+    out.extend_from_slice(&position.to_le_bytes());
     out.extend_from_slice(&((samples.len() / 2) as u32).to_le_bytes());
     out.extend_from_slice(&(changes.len() as u32).to_le_bytes());
     for (id, v) in changes {
@@ -340,10 +352,13 @@ pub fn encode_audio(
 /// Reads an audio request back: changes, notes and samples. None if malformed.
 pub fn decode_audio(
     buf: &[u8],
+    position: &mut i64,
     changes: &mut Vec<(u32, f64)>,
     notes: &mut Vec<NoteEvent>,
     samples: &mut Vec<f32>,
 ) -> Option<()> {
+    *position = i64::from_le_bytes(buf.get(..8)?.try_into().ok()?);
+    let buf = &buf[8..];
     let u32_at = |i: usize| {
         buf.get(i..i + 4)
             .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
@@ -522,13 +537,21 @@ mod tests {
             pitch: 60,
             velocity: 0.75,
         };
-        encode_audio(&mut body, &[(7, 0.25)], &[note], &[0.5, -0.5, 1.0, 0.0]);
+        encode_audio(
+            &mut body,
+            4800,
+            &[(7, 0.25)],
+            &[note],
+            &[0.5, -0.5, 1.0, 0.0],
+        );
         write_frame(&mut wire, AUDIO, &body).unwrap();
         let mut r = &wire[..];
         let mut buf = Vec::new();
         assert_eq!(read_frame(&mut r, &mut buf).unwrap(), Some(AUDIO));
         let (mut ch, mut n, mut s) = (Vec::new(), Vec::new(), Vec::new());
-        decode_audio(&buf, &mut ch, &mut n, &mut s).unwrap();
+        let mut pos = 0;
+        decode_audio(&buf, &mut pos, &mut ch, &mut n, &mut s).unwrap();
+        assert_eq!(pos, 4800);
         assert_eq!(ch, vec![(7, 0.25)]);
         assert_eq!(n, vec![note]);
         assert_eq!(s, vec![0.5, -0.5, 1.0, 0.0]);

@@ -112,6 +112,8 @@ pub struct RegistryView {
     pub folders: Vec<FolderView>,
     pub plugins: Vec<PluginView>,
     pub failed: Vec<FailedView>,
+    /// Makers whose plug-ins run together in one process (lower case).
+    pub shared: Vec<String>,
 }
 
 fn view(reg: &Registry) -> RegistryView {
@@ -133,6 +135,7 @@ fn view(reg: &Registry) -> RegistryView {
         }
     }
     RegistryView {
+        shared: instance::shared_maker_list(),
         folders,
         plugins: reg
             .plugins
@@ -166,6 +169,12 @@ fn view(reg: &Registry) -> RegistryView {
 #[tauri::command]
 pub fn plugins_registry() -> RegistryView {
     view(&plugins::snapshot())
+}
+
+/// Sets the makers whose plug-ins run together in one process.
+#[tauri::command]
+pub fn plugins_set_shared(makers: Vec<String>) -> RegistryView {
+    view(&plugins::set_shared_makers(makers))
 }
 
 /// Scans the folders. Each bundle is read by a host process of its own,

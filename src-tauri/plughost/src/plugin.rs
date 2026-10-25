@@ -445,7 +445,18 @@ unsafe fn read_params(c: &ComPtr<IEditController>) -> Vec<ParamInfo> {
 impl Audio {
     /// Processes interleaved stereo in place, applying `changes` first
     /// and playing `notes` at their offsets.
-    pub fn process(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32]) {
+    /// `position` is the timeline frame of the first sample, which the
+    /// plug-in is told as the song position; below 0 it keeps counting on.
+    pub fn process(
+        &mut self,
+        position: i64,
+        changes: &[(u32, f64)],
+        notes: &[NoteEvent],
+        io: &mut [f32],
+    ) {
+        if position >= 0 {
+            self.time = position;
+        }
         let mut first = true;
         for (i, chunk) in io.chunks_mut(MAX_BLOCK * 2).enumerate() {
             let mut all: Vec<(u32, f64)> = if first { changes.to_vec() } else { Vec::new() };

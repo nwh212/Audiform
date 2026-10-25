@@ -10,7 +10,7 @@
   only listed as failed.
 -->
 <script lang="ts">
-  import { onPluginScanProgress, pluginsRegistry, pluginsScan, pluginsScanStop, pluginsSetFolder, type PluginRegistry, type PluginScanProgress } from "./core";
+  import { onPluginScanProgress, pluginsRegistry, pluginsScan, pluginsScanStop, pluginsSetFolder, pluginsSetShared, type PluginRegistry, type PluginScanProgress } from "./core";
   import { pluginsVersion } from "../stores/plugins";
 
   interface Props {
@@ -19,9 +19,11 @@
     onNotice: (text: string) => void;
     onError: (e: unknown) => void;
     onClose: () => void;
+    /** Fetches running plug-ins' settings into the session (before some of them restart). */
+    beforeRestart?: () => Promise<void>;
   }
 
-  const { pickFolder, onNotice, onError, onClose }: Props = $props();
+  const { pickFolder, onNotice, onError, onClose, beforeRestart = async () => {} }: Props = $props();
 
   let reg = $state<PluginRegistry | null>(null);
   let scanning = $state(false);
@@ -38,6 +40,26 @@
       return !q || p.name.toLowerCase().includes(q) || p.vendor.toLowerCase().includes(q) || p.kind.toLowerCase().includes(q);
     }),
   );
+
+  /** Each maker with plug-ins installed, and whether its plug-ins run together. */
+  const makers = $derived.by(() => {
+    const seen = new Map<string, string>();
+    for (const p of reg?.plugins ?? []) if (p.vendor.trim()) seen.set(p.vendor.trim().toLowerCase(), p.vendor.trim());
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([key, name]) => ({ key, name, on: reg?.shared.includes(key) ?? false }));
+  });
+  async function setTogether(key: string, on: boolean) {
+    const now = new Set(reg?.shared ?? []);
+    if (on) now.add(key);
+    else now.delete(key);
+    try {
+      // Its running plug-ins restart the new way: keep what they are set to first.
+      await beforeRestart();
+      reg = await pluginsSetShared([...now]);
+      onNotice(on ? "Plug-ins from that maker will run together from the next playback." : "Plug-ins from that maker will each run on their own from the next playback.");
+    } catch (e) {
+      onError(e);
+    }
+  }
 
   async function scan(all: boolean) {
     if (scanning) return;
@@ -162,6 +184,19 @@
           {/each}
         </div>
       {/if}
+      {#if makers.length}
+        <h2>Run together</h2>
+        <p class="note">
+          Some plug-ins talk to each other while they play, for example an immersive panner on each track and the renderer on the mix. Those need to run in one shared
+          process. Tick a maker to run all its plug-ins together. If one of them crashes, the others from that maker stop too. Takes effect from the next playback or export
+          (their current settings are kept).
+        </p>
+        <div class="makers">
+          {#each makers as m (m.key)}
+            <label><input type="checkbox" checked={m.on} onchange={(e) => void setTogether(m.key, e.currentTarget.checked)} /> {m.name}</label>
+          {/each}
+        </div>
+      {/if}
       {#if reg?.failed.length}
         <h2>Could not be read ({reg.failed.length})</h2>
         <ul class="failed">
@@ -174,8 +209,8 @@
 
     <p class="note">
       Effects appear in the Voice Chain's Add effect list under Plug-ins (VST3); instruments in MIDI track headers. ⚠ marks a plug-in that crashed while being read: it is
-      listed anyway, and hover it to see where it stopped. Each runs in a process of its own, so one that crashes is bypassed and the
-      editor carries on. VST2 plug-ins are not supported.
+      listed anyway, and hover it to see where it stopped. Each runs in a process of its own (or its maker's, when set to run together), so one that crashes is
+      bypassed and the editor carries on. VST2 plug-ins are not supported.
     </p>
     <footer>
       <button type="button" onclick={close} title={scanning ? "Stops the scan and closes. What was read so far is kept." : undefined}>Close</button>
@@ -207,6 +242,17 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
+  }
+  .makers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 4px 0 8px;
+  }
+  .makers label {
+    display: flex;
+    gap: 5px;
+    align-items: center;
   }
   h2 {
     margin: 0 0 6px;

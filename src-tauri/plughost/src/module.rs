@@ -114,6 +114,22 @@ impl Module {
 
     pub fn classes(&self) -> Vec<FactoryClass> {
         let mut out = Vec::new();
+        // The maker the file declares, for classes that leave theirs blank.
+        let maker = unsafe {
+            let mut fi: vst3::Steinberg::PFactoryInfo = std::mem::zeroed();
+            if self.factory().getFactoryInfo(&mut fi) == vst3::Steinberg::kResultOk {
+                from_cstring(&fi.vendor)
+            } else {
+                String::new()
+            }
+        };
+        let or_maker = |v: String| {
+            if v.trim().is_empty() {
+                maker.clone()
+            } else {
+                v
+            }
+        };
         unsafe {
             let f2 = self.factory().cast::<IPluginFactory2>();
             let n = self.factory().countClasses();
@@ -125,7 +141,7 @@ impl Module {
                             cid: info.cid.map(|b| b as u8),
                             category: from_cstring(&info.category),
                             name: from_cstring(&info.name),
-                            vendor: from_cstring(&info.vendor),
+                            vendor: or_maker(from_cstring(&info.vendor)),
                             version: from_cstring(&info.version),
                             sub_categories: from_cstring(&info.subCategories),
                         });
@@ -138,7 +154,7 @@ impl Module {
                         cid: info.cid.map(|b| b as u8),
                         category: from_cstring(&info.category),
                         name: from_cstring(&info.name),
-                        vendor: String::new(),
+                        vendor: maker.clone(),
                         version: String::new(),
                         sub_categories: String::new(),
                     });

@@ -28,6 +28,7 @@ pub mod module;
 pub mod plugin;
 pub mod protocol;
 
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
@@ -68,31 +69,54 @@ fn init_com() {
 #[cfg(not(windows))]
 fn init_com() {}
 
-type Out = Arc<Mutex<io::Stdout>>;
+/// The pipe to the editor, and which plug-in its last frames were for.
+struct Writer {
+    stdout: io::Stdout,
+    selected: u32,
+}
+
+type Out = Arc<Mutex<Writer>>;
 
 /// Control changes waiting for the audio thread.
 type Queue = Arc<Mutex<Vec<(u32, f64)>>>;
 
-fn send(out: &Out, m: &Message) {
+/// Writes a frame for plug-in `id`, saying which plug-in first when it
+/// changed since the last frame.
+fn write_for(w: &mut Writer, id: u32, kind: u8, payload: &[u8]) -> io::Result<()> {
+    if w.selected != id {
+        write_frame(&mut w.stdout, protocol::SELECT, &id.to_le_bytes())?;
+        w.selected = id;
+    }
+    write_frame(&mut w.stdout, kind, payload)
+}
+
+fn send(out: &Out, id: u32, m: &Message) {
     if let (Ok(json), Ok(mut o)) = (serde_json::to_vec(m), out.lock()) {
-        let _ = write_frame(&mut *o, CONTROL, &json);
+        let _ = write_for(&mut o, id, CONTROL, &json);
     }
 }
 
 enum ToMain {
     Load {
+        id: u32,
         req: Request,
         reply: Sender<Option<SendPtr<Audio>>>,
     },
-    Request(Request),
+    Request(u32, Request),
     /// Control values the editor set, to show on the plug-in's controller.
-    Changes(Vec<(u32, f64)>),
+    Changes(u32, Vec<(u32, f64)>),
+    /// The plug-in has stopped processing; tear it down.
+    Unload(u32),
     Quit,
 }
 
-/// Host mode: one plug-in, driven over stdin and stdout.
+/// Host mode: plug-ins driven over stdin and stdout (usually one; several
+/// when the editor runs one maker's plug-ins together).
 pub fn serve() -> i32 {
-    let out: Out = Arc::new(Mutex::new(io::stdout()));
+    let out: Out = Arc::new(Mutex::new(Writer {
+        stdout: io::stdout(),
+        selected: 0,
+    }));
     let (tx, rx) = mpsc::channel::<ToMain>();
     let audio_out = out.clone();
     let reader = thread::Builder::new()
@@ -107,27 +131,41 @@ pub fn serve() -> i32 {
 
 fn audio_loop(out: Out, tx: Sender<ToMain>) {
     let mut stdin = io::stdin().lock();
-    let mut audio: Option<Audio> = None;
+    let mut audio: HashMap<u32, Audio> = HashMap::new();
+    let mut cur = 0u32;
     let mut buf = Vec::new();
     let mut changes = Vec::new();
     let mut notes = Vec::new();
     let mut samples = Vec::new();
     let mut reply = Vec::new();
+    let mut position = -1i64;
     loop {
         match read_frame(&mut stdin, &mut buf) {
+            Ok(Some(protocol::SELECT)) => {
+                let Some(b) = buf.get(..4) else { break };
+                cur = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+            }
             Ok(Some(AUDIO)) => {
-                if protocol::decode_audio(&buf, &mut changes, &mut notes, &mut samples).is_none() {
+                if protocol::decode_audio(
+                    &buf,
+                    &mut position,
+                    &mut changes,
+                    &mut notes,
+                    &mut samples,
+                )
+                .is_none()
+                {
                     break;
                 }
-                if let Some(a) = audio.as_mut() {
-                    a.process(&changes, &notes, &mut samples);
+                if let Some(a) = audio.get_mut(&cur) {
+                    a.process(position, &changes, &notes, &mut samples);
                 }
                 if !changes.is_empty() {
-                    let _ = tx.send(ToMain::Changes(changes.clone()));
+                    let _ = tx.send(ToMain::Changes(cur, changes.clone()));
                 }
                 protocol::encode_samples(&mut reply, &samples);
                 let Ok(mut o) = out.lock() else { break };
-                if write_frame(&mut *o, AUDIO, &reply).is_err() {
+                if write_for(&mut o, cur, AUDIO, &reply).is_err() {
                     break;
                 }
             }
@@ -135,6 +173,7 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                 let Ok(req) = serde_json::from_slice::<Request>(&buf) else {
                     send(
                         &out,
+                        cur,
                         &Message::Error {
                             message: "Bad request.".into(),
                         },
@@ -144,34 +183,56 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                 match req {
                     Request::Load { .. } => {
                         let (rtx, rrx) = mpsc::channel();
-                        if tx.send(ToMain::Load { req, reply: rtx }).is_err() {
+                        if tx
+                            .send(ToMain::Load {
+                                id: cur,
+                                req,
+                                reply: rtx,
+                            })
+                            .is_err()
+                        {
                             break;
                         }
-                        audio = rrx.recv().ok().flatten().map(|a| a.0);
+                        match rrx.recv().ok().flatten() {
+                            Some(a) => {
+                                audio.insert(cur, a.0);
+                            }
+                            None => {
+                                audio.remove(&cur);
+                            }
+                        }
                     }
                     Request::GetState => {
                         // Changes still waiting count in the saved settings.
-                        if let Some(a) = audio.as_mut() {
+                        if let Some(a) = audio.get_mut(&cur) {
                             a.flush(&[]);
                         }
-                        if tx.send(ToMain::Request(Request::GetState)).is_err() {
+                        if tx.send(ToMain::Request(cur, Request::GetState)).is_err() {
                             break;
                         }
                     }
                     Request::Tempo { bpm, beats_per_bar } => {
-                        if let Some(a) = audio.as_mut() {
+                        if let Some(a) = audio.get_mut(&cur) {
                             a.set_tempo(bpm, beats_per_bar as i32);
                         }
-                        send(&out, &Message::Ok);
+                        send(&out, cur, &Message::Ok);
                     }
                     Request::Reset => {
-                        if let Some(a) = audio.as_mut() {
+                        if let Some(a) = audio.get_mut(&cur) {
                             a.reset();
                         }
-                        send(&out, &Message::Ok);
+                        send(&out, cur, &Message::Ok);
+                    }
+                    Request::Unload => {
+                        // Processing stops before the plug-in is torn down on the main thread.
+                        audio.remove(&cur);
+                        if tx.send(ToMain::Unload(cur)).is_err() {
+                            break;
+                        }
+                        send(&out, cur, &Message::Ok);
                     }
                     other => {
-                        if tx.send(ToMain::Request(other)).is_err() {
+                        if tx.send(ToMain::Request(cur, other)).is_err() {
                             break;
                         }
                     }
@@ -180,61 +241,70 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
             _ => break,
         }
     }
-    // Processing stops before the plug-in is torn down on the main thread.
+    // Processing stops before the plug-ins are torn down on the main thread.
     drop(audio);
     let _ = tx.send(ToMain::Quit);
 }
 
+/// One plug-in on the main thread: the plug-in, its queue to the audio
+/// thread, and its window when open.
+struct Loaded {
+    // Fields drop in this order: the window goes before its plug-in.
+    window: Option<Box<dyn EditorWindow>>,
+    to_audio: Queue,
+    plugin: Plugin,
+}
+
 fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
-    let mut plugin: Option<Plugin> = None;
-    let mut to_audio: Option<Queue> = None;
-    let mut window: Option<Box<dyn EditorWindow>> = None;
+    let mut loaded: HashMap<u32, Loaded> = HashMap::new();
     loop {
-        if let Some(w) = window.as_mut() {
-            if !w.pump() {
-                window = None;
-                send(out, &Message::EditorClosed);
+        let mut windows = false;
+        for (id, l) in loaded.iter_mut() {
+            if let Some(w) = l.window.as_mut() {
+                windows = true;
+                if !w.pump() {
+                    l.window = None;
+                    send(out, *id, &Message::EditorClosed);
+                }
             }
-        }
-        if let Some(p) = &plugin {
-            let edits: Vec<Edit> = p
+            let edits: Vec<Edit> = l
+                .plugin
                 .edits
                 .lock()
                 .map(|mut e| std::mem::take(&mut *e))
                 .unwrap_or_default();
             for e in edits {
                 match e {
-                    Edit::Param(id, v) => {
-                        if let Some(q) = &to_audio {
-                            if let Ok(mut q) = q.lock() {
-                                q.push((id, v));
-                            }
+                    Edit::Param(pid, v) => {
+                        if let Ok(mut q) = l.to_audio.lock() {
+                            q.push((pid, v));
                         }
-                        send(out, &Message::ParamEdited { id, value: v });
+                        send(out, *id, &Message::ParamEdited { id: pid, value: v });
                     }
                     Edit::Latency => send(
                         out,
+                        *id,
                         &Message::LatencyChanged {
-                            latency: p.latency_now(),
+                            latency: l.plugin.latency_now(),
                         },
                     ),
-                    Edit::Dirty => send(out, &Message::Dirty),
+                    Edit::Dirty => send(out, *id, &Message::Dirty),
                     Edit::Resize(w, h) => {
-                        if let Some(win) = window.as_mut() {
+                        if let Some(win) = l.window.as_mut() {
                             win.resize(w, h);
                         }
                     }
                 }
             }
         }
-        let wait = if window.is_some() { 10 } else { 50 };
+        let wait = if windows { 10 } else { 50 };
         let cmd = match rx.recv_timeout(Duration::from_millis(wait)) {
             Ok(c) => c,
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => break,
         };
         match cmd {
-            ToMain::Load { req, reply } => {
+            ToMain::Load { id, req, reply } => {
                 let Request::Load {
                     path,
                     cid,
@@ -246,14 +316,17 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     let _ = reply.send(None);
                     continue;
                 };
+                // Loading again in the same place replaces what was there.
+                loaded.remove(&id);
                 match Plugin::load(Path::new(&path), &cid, rate, state.as_deref()) {
                     Ok((p, mut a)) => {
-                        for (id, v) in &params {
-                            p.set_param(*id, *v);
+                        for (pid, v) in &params {
+                            p.set_param(*pid, *v);
                         }
                         a.flush(&params);
                         send(
                             out,
+                            id,
                             &Message::Loaded {
                                 latency: p.latency,
                                 params: p.params.clone(),
@@ -261,63 +334,90 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                                 instrument: p.instrument,
                             },
                         );
-                        to_audio = Some(a.from_editor.clone());
-                        plugin = Some(p);
+                        let to_audio = a.from_editor.clone();
+                        loaded.insert(
+                            id,
+                            Loaded {
+                                plugin: p,
+                                to_audio,
+                                window: None,
+                            },
+                        );
                         let _ = reply.send(Some(SendPtr(a)));
                     }
                     Err(message) => {
-                        send(out, &Message::Error { message });
+                        send(out, id, &Message::Error { message });
                         let _ = reply.send(None);
                     }
                 }
             }
-            ToMain::Request(Request::GetState) => match &plugin {
-                Some(p) => send(out, &Message::State { data: p.state() }),
+            ToMain::Request(id, Request::GetState) => match loaded.get(&id) {
+                Some(l) => send(
+                    out,
+                    id,
+                    &Message::State {
+                        data: l.plugin.state(),
+                    },
+                ),
                 None => send(
                     out,
+                    id,
                     &Message::Error {
                         message: "No plug-in loaded.".into(),
                     },
                 ),
             },
-            ToMain::Request(Request::OpenEditor { title, owner }) => {
-                if let Some(w) = window.as_mut() {
+            ToMain::Request(id, Request::OpenEditor { title, owner }) => {
+                let Some(l) = loaded.get_mut(&id) else {
+                    send(
+                        out,
+                        id,
+                        &Message::Error {
+                            message: "No plug-in loaded.".into(),
+                        },
+                    );
+                    continue;
+                };
+                if let Some(w) = l.window.as_mut() {
                     w.raise();
-                    send(out, &Message::Ok);
+                    send(out, id, &Message::Ok);
                     continue;
                 }
-                let opened = match plugin
-                    .as_ref()
-                    .and_then(|p| p.controller.as_ref().map(|c| (c, p.edits.clone())))
-                {
-                    Some((c, edits)) => editor::open(c, &title, edits, owner),
+                let opened = match l.plugin.controller.as_ref() {
+                    Some(c) => editor::open(c, &title, l.plugin.edits.clone(), owner),
                     None => Err("This plug-in has no window of its own.".into()),
                 };
                 match opened {
                     Ok(w) => {
-                        window = Some(w);
-                        send(out, &Message::Ok);
+                        l.window = Some(w);
+                        send(out, id, &Message::Ok);
                     }
-                    Err(message) => send(out, &Message::Error { message }),
+                    Err(message) => send(out, id, &Message::Error { message }),
                 }
             }
-            ToMain::Request(Request::CloseEditor) => {
-                window = None;
-                send(out, &Message::Ok);
+            ToMain::Request(id, Request::CloseEditor) => {
+                if let Some(l) = loaded.get_mut(&id) {
+                    l.window = None;
+                }
+                send(out, id, &Message::Ok);
             }
-            ToMain::Request(_) => send(out, &Message::Ok),
-            ToMain::Changes(list) => {
-                if let Some(p) = &plugin {
-                    for (id, v) in list {
-                        p.set_param(id, v);
+            ToMain::Request(id, _) => send(out, id, &Message::Ok),
+            ToMain::Changes(id, list) => {
+                if let Some(l) = loaded.get(&id) {
+                    for (pid, v) in list {
+                        l.plugin.set_param(pid, v);
                     }
                 }
+            }
+            ToMain::Unload(id) => {
+                // Its window goes first, then the plug-in (see `Loaded`).
+                loaded.remove(&id);
             }
             ToMain::Quit => break,
         }
     }
-    drop(window);
-    drop(plugin);
+    // Windows go before their plug-ins (see `Loaded`).
+    loaded.clear();
     let _ = io::stdout().flush();
 }
 
