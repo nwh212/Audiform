@@ -56,6 +56,7 @@
   import ResponseGraph from "./ResponseGraph.svelte";
   import EqGraph from "./EqGraph.svelte";
   import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
+  import EffectControls from "./EffectControls.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
@@ -515,17 +516,6 @@
   const mixShown = $derived(draft?.key === "chain.mix" ? draft.value : Math.round(chain.mix * 100));
   const MIX: EffectParamInfo = { key: "mix", name: "Mix", unit: "%", min: 0, max: 100, default: 100, step: 1, log: false, toggle: false };
 
-  const groups = (info: EffectInfo) => {
-    const out: { name: string; params: EffectParamInfo[] }[] = [];
-    for (const p of info.params) {
-      if (p.hidden) continue;
-      const g = p.group ?? "";
-      const last = out[out.length - 1];
-      if (last && last.name === g) last.params.push(p);
-      else out.push({ name: g, params: [p] });
-    }
-    return out;
-  };
 </script>
 
 <section class="vc" aria-label="Voice Chain">
@@ -728,35 +718,13 @@
             </span>
           </div>
         {/if}
-        {#each groups(winInfo).filter((g) => groupShown(winSlot.effect, winSlot, g.name)) as g (g.name)}
-          {#if g.name}<h3>{g.name}</h3>{/if}
-          {#each g.params as p (p.key)}
-            {@const v = shown(winSlot, p)}
-            <label class="param">
-              <span class="pname">{p.name}</span>
-              {#if p.toggle}
-                <input type="checkbox" checked={v >= 0.5} onchange={(e) => setValue(winSlot, p, e.currentTarget.checked ? 1 : 0)} />
-              {:else if p.choices?.length}
-                <select value={String(Math.round(v))} onchange={(e) => setValue(winSlot, p, Number(e.currentTarget.value))}>
-                  {#each p.choices as c, ci (c)}<option value={String(p.min + ci)}>{c}</option>{/each}
-                </select>
-              {:else}
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.001"
-                  value={toSlider(p, v)}
-                  oninput={(e) => drag(winSlot, p, fromSlider(p, Number(e.currentTarget.value)))}
-                  onchange={(e) => setValue(winSlot, p, fromSlider(p, Number(e.currentTarget.value)))}
-                  ondblclick={() => setValue(winSlot, p, p.default)}
-                  title="Double-click for the default"
-                />
-              {/if}
-              <span class="val">{formatParam(p, v)}</span>
-            </label>
-          {/each}
-        {/each}
+        <EffectControls
+          info={winInfo}
+          value={(p) => shown(winSlot, p)}
+          shown={(g) => groupShown(winSlot.effect, winSlot, g)}
+          oninput={(p, v) => drag(winSlot, p, v)}
+          oncommit={(p, v) => setValue(winSlot, p, v)}
+        />
       {:else}
         <p class="hint">This effect is not built in. It stays in the file and is skipped on playback.</p>
       {/if}
@@ -1071,14 +1039,6 @@
   }
   .bottom {
     border-top: 1px solid var(--border);
-  }
-  h3 {
-    margin: 4px 0 0;
-    font-size: 12px;
-  }
-  h3 {
-    color: var(--text-dim);
-    font-weight: normal;
   }
   .param {
     display: grid;
