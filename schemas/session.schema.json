@@ -685,6 +685,23 @@
             "slot_id",
             "param"
           ]
+        },
+        {
+          "description": "3D Space sessions: one setting of the owner's spot in the room.",
+          "type": "object",
+          "properties": {
+            "param": {
+              "$ref": "#/$defs/SpaceParam"
+            },
+            "type": {
+              "type": "string",
+              "const": "space"
+            }
+          },
+          "required": [
+            "type",
+            "param"
+          ]
         }
       ]
     },
@@ -1232,6 +1249,21 @@
         }
       ]
     },
+    "SpaceParam": {
+      "description": "A setting of a spot in the room that automation can move. Values use\nthe spot's own units (see `SpacePos`).",
+      "type": "string",
+      "enum": [
+        "x",
+        "y",
+        "z",
+        "size",
+        "width",
+        "rotation",
+        "lfe",
+        "spread",
+        "spatialize"
+      ]
+    },
     "SpacePos": {
       "description": "A spot in the room. x runs left (-1) to right (1), y back (-1) to\nfront (1), z ear level (0) to ceiling (1), and below ear level down\nto -1.",
       "type": "object",
@@ -1251,6 +1283,16 @@
           "type": "number",
           "format": "double",
           "default": 0.0
+        },
+        "spatialize": {
+          "description": "Stereo sources: how much of the difference between its sides is\nsent, delayed and decorrelated, to the surround and height\nspeakers, with what the sides share fed to the center, 0 to 1.",
+          "type": "number",
+          "format": "double"
+        },
+        "spread": {
+          "description": "How much of it is spread through the room as a diffuse field\n(decorrelated copies on every speaker in use), 0 (none) to 1 (all).",
+          "type": "number",
+          "format": "double"
         },
         "width": {
           "description": "Stereo sources: how far left and right of the spot their two\nsides sit, 0 (together) to 1 (a full room width apart each way).",

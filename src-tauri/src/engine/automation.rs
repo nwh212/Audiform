@@ -10,8 +10,11 @@
 //! as clip effect automation does. Values hold flat before the first
 //! point and after the last, and move in straight lines between points.
 
+use std::sync::Arc;
+
+use super::graph::Place;
 use super::plan::{to_out, ParamLane};
-use crate::session::model::{Envelope, EnvelopeTarget, Send};
+use crate::session::model::{Envelope, EnvelopeTarget, Send, SpaceParam};
 
 /// Lowest volume a lane reaches: at or below it is silence.
 const SILENT_DB: f32 = -59.9;
@@ -58,6 +61,8 @@ pub struct StripAuto {
     volume: Option<ParamLane>,
     pan: Option<ParamLane>,
     pub params: Vec<ParamLane>,
+    /// 3D Space sessions: settings of the spot that move.
+    pub space: Vec<(SpaceParam, ParamLane)>,
     /// Per send: true when it follows the fader (and so the volume lane).
     post: Vec<bool>,
     /// Per frame of the last block: volume gain, and pan as left and right.
@@ -88,9 +93,26 @@ impl StripAuto {
                 EnvelopeTarget::EffectParam { .. } => {
                     a.params.push(lane(e, session_rate, out_rate))
                 }
+                EnvelopeTarget::Space { param } => {
+                    a.space.push((param, lane(e, session_rate, out_rate)))
+                }
             }
         }
         Some(a)
+    }
+
+    /// The spot at timeline frame `pos`: `base` with the automated settings
+    /// in place. None when no spot setting moves. (Worked out once a block
+    /// on the render thread, which mixes ahead of the speakers.)
+    pub fn place_at(&self, base: &Place, pos: u64) -> Option<Arc<Place>> {
+        if self.space.is_empty() {
+            return None;
+        }
+        let mut spot = base.pos;
+        for (param, l) in &self.space {
+            param.set(&mut spot, f64::from(l.value_at(pos)));
+        }
+        Some(Arc::new(Place::at(base.layout, &spot, base.stereo)))
     }
 
     pub fn moves_level(&self) -> bool {
@@ -184,5 +206,34 @@ mod tests {
         let mut off = env(EnvelopeTarget::Volume, &[(0, -20.0)]);
         off.enabled = false;
         assert!(StripAuto::new(&[off, env(EnvelopeTarget::Pan, &[])], &[], 1_000, 1_000).is_none());
+    }
+
+    #[test]
+    fn a_space_lane_moves_the_spot() {
+        use crate::session::model::{SpaceLayout, SpacePos};
+        let envs = vec![env(
+            EnvelopeTarget::Space {
+                param: SpaceParam::X,
+            },
+            &[(0, -1.0), (1_000, 1.0)],
+        )];
+        let a = StripAuto::new(&envs, &[], 1_000, 1_000).unwrap();
+        assert!(!a.moves_level());
+        let base = Place::at(SpaceLayout::Surround51, &SpacePos::default(), false);
+        // Mono at the front: from the left speaker to the right one.
+        let start = a.place_at(&base, 0).unwrap();
+        let end = a.place_at(&base, 1_000).unwrap();
+        assert!(
+            start.bed[0][0] > 0.4 && start.bed[0][1].abs() < 1e-6,
+            "{:?}",
+            start.bed
+        );
+        assert!(
+            end.bed[0][1] > 0.4 && end.bed[0][0].abs() < 1e-6,
+            "{:?}",
+            end.bed
+        );
+        // The settings that do not move keep the spot's own.
+        assert_eq!(start.pos.y, 1.0);
     }
 }

@@ -11,7 +11,7 @@
  */
 
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
-import type { EffectChainDoc, EnvelopeDoc, EnvelopePointDoc } from "../../stores/session";
+import { DEFAULT_SPACE_POS, type EffectChainDoc, type EnvelopeDoc, type EnvelopePointDoc, type SpaceParam, type SpacePosDoc } from "../../stores/session";
 
 /** Height of one automation lane, in pixels. */
 export const AUTO_H = 54;
@@ -24,7 +24,24 @@ export interface AutoOwner {
   pan: number;
   effects?: EffectChainDoc;
   envelopes?: EnvelopeDoc[];
+  /** 3D Space sessions: its spot in the room. */
+  space?: SpacePosDoc | null;
+  channels?: "mono" | "stereo";
+  mono?: boolean;
 }
+
+/** The spot settings a lane can move, in the order the picker lists them. */
+const SPACE_LANES: { param: SpaceParam; label: string; stereo?: boolean }[] = [
+  { param: "x", label: "3D: Left / right" },
+  { param: "y", label: "3D: Back / front" },
+  { param: "z", label: "3D: Height" },
+  { param: "size", label: "3D: Size" },
+  { param: "spread", label: "3D: Spread" },
+  { param: "width", label: "3D: Width", stereo: true },
+  { param: "rotation", label: "3D: Rotation", stereo: true },
+  { param: "spatialize", label: "3D: Spatialize", stereo: true },
+  { param: "lfe", label: "3D: LFE send" },
+];
 
 export interface AutoRange {
   /** Value drawn at the top of the lane. */
@@ -41,7 +58,9 @@ export const PAN_RANGE: AutoRange = { top: -100, bottom: 100, step: 1, log: fals
 
 /** A stable key for a target, for pickers and lookups. */
 export function targetKey(t: AutoTarget): string {
-  return t.type === "effect_param" ? `fx:${t.slot_id}:${t.param}` : t.type;
+  if (t.type === "effect_param") return `fx:${t.slot_id}:${t.param}`;
+  if (t.type === "space") return `space:${t.param}`;
+  return t.type;
 }
 
 function paramOf(owner: AutoOwner, catalog: readonly EffectInfo[], t: AutoTarget): { info: EffectInfo; param: EffectParamInfo; value: number } | null {
@@ -53,12 +72,17 @@ function paramOf(owner: AutoOwner, catalog: readonly EffectInfo[], t: AutoTarget
   return { info, param, value: slot.params[param.key] ?? param.default };
 }
 
-/** Every setting of an owner that a lane can move: volume, pan, then each effect control in chain order. */
-export function autoChoices(owner: AutoOwner, catalog: readonly EffectInfo[]): { target: AutoTarget; label: string }[] {
-  const out: { target: AutoTarget; label: string }[] = [
-    { target: { type: "volume" }, label: "Volume" },
-    { target: { type: "pan" }, label: "Pan" },
-  ];
+/**
+ * Every setting of an owner that a lane can move: volume, pan (or in a 3D
+ * Space session, where pan does nothing, the spot's settings), then each
+ * effect control in chain order.
+ */
+export function autoChoices(owner: AutoOwner, catalog: readonly EffectInfo[], in3d = false): { target: AutoTarget; label: string }[] {
+  const out: { target: AutoTarget; label: string }[] = [{ target: { type: "volume" }, label: "Volume" }];
+  if (in3d) {
+    const stereo = owner.channels !== "mono" && !owner.mono;
+    for (const l of SPACE_LANES) if (stereo || !l.stereo) out.push({ target: { type: "space", param: l.param }, label: l.label });
+  } else out.push({ target: { type: "pan" }, label: "Pan" });
   for (const slot of owner.effects?.slots ?? []) {
     const info = catalog.find((e) => e.id === slot.effect);
     for (const p of info?.params ?? []) {
@@ -74,6 +98,7 @@ export function autoChoices(owner: AutoOwner, catalog: readonly EffectInfo[]): {
 export function autoName(owner: AutoOwner, catalog: readonly EffectInfo[], t: AutoTarget): string {
   if (t.type === "volume") return "Volume";
   if (t.type === "pan") return "Pan";
+  if (t.type === "space") return SPACE_LANES.find((l) => l.param === t.param)?.label ?? "3D";
   const p = paramOf(owner, catalog, t);
   return p ? `${p.info.name}: ${p.param.name}` : "Removed effect";
 }
@@ -86,6 +111,7 @@ export function isOrphan(owner: AutoOwner, catalog: readonly EffectInfo[], t: Au
 export function autoRange(owner: AutoOwner, catalog: readonly EffectInfo[], t: AutoTarget): AutoRange {
   if (t.type === "volume") return VOLUME_RANGE;
   if (t.type === "pan") return PAN_RANGE;
+  if (t.type === "space") return spaceRange(t.param);
   const p = paramOf(owner, catalog, t);
   if (!p) return { top: 1, bottom: 0, step: 0.01, log: false, unit: "" };
   const { min, max, step, log, unit } = p.param;
@@ -96,6 +122,7 @@ export function autoRange(owner: AutoOwner, catalog: readonly EffectInfo[], t: A
 export function autoRest(owner: AutoOwner, catalog: readonly EffectInfo[], t: AutoTarget): number {
   if (t.type === "volume") return owner.volume_db;
   if (t.type === "pan") return owner.pan;
+  if (t.type === "space") return (owner.space ?? DEFAULT_SPACE_POS)[t.param] ?? DEFAULT_SPACE_POS[t.param] ?? 0;
   return paramOf(owner, catalog, t)?.value ?? 0;
 }
 
@@ -129,7 +156,21 @@ export function autoSnap(t: AutoTarget, v: number): number {
   return v;
 }
 
+/** A spot setting's range: left at the top for left/right (as pan), front, high or more at the top otherwise. */
+function spaceRange(p: SpaceParam): AutoRange {
+  if (p === "x") return { top: -1, bottom: 1, step: 0.01, log: false, unit: "" };
+  if (p === "y" || p === "z") return { top: 1, bottom: -1, step: 0.01, log: false, unit: "" };
+  if (p === "rotation") return { top: 180, bottom: -180, step: 1, log: false, unit: "°" };
+  return { top: 1, bottom: 0, step: 0.01, log: false, unit: "%" };
+}
+
 export function autoFormat(t: AutoTarget, v: number, r: AutoRange): string {
+  if (t.type === "space") {
+    if (t.param === "x") return Math.abs(v) < 0.005 ? "Center" : v < 0 ? `Left ${Math.round(-v * 100)}%` : `Right ${Math.round(v * 100)}%`;
+    if (t.param === "y") return Math.abs(v) < 0.005 ? "Middle" : v > 0 ? `Front ${Math.round(v * 100)}%` : `Back ${Math.round(-v * 100)}%`;
+    if (t.param === "rotation") return `${Math.round(v)}°`;
+    return `${Math.round(v * 100)}%`;
+  }
   if (t.type === "volume") return v <= -59.9 ? "Silent" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`;
   if (t.type === "pan") {
     const p = Math.round(v);
@@ -190,9 +231,9 @@ export function dropLane(owner: AutoOwner, id: string): EnvelopeDoc[] {
 }
 
 /** The setting a new lane takes: the first one that has no lane yet. */
-export function nextTarget(owner: AutoOwner, catalog: readonly EffectInfo[]): AutoTarget | null {
+export function nextTarget(owner: AutoOwner, catalog: readonly EffectInfo[], in3d = false): AutoTarget | null {
   const used = new Set(shownLanes(owner).map((e) => targetKey(e.target)));
-  return autoChoices(owner, catalog).find((c) => !used.has(targetKey(c.target)))?.target ?? null;
+  return autoChoices(owner, catalog, in3d).find((c) => !used.has(targetKey(c.target)))?.target ?? null;
 }
 
 /** Adds a point at `pos`, or moves the one already there. Returns the list and the point's index. */

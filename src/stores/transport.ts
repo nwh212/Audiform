@@ -242,7 +242,10 @@ export class TransportStore {
       tracks,
       chains,
       master: [this.meter("m:0", this.state.master[0], s.master[0]), this.meter("m:1", this.state.master[1], s.master[1])],
-      bed: (s.bedMeters ?? []).map((v, k) => this.meter(`bed:${k}`, this.state.bed?.[k] ?? quiet(), v)),
+      // A status without speaker readings keeps the rows (they fall as with silence) instead of blanking them.
+      bed: s.bedMeters?.length
+        ? s.bedMeters.map((v, k) => this.meter(`bed:${k}`, this.state.bed?.[k] ?? quiet(), v))
+        : (this.state.bed ?? []).map((m, k) => this.meter(`bed:${k}`, m, 0)),
     });
   }
 

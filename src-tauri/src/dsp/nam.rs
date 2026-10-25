@@ -324,7 +324,7 @@ fn usize_of(v: &Value, key: &str) -> Result<usize, String> {
 }
 
 /// A per-layer setting: a list with one entry per layer, or one value for all.
-fn per_layer<'a>(v: &'a Value, n: usize) -> Vec<&'a Value> {
+fn per_layer(v: &Value, n: usize) -> Vec<&Value> {
     match v.as_array() {
         Some(a) if a.len() == n => a.iter().collect(),
         _ => vec![v; n],
@@ -334,12 +334,16 @@ fn per_layer<'a>(v: &'a Value, n: usize) -> Vec<&'a Value> {
 impl WaveNet {
     fn new(config: &Value, weights: &[f32]) -> Result<WaveNet, String> {
         if !config["head"].is_null() {
-            return Err("This WaveNet model has a separate head, which is not supported yet.".into());
+            return Err(
+                "This WaveNet model has a separate head, which is not supported yet.".into(),
+            );
         }
         if !config["condition_dsp"].is_null() {
             return Err("This WaveNet model shapes its input with another model, which is not supported yet.".into());
         }
-        let specs = config["layers"].as_array().ok_or("The model's settings lack layers.")?;
+        let specs = config["layers"]
+            .as_array()
+            .ok_or("The model's settings lack layers.")?;
         let mut r = Reader { w: weights, at: 0 };
         let mut arrays = Vec::new();
         let mut prewarm = 1;
@@ -386,7 +390,11 @@ impl WaveNet {
             } else {
                 per_layer(&s["kernel_sizes"], n)
                     .iter()
-                    .map(|k| k.as_u64().map(|k| k as usize).ok_or("The model's settings lack kernel sizes."))
+                    .map(|k| {
+                        k.as_u64()
+                            .map(|k| k as usize)
+                            .ok_or("The model's settings lack kernel sizes.")
+                    })
                     .collect::<Result<_, _>>()?
             };
             let acts: Vec<Act> = per_layer(&s["activation"], n)
@@ -460,7 +468,12 @@ impl WaveNet {
                     look,
                 });
             }
-            let head_w = taps_from_file(&r.take(head * bottleneck * head_kernel)?, head, bottleneck, head_kernel);
+            let head_w = taps_from_file(
+                &r.take(head * bottleneck * head_kernel)?,
+                head,
+                bottleneck,
+                head_kernel,
+            );
             let head_b = if head_bias { Some(r.take(head)?) } else { None };
             let head_look = head_kernel.max(1) - 1;
             prewarm += head_look;
@@ -541,7 +554,11 @@ impl WaveNet {
                     dst.fill(0.0);
                     for i in 0..a.input {
                         let w = a.rechannel[o * a.input + i];
-                        let src = if ai == 0 { cond } else { &self.array_out[row(i)] };
+                        let src = if ai == 0 {
+                            cond
+                        } else {
+                            &self.array_out[row(i)]
+                        };
                         axpy(dst, w, src);
                     }
                 }
@@ -591,7 +608,11 @@ impl WaveNet {
                     }
                 }
                 for o in 0..bn {
-                    axpy(&mut a.hin[o * hs + hl..o * hs + hl + n], 1.0, &self.z[row(o)]);
+                    axpy(
+                        &mut a.hin[o * hs + hl..o * hs + hl + n],
+                        1.0,
+                        &self.z[row(o)],
+                    );
                 }
                 // Next layer's input (or this array's output): input + 1x1(z).
                 for o in 0..ch {
@@ -798,7 +819,10 @@ mod tests {
     fn says_which_models_it_cannot_play() {
         let e = parse(r#"{"architecture":"Sequential","config":{},"weights":[]}"#).unwrap_err();
         assert!(e.contains("not supported"), "{e}");
-        let e = parse(r#"{"architecture":"SlimmableContainer","config":{"submodels":[]},"weights":[]}"#).unwrap_err();
+        let e = parse(
+            r#"{"architecture":"SlimmableContainer","config":{"submodels":[]},"weights":[]}"#,
+        )
+        .unwrap_err();
         assert!(e.contains("no models"), "{e}");
         assert!(parse("not json").is_err());
     }

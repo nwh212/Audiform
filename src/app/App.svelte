@@ -122,7 +122,7 @@
   import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
-  import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
+  import { PLUGIN_SLOTS, RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
     sessionAutosave,
     sessionClearAutosave,
@@ -173,6 +173,7 @@
     recordStop,
     recordMonitor,
     effectsCatalog,
+    pluginsRegistry,
     musicFit,
     quickpassRepairCopy,
     type SpotsRequest,
@@ -282,7 +283,7 @@
   const previewMeter = new PreviewMeter({ status: () => previewStatus() });
   const uuid = () => crypto.randomUUID();
 
-  function nextTrackName(tracks: readonly TrackDoc[]): string {
+  function nextTrackName(tracks: readonly { name: string }[]): string {
     const names = new Set(tracks.map((t) => t.name));
     let n = tracks.length + 1;
     while (names.has(`Track ${n}`)) n++;
@@ -304,42 +305,54 @@
     const items = imported.ids.map((id) => mediaPool.get(id)).filter((it) => it?.status === "ready" && it.info);
     if (items.length === 0) return null;
     const ops: Op[] = [];
-    let target = trackId;
+    const audio = doc.tracks.filter((t) => t.kind !== "midi");
+    const names: { name: string }[] = doc.tracks.map((t) => ({ name: t.name }));
+    /** A new track at the bottom for `it`, named after the file when files go side by side. */
+    const newTrack = (it: (typeof items)[number], byFile: boolean): string => {
+      const id = uuid();
+      const name = byFile ? stem(it!.name) : nextTrackName(names);
+      ops.push({ op: "add_track", id, name, stereo: (it!.info!.channels ?? 2) > 1, index: names.length });
+      names.push({ name });
+      return id;
+    };
     // Audio never lands on a MIDI track: it gets a new track instead.
-    if (!target || !doc.tracks.some((t) => t.id === target && t.kind !== "midi")) {
-      target = uuid();
-      ops.push({
-        op: "add_track",
-        id: target,
-        name: nextTrackName(doc.tracks),
-        stereo: (items[0]!.info!.channels ?? 2) > 1,
-        index: doc.tracks.length,
-      });
-    }
+    const first = trackId && audio.some((t) => t.id === trackId) ? trackId : null;
     const known = new Set(doc.media.map((m) => m.id));
-    const clips = [];
-    let pos = Math.max(0, Math.round(at));
-    for (const it of items) {
+    const addMedia = (it: (typeof items)[number]) => {
       const info = it!.info!;
-      if (!known.has(it!.id)) {
-        known.add(it!.id);
-        ops.push({
-          op: "add_media",
-          media: {
-            id: it!.id,
-            path: it!.path,
-            relative_path: null,
-            sample_rate: info.sampleRate,
-            channels: info.channels,
-            length: info.length,
-          },
-        });
-      }
-      clips.push({ id: uuid(), name: stem(it!.name), media_id: it!.id, start: pos, source_in: 0, source_out: info.length });
+      if (known.has(it!.id)) return;
+      known.add(it!.id);
+      ops.push({ op: "add_media", media: { id: it!.id, path: it!.path, relative_path: null, sample_rate: info.sampleRate, channels: info.channels, length: info.length } });
+    };
+    const start = Math.max(0, Math.round(at));
+    const clips: { id: string }[] = [];
+    if (items.length > 1 && settings.current.dropMany === "tracks") {
+      // Side by side: the first on the track under the pointer, the rest on
+      // the audio tracks below it, then on new tracks, all from the same time.
+      const below = first ? audio.slice(audio.findIndex((t) => t.id === first)) : [];
+      let target = first ?? "";
+      items.forEach((it, k) => {
+        addMedia(it);
+        const info = it!.info!;
+        const track = below[k]?.id ?? newTrack(it, true);
+        if (k === 0) target = track;
+        const clip = { id: uuid(), name: stem(it!.name), media_id: it!.id, start, source_in: 0, source_out: info.length };
+        ops.push({ op: "add_clips", track_id: track, clips: [clip] });
+        clips.push(clip);
+      });
+      return { ops, clips, target };
+    }
+    const target = first ?? newTrack(items[0]!, false);
+    const list = [];
+    let pos = start;
+    for (const it of items) {
+      addMedia(it);
+      const info = it!.info!;
+      list.push({ id: uuid(), name: stem(it!.name), media_id: it!.id, start: pos, source_in: 0, source_out: info.length });
       pos += Math.round((info.length * doc.sample_rate) / info.sampleRate);
     }
-    ops.push({ op: "add_clips", track_id: target, clips });
-    return { ops, clips, target };
+    ops.push({ op: "add_clips", track_id: target, clips: list });
+    return { ops, clips: list, target };
   }
 
   /**
@@ -787,6 +800,19 @@
   }
 
   const selectedTrack = () => session.current?.tracks.find((t) => t.id === editor.current().selectedTrack) ?? null;
+  /** What Delete Track removes: the picked track or bus, else the track holding the picked clips. */
+  function trackToDelete(): { kind: "track" | "bus"; id: string } | null {
+    const doc = session.current;
+    if (!doc) return null;
+    const ed = editor.current();
+    if (ed.selectedTrack) {
+      if (doc.tracks.some((t) => t.id === ed.selectedTrack)) return { kind: "track", id: ed.selectedTrack };
+      if ((doc.buses ?? []).some((b) => b.id === ed.selectedTrack)) return { kind: "bus", id: ed.selectedTrack };
+    }
+    const clip = [...ed.selectedClips][0];
+    const t = clip ? doc.tracks.find((x) => x.clips.some((c) => c.id === clip) || (x.midi_clips ?? []).some((c) => c.id === clip)) : undefined;
+    return t ? { kind: "track", id: t.id } : null;
+  }
 
   function usedMedia(): Set<string> {
     const used = new Set<string>();
@@ -1948,6 +1974,9 @@
     return t ? { target: { kind: "track", id: t.id }, chain: t.effects, name: t.name } : null;
   }
   let fxCatalog: EffectInfo[] | null = null;
+  /** Effect plug-ins for Effects > Plug-ins (instruments are picked on MIDI tracks). */
+  let menuPlugins: { effect: string; name: string; vendor: string }[] = [];
+
   async function addEffectFromMenu(effect: string) {
     const at = fxTarget();
     if (!at) return;
@@ -3392,11 +3421,12 @@
       actions.register({
         id: "multitrack.delete-track",
         run: async () => {
-          const t = selectedTrack();
-          if (t) await session.edit("Delete Track", { op: "remove_track", id: t.id }, sessionHistory);
+          const t = trackToDelete();
+          if (t?.kind === "track") await session.edit("Delete Track", { op: "remove_track", id: t.id }, sessionHistory);
+          else if (t?.kind === "bus") await session.edit("Delete Bus", { op: "remove_bus", id: t.id }, sessionHistory);
           editor.selectTrack(null);
         },
-        enabled: () => selectedTrack() !== null,
+        enabled: () => trackToDelete() !== null,
         reason: () => "Select a track first.",
       }),
       actions.register({
@@ -3666,6 +3696,30 @@
         },
         enabled: () => (markerDoc()?.markers.length ?? 0) > 0,
         reason: () => "Add markers first (Edit > Markers).",
+      }),
+      // Effects > Plug-ins: every scanned effect plug-in, by maker then name.
+      ...Array.from({ length: PLUGIN_SLOTS }, (_, i) =>
+        actions.register({
+          id: `fx.plugins.${i + 1}`,
+          run: () => {
+            const p = menuPlugins[i];
+            if (p) return addEffectFromMenu(p.effect);
+          },
+          visible: () => menuPlugins[i] !== undefined,
+          label: () => {
+            const p = menuPlugins[i];
+            return p ? (p.vendor ? `${p.name} (${p.vendor})` : p.name) : null;
+          },
+          enabled: () => fxTarget() !== null,
+          reason: () => (inWave() ? "Open a file in the Waveform editor first." : "Select a track or one clip first."),
+        }),
+      ),
+      actions.register({
+        id: "fx.plugins.none",
+        run: () => {},
+        enabled: () => false,
+        visible: () => menuPlugins.length === 0,
+        reason: () => "Scan for plug-ins in Effects > Plug-in Manager. Effect plug-ins it finds appear here.",
       }),
       ...FX_MENU.map((short) =>
         actions.register({
@@ -4295,6 +4349,15 @@
   $effect(() => {
     pluginSync.start();
     const stopCatalog = pluginsVersion.subscribe(() => {
+      void pluginsRegistry()
+        .then((r) => {
+          menuPlugins = r.plugins
+            .filter((p) => !p.instrument)
+            .map((p) => ({ effect: p.effect, name: p.name, vendor: p.vendor }))
+            .sort((a, b) => a.vendor.localeCompare(b.vendor) || a.name.localeCompare(b.name));
+          actions.invalidate();
+        })
+        .catch(() => {});
       void effectsCatalog()
         .then((c) => {
           fxCatalog = c;

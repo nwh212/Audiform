@@ -188,7 +188,8 @@ export interface EnvelopeDoc {
   target:
     | { type: "volume" }
     | { type: "pan" }
-    | { type: "effect_param"; slot_id: string; param: string };
+    | { type: "effect_param"; slot_id: string; param: string }
+    | { type: "space"; param: SpaceParam };
   enabled: boolean;
   points: EnvelopePointDoc[];
 }
@@ -267,6 +268,9 @@ export interface SpaceDoc {
   listen?: "stereo" | "binaural";
 }
 /** A spot in the room: x left -1 to right 1, y back -1 to front 1, z floor 0 to ceiling 1. */
+/** A setting of a spot in the room that automation can move. */
+export type SpaceParam = "x" | "y" | "z" | "size" | "width" | "rotation" | "lfe" | "spread" | "spatialize";
+
 export interface SpacePosDoc {
   x: number;
   y: number;
@@ -279,8 +283,12 @@ export interface SpacePosDoc {
   rotation?: number;
   /** How much also feeds the low-frequency channel, 0 to 1. */
   lfe?: number;
+  /** How much is spread through the room as a diffuse field, 0 to 1. */
+  spread?: number;
+  /** Stereo sources: how much of the difference between the sides goes to the surrounds and heights, 0 to 1. */
+  spatialize?: number;
 }
-export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, lfe: 0 };
+export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, lfe: 0, spread: 0, spatialize: 0 };
 
 export { BPM_MAX, BPM_MIN, DEFAULT_TEMPO, type TempoChangeDoc, type TempoDoc } from "./tempo";
 

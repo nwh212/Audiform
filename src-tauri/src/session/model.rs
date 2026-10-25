@@ -726,6 +726,15 @@ pub struct SpacePos {
     /// (full level), low-passed at 120 Hz.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub lfe: f64,
+    /// How much of it is spread through the room as a diffuse field
+    /// (decorrelated copies on every speaker in use), 0 (none) to 1 (all).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub spread: f64,
+    /// Stereo sources: how much of the difference between its sides is
+    /// sent, delayed and decorrelated, to the surround and height
+    /// speakers, with what the sides share fed to the center, 0 to 1.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub spatialize: f64,
 }
 
 fn is_zero_f64(v: &f64) -> bool {
@@ -747,6 +756,8 @@ impl Default for SpacePos {
             width: 1.0,
             rotation: 0.0,
             lfe: 0.0,
+            spread: 0.0,
+            spatialize: 0.0,
         }
     }
 }
@@ -765,6 +776,8 @@ impl SpacePos {
             width: c(self.width, 0.0, 1.0, 1.0),
             rotation: c(self.rotation, -180.0, 180.0, 0.0),
             lfe: c(self.lfe, 0.0, 1.0, 0.0),
+            spread: c(self.spread, 0.0, 1.0, 0.0),
+            spatialize: c(self.spatialize, 0.0, 1.0, 0.0),
         }
     }
 }
@@ -980,6 +993,53 @@ pub enum EnvelopeTarget {
         slot_id: Id,
         param: String,
     },
+    /// 3D Space sessions: one setting of the owner's spot in the room.
+    Space {
+        param: SpaceParam,
+    },
+}
+
+/// A setting of a spot in the room that automation can move. Values use
+/// the spot's own units (see `SpacePos`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpaceParam {
+    X,
+    Y,
+    Z,
+    Size,
+    Width,
+    Rotation,
+    Lfe,
+    Spread,
+    Spatialize,
+}
+
+impl SpaceParam {
+    /// The range its values take.
+    pub fn range(self) -> (f64, f64) {
+        match self {
+            SpaceParam::X | SpaceParam::Y | SpaceParam::Z => (-1.0, 1.0),
+            SpaceParam::Rotation => (-180.0, 180.0),
+            _ => (0.0, 1.0),
+        }
+    }
+
+    /// `pos` with this setting at `v`.
+    pub fn set(self, pos: &mut SpacePos, v: f64) {
+        let slot = match self {
+            SpaceParam::X => &mut pos.x,
+            SpaceParam::Y => &mut pos.y,
+            SpaceParam::Z => &mut pos.z,
+            SpaceParam::Size => &mut pos.size,
+            SpaceParam::Width => &mut pos.width,
+            SpaceParam::Rotation => &mut pos.rotation,
+            SpaceParam::Lfe => &mut pos.lfe,
+            SpaceParam::Spread => &mut pos.spread,
+            SpaceParam::Spatialize => &mut pos.spatialize,
+        };
+        *slot = v;
+    }
 }
 
 /// How the value moves from one point to the next.
@@ -1197,6 +1257,8 @@ mod tests {
             width: 0.5,
             rotation: 30.0,
             lfe: 0.25,
+            spread: 0.4,
+            spatialize: 0.6,
         });
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains(r#""layout":"7.1.2""#));

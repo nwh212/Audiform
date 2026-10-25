@@ -64,6 +64,12 @@ pub struct Place {
     pub fold: [[f32; 2]; 2],
     /// How much feeds the low-frequency channel (its index), from both sides.
     pub lfe: Option<(usize, f32)>,
+    /// Spread and Spatialize, when either is on.
+    pub field: Option<crate::dsp::diffuse::Field>,
+    /// What it was worked out from, so automation can move one setting.
+    pub layout: crate::session::model::SpaceLayout,
+    pub pos: crate::session::model::SpacePos,
+    pub stereo: bool,
 }
 
 impl Place {
@@ -73,16 +79,41 @@ impl Place {
         stereo: bool,
     ) -> Option<Arc<Place>> {
         let layout = s.space?.layout;
-        let pos = pos.copied().unwrap_or_default().tidy();
+        let pos = pos.copied().unwrap_or_default();
+        Some(Arc::new(Place::at(layout, &pos, stereo)))
+    }
+
+    /// The gains for a spot in `layout`.
+    pub fn at(
+        layout: crate::session::model::SpaceLayout,
+        pos: &crate::session::model::SpacePos,
+        stereo: bool,
+    ) -> Place {
+        let pos = pos.tidy();
         let [l, r] = crate::dsp::space::source_gains(layout, &pos, stereo);
         let lfe = crate::dsp::space::lfe_channel(layout)
             .filter(|_| pos.lfe > 0.0)
             .map(|c| (c, pos.lfe as f32 * 0.5));
-        Some(Arc::new(Place {
-            bed: [l, r],
-            fold: crate::dsp::space::fold_gains(&pos, stereo),
+        let field = crate::dsp::diffuse::field(
+            layout,
+            pos.z as f32,
+            pos.spread as f32,
+            pos.spatialize as f32,
+            stereo,
+        );
+        // The placed sound gives up what Spread and Spatialize take.
+        let k = field.direct;
+        let scale = |g: Vec<f32>| g.into_iter().map(|v| v * k).collect::<Vec<f32>>();
+        let fold = crate::dsp::space::fold_gains(&pos, stereo).map(|s| s.map(|v| v * k));
+        Place {
+            bed: [scale(l), scale(r)],
+            fold,
             lfe,
-        }))
+            field: field.on.then_some(field),
+            layout,
+            pos,
+            stereo,
+        }
     }
 }
 
@@ -290,6 +321,8 @@ struct Strip {
     peak: [f32; 2],
     /// Its volume, pan and effect settings moving over the timeline.
     auto: Option<super::automation::StripAuto>,
+    /// 3D Space sessions: the decorrelators for Spread and Spatialize.
+    diffuse: Option<Box<[crate::dsp::diffuse::Decorrelator; 2]>>,
 }
 
 /// Peaks since the last read, 0 to 1 (and above on overs).
@@ -375,8 +408,32 @@ pub struct Graph {
     pos: u64,
     /// 3D Space sessions: each speaker's peak since the last read.
     bed_peak: Vec<f32>,
-    /// The low-frequency channel's index and its low pass.
-    lfe_lp: Option<(usize, [crate::dsp::biquad::Biquad; 2])>,
+    /// The low-frequency channel's index and its filters: four low-pass
+    /// sections (120 Hz, 48 dB per octave) then two high-pass sections
+    /// (20 Hz, 24 dB per octave), so it carries only the band it is for.
+    lfe_lp: Option<(usize, [crate::dsp::biquad::Biquad; LFE_SECTIONS])>,
+}
+
+/// Filter sections on the low-frequency channel.
+const LFE_SECTIONS: usize = 6;
+
+/// The low-frequency channel's filters at `rate`: a 120 Hz low pass, 8th
+/// order Butterworth, then a 20 Hz high pass, 4th order, which cuts the
+/// rumble below hearing that only wastes the subwoofer's headroom.
+fn lfe_filters(rate: u32) -> [crate::dsp::biquad::Biquad; LFE_SECTIONS] {
+    use crate::dsp::biquad::{butterworth_qs, Biquad, Coeffs, Shape};
+    let lq = butterworth_qs(4);
+    let hq = butterworth_qs(2);
+    let lp = |q: f64| Biquad::new(Coeffs::new(Shape::LowPass, rate, 120.0, q, 0.0));
+    let hp = |q: f64| Biquad::new(Coeffs::new(Shape::HighPass, rate, 20.0, q, 0.0));
+    [
+        lp(lq[0]),
+        lp(lq[1]),
+        lp(lq[2]),
+        lp(lq[3]),
+        hp(hq[0]),
+        hp(hq[1]),
+    ]
 }
 
 impl Graph {
@@ -434,6 +491,15 @@ impl Graph {
         } else {
             Vec::new()
         };
+        if s.space.is_some() {
+            // Made here, so playing never allocates them.
+            for (k, st) in tracks.iter_mut().chain(buses.iter_mut()).enumerate() {
+                st.diffuse = Some(Box::new([
+                    crate::dsp::diffuse::Decorrelator::new(rate, k % 2),
+                    crate::dsp::diffuse::Decorrelator::new(rate, 1 - k % 2),
+                ]));
+            }
+        }
         let mut master = Strip {
             id: Id::nil(),
             fx: if routed { fx(&s.master.effects) } else { None },
@@ -638,12 +704,7 @@ impl Graph {
             lfe_lp: s
                 .space
                 .and_then(|sp| crate::dsp::space::lfe_channel(sp.layout))
-                .map(|c| {
-                    use crate::dsp::biquad::{Biquad, Coeffs, Shape};
-                    let q = crate::dsp::biquad::butterworth_qs(2);
-                    let lp = |q: f64| Biquad::new(Coeffs::new(Shape::LowPass, rate, 120.0, q, 0.0));
-                    (c, [lp(q[0]), lp(q[1])])
-                }),
+                .map(|c| (c, lfe_filters(rate))),
         }
     }
 
@@ -813,6 +874,11 @@ impl Graph {
                 // After the chain (and its keys), before the fader, pan and sends.
                 fold_mono(&mut st.pre);
             }
+            // 3D Space automation: the spot where this block is (mid-block).
+            let moved = match (st.auto.as_ref(), to.place.as_ref()) {
+                (Some(a), Some(p)) => a.place_at(p, self.pos + frames as u64 / 2),
+                _ => None,
+            };
             for (r, route) in st.routes.iter_mut().enumerate() {
                 scratch.clear();
                 scratch.extend_from_slice(&st.pre);
@@ -839,7 +905,7 @@ impl Graph {
                 route.delay.run(&mut scratch);
                 // 3D Space: placed into the room, and folded to stereo to listen.
                 if r == 0 && matches!(route.dest, Dest::Master) {
-                    if let Some(p) = to.place.as_ref() {
+                    if let Some(p) = moved.as_ref().or(to.place.as_ref()) {
                         let f = p.fold;
                         for (o, v) in self
                             .master
@@ -866,6 +932,39 @@ impl Graph {
                                 }
                             }
                         }
+                        // Spread and Spatialize: decorrelated copies to the speakers,
+                        // and folded to stereo for listening.
+                        if let (Some(fl), Some(dc)) = (p.field.as_ref(), st.diffuse.as_deref_mut())
+                        {
+                            let [da, ds] = dc;
+                            let bed_n = if make_bed { nb } else { 0 };
+                            for (k, v) in scratch.chunks_exact(2).enumerate() {
+                                let mid = 0.5 * (v[0] + v[1]);
+                                let side = 0.5 * (v[0] - v[1]);
+                                let a = if fl.spreads { da.run(mid) } else { [0.0; 4] };
+                                let b = if fl.sides { ds.run(side) } else { [0.0; 4] };
+                                let (mut ol, mut or) = (0.0f32, 0.0f32);
+                                for c in 0..fl.spread.len() {
+                                    let tap = c % crate::dsp::diffuse::TAPS;
+                                    let mut e = a[tap] * fl.spread[c] + b[tap] * fl.side[c];
+                                    if let Some((_, g)) = fl.center.filter(|x| x.0 == c) {
+                                        e += mid * g;
+                                    }
+                                    if e == 0.0 {
+                                        continue;
+                                    }
+                                    if c < bed_n {
+                                        self.bed[k * nb + c] += e;
+                                    }
+                                    ol += e * fl.fold[c][0];
+                                    or += e * fl.fold[c][1];
+                                }
+                                if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
+                                    o[0] += ol;
+                                    o[1] += or;
+                                }
+                            }
+                        }
                         continue;
                     }
                 }
@@ -887,11 +986,10 @@ impl Graph {
         }
         if nb > 0 {
             // The low-frequency channel carries only lows: 120 Hz, steep.
-            if let Some((c, lp)) = self.lfe_lp.as_mut() {
+            if let Some((c, filters)) = self.lfe_lp.as_mut() {
                 let c = *c;
                 for f in self.bed.chunks_exact_mut(nb) {
-                    let x = lp[0].run(f[c]);
-                    f[c] = lp[1].run(x);
+                    f[c] = filters.iter_mut().fold(f[c], |x, b| b.run(x));
                 }
             }
             if self.bed_peak.len() != nb {
@@ -1160,6 +1258,32 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     const RATE: u32 = 48_000;
+
+    /// Steady-state gain of the low-frequency channel's filters for a tone.
+    fn lfe_gain(freq: f64) -> f64 {
+        let mut f = lfe_filters(RATE);
+        let n = RATE as usize;
+        let mut peak = 0.0f64;
+        for i in 0..n {
+            let x = (2.0 * std::f64::consts::PI * freq * i as f64 / RATE as f64).sin() as f32;
+            let y = f.iter_mut().fold(x, |v, b| b.run(v));
+            if i > n / 2 {
+                peak = peak.max(f64::from(y.abs()));
+            }
+        }
+        peak
+    }
+
+    #[test]
+    fn lfe_keeps_only_the_low_band() {
+        assert!(lfe_gain(60.0) > 0.9, "60 Hz passes");
+        assert!(lfe_gain(500.0) < 0.001, "500 Hz is cut by about 60 dB");
+        assert!(
+            lfe_gain(240.0) < 0.01,
+            "an octave above is down about 48 dB"
+        );
+        assert!(lfe_gain(8.0) < 0.05, "rumble below hearing is cut");
+    }
 
     /// One second, mono: `f(i)` for each frame.
     fn wav(dir: &Path, name: &str, f: impl Fn(usize) -> f32) -> PathBuf {

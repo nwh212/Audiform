@@ -111,7 +111,7 @@
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
-    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape });
+    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, dropMany: def.dropMany });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
@@ -145,14 +145,20 @@
         {/if}
 
         {#if page === "General"}
-          <label class="row" title="Off: the wheel scrolls the tracks or the file, and Ctrl+wheel zooms. Over the track headers the wheel always scrolls the tracks.">
+          <label class="row" title="Off: the wheel scrolls the tracks or the file, and Ctrl+wheel zooms. Over the track headers the wheel always makes the tracks taller or shorter.">
             <input type="checkbox" bind:checked={d.app.wheelZooms} /> The mouse wheel over the waveform zooms in time (Waveform editor; in the Multitrack the wheel zooms over the ruler and scrolls over the tracks)
           </label>
           <label class="row">Each wheel step zooms by <input type="number" min="5" max="100" step="5" bind:value={d.app.zoomStep} /> % a step</label>
           <fieldset>
             <legend>Wheel zoom centers on</legend>
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="mouse" /> The mouse pointer</label>
+            <label><input type="radio" bind:group={d.app.wheelAnchor} value="between" /> Between the pointer and the middle of the view (drifts less)</label>
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="playhead" /> The playhead</label>
+          </fieldset>
+          <fieldset>
+            <legend>Several files dropped on the Editor go</legend>
+            <label><input type="radio" bind:group={d.app.dropMany} value="sequence" /> One after another on one track</label>
+            <label><input type="radio" bind:group={d.app.dropMany} value="tracks" /> Side by side, each on its own track from the same time</label>
           </fieldset>
           <fieldset>
             <legend>New fades start as</legend>

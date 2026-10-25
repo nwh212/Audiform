@@ -69,6 +69,8 @@ export function tidyPos(p: Partial<SpacePosDoc> | null | undefined): SpacePosDoc
     width: c(p?.width, 0, 1, d.width),
     rotation: c(p?.rotation, -180, 180, 0),
     lfe: c(p?.lfe, 0, 1, 0),
+    spread: c(p?.spread, 0, 1, 0),
+    spatialize: c(p?.spatialize, 0, 1, 0),
   };
 }
 
@@ -129,4 +131,35 @@ export function channelNames(layout: SpaceLayout): string[] {
     case "7.1.4":
       return [...base, "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr"];
   }
+}
+
+/** Turns degrees into -180 to 180. */
+export function wrapDeg(d: number): number {
+  let v = ((d + 180) % 360 + 360) % 360 - 180;
+  if (v === -180 && d > 0) v = 180;
+  return v;
+}
+
+/** The angle from (cx, cy) to (x, y) in the room, degrees clockwise seen from above (0 is to the right). */
+export function angleOf(cx: number, cy: number, x: number, y: number): number {
+  return (Math.atan2(-(y - cy), x - cx) * 180) / Math.PI;
+}
+
+/**
+ * Snapping in the room: a spot pulled onto a speaker, the center lines or
+ * a quarter-room grid when within `tol` (room units).
+ */
+export function snapSpot(x: number, y: number, speakers: readonly { x: number; y: number }[], tol = 0.06): [number, number] {
+  for (const s of speakers) if (Math.hypot(s.x - x, s.y - y) <= tol * 1.5) return [s.x, s.y];
+  const grid = (v: number) => {
+    const g = Math.round(v * 4) / 4;
+    return Math.abs(g - v) <= tol ? g : v;
+  };
+  return [grid(x), grid(y)];
+}
+
+/** Snapping a rotation to 15 degree steps when within 4 degrees. */
+export function snapAngle(d: number): number {
+  const g = Math.round(d / 15) * 15;
+  return Math.abs(g - d) <= 4 ? wrapDeg(g) : d;
 }

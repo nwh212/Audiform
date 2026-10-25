@@ -105,6 +105,8 @@
       const tracks = (e.currentTarget as HTMLElement).closest<HTMLElement>(".scroller");
       if (!tracks) return;
       e.preventDefault();
+      // Handled here: over the rest of a header the wheel zooms the tracks.
+      e.stopPropagation();
       tracks.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
     }}
   >

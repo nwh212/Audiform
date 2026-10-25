@@ -609,6 +609,7 @@ fn envelope_hash(c: &Clip) -> u64 {
             EnvelopeTarget::Volume => 1,
             EnvelopeTarget::Pan => 2,
             EnvelopeTarget::EffectParam { .. } => 3,
+            EnvelopeTarget::Space { .. } => 4,
         });
         mix(u64::from(e.enabled));
         for p in &e.points {

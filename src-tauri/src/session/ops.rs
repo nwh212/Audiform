@@ -1442,6 +1442,7 @@ fn set_points(
             .and_then(|s| crate::dsp::effects::info(&s.effect))
             .and_then(|i| i.params.into_iter().find(|p| p.key == param.as_str()))
             .map_or((f64::MIN, f64::MAX), |p| (p.min, p.max)),
+        EnvelopeTarget::Space { param } => param.range(),
     };
     let i = c.envelopes.iter().position(|e| e.target == target);
     let old = i.map(|i| c.envelopes[i].points.clone()).unwrap_or_default();
@@ -1520,6 +1521,7 @@ fn tidy_envelope(e: &Envelope) -> Envelope {
         EnvelopeTarget::Volume => (-96.0, 24.0),
         EnvelopeTarget::Pan => (-100.0, 100.0),
         EnvelopeTarget::EffectParam { .. } => (f64::MIN, f64::MAX),
+        EnvelopeTarget::Space { param } => param.range(),
     };
     let mut points: Vec<EnvelopePoint> = e
         .points

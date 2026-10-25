@@ -7,6 +7,7 @@
 pub mod align;
 pub mod binaural;
 pub mod biquad;
+pub mod diffuse;
 pub mod effects;
 pub mod elliptic;
 pub mod meters;

@@ -11,7 +11,7 @@
 
 /** A fade curve, as the session stores it. */
 export type FadeShape = "linear" | "logarithmic" | "cosine";
-export type WheelAnchor = "mouse" | "playhead";
+export type WheelAnchor = "mouse" | "between" | "playhead";
 
 export interface AppColors {
   /** Waveforms in the Waveform editor. Empty keeps the theme color. */
@@ -36,6 +36,8 @@ export interface AppSettings {
   wheelZooms: boolean;
   /** Shape a new fade starts with. */
   fadeShape: FadeShape;
+  /** Several files dropped on the Editor: one after another on one track, or each on its own track from the same time. */
+  dropMany: "sequence" | "tracks";
   /** What the space bar does to a playing session. */
   colors: AppColors;
   /** System name of the output; null is the system default. */
@@ -81,6 +83,8 @@ export interface AppSettings {
   phaseWheel: PhaseWheelPrefs;
   /** The metronome, kept between runs. */
   metronome: MetronomePrefs;
+  /** 3D Space: dots snap to speakers, the center lines and a grid; turns snap to 15 degrees. */
+  spaceSnap: boolean;
 }
 
 export type MetronomeSound = "tick" | "wood" | "beep" | "shaker";
@@ -139,9 +143,10 @@ export const NO_COLORS: AppColors = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   zoomStep: 25,
-  wheelAnchor: "mouse",
+  wheelAnchor: "between",
   wheelZooms: true,
   fadeShape: "cosine",
+  dropMany: "sequence",
   colors: { ...NO_COLORS },
   output: null,
   waveInput: null,
@@ -166,6 +171,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markerName: "Marker",
   timecodeFps: 30,
   phaseWheel: { size: 4096, fps: 60, a: "left", b: "right" },
+  spaceSnap: true,
   metronome: { on: false, muted: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
 };
 
@@ -191,8 +197,9 @@ export function sanitizeSettings(raw: unknown): AppSettings {
   const yellow = num(o.meterYellowDb, -40, -1, d.meterYellowDb);
   return {
     zoomStep: Math.round(num(o.zoomStep, 5, 100, d.zoomStep)),
-    wheelAnchor: o.wheelAnchor === "playhead" ? "playhead" : "mouse",
+    wheelAnchor: o.wheelAnchor === "playhead" || o.wheelAnchor === "between" || o.wheelAnchor === "mouse" ? o.wheelAnchor : d.wheelAnchor,
     wheelZooms: bool(o.wheelZooms, d.wheelZooms),
+    dropMany: o.dropMany === "tracks" ? "tracks" : "sequence",
     fadeShape:
       o.fadeShape === "linear" || o.fadeShape === "logarithmic"
         ? o.fadeShape
@@ -250,6 +257,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       : d.timecodeFps,
     phaseWheel: phasePrefs(o.phaseWheel),
     metronome: metronomePrefs(o.metronome),
+    spaceSnap: bool(o.spaceSnap, d.spaceSnap),
   };
 }
 
@@ -310,6 +318,19 @@ class SettingsStore {
 export const settings = new SettingsStore();
 
 /** The Ctrl+wheel zoom ratios for zooming in and out. */
+/**
+ * Where a wheel zoom centers, in pixels across a view `width` wide: the
+ * pointer, the playhead (when in view), or between the pointer and the
+ * middle of the view (pulled 40% toward the middle, so zooming drifts
+ * less). Over a ruler, `exact` keeps it on the pointer.
+ */
+export function wheelAnchorX(mouse: number, width: number, playheadX: number, exact = false): number {
+  const a = settings.current.wheelAnchor;
+  if (exact || a === "mouse") return mouse;
+  if (a === "playhead") return Math.max(0, Math.min(width, playheadX));
+  return mouse + (width / 2 - mouse) * 0.4;
+}
+
 export function zoomRatios(step = settings.current.zoomStep): {
   zoomIn: number;
   zoomOut: number;

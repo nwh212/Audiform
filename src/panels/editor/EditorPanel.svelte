@@ -8,7 +8,7 @@
   management and zoom. Playback arrives in P2, clip editing in P3.
 -->
 <script lang="ts">
-  import { settings, zoomRatios } from "../../stores/settings";
+  import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import { trackOp } from "../mixer/solo";
   import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
   import SendList from "../mixer/SendList.svelte";
@@ -416,16 +416,23 @@
 
   // Follow Playhead: during playback, page the lanes when the playhead
   // nears the right edge or falls off either side. Scrolling or zooming
-  // yourself while it plays (overview bar, wheel, scrollbar) stops the
-  // following until playback starts again or the playhead is moved, so you
-  // can look at another part of the session while it plays.
+  // yourself while it plays (overview bar, wheel, scrollbar) lets go of it,
+  // so you can look at another part of the session while it plays. It
+  // follows again once you stop moving the view with the playhead in view
+  // (or when playback starts, or the playhead is moved).
   // Bars and beats everywhere follow the session tempo.
   $effect(() => setDisplayTempo(doc?.tempo));
   let followHeld = false;
   let wasPlaying = false;
-  // Switching Follow Playhead on picks the following up again at once.
+  /** When you last moved the view yourself (ms). */
+  let userViewAt = 0;
+  // Switching Follow Playhead on picks the following up again at once
+  // (only on the switch: the editor state changes for many other reasons).
+  let followWas = editor.current().followPlayhead;
   $effect(() => {
-    if (ed.followPlayhead) followHeld = false;
+    const on = ed.followPlayhead;
+    if (on && !followWas) followHeld = false;
+    followWas = on;
   });
   $effect(() => {
     const playingNow = !!tp?.playing;
@@ -433,7 +440,11 @@
     wasPlaying = playingNow;
     if (!playingNow || !ed.followPlayhead || lanesWidth <= 0) return;
     const x = xOf(playhead, view);
-    if (followHeld) return;
+    if (followHeld) {
+      // Back in view and left alone for a moment: follow it again.
+      if (x >= 0 && x <= lanesWidth && performance.now() - userViewAt > 400) followHeld = false;
+      return;
+    }
     if (x > lanesWidth * 0.92 || x < 0) setView({ scroll: playhead - lanesWidth * 0.08 * view.spp }, true);
   });
 
@@ -442,7 +453,10 @@
     if (!doc) return;
     if (!auto && tp?.playing) {
       if (v.playhead !== undefined) followHeld = false;
-      else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) followHeld = true;
+      else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) {
+        followHeld = true;
+        userViewAt = performance.now();
+      }
     }
     session.setView({
       ...doc.view,
@@ -460,7 +474,7 @@
       onMove: (paths, at) => showDropGhost(paths, at),
       onDrop: (paths, at) => {
         const { trackId, sample } = hitLanes(at.x, at.y);
-        onPlaceFiles(paths, trackId, sample);
+        onPlaceFiles(paths, trackId, dropSample(sample));
       },
     });
   });
@@ -500,15 +514,32 @@
     const height = row ? row.offsetHeight - TRACK_GAP : 60;
     void Promise.all(paths.map(probeLength)).then((infos) => {
       if (seq !== ghostSeq) return;
-      let pos = Math.max(0, sample);
+      const start = dropSample(sample);
+      let pos = start;
       const items = [];
+      const side = settings.current.dropMany === "tracks" && infos.filter(Boolean).length > 1;
       for (const i of infos) {
         if (!i) continue;
         items.push({ name: i.name, x: xOf(pos, view), w: Math.max(4, i.len / view.spp) });
+        // Side by side, the ghost shows the first file; the rest start at the same time below.
+        if (side) break;
         pos += i.len;
       }
+      const more = side ? infos.filter(Boolean).length - 1 : 0;
+      if (more > 0) items[0]!.name = `${items[0]!.name} (+${more} on the tracks below)`;
       dropGhost = items.length ? { top, height, newTrack: !row, items } : null;
     });
+  }
+
+  /**
+   * Where dropped files start: with snapping on, the usual targets, and the
+   * session start from further away (a drop near it is meant for it).
+   */
+  function dropSample(sample: number): number {
+    const p = Math.max(0, Math.round(sample));
+    if (!doc || !ed.snap.on) return p;
+    if (p <= SNAP_PX * 3 * view.spp) return 0;
+    return nearest(p, targetsFor(doc, new Set()), SNAP_PX * view.spp) ?? p;
   }
 
   function hitLanes(x: number, y: number): { trackId: string | null; sample: number } {
@@ -779,8 +810,8 @@
 
   /**
    * The mouse wheel. Over the ruler and the overview it zooms the
-   * timeline; over the lanes and headers it scrolls the tracks up and
-   * down. Alt + wheel makes the track under the pointer taller or shorter,
+   * timeline; over the lanes it scrolls the tracks up and down; over the
+   * headers it zooms the tracks (as the track scrollbar does). Alt + wheel makes the track under the pointer taller or shorter,
    * Alt + Shift + wheel scales the waveforms, Ctrl + wheel zooms the
    * timeline, Shift + wheel (or a sideways wheel) scrolls along it.
    */
@@ -793,15 +824,19 @@
       const r = zoomRatios();
       const mouse = Math.max(0, e.clientX - left);
       // Over the ruler the zoom always goes toward the pointer.
-      const at = settings.current.wheelAnchor === "playhead" && !overRuler ? Math.max(0, Math.min(lanesEl!.clientWidth, xOf(playhead, view))) : mouse;
+      const at = wheelAnchorX(mouse, lanesEl!.clientWidth, xOf(playhead, view), overRuler);
       const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, maxSppFor(lanesWidth, contentEnd, rate));
       setView({ spp: z.spp, scroll: z.scroll });
     };
     if (e.clientX < left && !overRuler) {
-      // Over the track headers: the wheel scrolls the tracks (Alt+wheel resizes them, below).
+      // Over the track headers the wheel zooms the tracks, as over the track
+      // scrollbar: every open track taller or shorter. Alt+wheel resizes only
+      // the one under the pointer. (Over a header's effect slots it scrolls.)
       if (e.altKey) {
         e.preventDefault();
         wheelResizeTracks(e);
+      } else if (!e.shiftKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        onVbarWheel(e);
       }
       return;
     } else if (e.altKey && e.shiftKey) {
@@ -1266,6 +1301,17 @@
     const t = snapTargets(d, exclude, playhead, ed.snap);
     if (ed.snap.ruler) for (const tick of ticksFor(view, lanesWidth, rate, ed.timeFormat)) t.push(sampleAt(tick.x, view));
     return t;
+  }
+
+  /**
+   * A press on a bus or master lane, or below the last track: the same
+   * drag as on empty track space, so a selection can start anywhere (a
+   * box with the Move tool, a time range otherwise) and sweep over tracks.
+   */
+  function startSelectFromLane(e: PointerEvent) {
+    if (e.button !== 0) return;
+    if (ed.tool === "move") startBoxSelect(e);
+    else startRange(e);
   }
 
   /** Drag on empty lane space selects a time range; a plain click moves the playhead and clears it. */
@@ -1754,7 +1800,7 @@
     setTrack(track, { show_automation: !track.show_automation }, track.show_automation ? "Hide Automation Lanes" : "Show Automation Lanes");
   }
 
-  function addLane(track: TrackDoc, target: AutoTarget | null = nextTarget(track, fxCatalog)) {
+  function addLane(track: TrackDoc, target: AutoTarget | null = nextTarget(track, fxCatalog, !!doc?.space)) {
     if (!target) return;
     // The starting Volume lane is not saved until it has points; keep it when adding another.
     const base = (track.envelopes?.length ?? 0) === 0 ? [newLane({ type: "volume" })] : (track.envelopes ?? []);
@@ -1766,7 +1812,7 @@
 
   /** Points a lane at another setting. Its points are kept only when the value range is the same kind. */
   function pickTarget(track: TrackDoc, lane: EnvelopeDoc, key: string) {
-    const c = autoChoices(track, fxCatalog).find((x) => targetKey(x.target) === key);
+    const c = autoChoices(track, fxCatalog, !!doc?.space).find((x) => targetKey(x.target) === key);
     if (!c || targetKey(c.target) === targetKey(lane.target)) return;
     const same = c.target.type === lane.target.type && c.target.type !== "effect_param";
     setLanes(track, putLane(track, { ...lane, target: c.target, points: same ? lane.points : [] }), `Automate ${c.label}`);
@@ -1800,7 +1846,7 @@
       { kind: "item", label: `Clear ${name} Lane`, disabled: lane.points.length === 0, run: () => setLanes(track, putLane(track, { ...lane, points: [] }), "Clear Automation Lane") },
       { kind: "sep" },
       { kind: "item", label: lane.enabled ? "Turn Lane Off" : "Turn Lane On", disabled: !lane.id, run: () => setLanes(track, putLane(track, { ...lane, enabled: !lane.enabled }), lane.enabled ? "Automation Lane Off" : "Automation Lane On") },
-      { kind: "item", label: "Add Lane", disabled: !nextTarget(track, fxCatalog), run: () => addLane(track) },
+      { kind: "item", label: "Add Lane", disabled: !nextTarget(track, fxCatalog, !!doc?.space), run: () => addLane(track) },
       { kind: "item", label: "Remove Lane", disabled: !lane.id, run: () => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane") },
       { kind: "item", label: "Hide Automation Lanes", run: () => toggleLanes(track) },
     ];
@@ -2439,7 +2485,7 @@
                     onchange={(e) => pickTarget(track, lane, e.currentTarget.value)}
                   >
                     {#if isOrphan(track, fxCatalog, lane.target)}<option value={targetKey(lane.target)}>Removed effect</option>{/if}
-                    {#each autoChoices(track, fxCatalog) as c (targetKey(c.target))}
+                    {#each autoChoices(track, fxCatalog, !!doc?.space) as c (targetKey(c.target))}
                       <option value={targetKey(c.target)} disabled={targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}>{c.label}</option>
                     {/each}
                   </select>
@@ -2456,7 +2502,7 @@
                   >{lane.enabled ? "Read" : "Off"}</button>
                   <span class="auto-count">{lane.points.length === 0 ? "Click the lane to add points" : `${lane.points.length} point${lane.points.length === 1 ? "" : "s"}`}</span>
                   {#if k === lanes.length - 1}
-                    <button type="button" class="ms" title="Add a lane for another setting" disabled={!nextTarget(track, fxCatalog)} onclick={() => addLane(track)}>+</button>
+                    <button type="button" class="ms" title="Add a lane for another setting" disabled={!nextTarget(track, fxCatalog, !!doc?.space)} onclick={() => addLane(track)}>+</button>
                   {/if}
                   <button type="button" class="ms" title="Remove this lane and its points" disabled={!lane.id} onclick={() => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane")}>×</button>
                 </div>
@@ -2669,6 +2715,7 @@
               class="lane bus-lane"
               class:selected={ed.selectedTrack === b.id}
               style:height="{busHeight(b)}px"
+              onpointerdown={startSelectFromLane}
               onclick={() => editor.selectTrack(b.id)}
               oncontextmenu={(e) => {
                 e.preventDefault();
@@ -2681,7 +2728,7 @@
             {/if}
           {/each}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="lane bus-lane master-lane" class:selected={ed.selectedTrack === MASTER_ID} style:height="72px" onclick={() => editor.selectTrack(MASTER_ID)}>
+          <div class="lane bus-lane master-lane" class:selected={ed.selectedTrack === MASTER_ID} style:height="72px" onpointerdown={startSelectFromLane} onclick={() => editor.selectTrack(MASTER_ID)}>
             <span>Master: the whole mix, after every track and bus. Its fader and Voice Chain apply last.</span>
           </div>
           {#each shownMarkers as m (m.id)}
@@ -2704,11 +2751,7 @@
             <div
               class="below"
               title="Drop files here to add a new track. Drag here to select a time range."
-              onpointerdown={(e) => {
-                if (e.button !== 0) return;
-                if (ed.tool === "move") startBoxSelect(e);
-                else startRange(e);
-              }}
+              onpointerdown={startSelectFromLane}
             ></div>
           {/if}
         {/if}
@@ -2841,10 +2884,11 @@
     white-space: nowrap;
   }
 
+  /* A column: the strips above and below keep their height and only the
+     tracks stretch, however many strips (metronome, tempo) show. */
   .editor {
-    display: grid;
-    grid-template-rows: auto auto auto 1fr auto auto;
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
     height: 100%;
     overflow: hidden;
     background: var(--surface-0);
@@ -3049,6 +3093,15 @@
     min-width: 0;
     cursor: text;
     border-bottom: 1px solid var(--border);
+  }
+
+  .editor > :global(*) {
+    flex: none;
+    min-width: 0;
+  }
+
+  .editor > .vwrap {
+    flex: 1 1 0;
   }
 
   .vwrap {

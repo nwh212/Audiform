@@ -93,6 +93,9 @@ struct Shared {
     levels: Mutex<Option<Levels>>,
     /// Render-thread meters, oldest first, released as the device plays them.
     chain_meters: Mutex<VecDeque<BlockPeaks>>,
+    /// The last reading `played_meters` gave, given again when no new block
+    /// was played since (otherwise the meters blinked to silence).
+    last_played: Mutex<GraphMeters>,
 }
 
 impl Shared {
@@ -118,6 +121,7 @@ impl Shared {
             chains: Mutex::new(None),
             levels: Mutex::new(None),
             chain_meters: Mutex::new(VecDeque::new()),
+            last_played: Mutex::new(GraphMeters::default()),
         }
     }
 
@@ -179,11 +183,22 @@ impl Shared {
         let Ok(mut q) = self.chain_meters.lock() else {
             return out;
         };
+        let mut any = false;
         while q.front().is_some_and(|(at, _)| *at <= played) {
             let (_, peaks) = q.pop_front().expect("checked");
             out.merge(&peaks);
+            any = true;
         }
-        out
+        drop(q);
+        let Ok(mut last) = self.last_played.lock() else {
+            return out;
+        };
+        if any {
+            *last = out.clone();
+            out
+        } else {
+            last.clone()
+        }
     }
 
     fn set_gains(&self, gains: &[[f32; 2]], master: f32) {
@@ -1100,8 +1115,8 @@ mod tests {
         assert_eq!(m.buses[0], [0.1, 0.1]);
         assert_eq!(
             shared.played_meters(),
-            GraphMeters::default(),
-            "each reading is used once"
+            m,
+            "with nothing newly played, the last reading holds (no blink to silence)"
         );
     }
 

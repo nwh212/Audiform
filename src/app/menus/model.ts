@@ -53,6 +53,9 @@ const NEXT_FX = "Arrives in the next effects batch.";
 const P7 = "Arrives with podcast publishing (P7).";
 const LATER = "Not built yet.";
 
+/** Effects > Plug-ins slots, one per scanned effect plug-in. Unused slots are hidden. */
+export const PLUGIN_SLOTS = 120;
+
 /** Open Recent slots. Unused slots are hidden. */
 export const RECENT_SLOTS = 10;
 /** Menu slots for workspaces: the built-in ones plus the user's own. */
@@ -438,8 +441,13 @@ export const MENUS: readonly Menu[] = [
       ]),
       sep,
       sub("Plug-ins", [
+        ...Array.from({ length: PLUGIN_SLOTS }, (_, i) =>
+          item(`fx.plugins.${i + 1}`, `Plug-in ${i + 1}`, {
+            placeholder: true,
+          }),
+        ),
         item("fx.plugins.none", "No plug-ins scanned", {
-          pending: P5,
+          pending: "Scan for plug-ins in Effects > Plug-in Manager. Effect plug-ins it finds appear here.",
           placeholder: true,
         }),
       ]),

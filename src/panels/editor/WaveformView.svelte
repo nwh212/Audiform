@@ -9,7 +9,7 @@
   view draws the result and turns gestures into actions.
 -->
 <script lang="ts">
-  import { settings, zoomRatios } from "../../stores/settings";
+  import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
   import { SPECTRUM_HIGH, SPECTRUM_LOW } from "../../app/colors";
   import { KIND_COLORS } from "../markers/markers";
@@ -614,7 +614,7 @@
     } else if (overRuler || e.ctrlKey || (settings.current.wheelZooms && !e.shiftKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX))) {
       e.preventDefault();
       const r = zoomRatios();
-      const at = settings.current.wheelAnchor === "playhead" && !overRuler ? Math.max(0, Math.min(width, xOf(playhead, view))) : x;
+      const at = wheelAnchorX(x, width, xOf(playhead, view), overRuler);
       const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, outermost(), SAMPLE_SPP);
       setView({ spp: z.spp, scroll: z.scroll });
     } else {

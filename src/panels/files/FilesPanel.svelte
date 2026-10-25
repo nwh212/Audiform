@@ -177,8 +177,21 @@
     }
   }
 
+  /** The session row's right-click menu. The id is fixed here: the menu closes before an item runs. */
+  function sessionItems(id: string): ContextItem[] {
+    const row = sessionRows.find((r) => r.id === id);
+    return [
+      { kind: "item", label: row?.front ? "Show in Multitrack" : "Switch to This Session", run: () => onOpenSession(id) },
+      { kind: "item", label: "Save", disabled: !row?.front, reason: "Switch to the session first.", run: () => run("file.save"), shortcut: shortcutFor("file.save") },
+      { kind: "sep" },
+      { kind: "item", label: row?.dirty ? "Close Session..." : "Close Session", shortcut: "Delete", run: () => onCloseSession(id) },
+      { kind: "item", label: "Close All Sessions...", run: () => run("file.close-all") },
+    ];
+  }
+
   function onListKey(e: KeyboardEvent) {
-    if (pickedSession && (e.key === "Delete" || e.key === "Backspace")) {
+    // Plain Delete or Backspace only: chords such as Ctrl+Alt+Backspace (Delete Track) pass on.
+    if (pickedSession && (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       onCloseSession(pickedSession);
@@ -591,20 +604,7 @@
   <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => (menu = null)} />
 {/if}
 {#if sessionMenu}
-  {@const sm = sessionMenu}
-  {@const row = sessionRows.find((r) => r.id === sm.id)}
-  <ContextMenu
-    x={sm.x}
-    y={sm.y}
-    items={[
-      { kind: "item", label: row?.front ? "Show in Multitrack" : "Switch to This Session", run: () => onOpenSession(sm.id) },
-      { kind: "item", label: "Save", disabled: !row?.front, reason: "Switch to the session first.", run: () => run("file.save"), shortcut: shortcutFor("file.save") },
-      { kind: "sep" },
-      { kind: "item", label: row?.dirty ? "Close Session..." : "Close Session", shortcut: "Delete", run: () => onCloseSession(sm.id) },
-      { kind: "item", label: "Close All Sessions...", run: () => run("file.close-all") },
-    ]}
-    onClose={() => (sessionMenu = null)}
-  />
+  <ContextMenu x={sessionMenu.x} y={sessionMenu.y} items={sessionItems(sessionMenu.id)} onClose={() => (sessionMenu = null)} />
 {/if}
 
 <style>
