@@ -216,3 +216,38 @@ describe("planOpen", () => {
     expect(planOpen(["/x/old.sesx", "/x/a.flac"])).toEqual({ session: null, sesx: "/x/old.sesx", audio: ["/x/a.flac"], skipped: [] });
   });
 });
+
+describe("several open sessions", () => {
+  it("sets the session in front aside on Open, switches back with its history, and closes to the next one", async () => {
+    const { files, session, stack, makeDirty } = setup();
+    const parked = new Map<string, { s: SessionDoc; p: string | null }>();
+    const b = (files as unknown as { d: { backend: SessionFileBackend } }).d.backend;
+    b.park = async () => void parked.set(session.current!.id, { s: session.current!, p: session.path });
+    b.resume = async (id) => {
+      const x = parked.get(id)!;
+      parked.delete(id);
+      return result(x.s, x.p);
+    };
+    await makeDirty();
+    const first = session.current!.id;
+    expect(await files.open("C:\\Shows\\Two.altaudio")).toBe(true);
+    expect(files.others.map((o) => o.id)).toEqual([first]);
+    expect(files.others[0]!.dirty).toBe(true);
+    expect(stack.current.dirty).toBe(false);
+
+    // Back to the first: its unsaved edit comes with it.
+    expect(await files.switchTo(first)).toBe(true);
+    expect(session.current!.id).toBe(first);
+    expect(stack.current.canUndo).toBe(true);
+    expect(files.others.map((o) => o.name)).toEqual(["Two"]);
+
+    // Opening the second again just brings it to the front.
+    expect(await files.open("C:\\Shows\\Two.altaudio")).toBe(true);
+    expect(files.others.map((o) => o.id)).toEqual([first]);
+
+    // Closing the one in front brings the other back.
+    expect(await files.close()).toBe(true);
+    expect(session.current!.id).toBe(first);
+    expect(files.others).toEqual([]);
+  });
+});

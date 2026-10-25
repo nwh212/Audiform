@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { ClipDoc, SessionDoc, TrackDoc } from "../../stores/session";
-import { clipsAt, copyClips, copyMoved, fadeClip, gapAt, LockedError, MIN_CLIP, moveClips, nearest, pasteClips, previewTracks, rippleDeleteClips, rippleDeleteRange, snapTargets, trimToRange, splitClips, trimClip, trimToPlayhead, withCrossfades, withGroups, withVolume, withEnvelope, envelopeId, loopChanges } from "./clip-edit";
+import { clipsAt, copyClips, copyMoved, fadeClip, gapAt, LockedError, MIN_CLIP, moveClips, nearest, pasteClips, previewTracks, rippleDeleteClips, rippleDeleteRange, snapTargets, trimToRange, splitClips, trimClip, trimToPlayhead, withCrossfades, withGroups, withLayers, TOP_LAYER, withVolume, withEnvelope, envelopeId, loopChanges } from "./clip-edit";
 
 const fade = () => ({ length: 0, shape: "linear" as const, curve: 0 });
 
@@ -252,6 +252,17 @@ describe("withCrossfades", () => {
     ]);
   });
 
+  it("takes the crossfade away when a clip moves wholly inside the other", () => {
+    const fade = (length: number) => ({ length, shape: "cosine" as const, curve: 0 });
+    const a = { ...clip("a", 0), fade_out: fade(8_000) };
+    const b = { ...clip("b", 40_000), fade_in: fade(8_000) };
+    const doc = session([track("A", [a, b])]);
+    // b overlapped a's end by 8,000; now it lies exactly over a (same size), so it simply covers it.
+    const r = withCrossfades(doc, [{ id: "b", start: 0 }]);
+    expect(r).toContainEqual({ id: "b", start: 0, fade_in: fade(0) });
+    expect(r).toContainEqual({ id: "a", fade_out: fade(0) });
+  });
+
   it("leaves untouched and nested clips alone", () => {
     const doc = session([track("A", [clip("a", 0), clip("b", 10_000, 0, 1_000)])]);
     expect(withCrossfades(doc, [{ id: "b", start: 20_000 }])).toEqual([{ id: "b", start: 20_000 }]);
@@ -439,5 +450,19 @@ describe("copyMoved", () => {
       ["t2", "new2", 250, "new1"],
     ]);
     expect(ops[1]).toEqual({ op: "set_clips", changes: [{ id: "n", fade_in: { length: 10, shape: "linear", curve: 0 } }] });
+  });
+});
+
+describe("withLayers", () => {
+  it("puts a dragged clip on top of what it lands on", () => {
+    const doc = session([track("A", [clip("a", 200_000), clip("b", 0)])]);
+    const r = withLayers(doc, [{ id: "a", start: 10_000 }]);
+    expect(r).toEqual([{ id: "a", start: 10_000, layer: TOP_LAYER }]);
+    expect(previewTracks(doc, r)[0]!.clips.map((c) => c.id)).toEqual(["b", "a"]);
+  });
+
+  it("leaves a clip tucked under the same clip where it is", () => {
+    const doc = session([track("A", [clip("a", 10_000), clip("b", 0)])]);
+    expect(withLayers(doc, [{ id: "a", start: 12_000 }])).toEqual([{ id: "a", start: 12_000 }]);
   });
 });

@@ -40,20 +40,31 @@
     /** Double-click: open the file in the Waveform editor. */
     onOpen?: (path: string) => void;
     shortcutFor?: (id: string) => string | undefined;
-    /** The open multitrack session, listed first. */
-    session?: Readable<SessionRow | null>;
-    /** Double-click on the session row: show it in the Multitrack view. */
-    onOpenSession?: () => void;
+    /** The open multitrack sessions, listed first: the one in front, then the ones set aside. */
+    sessions?: Readable<SessionRow[]>;
+    /** Double-click on a session row: bring it to the front in the Multitrack view. */
+    onOpenSession?: (id: string) => void;
+    /** Close a session (asks to save first). */
+    onCloseSession?: (id: string) => void;
   }
 
-  const { pool, actions, drop, onDropPaths, onOpen = () => {}, shortcutFor = () => undefined, session, onOpenSession = () => {} }: Props = $props();
+  const { pool, actions, drop, onDropPaths, onOpen = () => {}, shortcutFor = () => undefined, sessions, onOpenSession = () => {}, onCloseSession = () => {} }: Props = $props();
 
-  let sessionRow = $state<SessionRow | null>(null);
+  let sessionRows = $state<SessionRow[]>([]);
   $effect(() =>
-    session?.subscribe((r) => {
-      sessionRow = r;
+    sessions?.subscribe((r) => {
+      sessionRows = r;
     }),
   );
+  /** A session row picked with a click, for Delete or the remove button. */
+  let pickedSession = $state<string | null>(null);
+  $effect(() => {
+    if (pickedSession && !sessionRows.some((r) => r.id === pickedSession)) pickedSession = null;
+  });
+  $effect(() => {
+    // Picking files drops the session pick.
+    if (snap?.selected.size) pickedSession = null;
+  });
 
   let snap = $state<MediaPoolState | null>(null);
   $effect(() =>
@@ -165,6 +176,12 @@
   }
 
   function onListKey(e: KeyboardEvent) {
+    if (pickedSession && (e.key === "Delete" || e.key === "Backspace")) {
+      e.preventDefault();
+      e.stopPropagation();
+      onCloseSession(pickedSession);
+      return;
+    }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
     let id: string | null;
@@ -402,10 +419,10 @@
     <button
       type="button"
       class="tool"
-      title={tip("Remove from Session", "edit.delete")}
-      aria-label="Remove from Session"
-      disabled={!counts.selected}
-      onclick={() => run("edit.delete")}
+      title={pickedSession ? "Close the picked session (asks to save first)" : tip("Remove from Session", "edit.delete")}
+      aria-label={pickedSession ? "Close Session" : "Remove from Session"}
+      disabled={!counts.selected && !pickedSession}
+      onclick={() => (pickedSession ? onCloseSession(pickedSession) : run("edit.delete"))}
     >
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" />
@@ -446,24 +463,41 @@
     onpointerdown={onBlankPointer}
   >
     {#if pickBox}<div class="pick-box" style:left="{pickBox.x}px" style:top="{pickBox.y}px" style:width="{pickBox.w}px" style:height="{pickBox.h}px"></div>{/if}
-    {#if sessionRow}
+    {#each sessionRows as sr (sr.id)}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="row session"
-        class:active={sessionRow.active}
+        class:active={sr.active}
+        class:behind={!sr.front}
         role="option"
         tabindex="-1"
-        aria-selected="false"
-        title="The open multitrack session. Double-click to show it in the Multitrack view."
-        ondblclick={() => onOpenSession()}
+        aria-selected={pickedSession === sr.id}
+        title={sr.front ? "The multitrack session in front. Double-click to show it in the Multitrack view; Delete closes it." : "An open session set aside. Double-click to bring it to the front; Delete closes it."}
+        onclick={() => {
+          pickedSession = sr.id;
+          pool.setSelection([]);
+          list?.focus();
+        }}
+        ondblclick={() => onOpenSession(sr.id)}
       >
-        <span class="col name"><span class="sicon" aria-hidden="true">▤</span>{sessionRow.name}{sessionRow.dirty ? " *" : ""}</span>
-        <span class="col status ready"><span class="dot" aria-hidden="true"></span>Session</span>
-        <span class="col num duration">{sessionDuration(sessionRow.seconds)}</span>
-        <span class="col num rate">{formatRate(sessionRow.sampleRate)}</span>
-        <span class="col channels"></span>
+        <span class="col name"><span class="sicon" aria-hidden="true">▤</span>{sr.name}{sr.dirty ? " *" : ""}</span>
+        <span class="col status ready"><span class="dot" aria-hidden="true"></span>{sr.front ? "Session" : "Open"}</span>
+        <span class="col num duration">{sessionDuration(sr.seconds)}</span>
+        <span class="col num rate">{formatRate(sr.sampleRate)}</span>
+        <span class="col channels">
+          <button
+            type="button"
+            class="sclose"
+            title="Close {sr.name} (asks to save first)"
+            aria-label="Close {sr.name}"
+            onclick={(e) => {
+              e.stopPropagation();
+              onCloseSession(sr.id);
+            }}>×</button
+          >
+        </span>
       </div>
-    {/if}
+    {/each}
     {#each visible as it (it.id)}
       <div
         class="row"
@@ -554,6 +588,34 @@
   }
   .row.session.active .name {
     color: var(--accent);
+  }
+  .row.session.behind .name {
+    font-weight: normal;
+    color: var(--text-dim);
+  }
+  .row.session[aria-selected="true"] {
+    background: var(--selection, rgba(63, 169, 245, 0.18));
+  }
+  .sclose {
+    visibility: hidden;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    line-height: 14px;
+    cursor: pointer;
+  }
+  .row.session:hover .sclose,
+  .row.session[aria-selected="true"] .sclose {
+    visibility: visible;
+  }
+  .sclose:hover {
+    background: var(--surface-3, #333);
+    color: var(--text);
   }
   .sicon {
     margin-right: 5px;

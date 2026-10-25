@@ -24,6 +24,10 @@ use serde::{Deserialize, Serialize};
 pub const CONTROL: u8 = 1;
 pub const AUDIO: u8 = 2;
 
+fn is_zero(v: &u64) -> bool {
+    *v == 0
+}
+
 /// Largest block a host processes in one call. Bigger blocks are split.
 pub const MAX_BLOCK: usize = 8_192;
 
@@ -228,8 +232,12 @@ pub enum Request {
     /// Asks for the plug-in's settings as a [`Message::State`].
     GetState,
     /// Opens the plug-in's own window, or brings it to the front.
+    /// `owner` is the editor's main window (a Windows window handle; 0
+    /// for none): the plug-in window stays above it.
     OpenEditor {
         title: String,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        owner: u64,
     },
     CloseEditor,
     /// The session's tempo, told to the plug-in with every block.
@@ -539,6 +547,7 @@ mod tests {
     fn json_messages_are_tagged() {
         let r = Request::OpenEditor {
             title: "Vocal".into(),
+            owner: 0,
         };
         assert_eq!(
             serde_json::to_string(&r).unwrap(),

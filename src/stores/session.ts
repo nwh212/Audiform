@@ -367,6 +367,8 @@ export interface ClipChange {
   audio_type?: AudioType;
   /** Clears the audio type. */
   clear_audio_type?: boolean;
+  /** Place in the track's stacking order after the change: 0 is the bottom; past the end is the top. */
+  layer?: number;
 }
 
 export interface ClipSpec {

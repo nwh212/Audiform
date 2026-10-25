@@ -282,10 +282,13 @@ impl Host {
         }
     }
 
-    pub fn open_window(&mut self, title: &str) -> Result<(), String> {
+    /// Opens the plug-in's window, owned by `owner` (the main window's
+    /// handle on Windows, 0 for none) so it stays above it.
+    pub fn open_window(&mut self, title: &str, owner: u64) -> Result<(), String> {
         match self.request(
             &Request::OpenEditor {
                 title: title.into(),
+                owner,
             },
             REQUEST_TIMEOUT,
         ) {

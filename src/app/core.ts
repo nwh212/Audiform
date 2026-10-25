@@ -427,6 +427,21 @@ export interface SessionResult<T> {
   missing: string[];
 }
 
+/** Sets a copy of the session in front aside, so another can take its place. */
+export function sessionPark(): Promise<void> {
+  return invoke<void>("session_park");
+}
+
+/** Brings a set-aside session to the front. */
+export function sessionResume<T>(id: string): Promise<SessionResult<T>> {
+  return invoke<SessionResult<T>>("session_resume", { id });
+}
+
+/** Drops a set-aside session. */
+export function sessionForget(id: string): Promise<void> {
+  return invoke<void>("session_forget", { id });
+}
+
 export function sessionNew<T>(options: NewSessionOptions = {}): Promise<SessionResult<T>> {
   return invoke<SessionResult<T>>("session_new", { options });
 }

@@ -209,16 +209,36 @@ pub fn plugins_set_folder(path: PathBuf, on: bool) -> RegistryView {
 /// Opens a plug-in's own window (starting the plug-in if it is not
 /// running yet), or brings it to the front.
 #[tauri::command]
-pub async fn plugin_open_window(slot: EffectSlot, title: String) -> Result<(), String> {
+pub async fn plugin_open_window(
+    app: tauri::AppHandle,
+    slot: EffectSlot,
+    title: String,
+) -> Result<(), String> {
+    let owner = main_window_handle(&app);
     spawn_blocking(move || {
         let rate = crate::engine::output::device_rate();
         let host = instance::host_for(&slot, rate)
             .ok_or("The plug-in is not installed or would not start.")?;
         let mut h = host.lock().map_err(|e| e.to_string())?;
-        h.open_window(&title)
+        h.open_window(&title, owner)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The main window's handle on Windows, for plug-in windows to belong to.
+#[cfg(windows)]
+fn main_window_handle(app: &tauri::AppHandle) -> u64 {
+    use tauri::Manager;
+    app.get_webview_window("main")
+        .and_then(|w| w.hwnd().ok())
+        .map(|h| h.0 as usize as u64)
+        .unwrap_or(0)
+}
+
+#[cfg(not(windows))]
+fn main_window_handle(_app: &tauri::AppHandle) -> u64 {
+    0
 }
 
 #[tauri::command]

@@ -31,7 +31,8 @@
   import type { EffectSlotDoc, Op } from "../../stores/session";
   import { pluginsVersion } from "../../stores/plugins";
   import { stretchTo } from "./stretch";
-  import { clipsAt, copyMoved, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades, withGroups } from "./clip-edit";
+  import { clipsAt, copyMoved, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades,
+    withLayers, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
   import { addPoint, chipBox, chipLabel, envChange, envName, formatValue, fxChoices, fxLaneOf, fxParam, levelAt, movePoint, pointsOf, rangeOf, restValue, snapValue, valueToY, yToValue, type EnvKind } from "./envelope";
   import LaneCanvas from "./LaneCanvas.svelte";
@@ -1348,6 +1349,7 @@
         if (over) row = d0.tracks.findIndex((t) => t.id === over);
         changes = moveClips(d0, ids, dx, row - startRow, targets, tol).changes;
         if (ed.autoCrossfade) changes = withCrossfades(d0, changes);
+        changes = withLayers(d0, changes);
         // Alt held: the drop makes copies and leaves the originals.
         stretchHint = ev.altKey ? (ids.length > 1 ? `Copy ${ids.length} clips` : "Copy") : null;
       } else if (stretching) {

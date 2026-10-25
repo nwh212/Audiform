@@ -30,6 +30,7 @@ pub fn open(
     _controller: &ComPtr<IEditController>,
     _title: &str,
     _edits: Arc<Mutex<Vec<Edit>>>,
+    _owner: u64,
 ) -> Result<Box<dyn EditorWindow>, String> {
     Err(
         "Plug-in windows open on Windows for now. The plug-in's controls are in its effect window."
@@ -102,6 +103,7 @@ mod win {
         controller: &ComPtr<IEditController>,
         title: &str,
         edits: Arc<Mutex<Vec<Edit>>>,
+        owner: u64,
     ) -> Result<Box<dyn EditorWindow>, String> {
         unsafe {
             let view = ComPtr::<IPlugView>::from_raw(controller.createView(ViewType::kEditor))
@@ -153,7 +155,13 @@ mod win {
                 CW_USEDEFAULT,
                 r.right - r.left,
                 r.bottom - r.top,
-                ptr::null_mut(),
+                // Owned by the editor's main window: it stays above it, and
+                // clicking in the main window never buries it.
+                if owner == 0 {
+                    ptr::null_mut()
+                } else {
+                    owner as usize as _
+                },
                 ptr::null_mut(),
                 hinst,
                 ptr::null(),

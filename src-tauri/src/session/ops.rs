@@ -210,6 +210,11 @@ pub struct ClipChange {
     /// Clears the clip's audio type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_audio_type: Option<bool>,
+    /// Where the clip sits in its track's stacking order after the change:
+    /// 0 is the bottom; past the end puts it on top. Later clips play over
+    /// earlier ones where they overlap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<u32>,
 }
 
 /// Changes to one marker. Fields left out are unchanged.
@@ -1333,10 +1338,23 @@ fn set_clip(s: &mut Session, ch: &ClipChange) -> Result<ClipChange, OpError> {
         }
     }
 
+    let mut at = (ti, ci);
     if let Some(to) = to_track.filter(|t| *t != ti) {
         let clip = s.tracks[ti].clips.remove(ci);
         s.tracks[to].clips.push(clip);
         inv.track_id = Some(s.tracks[ti].id);
+        // Undo puts it back where it was in the old track's order.
+        inv.layer = Some(ci as u32);
+        at = (to, s.tracks[to].clips.len() - 1);
+    }
+    if let Some(layer) = ch.layer {
+        let (t, i) = at;
+        let clip = s.tracks[t].clips.remove(i);
+        let to = (layer as usize).min(s.tracks[t].clips.len());
+        s.tracks[t].clips.insert(to, clip);
+        if inv.layer.is_none() {
+            inv.layer = Some(i as u32);
+        }
     }
     Ok(inv)
 }
@@ -2185,6 +2203,56 @@ mod tests {
             }],
         };
         assert_eq!(apply(&mut s, &mv), Err(OpError::ClipLocked));
+    }
+
+    #[test]
+    fn layer_moves_a_clip_in_the_stacking_order_and_undo_puts_it_back() {
+        let mut s = Session::new("t", 48_000);
+        let (t, m) = (new_id(), new_id());
+        let ids = [new_id(), new_id(), new_id()];
+        let mut ops = vec![
+            Op::AddMedia { media: media(m) },
+            Op::AddTrack {
+                id: t,
+                name: "T".into(),
+                stereo: false,
+                index: 0,
+                midi: false,
+            },
+        ];
+        ops.push(Op::AddClips {
+            track_id: t,
+            clips: ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| ClipSpec {
+                    id: *id,
+                    name: "c".into(),
+                    media_id: m,
+                    start: i as u64 * 1000,
+                    source_in: 0,
+                    source_out: 10_000,
+                })
+                .collect(),
+        });
+        apply(&mut s, &Op::Batch { ops }).unwrap();
+        let order = |s: &Session| s.tracks[0].clips.iter().map(|c| c.id).collect::<Vec<_>>();
+        let before = order(&s);
+        let inv = apply(
+            &mut s,
+            &Op::SetClips {
+                changes: vec![ClipChange {
+                    id: ids[0],
+                    start: Some(5_000),
+                    layer: Some(u32::MAX),
+                    ..ClipChange::default()
+                }],
+            },
+        )
+        .unwrap();
+        assert_eq!(order(&s), vec![ids[1], ids[2], ids[0]], "moved to the top");
+        apply(&mut s, &inv).unwrap();
+        assert_eq!(order(&s), before, "undo restores the order");
     }
 
     #[test]

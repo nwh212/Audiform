@@ -30,6 +30,7 @@ pub fn run() {
         .manage(commands::batch::BatchCancel::default())
         .manage(commands::wave::OpenWave::default())
         .manage(commands::wave::ParkedWaves::default())
+        .manage(commands::session::ParkedSessions::default())
         .manage(commands::wave::Playing::default())
         .setup(|app| {
             use tauri::Manager;
@@ -117,6 +118,9 @@ pub fn run() {
             commands::session::session_apply,
             commands::session::session_set_view,
             commands::session::session_new,
+            commands::session::session_park,
+            commands::session::session_resume,
+            commands::session::session_forget,
             commands::session::session_save,
             commands::session::session_open,
             commands::session::session_autosave,

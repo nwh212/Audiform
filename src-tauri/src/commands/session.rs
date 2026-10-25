@@ -24,8 +24,72 @@ pub struct OpenState {
     pub path: Option<PathBuf>,
 }
 
-/// The open session. One at a time in P1.
+/// The session in front. Others the person has open wait in
+/// [`ParkedSessions`] until they switch back.
 pub struct OpenSession(pub Mutex<OpenState>);
+
+/// Open sessions set aside (with their unsaved edits) while another one
+/// is in front.
+#[derive(Default)]
+pub struct ParkedSessions(pub Mutex<Vec<OpenState>>);
+
+/// Sets a copy of the session in front aside, keyed by its id, before
+/// another session takes its place (New Session, Open, switching).
+#[tauri::command]
+pub fn session_park(
+    app: AppHandle,
+    open: State<'_, OpenSession>,
+    parked: State<'_, ParkedSessions>,
+) -> Result<(), String> {
+    app.state::<crate::engine::Transport>().stop();
+    let s = open.0.lock().map_err(|e| e.to_string())?;
+    let mut p = parked.0.lock().map_err(|e| e.to_string())?;
+    p.retain(|x| x.session.id != s.session.id);
+    p.push(OpenState {
+        session: s.session.clone(),
+        path: s.path.clone(),
+    });
+    Ok(())
+}
+
+/// Brings a set-aside session to the front. The one in front should be
+/// parked (or closed) first.
+#[tauri::command]
+pub fn session_resume(
+    app: AppHandle,
+    open: State<'_, OpenSession>,
+    parked: State<'_, ParkedSessions>,
+    id: crate::session::model::Id,
+) -> Result<SessionWithPath, String> {
+    app.state::<crate::engine::Transport>().stop();
+    let mut p = parked.0.lock().map_err(|e| e.to_string())?;
+    let i = p
+        .iter()
+        .position(|x| x.session.id == id)
+        .ok_or("That session is not open any more.")?;
+    let back = p.remove(i);
+    let mut s = open.0.lock().map_err(|e| e.to_string())?;
+    *s = back;
+    Ok(SessionWithPath {
+        session: s.session.clone(),
+        path: s.path.clone(),
+        missing: Vec::new(),
+    })
+}
+
+/// Drops a set-aside session and its unsaved edits.
+#[tauri::command]
+pub fn session_forget(
+    parked: State<'_, ParkedSessions>,
+    id: crate::session::model::Id,
+) -> Result<(), String> {
+    parked
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .retain(|x| x.session.id != id);
+    Ok(())
+}
 
 impl Default for OpenSession {
     fn default() -> Self {

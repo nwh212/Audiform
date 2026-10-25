@@ -126,6 +126,9 @@
     sessionClearAutosave,
     sessionDiscardRecovery,
     sessionNew,
+    sessionPark,
+    sessionResume,
+    sessionForget,
     mediaCopyIn,
     waveChannelEdit,
     sessionOpen,
@@ -1525,7 +1528,12 @@
       pickOpen: () => sessionPickOpen(false),
       pickSesx: () => sessionPickOpen(true),
       importSesx: (p) => sessionImportSesx<SessionDoc>(p),
+      park: () => sessionPark(),
+      resume: (id) => sessionResume<SessionDoc>(id),
+      forget: (id) => sessionForget(id),
     },
+    beforePark: () => pluginSync.captureAll(),
+    onSessions: () => updateTitle(),
     session,
     pool: mediaPool,
     stack: sessionHistory,
@@ -1582,22 +1590,17 @@
     dock.setTitle("editor", what ? `Editor - ${what}${inWave() ? "" : files.unsaved ? " *" : ""}` : "Editor");
   }
   /** The open session as a row at the top of the Files panel. */
-  const sessionRow = writable<SessionRow | null>(null);
+  const sessionRows = writable<SessionRow[]>([]);
   function updateSessionRow() {
     const d = session.current;
-    if (!d) {
-      sessionRow.set(null);
-      return;
-    }
+    const rows: SessionRow[] = [];
     // A never-saved session with nothing in it (files imported only) is not listed as "Untitled Session".
-    if (session.isScratch(d)) {
-      if (get(sessionRow)) sessionRow.set(null);
-      return;
+    if (d && !session.isScratch(d)) {
+      rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true });
     }
-    const seconds = sessionEnd(d) / Math.max(1, d.sample_rate);
-    const row: SessionRow = { name: files.name, dirty: files.unsaved, seconds, sampleRate: d.sample_rate, active: !inWave() };
-    const cur = get(sessionRow);
-    if (!cur || cur.name !== row.name || cur.dirty !== row.dirty || cur.seconds !== row.seconds || cur.sampleRate !== row.sampleRate || cur.active !== row.active) sessionRow.set(row);
+    for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false });
+    const cur = get(sessionRows);
+    if (JSON.stringify(cur) !== JSON.stringify(rows)) sessionRows.set(rows);
   }
   function updateTitle() {
     updateSessionRow();
@@ -1611,6 +1614,18 @@
 
   async function exitSafely() {
     if (!(await files.confirmDiscard())) return;
+    const sessionsLeft = files.others.filter((p) => p.dirty).map((p) => p.name);
+    if (sessionsLeft.length) {
+      const v = await ask(
+        "Other sessions have unsaved changes",
+        `${sessionsLeft.join(", ")} ${sessionsLeft.length === 1 ? "has" : "have"} unsaved changes. Double-click ${sessionsLeft.length === 1 ? "it" : "each one"} in the Files panel to save, or quit without saving. Recovery copies are kept either way.`,
+        [
+          { label: "Cancel", value: "cancel", primary: true },
+          { label: "Quit Without Saving", value: "quit" },
+        ],
+      );
+      if (v !== "quit") return;
+    }
     if (!(await confirmWaveDiscard())) return;
     const others = parkedUnsaved();
     if (others.length) {
@@ -1655,8 +1670,13 @@
             shortcutFor,
             onDropPaths: (paths: string[]) => void importPaths(paths).catch(showError),
             onOpen: (path: string) => void openInWaveform(path),
-            session: sessionRow,
-            onOpenSession: () => void actions.run("view.editor.multitrack"),
+            sessions: sessionRows,
+            onOpenSession: (id: string) =>
+              void files
+                .switchTo(id)
+                .then(() => actions.run("view.editor.multitrack"))
+                .catch(showError),
+            onCloseSession: (id: string) => void files.closeSession(id).catch(showError),
           },
         };
       case "drive-manager":
@@ -4201,7 +4221,7 @@
       actions.register({ id: "file.save-all", run: () => files.save().then(() => undefined) }),
       actions.register({ id: "file.close", run: () => files.close().then(() => undefined) }),
       actions.register({ id: "file.import-sesx", run: () => files.importSesx().then(() => undefined) }),
-      actions.register({ id: "file.close-all", run: () => files.close().then(() => undefined) }),
+      actions.register({ id: "file.close-all", run: () => files.closeAll().then(() => undefined) }),
       actions.register({
         id: "file.recent.none",
         run: () => {},

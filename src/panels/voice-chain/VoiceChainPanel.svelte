@@ -161,8 +161,11 @@
     prefs.set(KEY_TAB, t);
   }
 
-  // What the chain belongs to.
-  const oneClip = $derived(ed.selectedClips.size === 1 ? [...ed.selectedClips][0]! : null);
+  // What the chain belongs to. While an effect's window is open, the panel
+  // stays on that chain, so clicking another track or clip in the editor
+  // does not take the window away.
+  let hold = $state<{ owner: string | null; clip: string | null } | null>(null);
+  const oneClip = $derived(hold ? hold.clip : ed.selectedClips.size === 1 ? [...ed.selectedClips][0]! : null);
   const clipTrack = $derived(oneClip ? doc?.tracks.find((t) => t.clips.some((c) => c.id === oneClip)) : undefined);
   // The track picked in the panel wins; otherwise the selected track,
   // the selected clip's track, or the first track, so the chain is never
@@ -172,19 +175,23 @@
   // selection, not on every editor update.
   const selTrack = $derived(ed.selectedTrack);
   $effect(() => {
-    // A new selection in the editor takes over from the panel's pick.
+    // A new selection in the editor takes over from the panel's pick (not while a window holds it).
     void selTrack;
     void oneClip;
-    pickedTrack = null;
+    if (!hold) pickedTrack = null;
   });
   const track = $derived(
-    doc?.tracks.find((t) => t.id === pickedTrack) ?? doc?.tracks.find((t) => t.id === ed.selectedTrack) ?? clipTrack ?? doc?.tracks[0],
+    (hold ? doc?.tracks.find((t) => t.id === hold!.owner) : undefined) ??
+      doc?.tracks.find((t) => t.id === pickedTrack) ??
+      doc?.tracks.find((t) => t.id === ed.selectedTrack) ??
+      clipTrack ??
+      doc?.tracks[0],
   );
   const clip = $derived(oneClip ? clipTrack?.clips.find((c) => c.id === oneClip) : undefined);
   const inWave = $derived(ed.mode === "waveform");
   const waveTrack = $derived(waveDoc?.tracks[0]);
   // Track Effects also shows a bus's or the master's chain, picked here or in the Mixer.
-  const ownerId = $derived(pickedTrack ?? ed.selectedTrack);
+  const ownerId = $derived(hold ? hold.owner : (pickedTrack ?? ed.selectedTrack));
   const onTrackTab = $derived(!inWave && tab === "track");
   const bus = $derived(onTrackTab ? doc?.buses?.find((b) => b.id === ownerId) : undefined);
   const onMaster = $derived(onTrackTab && !!doc && ownerId === MASTER_ID);
@@ -233,6 +240,11 @@
     selectedSlot = id;
     winOpen = true;
   }
+  // Hold the chain while a window is open; let go when it closes.
+  $effect(() => {
+    if (winOpen && !hold) hold = { owner: onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null), clip: tab === "clip" ? (clip?.id ?? null) : null };
+    if (!winOpen && hold) hold = null;
+  });
   // Effects added from the Effects menu open here too.
   $effect(() => {
     const id = $effectWindowRequest;

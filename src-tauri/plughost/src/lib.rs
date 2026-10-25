@@ -280,7 +280,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     },
                 ),
             },
-            ToMain::Request(Request::OpenEditor { title }) => {
+            ToMain::Request(Request::OpenEditor { title, owner }) => {
                 if let Some(w) = window.as_mut() {
                     w.raise();
                     send(out, &Message::Ok);
@@ -290,7 +290,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     .as_ref()
                     .and_then(|p| p.controller.as_ref().map(|c| (c, p.edits.clone())))
                 {
-                    Some((c, edits)) => editor::open(c, &title, edits),
+                    Some((c, edits)) => editor::open(c, &title, edits, owner),
                     None => Err("This plug-in has no window of its own.".into()),
                 };
                 match opened {

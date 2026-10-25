@@ -4,6 +4,7 @@
 
 /** The open multitrack session, shown as the first row of the Files panel. */
 export interface SessionRow {
+  id: string;
   name: string;
   dirty: boolean;
   /** Length of the audio in the session, in seconds. */
@@ -11,6 +12,8 @@ export interface SessionRow {
   sampleRate: number;
   /** True while the Multitrack view is showing it. */
   active: boolean;
+  /** In front: the session the Multitrack editor shows. False for sessions set aside. */
+  front: boolean;
 }
 
 /** Seconds as m:ss.mmm (or h:mm:ss.mmm). */

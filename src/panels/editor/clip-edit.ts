@@ -457,7 +457,7 @@ export function previewTracks(doc: SessionDoc, changes: readonly ClipChange[]): 
         clips.push(c);
         continue;
       }
-      const { id: _id, track_id, volume, pan, unloop, unstretch, clear_audio_type, ...rest } = ch;
+      const { id: _id, track_id, volume, pan, unloop, unstretch, clear_audio_type, layer: _layer, ...rest } = ch;
       let next = { ...c, ...rest } as ClipDoc;
       if (unloop) next = { ...next, looped: null };
       if (unstretch) next = { ...next, stretch: null };
@@ -469,7 +469,65 @@ export function previewTracks(doc: SessionDoc, changes: readonly ClipChange[]): 
     }
     return { ...t, clips };
   });
-  return tracks.map((t) => (moved.has(t.id) ? { ...t, clips: [...t.clips, ...moved.get(t.id)!] } : t));
+  const placed = tracks.map((t) => (moved.has(t.id) ? { ...t, clips: [...t.clips, ...moved.get(t.id)!] } : t));
+  const layered = changes.filter((c) => c.layer !== undefined);
+  if (!layered.length) return placed;
+  return placed.map((t) => {
+    let clips = t.clips;
+    for (const ch of layered) {
+      const i = clips.findIndex((c) => c.id === ch.id);
+      if (i < 0) continue;
+      const rest = clips.filter((_, k) => k !== i);
+      rest.splice(Math.min(ch.layer!, rest.length), 0, clips[i]!);
+      clips = rest;
+    }
+    return clips === t.clips ? t : { ...t, clips };
+  });
+}
+
+/** Top of a track's stacking order, for `layer`. */
+export const TOP_LAYER = 4_294_967_295;
+
+/**
+ * Stacking after a move: a dragged clip lands on top of the clips it now
+ * overlaps, unless it was already tucked under one of them on the same
+ * track (then it stays under). Raised clips keep their order among
+ * themselves.
+ */
+export function withLayers(doc: SessionDoc, changes: ClipChange[]): ClipChange[] {
+  const media = mediaOf(doc);
+  const rate = doc.sample_rate;
+  const overlaps = (a: ClipDoc, b: ClipDoc) => a.start < clipEnd(b, media, rate) && b.start < clipEnd(a, media, rate);
+  const where = new Map<string, { track: string; index: number }>();
+  doc.tracks.forEach((t) => t.clips.forEach((c, index) => where.set(c.id, { track: t.id, index })));
+  const after = previewTracks(doc, changes);
+  const raise: { ch: ClipChange; order: [number, number] }[] = [];
+  const keep: ClipChange[] = [];
+  const trackOrder = new Map(doc.tracks.map((t, i) => [t.id, i]));
+  for (const ch of changes) {
+    const was = where.get(ch.id);
+    const moves = ch.start !== undefined || (ch.track_id !== undefined && ch.track_id !== was?.track);
+    const t = after.find((x) => x.clips.some((c) => c.id === ch.id));
+    const clip = t?.clips.find((c) => c.id === ch.id);
+    if (!moves || !was || !t || !clip) {
+      keep.push(ch);
+      continue;
+    }
+    const now = t.clips.filter((c) => c.id !== ch.id && overlaps(c, clip));
+    if (!now.length) {
+      keep.push(ch);
+      continue;
+    }
+    const before = doc.tracks.find((x) => x.id === was.track)!;
+    const old = before.clips[was.index]!;
+    // Clips it was tucked under before the move, on the same track.
+    const over = new Set(before.clips.filter((c, i) => i > was.index && overlaps(c, old)).map((c) => c.id));
+    const tucked = t.id === was.track && now.some((c) => over.has(c.id));
+    if (tucked) keep.push(ch);
+    else raise.push({ ch: { ...ch, layer: TOP_LAYER }, order: [trackOrder.get(was.track) ?? 0, was.index] });
+  }
+  raise.sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1]);
+  return [...keep, ...raise.map((r) => r.ch)];
 }
 
 export class LockedError extends Error {
@@ -649,8 +707,11 @@ export function pasteClips(doc: SessionDoc, board: ClipBoard, at: number, row: n
 /**
  * Automatic crossfades: after `changes`, wherever a changed clip
  * overlaps another clip on the same track, the earlier clip fades out
- * and the later one fades in across the overlap. Returns `changes` with
- * the fades merged in.
+ * and the later one fades in across the overlap. A clip that ends up
+ * wholly inside another is layered on top, with no crossfade, and a
+ * crossfade made earlier for an overlap that is gone now (exactly as
+ * long as that overlap was) is taken away. Returns `changes` with the
+ * fades merged in.
  */
 export function withCrossfades(doc: SessionDoc, changes: ClipChange[]): ClipChange[] {
   if (changes.length === 0) return changes;
@@ -664,7 +725,30 @@ export function withCrossfades(doc: SessionDoc, changes: ClipChange[]): ClipChan
     if (base.length === length) return;
     merged.set(c.id, { ...cur, [which]: { ...base, length, shape: base.length === 0 ? settings.current.fadeShape : base.shape } });
   };
-  for (const t of previewTracks(doc, changes)) {
+  // Crossfades the old overlaps made: a fade exactly as long as the overlap on both clips.
+  const oldIn = new Set<string>();
+  const oldOut = new Set<string>();
+  for (const t of doc.tracks) {
+    const clips = [...t.clips].sort((a, b) => a.start - b.start);
+    for (let i = 0; i < clips.length; i++) {
+      for (let j = i + 1; j < clips.length; j++) {
+        const a = clips[i]!;
+        const b = clips[j]!;
+        const aEnd = clipEnd(a, media, rate);
+        if (b.start >= aEnd) break;
+        if (!touched.has(a.id) && !touched.has(b.id)) continue;
+        const overlap = aEnd - b.start;
+        if (clipEnd(b, media, rate) > aEnd && a.fade_out.length === overlap && b.fade_in.length === overlap) {
+          oldOut.add(a.id);
+          oldIn.add(b.id);
+        }
+      }
+    }
+  }
+  const newIn = new Set<string>();
+  const newOut = new Set<string>();
+  const after = previewTracks(doc, changes);
+  for (const t of after) {
     const clips = [...t.clips].sort((a, b) => a.start - b.start);
     for (let i = 0; i < clips.length; i++) {
       for (let j = i + 1; j < clips.length; j++) {
@@ -679,9 +763,15 @@ export function withCrossfades(doc: SessionDoc, changes: ClipChange[]): ClipChan
         const overlap = aEnd - b.start;
         setFade(a, "fade_out", overlap);
         setFade(b, "fade_in", overlap);
+        newOut.add(a.id);
+        newIn.add(b.id);
       }
     }
   }
+  // Take away crossfades whose overlap is gone.
+  const byId = new Map(after.flatMap((t) => t.clips.map((c) => [c.id, c] as const)));
+  for (const id of oldIn) if (!newIn.has(id) && byId.has(id)) setFade(byId.get(id)!, "fade_in", 0);
+  for (const id of oldOut) if (!newOut.has(id) && byId.has(id)) setFade(byId.get(id)!, "fade_out", 0);
   return [...merged.values()];
 }
 
@@ -785,7 +875,7 @@ export function copyMoved(doc: SessionDoc, moving: readonly string[], changes: r
     const track = doc.tracks.find((t) => t.clips.some((c) => c.id === ch.id));
     const clip = track?.clips.find((c) => c.id === ch.id);
     if (!track || !clip) continue;
-    const { id: _id, track_id, ungroup: _ungroup, group: _group, ...fields } = ch;
+    const { id: _id, track_id, ungroup: _ungroup, group: _group, layer: _layer, ...fields } = ch;
     const id = newId();
     let group: string | null = null;
     if (clip.group) {

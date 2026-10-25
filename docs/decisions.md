@@ -1252,3 +1252,18 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **What.** Settings > Effects > "Mix down sessions that use VST3 plug-ins in real time" (off by default). With it on, any mixdown, stem export or Mix Down to New File of a session with VST3 plug-ins runs at playback speed, a block ahead of the clock, as playback does. Some plug-ins only work at normal speed: pitch correction, immersive panners and other tools that follow the clock or talk to each other while playing. Mixdowns already save every plug-in's latest settings first; this changes only the pace. Built-in effects never need it, so it stays off by default: with it on, an hour of audio takes an hour to export.
 - **Not covered yet.** Plug-ins whose output has more than two channels (immersive beds and objects) are heard as stereo, as in playback; hosting multichannel buses is a separate piece of work.
+
+## 2026-10-25: Clip stacking when dragging, and leftover crossfades
+
+- **Stacking.** Where clips on a track overlap, the one higher in the stack plays and the ones under it come through only where it fades. A clip you drag lands on top of the clips it now overlaps, unless it was already tucked under one of them on the same track; then it stays under. Drag it off and back on and it goes over. Clip changes carry an optional `layer` (place in the track's stacking order), which undo restores; moving a clip to another track and undoing now also puts it back in its old place in the order.
+- **Crossfades.** An automatic crossfade made while a clip overlapped another's edge is taken away once that overlap is gone, for example when the clip is dragged wholly inside the other (it then simply covers it) or clear of it. Only fades exactly as long as the old overlap count as automatic, so fades you set yourself stay.
+
+## 2026-10-25: Several sessions open at once
+
+- **What.** New Session, Open and Import Session no longer close the session in front: it is set aside with its unsaved changes and its undo history, and listed under it in the Files panel (in plain text, status "Open"). Double-click a session row to bring it to the front. Click a session row and press Delete, use the remove button, or the × on the row, to close it; it asks to save first if it has changes. Closing the session in front brings the last one set aside forward, or starts a blank session when none is left. File > Close All closes them one by one, asking for each. Opening a session that is already open brings it forward instead of opening it twice. Quitting warns about sessions set aside with unsaved changes. A blank session nobody has touched is dropped rather than kept.
+- **How.** The core keeps the sessions set aside (`ParkedSessions`, `session_park`, `session_resume`, `session_forget`); the interface keeps their undo histories (`UndoStack.stash`/`restore`, as the Waveform editor does for its files). Setting a session aside first fetches plug-in settings and writes a recovery copy if it has unsaved changes. Playback stops on a switch. The Files panel keeps every session's audio files listed, as before.
+
+## 2026-10-25: Effect and plug-in windows stay put
+
+- **Effect windows.** While an effect's window is open, the Voice Chain panel stays on that effect's chain, so clicking another track or clip in the editor no longer takes the window away. Closing the window lets the panel follow the selection again.
+- **Plug-in windows (Windows).** A VST3 plug-in's own window now belongs to the main window: it stays above it when you click in the main window, and minimizes with it. The plug-in host gets the main window's handle with the open request (`owner`).

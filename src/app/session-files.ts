@@ -16,6 +16,8 @@
 
 import type { NewSessionOptions, Recoverable, SesxReport, SessionResult } from "./core";
 import type { UndoStack } from "../commands";
+import type { StashedHistory } from "../commands/undo-stack";
+import { sessionEnd } from "../stores/session";
 import type { MediaPool } from "../stores/media-pool";
 import type { MediaRefDoc, SessionDoc, SessionStore } from "../stores/session";
 
@@ -35,6 +37,23 @@ export interface SessionFileBackend {
   pickOpen(): Promise<string | null>;
   pickSesx(): Promise<string | null>;
   importSesx(path: string): Promise<SessionResult<SessionDoc> & { report: SesxReport }>;
+  /** Sets a copy of the session in front aside, so another can take its place. Without these, one session at a time. */
+  park?(): Promise<void>;
+  /** Brings a set-aside session to the front. */
+  resume?(id: string): Promise<SessionResult<SessionDoc>>;
+  /** Drops a set-aside session. */
+  forget?(id: string): Promise<void>;
+}
+
+/** An open session waiting behind the one in front, with its undo history. */
+export interface ParkedSession {
+  id: string;
+  name: string;
+  path: string | null;
+  dirty: boolean;
+  seconds: number;
+  sampleRate: number;
+  history: StashedHistory;
 }
 
 export type Choice = "save" | "discard" | "cancel";
@@ -56,6 +75,10 @@ export interface SessionFilesDeps {
   libraries?(): string[];
   /** Runs just before saving to `target` (the session file): copies audio into its folder. */
   beforeSave?(target: string): Promise<void>;
+  /** Runs before the session in front is set aside (fetches plug-in settings). */
+  beforePark?(): Promise<void>;
+  /** The list of open sessions changed. */
+  onSessions?(): void;
 }
 
 export { isBlank } from "../stores/session";
@@ -93,6 +116,7 @@ export function sesxSummary(r: SesxReport): string {
 
 export class SessionFiles {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private parked: ParkedSession[] = [];
 
   constructor(private readonly d: SessionFilesDeps) {}
 
@@ -145,17 +169,71 @@ export class SessionFiles {
     return true;
   }
 
+  /** Sessions open behind the one in front, oldest first. */
+  get others(): readonly ParkedSession[] {
+    return this.parked;
+  }
+
+  /** Several sessions can be open at once (the core supports setting them aside). */
+  private get multi(): boolean {
+    return !!(this.d.backend.park && this.d.backend.resume);
+  }
+
+  /**
+   * Makes room for another session: sets the one in front aside with its
+   * edits and history, or, with one session at a time, asks to save it.
+   * A blank session nobody has touched is simply dropped.
+   */
+  private async makeRoom(): Promise<boolean> {
+    if (!this.multi) return this.confirmDiscard();
+    const doc = this.d.session.current;
+    if (!doc || this.d.session.isScratch()) return true;
+    await this.d.beforePark?.().catch(() => {});
+    const dirty = this.unsaved;
+    // Unsaved work set aside still gets a recovery copy.
+    if (dirty) await this.autosaveNow();
+    await this.d.backend.park!();
+    const history = await this.d.stack.stash();
+    this.parked = [
+      ...this.parked.filter((p) => p.id !== doc.id),
+      { id: doc.id, name: this.name, path: this.d.session.path, dirty, seconds: sessionEnd(doc) / Math.max(1, doc.sample_rate), sampleRate: doc.sample_rate, history },
+    ];
+    this.d.onSessions?.();
+    return true;
+  }
+
+  /** Brings an open session to the front, setting the current one aside. */
+  async switchTo(id: string): Promise<boolean> {
+    if (this.d.session.current?.id === id) return true;
+    const p = this.parked.find((x) => x.id === id);
+    if (!p || !this.multi) return false;
+    if (!(await this.makeRoom())) return false;
+    const r = await this.d.backend.resume!(id);
+    this.parked = this.parked.filter((x) => x.id !== id);
+    this.d.session.set(r.session, r.path);
+    this.d.pool.merge(r.session.media.map((m) => ({ id: m.id, path: m.path })));
+    await this.d.stack.restore(p.history);
+    this.d.onReplaced?.(r.session);
+    this.d.onSessions?.();
+    return true;
+  }
+
   async newSession(options?: NewSessionOptions): Promise<boolean> {
-    if (!(await this.confirmDiscard())) return false;
+    if (!(await this.makeRoom())) return false;
     const r = await this.d.backend.create(options);
     await this.replace(r, "New Session", false);
     return true;
   }
 
   async open(path?: string): Promise<boolean> {
-    if (!(await this.confirmDiscard())) return false;
     const target = path ?? (await this.d.backend.pickOpen());
     if (!target) return false;
+    // Already open: bring it to the front.
+    const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
+    if (key(this.d.session.path) === key(target)) return true;
+    const already = this.parked.find((p) => key(p.path) === key(target));
+    if (already) return this.switchTo(already.id);
+    if (!(await this.makeRoom())) return false;
     let r: SessionResult<SessionDoc>;
     try {
       r = await this.d.backend.open(target);
@@ -170,7 +248,7 @@ export class SessionFiles {
 
   /** Brings in a .sesx session as a new, unsaved session. */
   async importSesx(path?: string): Promise<boolean> {
-    if (!(await this.confirmDiscard())) return false;
+    if (!(await this.makeRoom())) return false;
     const target = path ?? (await this.d.backend.pickSesx());
     if (!target) return false;
     const r = await this.d.backend.importSesx(target);
@@ -180,8 +258,39 @@ export class SessionFiles {
     return true;
   }
 
+  /**
+   * Closes the session in front (asking to save first). Another open
+   * session comes to the front, or a new blank one when it was the last.
+   */
   async close(): Promise<boolean> {
-    return this.newSession();
+    if (!(await this.confirmDiscard())) return false;
+    const next = this.parked[this.parked.length - 1];
+    if (next && this.multi) {
+      const r = await this.d.backend.resume!(next.id);
+      this.parked = this.parked.filter((x) => x.id !== next.id);
+      this.d.session.set(r.session, r.path);
+      this.d.pool.merge(r.session.media.map((m) => ({ id: m.id, path: m.path })));
+      await this.d.stack.restore(next.history);
+      this.d.onReplaced?.(r.session);
+      this.d.onSessions?.();
+      return true;
+    }
+    const r = await this.d.backend.create();
+    await this.replace(r, "New Session", false);
+    this.d.onSessions?.();
+    return true;
+  }
+
+  /** Closes one open session, in front or not. */
+  async closeSession(id: string): Promise<boolean> {
+    if (this.d.session.current?.id !== id && !(await this.switchTo(id))) return false;
+    return this.close();
+  }
+
+  /** Closes every open session, asking to save each. Stops if one is cancelled. */
+  async closeAll(): Promise<boolean> {
+    while (this.parked.length) if (!(await this.close())) return false;
+    return this.close();
   }
 
   /** Saves to the current file, or asks where on first save. Returns false if cancelled. */
