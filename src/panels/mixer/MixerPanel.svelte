@@ -289,13 +289,14 @@
         <div class="unity" style:bottom="{dbToFader(0) * 100}%"></div>
         <div class="cap" style:bottom="{dbToFader(masterDb) * 100}%"></div>
       </div>
-      {#if bedNames.length > 2 && tp?.bed?.length === bedNames.length}
+      {#if bedNames.length > 2}
         <!-- 3D Space sessions: one bar per speaker channel, named on hover. -->
         <div class="meter bed" aria-hidden="true">
-          {#each tp.bed as m, k (k)}
-            <div class="mbar" title={bedNames[k]}>
+          {#each bedNames as name, k (k)}
+            {@const m = tp?.bed?.length === bedNames.length ? tp.bed[k] : undefined}
+            <div class="mbar" title={name}>
               <div class="mcover" style:height="{100 - levelOf(m)}%"></div>
-              {#if m.peak > 0}<div class="mpeak" style:bottom="{peakOf(m)}%"></div>{/if}
+              {#if (m?.peak ?? 0) > 0}<div class="mpeak" style:bottom="{peakOf(m)}%"></div>{/if}
             </div>
           {/each}
         </div>

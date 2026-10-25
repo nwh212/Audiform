@@ -3,7 +3,8 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Altered Audio Editor.
 
-  A track's level meter: left and right bars on a -60 to 0 dB scale,
+  A track's level meter: left and right bars (or one bar per speaker
+  channel, for the master of a 3D Space session) on a -60 to 0 dB scale,
   green to -12 dB, yellow to -3 dB, red above, with a held peak line and
   an over light per channel that stays lit until clicked. While a track
   is armed it shows the input level instead, on both bars.
@@ -12,22 +13,31 @@
   import { meterFraction, type MeterLevel } from "../../stores/transport";
 
   interface Props {
-    levels: readonly [MeterLevel, MeterLevel] | null;
+    levels: readonly MeterLevel[] | null;
     armed: boolean;
+    /** Channel names, shown on hover, when there are more than two bars. */
+    names?: readonly string[];
     /** Clears the over lights. */
     onClear: () => void;
   }
 
-  const { levels, armed, onClear }: Props = $props();
+  const { levels, armed, onClear, names }: Props = $props();
+  const chans = $derived(Array.from({ length: Math.max(2, levels?.length ?? 2) }, (_, k) => k));
 </script>
 
-<div class="meter" class:armed title={armed ? "Input level" : "Track level. Click a red light to clear it."}>
+<div
+  class="meter"
+  class:armed
+  style:--n={chans.length}
+  style:width={chans.length > 2 ? `${chans.length * 3 + 5}px` : undefined}
+  title={armed ? "Input level" : chans.length > 2 && names ? `Speaker levels: ${names.join(" ")}. Click a red light to clear it.` : "Track level. Click a red light to clear it."}
+>
   <div class="overs">
-    {#each [0, 1] as const as ch (ch)}
+    {#each chans as ch (ch)}
       <button
         type="button"
         class="over"
-        class:on={levels?.[ch].over}
+        class:on={levels?.[ch]?.over}
         aria-label="Clear over lights"
         tabindex="-1"
         onclick={(e) => {
@@ -38,9 +48,9 @@
     {/each}
   </div>
   <div class="bars" aria-hidden="true">
-    {#each [0, 1] as const as ch (ch)}
+    {#each chans as ch (ch)}
       {@const m = levels?.[ch]}
-      <div class="bar">
+      <div class="bar" title={names?.[ch]}>
         <div class="cover" style:height="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
         {#if m && m.peak > 0.001}<div class="peak" style:bottom="{meterFraction(m.peak) * 100}%"></div>{/if}
       </div>
@@ -63,7 +73,7 @@
   .overs,
   .bars {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(var(--n, 2), 1fr);
     gap: 1px;
   }
 

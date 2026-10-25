@@ -60,9 +60,12 @@
   const s = $derived<{ master: [MeterLevel, MeterLevel] } | null>(source === "wave" ? waveS : source === "preview" ? previewS : multiS);
   /** 3D Space sessions: one row per speaker channel of the master. */
   const rows = $derived.by((): { label: string; m: MeterLevel | undefined; name: string }[] => {
-    const bed = source === "multi" ? multiS?.bed : undefined;
+    // A 3D Space session shows every speaker channel, stopped or playing (unless another editor is playing).
     const names = space ? channelNames(space) : [];
-    if (bed && bed.length > 0 && names.length === bed.length) return bed.map((m, k) => ({ label: names[k]!, m, name: `${names[k]} level` }));
+    if (names.length > 2 && source === "multi") {
+      const bed = multiS?.bed ?? [];
+      return names.map((n, k) => ({ label: n, m: bed.length === names.length ? bed[k] : undefined, name: `${n} level` }));
+    }
     return [0, 1].map((ch) => ({ label: ch === 0 ? "L" : "R", m: s?.master[ch], name: ch === 0 ? "Left level" : "Right level" }));
   });
   function clearOver() {
@@ -129,16 +132,32 @@
     background: var(--surface-1);
   }
 
+  /* Every speaker channel shares the panel's height, so all of them fit. */
   .levels.many {
+    grid-template-rows: repeat(var(--rows), minmax(0, 1fr)) auto;
+    align-content: stretch;
     gap: 1px;
+    padding-top: 3px;
+    padding-bottom: 3px;
   }
 
-  .levels.many .bar {
-    height: max(3px, min(9px, calc((100% - 30px) / var(--rows))));
+  .levels.many .row {
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .levels.many .ch {
+  .levels.many .bar,
+  .levels.many .over {
+    height: auto;
+    min-height: 2px;
+    max-height: 9px;
+    align-self: stretch;
+  }
+
+  .levels.many .ch,
+  .levels.many .val {
     font-size: 9px;
+    line-height: 1;
   }
 
   .row,

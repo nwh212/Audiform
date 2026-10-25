@@ -1703,7 +1703,7 @@
       case "levels":
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter, session } };
       case "space":
-        return { component: asComponent(SpacePanel), props: { session, runner: sessionHistory, onError: showError } };
+        return { component: asComponent(SpacePanel), props: { session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown") } };
       case "phase-wheel":
         return { component: asComponent(PhaseWheelPanel), props: { transport, wave: waveTransport } };
       case "batch-convert":

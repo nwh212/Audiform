@@ -22,9 +22,11 @@
     session: SessionStore;
     runner: CommandRunner;
     onError?: (e: unknown) => void;
+    /** Opens Export Mixdown, where the speaker layout for the file is picked. */
+    onExport?: () => void;
   }
 
-  const { session, runner, onError = console.error }: Props = $props();
+  const { session, runner, onError = console.error, onExport }: Props = $props();
 
   let doc = $state<SessionDoc | null>(null);
   $effect(() =>
@@ -210,6 +212,9 @@
         </select>
       </label>
       <span class="spacer"></span>
+      {#if onExport}
+        <button type="button" title="Export the mix in any speaker layout (5.1, 7.1.2, 7.1.4 and so on, one channel per speaker), stereo, or headphones. Pick the layout under Speakers in the export window." onclick={onExport}>Export Mixdown...</button>
+      {/if}
       <button type="button" class="quiet" title="Make it an ordinary stereo session again. Spots are kept, so turning it back on puts everything where it was." onclick={() => setSpace(null, "Make Stereo Session")}>Stereo Session</button>
     </div>
     <div class="body">

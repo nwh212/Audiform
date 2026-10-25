@@ -60,7 +60,8 @@
   import type { WaveFile } from "../../stores/wave";
   import OverviewStrip from "./OverviewStrip.svelte";
   import { KIND_COLORS, markerAt, markerCss } from "../markers/markers";
-  import { type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
+  import { quiet, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
+  import { channelNames } from "../space/space";
   import { defaultTrackColor, trackHeight, formatIn, maxSppFor, rulerTicks, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
 
   interface Props {
@@ -2567,7 +2568,12 @@
               <Dial value={doc.master?.volume_db ?? 0} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={setMasterVolume} />
               <button type="button" class="ms mono check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}>MONO</button>
             </div>
-            <TrackMeter levels={tp?.master ?? null} armed={false} onClear={() => transport.clearOver()} />
+            {#if doc.space && channelNames(doc.space.layout).length > 2}
+              {@const names = channelNames(doc.space.layout)}
+              <TrackMeter levels={tp?.bed?.length === names.length ? tp.bed : names.map(() => quiet())} {names} armed={false} onClear={() => transport.clearOver()} />
+            {:else}
+              <TrackMeter levels={tp?.master ?? null} armed={false} onClear={() => transport.clearOver()} />
+            {/if}
           </div>
         {/if}
       </div>

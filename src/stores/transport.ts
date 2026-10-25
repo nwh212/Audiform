@@ -67,7 +67,7 @@ export function setMeterSpeed(speed: MeterSpeed): void {
   ballistics = BALLISTICS[speed] ?? BALLISTICS.fast;
 }
 
-const quiet = (): MeterLevel => ({ level: 0, peak: 0, over: false });
+export const quiet = (): MeterLevel => ({ level: 0, peak: 0, over: false });
 
 /** One meter reading folded into the last: slow fall, held peak. `hold` counts ticks left. */
 export function foldMeter(prev: MeterLevel, reading: number, hold: number): { meter: MeterLevel; hold: number } {
@@ -180,7 +180,7 @@ export class TransportStore {
   clearOver(trackId?: string): void {
     const off = (m: MeterLevel): MeterLevel => ({ ...m, over: false });
     if (trackId === undefined) {
-      this.set({ master: [off(this.state.master[0]), off(this.state.master[1])] });
+      this.set({ master: [off(this.state.master[0]), off(this.state.master[1])], ...(this.state.bed ? { bed: this.state.bed.map(off) } : {}) });
       return;
     }
     const t = this.state.tracks[trackId];
