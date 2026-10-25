@@ -295,8 +295,12 @@
     width: calc(100% - 4px);
     height: calc(100% - 19px);
   }
+  /* Notes in the clip's own color (its track's, unless the clip has one), outlined so they stand out from the clip body. */
   .notes rect {
-    fill: color-mix(in srgb, var(--clip-color) 40%, white);
+    fill: var(--clip-color);
+    stroke: color-mix(in srgb, var(--clip-color) 35%, white);
+    stroke-width: 0.6px;
+    vector-effect: non-scaling-stroke;
   }
   .lvl {
     position: absolute;

@@ -2616,6 +2616,7 @@
     <PianoRollDialog
       clip={prClip}
       {tempo}
+      color={prClip.color ? (prClip.color.startsWith("--") ? `var(${prClip.color})` : prClip.color) : trackColor(prTrack.color, doc.tracks.indexOf(prTrack))}
       instrument={prTrack.instrument ? (instruments.find((x) => x.effect === prTrack.instrument!.effect)?.name ?? null) : null}
       onApply={(c) => {
         const t = prTrack;

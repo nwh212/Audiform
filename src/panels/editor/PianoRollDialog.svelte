@@ -40,13 +40,15 @@
     tempo: TempoDoc;
     /** The instrument's name, for the title. */
     instrument: string | null;
+    /** The notes' color: the clip's, or its track's. */
+    color?: string;
     onApply: (clip: MidiClipDoc) => void;
     onClose: () => void;
     /** Plays a note through the track's instrument: pitch, velocity (1 to 127), length in seconds. */
     onAudition?: (pitch: number, velocity: number, seconds: number) => void;
   }
 
-  const { clip: original, tempo, instrument, onApply, onClose, onAudition = () => {} }: Props = $props();
+  const { clip: original, tempo, instrument, color = "var(--accent)", onApply, onClose, onAudition = () => {} }: Props = $props();
 
   /** Hears a note, held for its length (within reason). */
   function hear(n: NoteDoc) {
@@ -83,6 +85,8 @@
   /** Beats in a bar where the clip starts. */
   const barLen = $derived(barBeats(segmentAtBeat(tempo, original.start)));
   const changed = $derived(JSON.stringify($state.snapshot(clip)) !== JSON.stringify(original));
+  /** The roll's width in pixels, keys included. */
+  let viewW = $state(800);
   /** The grid runs two bars past the clip's end (or its last note), so there is room to work. */
   const widthPx = $derived(
     Math.max((Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * barLen) * zoom, viewW - KEYS_W),
@@ -91,7 +95,6 @@
   let scroller = $state<HTMLDivElement | null>(null);
   /** The scroll position and view size, kept for the zoom bar. */
   let scrollX = $state(0);
-  let viewW = $state(800);
   const totalBeats = $derived(widthPx / zoom);
 
   /** Zooms time so the whole clip is in view. */
@@ -498,7 +501,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={done}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pr-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+  <div class="dialog" style:--note={color} role="dialog" aria-modal="true" aria-labelledby="pr-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <header>
       <h1 id="pr-title">Edit Notes</h1>
       <label>Name <input type="text" class="name" bind:value={clip.name} /></label>
@@ -872,9 +875,9 @@
   .note {
     position: absolute;
     box-sizing: border-box;
-    border: 1px solid color-mix(in srgb, var(--accent) 70%, black);
+    border: 1px solid color-mix(in srgb, var(--note) 70%, black);
     border-radius: 2px;
-    background: color-mix(in srgb, var(--accent) calc(45% + 55% * var(--vel)), var(--surface-1));
+    background: color-mix(in srgb, var(--note) calc(45% + 55% * var(--vel)), var(--surface-1));
     cursor: grab;
   }
   /* The ends stretch the note (the grid works out which end from where the pointer is). */
@@ -911,7 +914,7 @@
     position: absolute;
     bottom: 0;
     width: 4px;
-    background: var(--accent);
+    background: var(--note);
   }
   .bar.picked {
     background: var(--text);
