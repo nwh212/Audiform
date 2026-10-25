@@ -115,6 +115,7 @@
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
   import { CompoundCommand } from "../commands/compound";
   import { repointPlan, toCopy } from "./session-media";
+  import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
@@ -124,6 +125,7 @@
     sessionDiscardRecovery,
     sessionNew,
     mediaCopyIn,
+    waveChannelEdit,
     sessionOpen,
     sessionPickOpen,
     filePickOpen,
@@ -1946,12 +1948,40 @@
   };
   const NEED_WAVE_SEL = "Drag across the waveform to select audio first.";
   let waveBoard: WaveBoard | null = null;
+  /** Copy in the Waveform editor: with one channel on, the copy remembers which. */
+  function copyOf(r: readonly [number, number]): WaveBoard | null {
+    const b = copyRange(wave.current!, r[0], r[1]);
+    const one = (wave.current?.media[0]?.channels ?? 1) > 1 ? oneChannel(get(waveChannels)) : null;
+    return b && one !== null ? { ...b, channel: one } : b;
+  }
 
-  async function waveEdit(label: string, op: Op | null): Promise<boolean> {
+  /**
+   * Runs a Waveform editor edit. With `range` and only one channel of a
+   * stereo file on, the edit reaches that channel alone (or as `take`
+   * says): the core renders the range and the other channel keeps what
+   * it had.
+   */
+  async function waveEdit(label: string, op: Op | null, range?: readonly [number, number], take?: ChannelTake | null): Promise<boolean> {
     if (!op) return false;
+    const d = wave.current;
+    const how = take !== undefined ? take : editTake(get(waveChannels));
+    if (range && how && d && (d.media[0]?.channels ?? 1) > 1) {
+      try {
+        const res = await waveChannelEdit(op, range[0], range[1], how);
+        const one = replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid);
+        if (!one) return false;
+        op = one;
+        label += channelLabel(get(waveChannels));
+      } catch (e) {
+        showError(e);
+        return false;
+      }
+    }
     await wave.edit(label, op, waveHistory);
     return true;
   }
+  /** Whether only one channel of a stereo file is on in the Waveform editor. */
+  const oneWaveChannel = () => (wave.current?.media[0]?.channels ?? 1) > 1 && oneChannel(get(waveChannels)) !== null;
 
   function waveSetSelection(sel: [number, number] | null, playhead?: number) {
     const d = wave.current;
@@ -2149,7 +2179,7 @@
     try {
       const res = await waveReverseInvert(r[0], r[1], mode);
       if (wave.current?.tracks[0]?.id !== t.id) return showNotice("You switched files while that was running, so it was not applied.");
-      await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid));
+      await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
     } catch (e) {
       showError(e);
     }
@@ -2183,7 +2213,7 @@
     const d = wave.current;
     const r = waveAll();
     if (!d || !r || !db) return;
-    await waveEdit(`Amplify ${db > 0 ? "+" : ""}${db.toFixed(1)} dB`, amplifyRange(d, r[0], r[1], db, uuid));
+    await waveEdit(`Amplify ${db > 0 ? "+" : ""}${db.toFixed(1)} dB`, amplifyRange(d, r[0], r[1], db, uuid), r);
   }
 
   /** Writes the Waveform preview chain into the selection (or the whole file), then clears the preview. */
@@ -2199,7 +2229,7 @@
       showNotice("You switched files while the effect was running, so it was not applied. Stay on the file until it finishes. To process many files, use Batch Convert.");
       return;
     }
-    await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid));
+    await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
     await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: chainOf(null) });
     if (!wholeFile) showNotice(`${label}: done. Undo takes it back.`);
   }
@@ -2214,7 +2244,7 @@
     if (!mask || !d) return;
     try {
       const r = await waveSpectralEdit(mask, mode, db);
-      await waveEdit(label, replaceRange(wave.current ?? d, r.start, r.end, r.media, label, uuid));
+      await waveEdit(label, replaceRange(wave.current ?? d, r.start, r.end, r.media, label, uuid), [r.start, r.end]);
     } catch (e) {
       showError(e);
     }
@@ -2560,7 +2590,7 @@
       showNotice(`Already peaks at ${target.toFixed(1)} dB.`);
       return;
     }
-    await waveEdit(`Normalize to ${target.toFixed(1)} dB`, amplifyRange(wave.current!, r[0], r[1], db, uuid));
+    await waveEdit(`Normalize to ${target.toFixed(1)} dB`, amplifyRange(wave.current!, r[0], r[1], db, uuid), r);
   }
 
   // File > New Audio File.
@@ -2793,11 +2823,21 @@
         },
       }),
       ov(waveFocus, { id: "edit.deselect", run: () => waveSetSelection(null), enabled: () => waveSel() !== null, reason: () => "Nothing is selected." }),
+      ...(["left", "right"] as const).map((ch) =>
+        actions.register({
+          id: `wave.channel-${ch}`,
+          run: () => waveChannels.update((c) => soloChannel(c, ch)),
+          enabled: () => (wave.current?.media[0]?.channels ?? 1) > 1 && inWave(),
+          reason: () => "Open a stereo file in the Waveform editor first.",
+        }),
+      ),
       ov(waveFocus, {
         id: "edit.delete",
         run: async () => {
           const r = waveSel();
-          if (r && (await waveEdit("Delete", deleteRange(wave.current!, r[0], r[1], uuid)))) waveSetSelection(null, r[0]);
+          // One channel can't get shorter than the other: deleting from one silences it.
+          if (r && oneWaveChannel()) await waveEdit("Delete", silenceRange(wave.current!, r[0], r[1], uuid), r);
+          else if (r && (await waveEdit("Delete", deleteRange(wave.current!, r[0], r[1], uuid)))) waveSetSelection(null, r[0]);
         },
         enabled: () => waveSel() !== null,
         label: () => "Delete Selection",
@@ -2807,7 +2847,7 @@
         id: "edit.copy",
         run: () => {
           const r = waveSel();
-          if (r) waveBoard = copyRange(wave.current!, r[0], r[1]);
+          if (r) waveBoard = copyOf(r);
           actions.invalidate();
         },
         enabled: () => waveSel() !== null,
@@ -2818,8 +2858,9 @@
         run: async () => {
           const r = waveSel();
           if (!r) return;
-          waveBoard = copyRange(wave.current!, r[0], r[1]);
-          if (await waveEdit("Cut", deleteRange(wave.current!, r[0], r[1], uuid))) waveSetSelection(null, r[0]);
+          waveBoard = copyOf(r);
+          if (oneWaveChannel()) await waveEdit("Cut", silenceRange(wave.current!, r[0], r[1], uuid), r);
+          else if (await waveEdit("Cut", deleteRange(wave.current!, r[0], r[1], uuid))) waveSetSelection(null, r[0]);
         },
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,
@@ -2828,6 +2869,19 @@
         id: "edit.paste",
         run: async () => {
           if (!waveBoard) return;
+          const take = pasteTake(get(waveChannels), waveBoard.channel);
+          if (take && (wave.current?.media[0]?.channels ?? 1) > 1) {
+            // Onto one channel (or a one-channel copy onto both): it goes over the audio from the selection or playhead, keeping the file's length.
+            const d = wave.current!;
+            const at = waveSel()?.[0] ?? wavePlayhead();
+            const len = Math.round(waveBoard.length * (d.sample_rate / waveBoard.rate));
+            const end = Math.min(sessionEnd(d), at + len);
+            const quiet = silenceRange(d, at, end, uuid);
+            const p = mixPasteAt(d, waveBoard, at, 0, uuid);
+            if (!quiet || !p || end <= at) return;
+            if (await waveEdit("Paste", { op: "batch", ops: [quiet, p.op] }, [at, end], take)) waveSetSelection([at, end], at);
+            return;
+          }
           // Pasting over a selection replaces it.
           const r = waveSel();
           if (r) await waveEdit("Delete", deleteRange(wave.current!, r[0], r[1], uuid));
@@ -2851,6 +2905,13 @@
           }
           const at = waveSel()?.[0] ?? wavePlayhead();
           const p = mixPasteAt(wave.current!, waveBoard, at, db, uuid);
+          const take = pasteTake(get(waveChannels), waveBoard.channel);
+          if (p && take && (wave.current?.media[0]?.channels ?? 1) > 1) {
+            // Mixed into one channel only: from the original channel plus the pasted one.
+            const end = Math.min(sessionEnd(wave.current!), at + p.length);
+            if (end > at && (await waveEdit("Mix Paste", p.op, [at, end], take))) waveSetSelection([at, end], at);
+            return;
+          }
           if (p && (await waveEdit("Mix Paste", p.op))) waveSetSelection([at, at + p.length], at);
         },
         enabled: () => waveBoard !== null,
@@ -2869,7 +2930,7 @@
         id: "fx.silence",
         run: async () => {
           const r = waveSel();
-          if (r) await waveEdit("Silence", silenceRange(wave.current!, r[0], r[1], uuid));
+          if (r) await waveEdit("Silence", silenceRange(wave.current!, r[0], r[1], uuid), r);
         },
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,
@@ -2878,7 +2939,7 @@
         id: "fx.fade-in",
         run: async () => {
           const r = waveSel();
-          if (r) await waveEdit("Fade In", fadeRange(wave.current!, r[0], r[1], "in", uuid));
+          if (r) await waveEdit("Fade In", fadeRange(wave.current!, r[0], r[1], "in", uuid), r);
         },
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,
@@ -2887,7 +2948,7 @@
         id: "fx.fade-out",
         run: async () => {
           const r = waveSel();
-          if (r) await waveEdit("Fade Out", fadeRange(wave.current!, r[0], r[1], "out", uuid));
+          if (r) await waveEdit("Fade Out", fadeRange(wave.current!, r[0], r[1], "out", uuid), r);
         },
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,

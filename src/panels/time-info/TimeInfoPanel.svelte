@@ -3,9 +3,11 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Altered Audio Editor.
 
-  Time Info: where the playhead is, the span of the selected clips, and
-  the session's length, format and mixdown size. In the Waveform editor it
-  shows the open file and its playback instead.
+  Time Info: where the playhead is, the time selection (or the span of the
+  selected clips), the visible range, and the session's length, format and
+  mixdown size. In the Waveform editor it shows the open file and its
+  playback instead. The playhead, selection and view times can be dragged
+  or typed: see TimeField.
 -->
 <script lang="ts">
   import { editor, type EditorState } from "../../stores/editor";
@@ -14,6 +16,9 @@
   import { formatIn } from "../editor/timeline";
   import { formatSize } from "../files/format";
   import { mixdownBytes } from "../../app/session-properties";
+  import { settings } from "../../stores/settings";
+  import TimeField from "./TimeField.svelte";
+  import { editSelection, laneWidths, parseTime, viewFor, viewRange } from "./time-info";
 
   interface Props {
     session: SessionStore;
@@ -80,21 +85,59 @@
 
   const length = $derived(doc ? sessionEnd(doc) : 0);
   const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  const store = $derived(inWave ? wave! : session);
+  const player = $derived(inWave ? waveTransport! : transport);
+  let widths = $state({ multitrack: 0, waveform: 0 });
+  $effect(() =>
+    laneWidths.subscribe((w) => {
+      widths = w;
+    }),
+  );
+  const laneW = $derived(inWave ? widths.waveform : widths.multitrack);
+  const step = $derived(doc?.view.samples_per_pixel ?? 1);
+  const parse = (text: string) => parseTime(text, rate, ed.timeFormat, settings.current.timecodeFps);
+  const vis = $derived(doc && laneW > 0 ? viewRange(doc.view, laneW) : null);
+  /** Only a time selection can be edited here; the span of selected clips is shown as it is. */
+  const timeSel = $derived(doc?.view.selection ?? null);
+
+  function setSel(part: "start" | "end" | "duration", v: number) {
+    const d = store.current;
+    if (!d) return;
+    const sel = d.view.selection ?? { start: d.view.playhead, end: d.view.playhead };
+    store.setView({ ...d.view, selection: editSelection(sel, part, v) });
+  }
+  function setVis(part: "start" | "end" | "duration", v: number) {
+    const d = store.current;
+    if (!d || laneW <= 0) return;
+    const r = viewRange(d.view, laneW);
+    const [a, b] = part === "start" ? [v, v + (r.end - r.start)] : part === "end" ? [r.start, Math.max(r.start + 1, v)] : [r.start, r.start + Math.max(1, v)];
+    store.setView(viewFor(d.view, a, b, laneW));
+  }
+
   /** A stereo WAV mixdown of the whole session at the session bit depth. */
   const size = $derived(mixdownBytes(length, doc?.bit_depth ?? 32));
 </script>
 
 <section class="info" aria-label="Time Info">
-  <div class="grid">
+  <div class="head">
     <span class="k">Playhead</span>
-    <span class="v big">{t(playhead)}</span>
+    <TimeField big value={doc ? playhead : null} text={t(playhead)} label="Playhead" {step} {parse} onset={doc ? (v) => void player.seek(v) : null} />
+  </div>
+  <div class="grid">
+    <span></span>
+    <span class="h">Start</span>
+    <span class="h">End</span>
+    <span class="h">Duration</span>
 
-    <span class="k" title={doc?.view.selection ? "Time selection" : "Selected clips"}>Start</span>
-    <span class="v">{span ? t(span.start) : "-"}</span>
-    <span class="k">End</span>
-    <span class="v">{span ? t(span.end) : "-"}</span>
-    <span class="k">Duration</span>
-    <span class="v">{span ? t(span.end - span.start) : "-"}</span>
+    <span class="k" title={timeSel ? "Time selection" : span ? "Selected clips" : "Time selection"}>{timeSel || !span ? "Selection" : "Clips"}</span>
+    <TimeField value={span?.start ?? null} text={span ? t(span.start) : "-"} label="Selection start" {step} {parse} onset={doc && (timeSel || !span) ? (v) => setSel("start", v) : null} />
+    <TimeField value={span?.end ?? null} text={span ? t(span.end) : "-"} label="Selection end" {step} {parse} onset={doc && (timeSel || !span) ? (v) => setSel("end", v) : null} />
+    <TimeField value={span ? span.end - span.start : null} text={span ? t(span.end - span.start) : "-"} label="Selection duration" {step} {parse} onset={doc && timeSel ? (v) => setSel("duration", v) : null} />
+
+    <span class="k" title="The part of the timeline in view">View</span>
+    <TimeField value={vis?.start ?? null} text={vis ? t(vis.start) : "-"} label="View start" {step} {parse} onset={vis ? (v) => setVis("start", v) : null} />
+    <TimeField value={vis?.end ?? null} text={vis ? t(vis.end) : "-"} label="View end" {step} {parse} onset={vis ? (v) => setVis("end", v) : null} />
+    <TimeField value={vis ? vis.end - vis.start : null} text={vis ? t(vis.end - vis.start) : "-"} label="View duration" {step} {parse} onset={vis ? (v) => setVis("duration", v) : null} />
   </div>
   <div class="foot">
     <span title="Session length">{t(length)}</span>
@@ -118,10 +161,23 @@
     background: var(--surface-1);
   }
 
-  .grid {
+  .head {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 0 10px;
+    align-items: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    gap: 1px 6px;
+    align-items: center;
+  }
+  .h {
+    color: var(--text-faint);
+    font-size: 10px;
+    text-align: right;
+    padding-right: 4px;
   }
 
   .k {
@@ -129,17 +185,6 @@
     font-size: var(--font-size-small);
   }
 
-  .v {
-    color: var(--value);
-    font-family: var(--font-mono);
-    font-size: var(--font-size-small);
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-  }
-
-  .v.big {
-    font-size: 14px;
-  }
 
   .foot {
     display: flex;

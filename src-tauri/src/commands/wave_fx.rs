@@ -206,6 +206,73 @@ pub async fn wave_reverse_invert(
     .map_err(|e| e.to_string())?
 }
 
+/// Where one output channel of a one-channel edit comes from: the file
+/// before the edit or after it, and which of its channels (0 left, 1 right).
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct ChannelSource {
+    pub after: bool,
+    pub channel: u8,
+}
+
+/// Interleaves two stereo renders channel by channel, as `take` says.
+pub fn merge_channels(before: &[f32], after: &[f32], take: &[ChannelSource; 2]) -> Vec<f32> {
+    let frames = before.len() / 2;
+    let mut out = Vec::with_capacity(frames * 2);
+    for i in 0..frames {
+        for t in take {
+            let src = if t.after { after } else { before };
+            out.push(
+                src.get(i * 2 + usize::from(t.channel.min(1)))
+                    .copied()
+                    .unwrap_or(0.0),
+            );
+        }
+    }
+    out
+}
+
+/// An edit limited to one channel of a stereo file in the Waveform
+/// editor: `op` is applied to a copy, `start..end` of the copy and of the
+/// file as it is are rendered, and each output channel is taken from one
+/// of them as `take` says. The interface swaps the result in, so the
+/// other channel keeps exactly what it had.
+#[tauri::command]
+pub async fn wave_channel_edit(
+    app: AppHandle,
+    wave: State<'_, OpenWave>,
+    op: crate::session::ops::Op,
+    start: u64,
+    end: u64,
+    take: [ChannelSource; 2],
+) -> Result<SpectralResult, String> {
+    let before = snapshot(&wave)?;
+    let dir = crate::commands::cache::cache_root(&app)?.join("wave-fx");
+    spawn_blocking(move || -> Result<SpectralResult, String> {
+        let end = end.min(mixdown::session_end(&before));
+        if end <= start {
+            return Err("Select some audio first.".into());
+        }
+        let mut after = before.clone();
+        crate::session::ops::apply(&mut after, &op).map_err(|e| e.to_string())?;
+        let a = render(&before, start as i64, end as i64);
+        let b = render(&after, start as i64, end as i64);
+        let out = merge_channels(&a, &b, &take);
+        let frames = (end - start) as usize;
+        let media = write_stretch(
+            &dir,
+            "channel-edit",
+            &out,
+            0,
+            frames,
+            before.sample_rate,
+            false,
+        )?;
+        Ok(SpectralResult { media, start, end })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,6 +291,41 @@ mod tests {
             position: None,
         });
         c
+    }
+
+    #[test]
+    fn merges_channels_from_before_and_after() {
+        let before = vec![1.0f32, 2.0, 3.0, 4.0];
+        let after = vec![10.0f32, 20.0, 30.0, 40.0];
+        let left_edit = [
+            ChannelSource {
+                after: true,
+                channel: 0,
+            },
+            ChannelSource {
+                after: false,
+                channel: 1,
+            },
+        ];
+        assert_eq!(
+            merge_channels(&before, &after, &left_edit),
+            vec![10.0, 2.0, 30.0, 4.0]
+        );
+        // Left copied onto the right.
+        let copy = [
+            ChannelSource {
+                after: false,
+                channel: 0,
+            },
+            ChannelSource {
+                after: true,
+                channel: 0,
+            },
+        ];
+        assert_eq!(
+            merge_channels(&before, &after, &copy),
+            vec![1.0, 10.0, 3.0, 30.0]
+        );
     }
 
     #[test]

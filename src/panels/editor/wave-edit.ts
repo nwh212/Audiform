@@ -164,6 +164,8 @@ export interface WaveBoard {
   length: number;
   clips: ClipDoc[];
   media: MediaRefDoc[];
+  /** Copied with only this channel on (0 left, 1 right): pasting uses that channel. */
+  channel?: 0 | 1;
 }
 
 /** Copy: the range as pieces starting at 0. */

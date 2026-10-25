@@ -731,6 +731,11 @@ export async function waveSpectrogram(start: number, end: number, columns: numbe
   return rawBytes(buf);
 }
 
+/** An edit limited to one channel: `op` applied to a copy, `start..end` rendered, each channel taken as `take` says. */
+export function waveChannelEdit(op: import("../stores/session").Op, start: number, end: number, take: import("../panels/editor/wave-channels").ChannelTake): Promise<SpectralResult> {
+  return invoke<SpectralResult>("wave_channel_edit", { op, start, end, take });
+}
+
 export interface SpectralResult {
   media: MediaRefDoc;
   start: number;

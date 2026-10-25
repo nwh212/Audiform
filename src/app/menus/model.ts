@@ -464,8 +464,8 @@ export const MENUS: readonly Menu[] = [
       item("view.zoom-in-vertical", "Zoom In Vertically", { pending: LATER }),
       item("view.zoom-out-vertical", "Zoom Out Vertically", { pending: LATER }),
       item("view.hud", "Show HUD", { pending: LATER }),
-      item("wave.channel-left", "Activate Left Channel", { pending: LATER }),
-      item("wave.channel-right", "Activate Right Channel", { pending: LATER }),
+      item("wave.channel-left", "Activate Left Channel"),
+      item("wave.channel-right", "Activate Right Channel"),
       sub("Time Format", [
         item("view.time.decimal", "Minutes and Seconds"),
         item("view.time.samples", "Samples"),

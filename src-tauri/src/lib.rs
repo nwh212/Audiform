@@ -110,6 +110,7 @@ pub fn run() {
             commands::spectral::wave_spectral_edit,
             commands::wave_fx::wave_apply_chain,
             commands::wave_fx::wave_reverse_invert,
+            commands::wave_fx::wave_channel_edit,
             commands::wave_fx::wave_stretch,
             commands::spectral::wave_pitch,
             commands::session::session_get,

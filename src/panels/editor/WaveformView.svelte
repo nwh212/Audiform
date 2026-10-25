@@ -22,6 +22,8 @@
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { onDestroy } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
+  import { BOTH, toggleChannel, waveChannels } from "./wave-channels";
+  import { laneWidths } from "../time-info/time-info";
   import { levelAt, pointsOf } from "./envelope";
   import { fit, formatIn, peakRange, pickLevel, rulerTicks, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
   import { mediaFrames } from "../../app/core";
@@ -43,6 +45,19 @@
 
   const RULER_H = 22;
   const SCALE_W = 46;
+  $effect(() => {
+    const w = width;
+    laneWidths.update((l) => (l.waveform === w ? l : { ...l, waveform: w }));
+  });
+  // Each file opens with both channels on.
+  let channelFile: string | null = null;
+  $effect(() => {
+    const p = file?.path ?? null;
+    if (p !== channelFile) {
+      channelFile = p;
+      waveChannels.set(BOTH);
+    }
+  });
 
   let doc = $state<SessionDoc | null>(null);
   $effect(() =>
@@ -473,11 +488,6 @@
         g.fillText(db === 0 ? " 0" : String(db), w + 8, mid + a * half);
       }
       g.fillText("-∞", w + 8, mid);
-      if (channels === 2) {
-        g.fillStyle = css("--text-faint");
-        g.fillText(ch === 0 ? "L" : "R", w + 34, top + 10);
-        g.fillStyle = css("--text-dim");
-      }
     }
   });
 
@@ -769,6 +779,22 @@
         </span>
         <span class="val">{level > 0 ? "+" : ""}{level.toFixed(1)} dB</span>
       </div>
+      {#if channels === 2}
+        {#each [0, 1] as const as ch (ch)}
+          {@const name = ch === 0 ? "left" : "right"}
+          {@const on = $waveChannels[name]}
+          {#if !on}<div class="chdim" style:top="{(ch * height) / 2}px" style:height="{height / 2}px" style:right="{SCALE_W}px"></div>{/if}
+          <button
+            type="button"
+            class="chbtn"
+            class:on
+            style:top="{(ch * height) / 2 + 4}px"
+            aria-pressed={on}
+            title={on ? `Switch the ${name} channel off: edits, effects, copy and paste then reach only the other channel (${ch === 0 ? "Up" : "Down"} picks this channel alone)` : `Switch the ${name} channel back on`}
+            onclick={() => waveChannels.update((c) => toggleChannel(c, name))}>{ch === 0 ? "L" : "R"}</button
+          >
+        {/each}
+      {/if}
     </div>
     {#if ed.showSpectrum || ed.showPitch}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -910,6 +936,32 @@
     position: relative;
     min-height: 0;
     overflow: hidden;
+  }
+  /* A channel switched off: edits pass it by. */
+  .chdim {
+    position: absolute;
+    left: 0;
+    background: rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+  }
+  .chbtn {
+    position: absolute;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-1, #111);
+    color: var(--text-faint);
+    font: inherit;
+    font-size: 10px;
+    line-height: 14px;
+    cursor: pointer;
+  }
+  .chbtn.on {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .measure {

@@ -44,6 +44,7 @@
   import { inputLevels, liveTakes, type LiveTakes } from "../../stores/record";
   import { keepLast } from "../../app/settings/device-cache";
   import { audioInputs, openSoundSettings, probeMedia, type AudioInput } from "../../app/core";
+  import { laneWidths } from "../time-info/time-info";
   import WaveformView from "./WaveformView.svelte";
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
   import type { Readable } from "svelte/store";
@@ -168,6 +169,10 @@
   };
 
   let lanesWidth = $state(800);
+  $effect(() => {
+    const w = lanesWidth;
+    laneWidths.update((l) => (l.multitrack === w ? l : { ...l, multitrack: w }));
+  });
   let lanesEl = $state<HTMLElement | null>(null);
   let scroller = $state<HTMLElement | null>(null);
   let ruler = $state<HTMLCanvasElement | null>(null);
