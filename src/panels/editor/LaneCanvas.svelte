@@ -231,6 +231,8 @@
                 Math.min(clip.source_out, Math.ceil(clip.source_in + ((view.scroll + right * view.spp - clip.start) * srcRate) / sessionRate) + 1),
               )
             : null;
+        // The waveform grows and shrinks with the clip's level.
+        const clipLevel = Math.pow(10, (clip.gain_db ?? 0) / 20);
         if (exact) {
           const tone = lighten(color, 0.55);
           g.strokeStyle = tone;
@@ -249,7 +251,7 @@
             const mid = body.top + laneH * (k + 0.5);
             const hc = Math.min(k, exact.channels - 1);
             const at = (f: number): [number, number] => {
-              const v = Math.max(-1, Math.min(1, (exact.data[(f - exact.start) * exact.channels + hc] ?? 0) * ampZoom));
+              const v = Math.max(-1, Math.min(1, (exact.data[(f - exact.start) * exact.channels + hc] ?? 0) * ampZoom * clipLevel));
               return [xOf(clip.start + ((f - clip.source_in) * sessionRate) / srcRate, view), mid - v * (laneH / 2 - 1)];
             };
             g.beginPath();
@@ -288,7 +290,7 @@
             for (let k = 0; k < ch; k++) {
               const [lo, hi] = peakRange(level, ch, k, Math.max(s0, clip.source_in), Math.min(s1, clip.source_out));
               const mid = body.top + laneH * (k + 0.5);
-              const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom));
+              const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom * clipLevel));
               const y0 = mid - amp(hi) * (laneH / 2 - 1);
               const y1 = mid - amp(lo) * (laneH / 2 - 1);
               g.fillRect(px, y0, 1, Math.max(1, y1 - y0));

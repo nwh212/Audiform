@@ -15,7 +15,7 @@ let recordingNow = false;
 let last = "";
 
 function push(m: MetronomePrefs): void {
-  const on = m.on && (m.when === "always" || recordingNow);
+  const on = m.on && !m.muted && (m.when === "always" || recordingNow);
   const msg = { on, levelDb: m.levelDb, sound: m.sound, accent: m.accent, subdivide: m.subdivide };
   const key = JSON.stringify(msg);
   if (key === last) return;

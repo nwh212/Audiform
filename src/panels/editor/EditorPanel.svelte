@@ -51,6 +51,8 @@
   import WaveformView from "./WaveformView.svelte";
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
   import TempoStrip from "./TempoStrip.svelte";
+  import MetronomeRow from "./MetronomeRow.svelte";
+  import { setMetronomePrefs } from "../../stores/metronome";
   import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
   import type { Readable } from "svelte/store";
   import type { WaveFile } from "../../stores/wave";
@@ -298,6 +300,14 @@
     const name = instruments.find((i) => i.effect === track.instrument!.effect)?.name ?? "Instrument";
     void pluginOpenWindow(track.instrument, `${name}: ${track.name}`).catch(onError);
   }
+
+  // The metronome's on/off (app settings, not the session): it shows its track while on.
+  let metOn = $state(settings.current.metronome.on);
+  $effect(() =>
+    settings.subscribe((v) => {
+      metOn = v.metronome.on;
+    }),
+  );
 
   /** Replaces the tempo map (tempo, time signature and their changes) as one undoable step. */
   function setTempoMap(t: TempoDoc, label: string) {
@@ -2054,6 +2064,17 @@
         <button
           type="button"
           class="view"
+          class:on={metOn}
+          title="Metronome: a click on every beat while playing and recording, on its own track at the top (never in an export)"
+          aria-label="Metronome"
+          aria-pressed={metOn}
+          onclick={() => setMetronomePrefs({ on: !metOn })}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h4l3 12H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><path d="M8 11l3.5-6" stroke="currentColor" stroke-width="1.3" /></svg>
+        </button>
+        <button
+          type="button"
+          class="view"
           class:on={ed.followPlayhead}
           title="Follow Playhead: keep the playhead in view during playback"
           aria-label="Follow playhead"
@@ -2097,6 +2118,9 @@
       {/if}
     </div>
   </div>
+  {#if doc && metOn}
+    <MetronomeRow {tempo} {view} width={lanesWidth} {rate} {playhead} headerW={HEADER_W} onTempo={setTempoMap} />
+  {/if}
   {#if doc && ((tempo.changes?.length ?? 0) > 0 || ed.timeFormat === "bars")}
     <div class="ruler-row tempo-row">
       <div class="corner tempo-corner" style:width="{HEADER_W}px" title="Tempo and time signature changes. The tempo and time signature where the playhead is are next to the metronome, under the tracks.">Tempo</div>
@@ -2582,8 +2606,6 @@
     zoom={onZoom}
     amplitude
     tracks
-    tempo={doc ? tempo : null}
-    onTempo={setTempoMap}
   />
 </section>
 {/if}

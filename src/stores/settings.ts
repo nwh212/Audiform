@@ -86,7 +86,10 @@ export interface AppSettings {
 export type MetronomeSound = "tick" | "wood" | "beep" | "shaker";
 export type MetronomeSubdivide = "none" | "halves" | "triplets" | "quarters";
 export interface MetronomePrefs {
+  /** The metronome is on: its track shows and it clicks (unless muted). */
   on: boolean;
+  /** Its track's mute: silent, but the track stays. */
+  muted: boolean;
   /** Click during playback and recording, or while recording only. */
   when: "always" | "recording";
   levelDb: number;
@@ -163,7 +166,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markerName: "Marker",
   timecodeFps: 30,
   phaseWheel: { size: 4096, fps: 60, a: "left", b: "right" },
-  metronome: { on: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
+  metronome: { on: false, muted: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -256,6 +259,7 @@ function metronomePrefs(raw: unknown): MetronomePrefs {
   const lvl = typeof m.levelDb === "number" && Number.isFinite(m.levelDb) ? Math.min(6, Math.max(-60, m.levelDb)) : d.levelDb;
   return {
     on: typeof m.on === "boolean" ? m.on : d.on,
+    muted: typeof m.muted === "boolean" ? m.muted : d.muted,
     when: m.when === "recording" ? "recording" : "always",
     levelDb: Math.round(lvl * 10) / 10,
     sound: METRONOME_SOUNDS.some((x) => x.value === m.sound) ? (m.sound as MetronomeSound) : d.sound,
