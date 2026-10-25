@@ -77,7 +77,7 @@ export function dropEdit(doc: SessionDoc, from: EffectTarget, slot: EffectSlotDo
     if (JSON.stringify(next.slots) === JSON.stringify(chain.slots)) return null;
     return { label: "Move Effect", op: { op: "set_effects", target, chain: next } };
   }
-  const next = addSlotAt(chain, { ...structuredClone(slot), id: newId(), sidechain: target.kind === "track" && slot.sidechain === target.id ? null : (slot.sidechain ?? null) }, to.index);
+  const next = addSlotAt(chain, { ...(JSON.parse(JSON.stringify(slot)) as typeof slot), id: newId(), sidechain: target.kind === "track" && slot.sidechain === target.id ? null : (slot.sidechain ?? null) }, to.index);
   if (!next) return null;
   return { label: "Copy Effect", op: { op: "set_effects", target, chain: next } };
 }

@@ -468,6 +468,8 @@ export const MENUS: readonly Menu[] = [
       item("wave.channel-right", "Activate Right Channel"),
       sub("Time Format", [
         item("view.time.decimal", "Minutes and Seconds"),
+        item("view.time.seconds", "Seconds"),
+        item("view.time.bars", "Bars and Beats"),
         item("view.time.samples", "Samples"),
         item("view.time.timecode", "Timecode (30 fps)"),
       ]),

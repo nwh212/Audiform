@@ -144,3 +144,20 @@ describe("ruler range and zoom limit", () => {
     expect(z.spp).toBeCloseTo((4 * 3600 * rate) / w, 0);
   });
 });
+
+describe("bars and beats", () => {
+  it("shows and reads bar.beat.tick at the tempo", async () => {
+    const { formatBars, parseBars, barTicks } = await import("./timeline");
+    const t = { bpm: 120, beats_per_bar: 4 };
+    // 120 bpm: a beat is half a second.
+    expect(formatBars(0, 48_000, t)).toBe("1.1.000");
+    expect(formatBars(24_000, 48_000, t)).toBe("1.2.000");
+    expect(formatBars(96_000 + 12_000, 48_000, t)).toBe("2.1.480");
+    expect(parseBars("2.1.480", 48_000, t)).toBe(108_000);
+    expect(parseBars("3", 48_000, t)).toBe(192_000);
+    expect(parseBars("0.1", 48_000, t)).toBeNull();
+    // A bar is 2 s = 96,000 samples; at 1,000 samples a pixel, bars are 96 px apart and labeled.
+    const ticks = barTicks({ spp: 1000, scroll: 0 }, 400, 48_000, t);
+    expect(ticks.filter((k) => k.label).map((k) => k.label)).toEqual(["1", "2", "3", "4", "5"]);
+  });
+});

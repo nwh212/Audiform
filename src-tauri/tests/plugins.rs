@@ -284,6 +284,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
                 length: 1.0,
                 muted: false,
                 color: None,
+                gain_db: 0.0,
                 notes: vec![Note {
                     pitch: 60,
                     velocity: 127,
@@ -440,6 +441,7 @@ fn a_real_reverb_rings_on_a_midi_track() {
                 length: 4.0,
                 muted: false,
                 color: None,
+                gain_db: 0.0,
                 notes: vec![Note {
                     pitch: 60,
                     velocity: 127,

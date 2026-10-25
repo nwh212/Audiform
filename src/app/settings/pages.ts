@@ -56,7 +56,7 @@ export function cleanDraft(d: SettingsDraft): SettingsDraft {
     editor: {
       followPlayhead: d.editor.followPlayhead === true,
       autoCrossfade: d.editor.autoCrossfade === true,
-      timeFormat: d.editor.timeFormat === "samples" || d.editor.timeFormat === "timecode" ? d.editor.timeFormat : "time",
+      timeFormat: (["samples", "timecode", "seconds", "bars"] as const).find((f) => f === d.editor.timeFormat) ?? "time",
     },
     record: {
       ...d.record,

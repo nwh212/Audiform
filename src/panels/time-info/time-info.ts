@@ -8,6 +8,7 @@
  */
 
 import { writable } from "svelte/store";
+import { getDisplayTempo, parseBars } from "../editor/timeline";
 import type { ViewDoc } from "../../stores/session";
 
 /** Width in pixels of each editor's lanes, set by the editors, so Time Info can show and set the visible range. */
@@ -18,8 +19,12 @@ export const laneWidths = writable<{ multitrack: number; waveform: number }>({ m
  * in the samples format, a plain count; in timecode, "00:01:05:12" at
  * `fps` too. Null when it is not a time.
  */
-export function parseTime(text: string, rate: number, format: "time" | "samples" | "timecode", fps: number): number | null {
+export function parseTime(text: string, rate: number, format: "time" | "samples" | "timecode" | "seconds" | "bars", fps: number): number | null {
   const t = text.trim();
+  if (format === "bars") {
+    const b = parseBars(t, rate, getDisplayTempo());
+    if (b !== null) return b;
+  }
   if (format === "samples" && /^\d+$/.test(t)) return Number(t);
   if (format === "timecode") {
     const m = /^(\d+):(\d{1,2}):(\d{1,2})[:;](\d{1,2})$/.exec(t);

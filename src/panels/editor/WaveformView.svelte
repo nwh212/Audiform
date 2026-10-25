@@ -24,8 +24,9 @@
   import { waveZoom, type WaveFile } from "../../stores/wave";
   import { BOTH, toggleChannel, waveChannels } from "./wave-channels";
   import { laneWidths } from "../time-info/time-info";
+  import { timeDisplayItems } from "./time-menu";
   import { levelAt, pointsOf } from "./envelope";
-  import { fit, formatIn, peakRange, pickLevel, rulerTicks, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
+  import { fit, formatIn, peakRange, pickLevel, rulerTicks, ticksFor, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
   import { mediaFrames } from "../../app/core";
   import TransportBar from "./TransportBar.svelte";
   import SpectrumView from "./SpectrumView.svelte";
@@ -122,9 +123,10 @@
 
   function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>, auto = false) {
     if (!doc) return;
-    if (!auto && tp?.playing && v.playhead === undefined && (v.scroll !== undefined || v.spp !== undefined)) {
-      const x = (tp.position - (v.scroll ?? doc.view.scroll)) / (v.spp ?? doc.view.samples_per_pixel);
-      followHeld = x < 0 || x > width;
+    // Scrolling or zooming by hand while playing stops the following until playback starts again or the playhead is moved.
+    if (!auto && tp?.playing) {
+      if (v.playhead !== undefined) followHeld = false;
+      else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) followHeld = true;
     }
     const maxScroll = Math.max(0, total - width * (v.spp ?? view.spp) * 0.5);
     wave.setView({
@@ -154,9 +156,9 @@
     setView({ spp: f.spp, scroll: 0 });
   });
 
-  // Keep the playhead in view while playing, unless the view was moved
-  // away from it by hand: then wait until it is back in view (or playback
-  // starts again).
+  // Keep the playhead in view while playing, unless the view was scrolled
+  // or zoomed by hand: then leave it be until playback starts again or the
+  // playhead is moved.
   let followHeld = false;
   let wasPlaying = false;
   $effect(() => {
@@ -165,10 +167,7 @@
     wasPlaying = playingNow;
     if (!playingNow || !tp || width <= 0) return;
     const x = xOf(tp.position, view);
-    if (followHeld) {
-      if (x < 0 || x > width) return;
-      followHeld = false;
-    }
+    if (followHeld) return;
     if (x > width - 20 || x < 0) setView({ scroll: tp.position - 20 * view.spp }, true);
   });
 
@@ -301,7 +300,7 @@
     // Time grid at the ruler's labeled ticks.
     g.strokeStyle = "rgba(255, 255, 255, 0.05)";
     g.lineWidth = 1;
-    for (const t of rulerTicks(view, w, rate)) {
+    for (const t of ticksFor(view, w, rate, ed.timeFormat)) {
       if (!t.label) continue;
       const x = Math.round(t.x) + 0.5;
       g.beginPath();
@@ -511,13 +510,13 @@
     g.strokeStyle = css("--border-strong");
     g.font = `10px ${css("--font-ui")}`;
     g.textBaseline = "top";
-    for (const t of rulerTicks(view, w, rate)) {
+    for (const t of ticksFor(view, w, rate, ed.timeFormat)) {
       const x = Math.round(t.x) + 0.5;
       g.beginPath();
       g.moveTo(x, t.label ? 8 : 15);
       g.lineTo(x, RULER_H);
       g.stroke();
-      if (t.label) g.fillText(ed.timeFormat === "time" ? t.label : formatIn(sampleAt(t.x, view), rate, ed.timeFormat), x + 3, 2);
+      if (t.label) g.fillText(ed.timeFormat === "time" || ed.timeFormat === "bars" ? t.label : formatIn(sampleAt(t.x, view), rate, ed.timeFormat), x + 3, 2);
     }
     if (selection) {
       const a = Math.max(0, xOf(selection.start, view));
@@ -767,7 +766,16 @@
 
   {#if doc && file}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <canvas class="ruler" bind:this={ruler} onpointerdown={onRulerPointer} onwheel={onWheel}></canvas>
+    <canvas
+      class="ruler"
+      bind:this={ruler}
+      onpointerdown={onRulerPointer}
+      onwheel={onWheel}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        menu = { x: e.clientX, y: e.clientY, items: timeDisplayItems() };
+      }}
+    ></canvas>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="area" bind:this={area} bind:clientHeight={height} onwheel={onWheel} oncontextmenu={onMenu}>
       <div class="measure" bind:clientWidth={width} style:right="{SCALE_W}px"></div>

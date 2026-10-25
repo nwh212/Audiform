@@ -75,7 +75,7 @@
     const k = id ? shortcutFor(id) : undefined;
     return k ? `${label} (${k})` : label;
   };
-  const NEXT_FORMAT = { time: "samples", samples: "timecode", timecode: "time" } as const;
+  const NEXT_FORMAT = { time: "seconds", seconds: "bars", bars: "samples", samples: "timecode", timecode: "time" } as const;
   const clock = $derived(formatIn(playhead, rate, ed.timeFormat));
 
   /** Rewind and fast forward step 5 seconds, 1 with Shift. */
@@ -89,7 +89,7 @@
   <button
     type="button"
     class="clock"
-    title="Playhead position. Click to switch between time, samples and timecode."
+    title="Playhead position. Click to switch between minutes and seconds, seconds, bars and beats, samples and timecode (or right-click the time ruler)."
     onclick={() => editor.setTimeFormat(NEXT_FORMAT[ed.timeFormat])}
   >
     {clock}

@@ -8,7 +8,7 @@ import { editor, parseSettings, restoreSettings, settingsOf } from "./editor";
 describe("editor settings", () => {
   it("keeps defaults for missing or bad values", () => {
     const s = parseSettings({ snap: { on: false, ruler: "yes" }, autoCrossfade: 1, timeFormat: "samples" });
-    expect(s.snap).toEqual({ on: false, clips: true, playhead: true, markers: true, ruler: false });
+    expect(s.snap).toEqual({ on: false, clips: true, playhead: true, markers: true, ruler: true });
     expect(s.autoCrossfade).toBe(true);
     expect(s.timeFormat).toBe("samples");
     expect(parseSettings(null).snap.on).toBe(true);

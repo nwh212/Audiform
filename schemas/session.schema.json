@@ -950,6 +950,11 @@
             "null"
           ]
         },
+        "gain_db": {
+          "description": "Clip level in dB: notes play harder or softer by this much (their\nvelocity is scaled), up to the hardest a note can play.",
+          "type": "number",
+          "format": "double"
+        },
         "id": {
           "type": "string",
           "format": "uuid"

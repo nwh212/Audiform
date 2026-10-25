@@ -118,6 +118,8 @@ describe("menu model", () => {
       "clip.reveal",
       "file.close-unused",
       "file.collect-media",
+      "view.time.seconds",
+      "view.time.bars",
       "wave.channel-left",
       "wave.channel-right",
       "edit.select-track-clips",

@@ -394,6 +394,7 @@ fn midi_plan(t: &Track, tempo: Tempo, out_rate: u32) -> Option<MidiPlan> {
     let instrument = t.instrument.clone()?;
     let mut notes: Vec<NotePlan> = Vec::new();
     for c in t.midi_clips.iter().filter(|c| !c.muted) {
+        let level = 10f32.powf(c.gain_db.clamp(-96.0, 24.0) as f32 / 20.0);
         for n in &c.notes {
             if n.start >= c.length || n.length <= 0.0 {
                 continue;
@@ -404,7 +405,8 @@ fn midi_plan(t: &Track, tempo: Tempo, out_rate: u32) -> Option<MidiPlan> {
                 on,
                 off: off.max(on + 1),
                 pitch: n.pitch.min(127),
-                velocity: f32::from(n.velocity.clamp(1, 127)) / 127.0,
+                velocity: (f32::from(n.velocity.clamp(1, 127)) / 127.0 * level)
+                    .clamp(1.0 / 127.0, 1.0),
             });
         }
     }

@@ -166,12 +166,93 @@ export function formatTimecode(
 export function formatIn(
   samples: number,
   rate: number,
-  format: "time" | "samples" | "timecode",
+  format: "time" | "samples" | "timecode" | "seconds" | "bars",
 ): string {
   if (format === "samples") return String(Math.round(samples));
   if (format === "timecode")
     return formatTimecode(samples, rate, settings.current.timecodeFps);
+  if (format === "seconds") return `${(samples / rate).toFixed(3)}`;
+  if (format === "bars") return formatBars(samples, rate, displayTempo);
   return formatClock(samples, rate);
+}
+
+/** The tempo bars and beats are shown in: the session's, set by the Multitrack editor. */
+export interface BarTempo {
+  bpm: number;
+  beats_per_bar: number;
+}
+let displayTempo: BarTempo = { bpm: 120, beats_per_bar: 4 };
+export function setDisplayTempo(t: BarTempo | null | undefined): void {
+  if (t && t.bpm > 0 && t.beats_per_bar > 0) displayTempo = { bpm: t.bpm, beats_per_bar: t.beats_per_bar };
+}
+export function getDisplayTempo(): BarTempo {
+  return displayTempo;
+}
+
+/** Ticks (fractions of a beat) shown in bar.beat.tick: 960 to a beat. */
+export const TICKS_PER_BEAT = 960;
+
+/** Bars and beats as bar.beat.tick, counted from 1 (1.1.000 is the start). */
+export function formatBars(samples: number, rate: number, t: BarTempo): string {
+  const neg = samples < 0;
+  const beats = (Math.abs(samples) / rate) * (t.bpm / 60);
+  const per = Math.max(1, Math.round(t.beats_per_bar));
+  let whole = Math.floor(beats);
+  let tick = Math.round((beats - whole) * TICKS_PER_BEAT);
+  if (tick >= TICKS_PER_BEAT) {
+    whole += 1;
+    tick = 0;
+  }
+  const body = `${Math.floor(whole / per) + 1}.${(whole % per) + 1}.${String(tick).padStart(3, "0")}`;
+  return neg ? `-${body}` : body;
+}
+
+/** Samples for a bar.beat.tick time (bar and beat from 1; the tick part may be left off). Null when it is not one. */
+export function parseBars(text: string, rate: number, t: BarTempo): number | null {
+  const m = /^\s*(\d+)(?:[.:|](\d+)(?:[.:|](\d+))?)?\s*$/.exec(text);
+  if (!m) return null;
+  const bar = Number(m[1]);
+  const beat = m[2] === undefined ? 1 : Number(m[2]);
+  const tick = m[3] === undefined ? 0 : Number(m[3]);
+  if (bar < 1 || beat < 1) return null;
+  const beats = (bar - 1) * Math.max(1, Math.round(t.beats_per_bar)) + (beat - 1) + tick / TICKS_PER_BEAT;
+  return Math.round(((beats * 60) / t.bpm) * rate);
+}
+
+/** Ruler ticks on bars and beats: labeled bars (or beats when zoomed in), at least `minGap` pixels apart. */
+export function barTicks(v: Viewport, width: number, rate: number, t: BarTempo, minGap = 70): Tick[] {
+  const per = Math.max(1, Math.round(t.beats_per_bar));
+  const beatSamples = (60 / t.bpm) * rate;
+  const pxPerBeat = beatSamples / v.spp;
+  // Labeled step in beats: a quarter beat up to 64 bars.
+  const choices = [0.25, 0.5, 1, per, per * 2, per * 4, per * 8, per * 16, per * 32, per * 64];
+  const step = choices.find((b) => b * pxPerBeat >= minGap) ?? per * 128;
+  const minor = step >= per ? (step === per ? 1 : step / 4) : step / 2;
+  const first = Math.floor(v.scroll / beatSamples / minor) * minor;
+  const last = (v.scroll + width * v.spp) / beatSamples;
+  const ticks: Tick[] = [];
+  const perMajor = Math.max(1, Math.round(step / minor));
+  const firstIndex = Math.round(first / minor);
+  const n = Math.ceil((last - first) / minor) + 1;
+  for (let i = 0; i <= n; i++) {
+    const k = firstIndex + i;
+    const b = k * minor;
+    const x = (b * beatSamples - v.scroll) / v.spp;
+    if (x < -1 || x > width + 1) continue;
+    let label: string | null = null;
+    if (k % perMajor === 0) {
+      const bar = Math.floor(b / per + 1e-9) + 1;
+      const inBar = b - (bar - 1) * per;
+      label = step >= per ? String(bar) : Number.isInteger(Math.round(inBar * 1000) / 1000) ? `${bar}.${Math.round(inBar) + 1}` : null;
+    }
+    ticks.push({ x, label });
+  }
+  return ticks;
+}
+
+/** Ruler ticks in the chosen display format: bars and beats, or clock time. */
+export function ticksFor(v: Viewport, width: number, rate: number, format: string, minGap?: number): Tick[] {
+  return format === "bars" ? barTicks(v, width, rate, displayTempo, minGap) : rulerTicks(v, width, rate, minGap);
 }
 
 export interface PeakLevel {

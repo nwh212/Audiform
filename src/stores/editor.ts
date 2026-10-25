@@ -10,7 +10,8 @@
 
 import { writable, type Readable } from "svelte/store";
 
-export type TimeFormat = "time" | "samples" | "timecode";
+/** How times show: minutes and seconds, plain seconds, bars and beats (at the session tempo), samples or timecode. */
+export type TimeFormat = "time" | "seconds" | "bars" | "samples" | "timecode";
 
 /** What clip drags and time selections snap to. */
 export interface SnapSettings {
@@ -81,7 +82,7 @@ const initial: EditorState = {
   selectedClips: new Set(),
   timeFormat: "time",
   width: 800,
-  snap: { on: true, clips: true, playhead: true, markers: true, ruler: false },
+  snap: { on: true, clips: true, playhead: true, markers: true, ruler: true },
   autoCrossfade: true,
   showVolume: false,
   showPan: false,
@@ -191,7 +192,7 @@ export function parseSettings(raw: unknown, base: EditorSettings = settingsOf(in
     stretchHandles: bool(o.stretchHandles, base.stretchHandles),
     brushSize: typeof o.brushSize === "number" && o.brushSize >= 2 && o.brushSize <= 80 ? Math.round(o.brushSize) : base.brushSize,
     playMode: o.playMode === "loop" || o.playMode === "skip" || o.playMode === "normal" ? o.playMode : base.playMode,
-    timeFormat: o.timeFormat === "samples" || o.timeFormat === "time" || o.timeFormat === "timecode" ? o.timeFormat : base.timeFormat,
+    timeFormat: ["samples", "time", "timecode", "seconds", "bars"].includes(o.timeFormat as string) ? (o.timeFormat as TimeFormat) : base.timeFormat,
   };
 }
 

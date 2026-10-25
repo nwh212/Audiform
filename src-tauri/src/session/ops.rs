@@ -1097,6 +1097,11 @@ fn tidy_midi_clip(c: &MidiClip) -> MidiClip {
     MidiClip {
         start: ok(c.start, 0.0),
         length: ok(c.length, 1.0 / 16.0),
+        gain_db: if c.gain_db.is_finite() {
+            c.gain_db.clamp(-96.0, 24.0)
+        } else {
+            0.0
+        },
         notes,
         ..c.clone()
     }
@@ -1533,6 +1538,7 @@ mod tests {
             length: 4.0,
             muted: false,
             color: None,
+            gain_db: 0.0,
             notes: vec![
                 Note {
                     pitch: 67,

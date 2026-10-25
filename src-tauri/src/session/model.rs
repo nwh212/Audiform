@@ -202,7 +202,15 @@ pub struct MidiClip {
     /// `#rrggbb` or a palette token. None uses the track color.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// Clip level in dB: notes play harder or softer by this much (their
+    /// velocity is scaled), up to the hardest a note can play.
+    #[serde(default, skip_serializing_if = "is_zero_db")]
+    pub gain_db: f64,
     pub notes: Vec<Note>,
+}
+
+fn is_zero_db(v: &f64) -> bool {
+    *v == 0.0
 }
 
 /// A source audio file referenced by clips.

@@ -242,6 +242,8 @@ export interface MidiClipDoc {
   length: number;
   muted?: boolean;
   color?: string | null;
+  /** Clip level in dB: its notes play harder or softer by this much. */
+  gain_db?: number;
   notes: NoteDoc[];
 }
 

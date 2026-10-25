@@ -107,7 +107,7 @@ export function transferClips(
   const moving = from.filter((c) => ids.has(c.id));
   if (moving.length === 0) return { from, to };
   const d = Math.max(-Math.min(...moving.map((c) => c.start)), delta);
-  const placed = moving.map((c) => ({ ...structuredClone(c), id: copy ? newId() : c.id, start: c.start + d }));
+  const placed = moving.map((c) => ({ ...(JSON.parse(JSON.stringify(c)) as MidiClipDoc), id: copy ? newId() : c.id, start: c.start + d }));
   return {
     from: copy ? from : from.filter((c) => !ids.has(c.id)),
     to: sorted([...to, ...placed]),

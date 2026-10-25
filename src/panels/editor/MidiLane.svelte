@@ -12,6 +12,7 @@
   the session tempo.
 -->
 <script lang="ts">
+  import { dragGain, gainText } from "./clip-gain";
   import type { MidiClipDoc, TempoDoc, TrackDoc } from "../../stores/session";
   import { beatsToSamples, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted } from "./midi";
   import { xOf, type Viewport } from "./timeline";
@@ -57,6 +58,32 @@
   /** A drag in progress: clips moving by `delta` beats, or one clip's new length. */
   let drag = $state<{ ids: Set<string>; delta: number } | null>(null);
   let sizing = $state<{ id: string; length: number } | null>(null);
+  /** The level handle being dragged: the clip and its new level. */
+  let leveling = $state<{ id: string; db: number } | null>(null);
+  const levelOf = (c: MidiClipDoc) => (leveling?.id === c.id ? leveling.db : (c.gain_db ?? 0));
+
+  /** The level handle: up or right raises the clip's level (how hard its notes play), down or left lowers it. */
+  function onLevelDown(e: PointerEvent, c: MidiClipDoc) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const start = c.gain_db ?? 0;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    leveling = { id: c.id, db: start };
+    const move = (ev: PointerEvent) => {
+      leveling = { id: c.id, db: dragGain(start, ev.clientX - sx, ev.clientY - sy, ev.shiftKey) };
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      const db = leveling?.db ?? start;
+      leveling = null;
+      if (db !== start) onSetClips(clips.map((x) => (x.id === c.id ? { ...x, gain_db: db } : x)), "Clip Level");
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  }
 
   function shown(c: MidiClipDoc): { start: number; length: number } {
     if (drag?.ids.has(c.id)) return { start: Math.max(0, c.start + drag.delta), length: c.length };
@@ -200,6 +227,14 @@
             {/each}
           </svg>
         {/if}
+        {#if w > 40 && height > 30}
+          {@const db = levelOf(c)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="lvl" title="Clip level: drag up or right to make the notes play harder, down or left softer (Shift for fine steps)." onpointerdown={(e) => onLevelDown(e, c)} ondblclick={(e) => e.stopPropagation()}>
+            <svg viewBox="0 0 14 12" aria-hidden="true"><path d="M7 2.5v7M4.5 5L7 2.5 9.5 5M4.5 7L7 9.5 9.5 7" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+          </div>
+          {#if db !== 0}<span class="lvltext">{gainText(db)}</span>{/if}
+        {/if}
         <div class="edge" title="Drag to change the clip's length"></div>
       </div>
     {/if}
@@ -270,6 +305,39 @@
   }
   .notes rect {
     fill: color-mix(in srgb, var(--clip-color) 40%, white);
+  }
+  .lvl {
+    position: absolute;
+    left: 4px;
+    bottom: 3px;
+    width: 14px;
+    height: 12px;
+    border-radius: 3px;
+    background: rgba(14, 14, 16, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: ns-resize;
+  }
+  .lvl:hover {
+    background: rgba(255, 255, 255, 0.85);
+    color: #0e0e10;
+  }
+  .lvl svg {
+    display: block;
+    width: 14px;
+    height: 12px;
+  }
+  .lvltext {
+    position: absolute;
+    left: 21px;
+    bottom: 3px;
+    height: 12px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(14, 14, 16, 0.55);
+    color: #f2f2f2;
+    font-size: 10px;
+    line-height: 12px;
+    pointer-events: none;
   }
   .edge {
     position: absolute;

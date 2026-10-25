@@ -1267,3 +1267,16 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **Effect windows.** While an effect's window is open, the Voice Chain panel stays on that effect's chain, so clicking another track or clip in the editor no longer takes the window away. Closing the window lets the panel follow the selection again.
 - **Plug-in windows (Windows).** A VST3 plug-in's own window now belongs to the main window: it stays above it when you click in the main window, and minimizes with it. The plug-in host gets the main window's handle with the open request (`owner`).
+
+## 2026-10-25: Clip level handle, and session rows' own menu
+
+- **Clip level handle.** Every clip has a small handle in its bottom-left corner (an up-and-down arrow, our own glyph). Drag it up or to the right to raise the clip's level, down or to the left to lower it (0.1 dB a pixel; Shift for 0.02). The level shows beside the handle while it is not 0, and while dragging. One undoable step ("Clip Level"). The level was already a clip setting; it no longer repeats in the title bar.
+- **MIDI clips** get a level too (`gain_db` on MIDI clips, saved only when not 0). It makes the clip's notes play harder or softer by that much (their velocity is scaled), up to the hardest a note can play, since an instrument's sound follows how hard it is played.
+- **Files panel.** Right-click a session row for Switch to This Session (or Show in Multitrack), Save, Close Session and Close All Sessions.
+
+## 2026-10-25: Bars and beats, more time formats, ruler menu
+
+- **Time formats.** Times can show as Minutes and Seconds, Seconds (65.250), Bars and Beats (bar.beat.tick from 1.1.000, 960 ticks to a beat, at the session tempo), Samples or Timecode. Pick one by right-clicking the time ruler (Time Display), from View > Time Display, or by clicking the transport clock to step through them. The ruler, Time Info and the transport clock all follow it; in Bars and Beats the ruler marks bars (or beats when zoomed in), and typed times in Time Info read bar.beat.tick, bar.beat or a bar number.
+- **Snapping to the ruler.** Snap to Ruler Marks is on for new settings and on the ruler's right-click menu (also Edit > Snapping > To Ruler Ticks). It snaps to the marks the ruler shows, so in Bars and Beats clips and selections snap to bars and beats.
+- **Following the playhead.** Scrolling or zooming by hand during playback now stops the following outright, until playback starts again, the playhead is moved, or Follow Playhead is switched on again. Before, it only stopped when the playhead went off screen, so small scrolls were pulled back.
+- **MIDI clips between tracks.** Moving and Alt-copying MIDI clips onto another MIDI track failed: the copy step could not copy the editor's live state. Fixed there, and in copying an effect between track headers and duplicating tracks, which used the same step.

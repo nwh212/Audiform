@@ -108,6 +108,8 @@
   let descending = $state(false);
   let anchor = $state<string | null>(null);
   let menu = $state<{ x: number; y: number } | null>(null);
+  /** Right-click on a session row: its own menu. */
+  let sessionMenu = $state<{ x: number; y: number; id: string } | null>(null);
 
   const visible = $derived.by(() => {
     if (!snap) return [];
@@ -479,6 +481,13 @@
           list?.focus();
         }}
         ondblclick={() => onOpenSession(sr.id)}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          pickedSession = sr.id;
+          pool.setSelection([]);
+          sessionMenu = { x: e.clientX, y: e.clientY, id: sr.id };
+        }}
       >
         <span class="col name"><span class="sicon" aria-hidden="true">▤</span>{sr.name}{sr.dirty ? " *" : ""}</span>
         <span class="col status ready"><span class="dot" aria-hidden="true"></span>{sr.front ? "Session" : "Open"}</span>
@@ -580,6 +589,22 @@
 
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => (menu = null)} />
+{/if}
+{#if sessionMenu}
+  {@const sm = sessionMenu}
+  {@const row = sessionRows.find((r) => r.id === sm.id)}
+  <ContextMenu
+    x={sm.x}
+    y={sm.y}
+    items={[
+      { kind: "item", label: row?.front ? "Show in Multitrack" : "Switch to This Session", run: () => onOpenSession(sm.id) },
+      { kind: "item", label: "Save", disabled: !row?.front, reason: "Switch to the session first.", run: () => run("file.save"), shortcut: shortcutFor("file.save") },
+      { kind: "sep" },
+      { kind: "item", label: row?.dirty ? "Close Session..." : "Close Session", shortcut: "Delete", run: () => onCloseSession(sm.id) },
+      { kind: "item", label: "Close All Sessions...", run: () => run("file.close-all") },
+    ]}
+    onClose={() => (sessionMenu = null)}
+  />
 {/if}
 
 <style>

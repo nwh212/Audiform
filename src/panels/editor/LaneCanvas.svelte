@@ -7,6 +7,7 @@
   the visible width. Redraws when the view, the track, or peaks change.
 -->
 <script lang="ts">
+  import { drawGainHandle, gainBox } from "./clip-gain";
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
   import { clipLength, stretchOf, type ClipDoc, type FadeDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
   import type { LiveWave } from "../../stores/record";
@@ -391,9 +392,8 @@
         g.fillText(`${chipLabel(showVolume, showPan, showFx)} \u25BE`, chip.x + 6, 1 + titleH / 2);
         tagRight = chip.x - 6;
       }
-      if (clip.locked || clip.gain_db !== 0 || clip.group || clip.looped) {
+      if (clip.locked || clip.group || clip.looped) {
         const tag = [
-          clip.gain_db !== 0 ? `${clip.gain_db > 0 ? "+" : ""}${clip.gain_db.toFixed(1)} dB` : "",
           clip.looped ? "Looped" : "",
           clip.group ? "Grouped" : "",
           clip.locked ? "Locked" : "",
@@ -472,6 +472,9 @@
         g.lineWidth = 1;
         g.strokeRect(x0 + 0.5, 1.5, x1 - x0 - 1, lh - 3);
       }
+      // Level handle in the bottom-left corner (see clip-gain.ts), with the level when it is not 0.
+      const gb = clip === liveClip ? null : gainBox(x0, x1, lh - 2, 1 + titleH);
+      if (gb) drawGainHandle(g, gb, clip.gain_db, `10px ${css("--font-ui")}`);
     }
 
     // Playhead.

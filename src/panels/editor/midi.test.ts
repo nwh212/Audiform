@@ -121,3 +121,18 @@ describe("moving MIDI clips between tracks", () => {
     expect(r.to.map((c) => [c.id, c.start])).toEqual([["new", 0]]);
   });
 });
+
+describe("moving clips between tracks", () => {
+  it("works on clips held as live editor state (proxies), moving and copying", async () => {
+    const { transferClips } = await import("./midi");
+    const clip = { id: "c1", name: "A", start: 4, length: 4, notes: [{ pitch: 60, velocity: 100, start: 0, length: 1 }] };
+    // A proxy, as the editor's state is: some copy functions refuse these.
+    const live = new Proxy(clip, {});
+    const moved = transferClips([live], [], new Set(["c1"]), 2, false, () => "new");
+    expect(moved.from).toEqual([]);
+    expect(moved.to.map((c) => [c.id, c.start])).toEqual([["c1", 6]]);
+    const copied = transferClips([live], [], new Set(["c1"]), 0, true, () => "new");
+    expect(copied.from).toHaveLength(1);
+    expect(copied.to.map((c) => c.id)).toEqual(["new"]);
+  });
+});
