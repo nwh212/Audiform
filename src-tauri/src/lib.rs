@@ -130,6 +130,7 @@ pub fn run() {
             commands::effects::effects_catalog,
             commands::effects::learn_noise_print,
             commands::effects::effect_response,
+            commands::effects::shaped_noise_curves,
             commands::align::phase_align,
             commands::musicfit::music_fit,
             commands::export::export_pick_path,

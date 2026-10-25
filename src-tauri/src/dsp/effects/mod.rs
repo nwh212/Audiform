@@ -22,6 +22,7 @@ pub mod phase_curve;
 mod pitch;
 pub mod print;
 mod restore;
+pub mod shaped;
 
 use std::collections::BTreeMap;
 
@@ -186,6 +187,7 @@ pub fn catalog() -> Vec<EffectInfo> {
         restore::noise_info(),
         print::print_info(),
         print::eraser_info(),
+        shaped::shaped_info(),
         restore::hiss_info(),
         restore::room_info(),
         restore::click_info(),
@@ -413,6 +415,7 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.noise_reducer" => Box::new(restore::noise_reducer(&p, rate)),
         "altaudio.noise_print" => Box::new(print::print_reducer(&p, rate)),
         "altaudio.sound_eraser" => Box::new(print::sound_eraser(&p, rate)),
+        shaped::SHAPED_NOISE => Box::new(shaped::shaped_reducer(&p, rate)),
         "altaudio.hiss_reducer" => Box::new(restore::hiss_reducer(&p, rate)),
         "altaudio.room_reducer" => Box::new(restore::room_reducer(&p, rate)),
         "altaudio.click_repair" => Box::new(restore::GapRepair::clicks(&p, rate)),

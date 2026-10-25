@@ -1080,6 +1080,11 @@ export function effectsCatalog(): Promise<EffectInfo[]> {
 }
 
 /** An EQ or filter's response: [frequency, dB] pairs from 20 Hz to 20 kHz. Empty for other effects. */
+/** The Shaped Noise Reducer's learned noise and threshold, in dB at `points` frequencies, on the scale of a `scope`-point spectrum. */
+export function shapedNoiseCurves(slot: import("../stores/session").EffectSlotDoc, points: number, scope: number): Promise<{ print: [number, number][]; threshold: [number, number][] }> {
+  return invoke("shaped_noise_curves", { slot, points, scope });
+}
+
 export function effectResponse(slot: import("../stores/session").EffectSlotDoc, points: number): Promise<[number, number][]> {
   return invoke<[number, number][]>("effect_response", { slot, points });
 }

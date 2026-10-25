@@ -57,6 +57,7 @@
   import EqGraph from "./EqGraph.svelte";
   import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
   import EffectControls from "./EffectControls.svelte";
+  import NoiseShapeGraph from "./NoiseShapeGraph.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
@@ -472,7 +473,7 @@
   // Noise Print Reducer: learn the print from the time selection. A bus
   // or the master has no audio of its own to learn from yet.
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
-  const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser"]);
+  const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
     return v && v.end > v.start ? v : null;
@@ -671,6 +672,15 @@
       {#if winSlot && winInfo}
                 {#if winSlot.effect === "altaudio.parametric_eq"}
           <EqGraph
+            slot={winSlot}
+            info={winInfo}
+            playing={!!ts?.playing}
+            playhead={ts?.playing ? ts.position : ((inWave ? waveDoc : doc)?.view.playhead ?? 0)}
+            wave={inWave}
+            onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
+          />
+        {:else if winSlot.effect === "altaudio.shaped_noise"}
+          <NoiseShapeGraph
             slot={winSlot}
             info={winInfo}
             playing={!!ts?.playing}
@@ -989,7 +999,8 @@
     width: 380px;
     /* Graph editors (the Parametric EQ) get room to work in. */
     &:has(:global(.eq)),
-    &:has(:global(.pc)) {
+    &:has(:global(.pc)),
+    &:has(:global(.ns)) {
       width: 560px;
     }
     max-width: calc(100vw - 16px);

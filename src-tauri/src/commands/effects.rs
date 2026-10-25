@@ -108,6 +108,28 @@ pub async fn effect_response(slot: EffectSlot, points: usize) -> Result<Vec<[f64
         .map_err(|e| e.to_string())
 }
 
+/// The Shaped Noise Reducer's graph: its learned noise and its threshold.
+#[derive(Debug, Clone, Serialize)]
+pub struct NoiseCurves {
+    pub print: Vec<[f64; 2]>,
+    pub threshold: Vec<[f64; 2]>,
+}
+
+/// The learned noise and the threshold of a Shaped Noise Reducer, in dB
+/// at `points` frequencies, on the scale of a `scope`-point spectrum view.
+#[tauri::command]
+pub fn shaped_noise_curves(
+    slot: EffectSlot,
+    points: usize,
+    scope: usize,
+) -> Result<NoiseCurves, String> {
+    use crate::dsp::effects::{info, shaped, Params};
+    let i = info(shaped::SHAPED_NOISE).ok_or("Unknown effect.")?;
+    let p = Params::resolve(&i, &slot.params);
+    let (print, threshold) = shaped::curves(&p, 48_000, points.clamp(2, 400), scope);
+    Ok(NoiseCurves { print, threshold })
+}
+
 /// Where to learn a noise print from: a stretch of the Waveform
 /// editor's file, or of one track or clip in the session.
 #[derive(Debug, Clone, Deserialize)]
