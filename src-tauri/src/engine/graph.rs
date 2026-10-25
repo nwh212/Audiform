@@ -51,6 +51,33 @@ pub struct NodeLevel {
     pub sends: Vec<[f32; 2]>,
     /// Fold left and right into one after the chain (the Mono button).
     pub mono: bool,
+    /// 3D Space sessions: where it plays in the room, when it feeds the
+    /// master.
+    pub place: Option<Arc<Place>>,
+}
+
+/// A source's spot in a 3D Space session, worked out as gains: per side
+/// (left, right), one per speaker for the bed, and stereo for listening.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Place {
+    pub bed: [Vec<f32>; 2],
+    pub fold: [[f32; 2]; 2],
+}
+
+impl Place {
+    fn new(
+        s: &Session,
+        pos: Option<&crate::session::model::SpacePos>,
+        stereo: bool,
+    ) -> Option<Arc<Place>> {
+        let layout = s.space?.layout;
+        let pos = pos.copied().unwrap_or_default().tidy();
+        let [l, r] = crate::dsp::space::source_gains(layout, &pos, stereo);
+        Some(Arc::new(Place {
+            bed: [l, r],
+            fold: crate::dsp::space::fold_gains(&pos, stereo),
+        }))
+    }
 }
 
 /// Every level in the graph. Changes apply live.
@@ -141,15 +168,18 @@ pub fn audible(s: &Session) -> (Vec<bool>, Vec<bool>) {
 /// and solo.
 pub fn levels(s: &Session) -> Levels {
     let (heard_t, heard_b) = audible(s);
+    let space = s.space.is_some();
     let node = |heard: bool,
                 sign: f32,
                 volume_db: f64,
                 pan: f64,
                 sends: &[crate::session::model::Send],
-                mono: bool| {
+                mono: bool,
+                place: Option<Arc<Place>>| {
         let on = if heard { sign } else { 0.0 };
         let fader = db(volume_db);
-        let [l, r] = balance(pan);
+        // In a 3D Space session the spot does what the pan would.
+        let [l, r] = if space { [1.0, 1.0] } else { balance(pan) };
         NodeLevel {
             main: [on * fader * l, on * fader * r],
             sends: sends
@@ -162,6 +192,7 @@ pub fn levels(s: &Session) -> Levels {
                 })
                 .collect(),
             mono,
+            place,
         }
     };
     Levels {
@@ -171,14 +202,24 @@ pub fn levels(s: &Session) -> Levels {
             .zip(heard_t)
             .map(|(t, h)| {
                 let sign = if t.polarity_inverted { -1.0 } else { 1.0 };
-                node(h, sign, t.volume_db, t.pan, &t.sends, t.mono)
+                let stereo = t.channels != crate::session::model::ChannelLayout::Mono && !t.mono;
+                let place = (t.output == crate::session::model::Output::Master)
+                    .then(|| Place::new(s, t.space.as_ref(), stereo))
+                    .flatten();
+                node(h, sign, t.volume_db, t.pan, &t.sends, t.mono, place)
             })
             .collect(),
         buses: s
             .buses
             .iter()
             .zip(heard_b)
-            .map(|(b, h)| node(h, 1.0, b.volume_db, b.pan, &b.sends, b.mono))
+            .map(|(b, h)| {
+                let stereo = b.channels != crate::session::model::ChannelLayout::Mono && !b.mono;
+                let place = (b.output == crate::session::model::Output::Master)
+                    .then(|| Place::new(s, b.space.as_ref(), stereo))
+                    .flatten();
+                node(h, 1.0, b.volume_db, b.pan, &b.sends, b.mono, place)
+            })
             .collect(),
     }
 }
@@ -285,6 +326,14 @@ pub struct Graph {
     scratch: Vec<f32>,
     /// The session's tempo map, told to plug-ins as playback crosses changes.
     tempo: Arc<Tempo>,
+    /// 3D Space sessions: speaker channels in the bed.
+    bed_channels: usize,
+    /// The bed for the last block (interleaved, one channel per speaker),
+    /// made only when asked for (exports).
+    bed: Vec<f32>,
+    want_bed: bool,
+    /// 3D Space sessions heard on headphones: the bed rendered to two ears.
+    binaural: Option<crate::dsp::binaural::Binaural>,
 }
 
 impl Graph {
@@ -520,7 +569,31 @@ impl Graph {
             levels: lv,
             scratch: Vec::new(),
             tempo: Arc::new(s.tempo.clone()),
+            bed_channels: s
+                .space
+                .map_or(0, |sp| crate::dsp::space::speakers(sp.layout).len()),
+            bed: Vec::new(),
+            want_bed: false,
+            binaural: s
+                .space
+                .filter(|sp| sp.listen == crate::session::model::SpaceListen::Binaural)
+                .map(|sp| crate::dsp::binaural::Binaural::new(sp.layout, rate)),
         }
+    }
+
+    /// 3D Space sessions: speaker channels in the bed (0 otherwise).
+    pub fn bed_channels(&self) -> usize {
+        self.bed_channels
+    }
+
+    /// Makes the bed as well as the stereo mix (for exports).
+    pub fn set_want_bed(&mut self, on: bool) {
+        self.want_bed = on && self.bed_channels > 0;
+    }
+
+    /// The bed for the last block, before the master fader.
+    pub fn bed(&self) -> &[f32] {
+        &self.bed
     }
 
     /// The session's tempo map.
@@ -628,6 +701,12 @@ impl Graph {
         }
         self.master.input.clear();
         self.master.input.resize(n, 0.0);
+        let nb = self.bed_channels;
+        let make_bed = self.want_bed || self.binaural.is_some();
+        if make_bed {
+            self.bed.clear();
+            self.bed.resize(frames * nb, 0.0);
+        }
         for o in out.iter_mut() {
             o.clear();
             o.resize(n, 0.0);
@@ -679,6 +758,31 @@ impl Graph {
                     }
                 }
                 route.delay.run(&mut scratch);
+                // 3D Space: placed into the room, and folded to stereo to listen.
+                if r == 0 && matches!(route.dest, Dest::Master) {
+                    if let Some(p) = to.place.as_ref() {
+                        let f = p.fold;
+                        for (o, v) in self
+                            .master
+                            .input
+                            .chunks_exact_mut(2)
+                            .zip(scratch.chunks_exact(2))
+                        {
+                            o[0] += v[0] * f[0][0] + v[1] * f[1][0];
+                            o[1] += v[0] * f[0][1] + v[1] * f[1][1];
+                        }
+                        if make_bed {
+                            let [gl, gr] = &p.bed;
+                            for (o, v) in self.bed.chunks_exact_mut(nb).zip(scratch.chunks_exact(2))
+                            {
+                                for c in 0..nb {
+                                    o[c] += v[0] * gl[c] + v[1] * gr[c];
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
                 let into: &mut Vec<f32> = match route.dest {
                     Dest::Bus(b) => &mut self.buses[b].input,
                     Dest::Master if r == 0 => &mut self.master.input,
@@ -695,7 +799,16 @@ impl Graph {
                 Node::Bus(i) => self.buses[i] = st,
             }
         }
-        if self.routed {
+        if self.routed && nb > 0 {
+            // 3D Space sessions have no master chain: it would change only
+            // the stereo listening mix, not the speakers.
+            if let Some(o) = out.first_mut() {
+                match self.binaural.as_mut() {
+                    Some(b) => b.process(&self.bed, o),
+                    None => o.copy_from_slice(&self.master.input),
+                }
+            }
+        } else if self.routed {
             let mut m = std::mem::take(&mut self.master);
             self.fill_keys(&mut m.keys, n);
             run_strip(&mut m);

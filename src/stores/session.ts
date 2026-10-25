@@ -97,6 +97,8 @@ export interface BusDoc {
   position?: number | null;
   /** Folded to mono after its Voice Chain. Missing when off. */
   mono?: boolean;
+  /** 3D Space sessions: where it sits in the room. */
+  space?: SpacePosDoc | null;
   [key: string]: unknown;
 }
 
@@ -208,6 +210,8 @@ export interface TrackDoc {
   polarity_inverted?: boolean;
   /** Folded to mono after its Voice Chain. Missing in files where it is off. */
   mono?: boolean;
+  /** 3D Space sessions: where it sits in the room. */
+  space?: SpacePosDoc | null;
   /** Folded to its name row. Missing in files where it is off. */
   collapsed?: boolean;
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
@@ -250,6 +254,26 @@ export interface MidiClipDoc {
   notes: NoteDoc[];
 }
 
+/** Speaker layouts a 3D Space session plays and exports in. */
+export type SpaceLayout = "2.0" | "5.1" | "7.1" | "5.1.2" | "7.1.2" | "5.1.4" | "7.1.4";
+export const SPACE_LAYOUTS: SpaceLayout[] = ["2.0", "5.1", "7.1", "5.1.2", "7.1.2", "5.1.4", "7.1.4"];
+export interface SpaceDoc {
+  layout: SpaceLayout;
+  /** Stereo: each sound folded to stereo. Binaural: the speakers heard around a head, for headphones. */
+  listen?: "stereo" | "binaural";
+}
+/** A spot in the room: x left -1 to right 1, y back -1 to front 1, z floor 0 to ceiling 1. */
+export interface SpacePosDoc {
+  x: number;
+  y: number;
+  z: number;
+  /** 0 a point, 1 fills the room. */
+  size: number;
+  /** Stereo sources: how far apart their left and right sit, 0 to 1. */
+  width: number;
+}
+export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1 };
+
 export { BPM_MAX, BPM_MIN, DEFAULT_TEMPO, type TempoChangeDoc, type TempoDoc } from "./tempo";
 
 /** The session's tempo (the default when the file has none). */
@@ -290,6 +314,8 @@ export interface SessionDoc {
   };
   /** Missing at the default, 120 BPM in 4. */
   tempo?: TempoDoc;
+  /** 3D Space sessions: the speaker layout and how it is heard. Missing for an ordinary session. */
+  space?: SpaceDoc | null;
   [key: string]: unknown;
 }
 
@@ -389,6 +415,8 @@ export interface TrackChanges {
   pan?: number;
   polarity_inverted?: boolean;
   mono?: boolean;
+  /** 3D Space sessions: where it sits in the room. */
+  space?: SpacePosDoc | null;
   collapsed?: boolean;
   hidden?: boolean;
   monitor_input?: boolean;
@@ -417,6 +445,8 @@ export interface BusChanges {
   /** Shows the bus below the last track again. */
   clear_position?: boolean;
   mono?: boolean;
+  /** 3D Space sessions: where it sits in the room. */
+  space?: SpacePosDoc | null;
 }
 
 /** An edit the core understands. */
@@ -457,6 +487,7 @@ export type Op =
   | { op: "set_sends"; owner: string; sends: SendDoc[] }
   | { op: "set_midi_clips"; track_id: string; clips: MidiClipDoc[] }
   | { op: "set_tempo"; tempo: TempoDoc }
+  | { op: "set_space"; space: SpaceDoc | null }
   | { op: "batch"; ops: Op[] };
 
 export interface SessionBackend {
@@ -654,7 +685,7 @@ function mergeKey(op: Op): string | null {
   if (op.op === "set_sends") return `sends:${op.owner}`;
   if (op.op !== "set_track" && op.op !== "set_bus") return null;
   const keys = Object.keys(op.changes);
-  if (keys.length !== 1 || !["volume_db", "pan", "height"].includes(keys[0]!))
+  if (keys.length !== 1 || !["volume_db", "pan", "height", "space"].includes(keys[0]!))
     return null;
   return `${op.id}:${keys[0]}`;
 }

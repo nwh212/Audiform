@@ -169,7 +169,9 @@ pub fn has_loop(s: &Session) -> bool {
 /// a track or bus routed to a bus, a send, a master chain, or a
 /// sidechain. Then the whole mix runs on the render thread.
 pub fn is_routed(s: &Session) -> bool {
-    crate::dsp::effects::is_active(&s.master.effects)
+    // 3D Space sessions place every track on the render thread.
+    s.space.is_some()
+        || crate::dsp::effects::is_active(&s.master.effects)
         || s.tracks
             .iter()
             .any(|t| t.output != Output::Master || t.sends.iter().any(|x| x.enabled))

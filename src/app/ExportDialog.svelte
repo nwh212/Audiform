@@ -20,6 +20,8 @@
     addToFiles: boolean;
     /** Write chapter markers into the file (MP3 and FLAC). */
     chapters: boolean;
+    /** 3D Space sessions: a speaker layout ("5.1", "7.1.4"...) or "binaural". */
+    speakers?: string;
   }
 
   export interface ExportScopeInfo {
@@ -35,6 +37,8 @@
 <script lang="ts">
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat, estimateBytes, extensionOf } from "./output-format";
+  import { SPACE_LAYOUTS, type SpaceLayout } from "../stores/session";
+  import { LAYOUT_NAMES } from "../panels/space/space";
 
   interface Props {
     initial: ExportSettings;
@@ -43,10 +47,12 @@
     onBrowse: (from: string) => Promise<string | null>;
     /** Chapter markers in the session. */
     chapterCount?: number;
+    /** 3D Space sessions: the session's speaker layout, to offer every layout and binaural. */
+    spaceLayout?: SpaceLayout | null;
     onDone: (value: ExportSettings | null) => void;
   }
 
-  const { initial, scopes, source, onBrowse, chapterCount = 0, onDone }: Props = $props();
+  const { initial, scopes, source, onBrowse, chapterCount = 0, spaceLayout = null, onDone }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   let s = $state<ExportSettings>({ ...initial, format: { ...initial.format } });
@@ -58,6 +64,11 @@
   });
 
   const current = $derived(scopes.find((x) => x.scope === s.scope));
+  /** A layout with more than two speakers is written as a WAV with one channel per speaker. */
+  const multi = $derived(!!spaceLayout && s.speakers !== undefined && s.speakers !== "binaural" && s.speakers !== "2.0");
+  $effect(() => {
+    if (multi && s.format.kind !== "wav") s.format = { ...s.format, kind: "wav" };
+  });
   const ext = $derived(extensionOf(s.format.kind));
   const summary = $derived(describeFormat(s.format, source));
   const size = $derived.by(() => {
@@ -123,6 +134,20 @@
         </span>
       </div>
     </section>
+
+    {#if spaceLayout}
+      <section>
+        <h2>Speakers</h2>
+        <label class="line" title="The same session plays in any layout: pick one for this file. Layouts with more than two speakers are written as WAV with one channel per speaker, labeled for other software. Headphones writes a stereo binaural mix.">
+          <span>Layout</span>
+          <select bind:value={s.speakers}>
+            {#each SPACE_LAYOUTS as l (l)}<option value={l}>{LAYOUT_NAMES[l]}{l === spaceLayout ? " (the session's)" : ""}</option>{/each}
+            <option value="binaural">Headphones (binaural stereo)</option>
+          </select>
+        </label>
+        {#if multi}<p class="summary">Written as a WAV with one channel per speaker.</p>{/if}
+      </section>
+    {/if}
 
     <section>
       <h2>Audio</h2>

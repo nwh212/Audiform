@@ -61,6 +61,11 @@ pub struct Session {
     /// follow it. Files from before MIDI tracks get the default.
     #[serde(default, skip_serializing_if = "Tempo::is_default")]
     pub tempo: Tempo,
+    /// 3D Space sessions: the speaker layout the mix is placed onto, each
+    /// track and bus at a spot in the room instead of a pan. None for an
+    /// ordinary stereo (or mono) session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<Space>,
     pub markers: Vec<Marker>,
     /// Playlist panel: range markers in the order they play and export.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -104,6 +109,7 @@ impl Session {
             buses: Vec::new(),
             master: MasterTrack::default(),
             tempo: Tempo::default(),
+            space: None,
             markers: Vec::new(),
             playlist: Vec::new(),
             view: SessionView::default(),
@@ -509,6 +515,10 @@ pub struct Track {
     /// file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mono: bool,
+    /// 3D Space sessions: where the track sits in the room (in place of
+    /// its pan). None sits at the front center.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<SpacePos>,
 
     /// Scaffolding (P4): armed for recording.
     pub record_armed: bool,
@@ -554,6 +564,7 @@ impl Track {
             solo: false,
             polarity_inverted: false,
             mono: false,
+            space: None,
             record_armed: false,
             monitor_input: false,
             input: None,
@@ -604,6 +615,10 @@ pub struct Bus {
     /// Voice Chain and before its fader and pan. Left out of the file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mono: bool,
+    /// 3D Space sessions: where the bus sits in the room, when it feeds
+    /// the master (in place of its pan).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<SpacePos>,
 }
 
 impl Bus {
@@ -625,6 +640,107 @@ impl Bus {
             envelopes: Vec::new(),
             position: None,
             mono: false,
+            space: None,
+        }
+    }
+}
+
+/// A speaker layout a 3D Space session can be placed onto. Spots are
+/// kept in room terms, so any session plays and exports in any layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum SpaceLayout {
+    #[serde(rename = "2.0")]
+    Stereo20,
+    #[serde(rename = "5.1")]
+    Surround51,
+    #[serde(rename = "7.1")]
+    Surround71,
+    #[serde(rename = "5.1.2")]
+    Surround512,
+    #[serde(rename = "7.1.2")]
+    Surround712,
+    #[serde(rename = "5.1.4")]
+    Surround514,
+    #[serde(rename = "7.1.4")]
+    Surround714,
+}
+
+impl SpaceLayout {
+    pub const ALL: [SpaceLayout; 7] = [
+        SpaceLayout::Stereo20,
+        SpaceLayout::Surround51,
+        SpaceLayout::Surround71,
+        SpaceLayout::Surround512,
+        SpaceLayout::Surround712,
+        SpaceLayout::Surround514,
+        SpaceLayout::Surround714,
+    ];
+}
+
+/// How a 3D Space session is heard while working.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpaceListen {
+    /// Each sound folded to stereo by where it sits left to right.
+    #[default]
+    Stereo,
+    /// The layout's speakers heard as if around a head, for headphones.
+    Binaural,
+}
+
+/// What makes a session a 3D Space session.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Space {
+    /// The layout it plays in and exports to unless an export picks another.
+    pub layout: SpaceLayout,
+    #[serde(default)]
+    pub listen: SpaceListen,
+}
+
+/// A spot in the room. x runs left (-1) to right (1), y back (-1) to
+/// front (1), z floor (0) to ceiling (1).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct SpacePos {
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub z: f64,
+    /// 0 is a point; 1 fills the room.
+    #[serde(default)]
+    pub size: f64,
+    /// Stereo sources: how far left and right of the spot their two
+    /// sides sit, 0 (together) to 1 (a full room width apart each way).
+    #[serde(default = "full_width")]
+    pub width: f64,
+}
+
+fn full_width() -> f64 {
+    1.0
+}
+
+impl Default for SpacePos {
+    /// Front center, as wide as the front speakers.
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+            size: 0.0,
+            width: 1.0,
+        }
+    }
+}
+
+impl SpacePos {
+    /// The same spot with every value in range.
+    pub fn tidy(&self) -> SpacePos {
+        let c = |v: f64, lo: f64, hi: f64, d: f64| if v.is_finite() { v.clamp(lo, hi) } else { d };
+        SpacePos {
+            x: c(self.x, -1.0, 1.0, 0.0),
+            y: c(self.y, -1.0, 1.0, 1.0),
+            z: c(self.z, 0.0, 1.0, 0.0),
+            size: c(self.size, 0.0, 1.0, 0.0),
+            width: c(self.width, 0.0, 1.0, 1.0),
         }
     }
 }
@@ -1038,6 +1154,29 @@ pub struct EpisodeMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn space_settings_round_trip_and_stay_out_of_plain_files() {
+        let mut s = Session::new("t", 48_000);
+        s.tracks.push(Track::new("A", ChannelLayout::Stereo));
+        let plain = serde_json::to_string(&s).unwrap();
+        assert!(!plain.contains("space"));
+        s.space = Some(Space {
+            layout: SpaceLayout::Surround712,
+            listen: SpaceListen::Binaural,
+        });
+        s.tracks[0].space = Some(SpacePos {
+            x: -0.5,
+            y: 0.25,
+            z: 0.75,
+            size: 0.1,
+            width: 0.5,
+        });
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains(r#""layout":"7.1.2""#));
+        let back: Session = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, s);
+    }
 
     #[test]
     fn tempo_map_follows_changes_at_bars() {

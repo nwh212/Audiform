@@ -17,7 +17,8 @@ use uuid::Uuid;
 use super::model::{
     AudioType, Bus, ChannelLayout, Clip, ClipLoop, ClipStretch, EffectChain, EffectSlot, Envelope,
     EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef, MidiClip, Output, Send,
-    Session, SessionView, Tempo, Track, TrackKind, TrackRole, STRETCH_MAX, STRETCH_MIN,
+    Session, SessionView, Space, SpacePos, Tempo, Track, TrackKind, TrackRole, STRETCH_MAX,
+    STRETCH_MIN,
 };
 
 /// Points for one effect setting's envelope on a clip.
@@ -83,6 +84,9 @@ pub struct TrackChanges {
     pub volume_db: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pan: Option<f64>,
+    /// 3D Space sessions: where the track sits in the room.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<SpacePos>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polarity_inverted: Option<bool>,
     /// Folds the track to mono after its Voice Chain.
@@ -129,6 +133,9 @@ pub struct BusChanges {
     pub volume_db: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pan: Option<f64>,
+    /// 3D Space sessions: where the bus sits in the room.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<SpacePos>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
     /// Where the bus's sound goes: the master or another bus.
@@ -386,6 +393,11 @@ pub enum Op {
     SetTempo {
         tempo: Tempo,
     },
+    /// Makes the session a 3D Space session with this speaker layout, or
+    /// an ordinary one again (None). Track and bus spots are kept.
+    SetSpace {
+        space: Option<Space>,
+    },
     /// Replaces the aux sends of a track or bus.
     SetSends {
         owner: Id,
@@ -607,6 +619,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.pan {
                 old.pan = Some(std::mem::replace(&mut t.pan, v.clamp(-100.0, 100.0)));
+            }
+            if let Some(v) = changes.space {
+                old.space = Some(t.space.replace(v.tidy()).unwrap_or_default());
             }
             if let Some(v) = changes.polarity_inverted {
                 old.polarity_inverted = Some(std::mem::replace(&mut t.polarity_inverted, v));
@@ -978,6 +993,9 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             if let Some(v) = changes.pan {
                 old.pan = Some(std::mem::replace(&mut b.pan, v.clamp(-100.0, 100.0)));
             }
+            if let Some(v) = changes.space {
+                old.space = Some(b.space.replace(v.tidy()).unwrap_or_default());
+            }
             if let Some(v) = changes.height {
                 old.height = Some(std::mem::replace(&mut b.height, v.clamp(40, 600)));
             }
@@ -1020,6 +1038,10 @@ fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
                 track_id: *track_id,
                 clips: old,
             })
+        }
+        Op::SetSpace { space } => {
+            let old = std::mem::replace(&mut s.space, *space);
+            Ok(Op::SetSpace { space: old })
         }
         Op::SetTempo { tempo } => {
             let old = std::mem::replace(&mut s.tempo, tempo.tidy());

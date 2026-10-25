@@ -26,7 +26,8 @@ export type PanelId =
   | "playlist"
   | "loudness-match"
   | "properties"
-  | "phase-wheel";
+  | "phase-wheel"
+  | "space";
 
 export type Side = "left" | "right" | "above" | "below";
 
@@ -184,6 +185,14 @@ export const PANELS: readonly PanelDef[] = [
     title: "Phase Wheel",
     inDefault: false,
     home: [{ reference: "audio-fx", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
+    pending: null,
+  },
+  {
+    id: "space",
+    title: "3D Space",
+    inDefault: false,
+    // Beside the Editor and Mixer: the room needs room.
+    home: [{ reference: "editor", direction: "within" }, { reference: "mixer", direction: "within" }, { edge: "right" }],
     pending: null,
   },
 ];

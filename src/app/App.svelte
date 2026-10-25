@@ -40,6 +40,7 @@
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
   import { peaks, session, transport } from "../stores/open-session";
   import PhaseWheelPanel from "../panels/phase/PhaseWheelPanel.svelte";
+  import SpacePanel from "../panels/space/SpacePanel.svelte";
   import PropertiesPanel from "../panels/properties/PropertiesPanel.svelte";
   import LevelsPanel from "../panels/levels/LevelsPanel.svelte";
   import { PreviewMeter } from "../stores/preview-meter";
@@ -1184,6 +1185,7 @@
         format: sanitizeFormat(saved?.format),
         addToFiles: saved?.addToFiles === true,
         chapters: (saved as { chapters?: unknown } | null)?.chapters !== false,
+        ...(doc.space ? { speakers: doc.space.layout } : {}),
       },
       scopes,
       source: { sampleRate: doc.sample_rate, channels: doc.master?.channels === "mono" ? 1 : 2, bitDepth: doc.bit_depth },
@@ -1204,7 +1206,7 @@
       ]);
       if (ok !== "yes") return;
     }
-    await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters);
+    await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters, v.speakers);
   }
 
   async function mixDown(source: MixSource, target: MixTarget) {
@@ -1263,7 +1265,7 @@
     }
   }
 
-  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false) {
+  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string) {
     const what = mixRange(source);
     if (!what || exporting) return;
     exporting = { title: target === "track" ? "Bouncing to a new track" : "Exporting mixdown", progress: 0, floating: true };
@@ -1276,6 +1278,7 @@
         ...(what.range ? { range: what.range } : {}),
         ...(what.clips ? { clips: what.clips } : {}),
         ...(format ? { format } : {}),
+        ...(speakers === "binaural" ? { binaural: true } : speakers ? { spaceLayout: speakers } : {}),
       });
       if (r.cancelled) {
         showNotice("Export cancelled. Nothing was saved.");
@@ -1699,6 +1702,8 @@
         return { component: asComponent(TimeInfoPanel), props: { session, transport, wave, waveTransport } };
       case "levels":
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter } };
+      case "space":
+        return { component: asComponent(SpacePanel), props: { session, runner: sessionHistory, onError: showError } };
       case "phase-wheel":
         return { component: asComponent(PhaseWheelPanel), props: { transport, wave: waveTransport } };
       case "batch-convert":
@@ -4264,6 +4269,15 @@
     if (pluginsUrl) offs.push(actions.register({ id: "help.plugins", run: () => openLink(pluginsUrl) }));
     const supportUrl = LINKS.support;
     if (supportUrl) offs.push(actions.register({ id: "help.support", run: () => openLink(supportUrl) }));
+    // Shows the 3D Space panel (without closing it when already open).
+    offs.push(
+      actions.register({
+        id: "multitrack.space",
+        run: () => {
+          if (!openPanels.has("space")) dock.toggle("space");
+        },
+      }),
+    );
     for (const p of PANELS) {
       offs.push(
         actions.register({
@@ -4615,6 +4629,7 @@
     scopes={exportReq.scopes}
     source={exportReq.source}
     chapterCount={session.current?.markers.filter((m) => m.kind === "chapter").length ?? 0}
+    spaceLayout={session.current?.space?.layout ?? null}
     onBrowse={(from) => exportPickFolder(from || null, "Export To")}
     onDone={(v) => void finishExportDialog(v)}
   />

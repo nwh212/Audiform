@@ -2258,7 +2258,19 @@
                 format={(v) => `${formatDb(v)}`}
                 onChange={(v) => setValue(track, "volume_db", v)}
               />
-              <Dial value={track.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setValue(track, "pan", v)} />
+              {#if doc?.space}
+                <button
+                  type="button"
+                  class="ms space3d"
+                  title="3D Space session: this track plays at a spot in the room instead of a pan. Click to place it in the 3D Space panel."
+                  onclick={() => {
+                    editor.selectTrack(track.id);
+                    run("multitrack.space");
+                  }}>3D</button
+                >
+              {:else}
+                <Dial value={track.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setValue(track, "pan", v)} />
+              {/if}
               <button
                 type="button"
                 class="ms pol"
@@ -3111,6 +3123,13 @@
   .ms.on {
     background: var(--accent-dim);
     color: #fff;
+  }
+
+  .ms.space3d {
+    width: 30px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
   }
 
   .ms.solo.on {

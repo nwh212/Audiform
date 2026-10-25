@@ -5,12 +5,14 @@
 //! Signal processing: effects, filters, spectral tools and time stretch.
 
 pub mod align;
+pub mod binaural;
 pub mod biquad;
 pub mod effects;
 pub mod elliptic;
 pub mod meters;
 pub mod musicfit;
 pub mod nam;
+pub mod space;
 pub mod spectral;
 pub mod stft;
 pub mod stretch;

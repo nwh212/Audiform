@@ -605,6 +605,10 @@ export interface MixdownRequest {
   dry?: boolean;
   /** Render at playback speed, for plug-ins that only work in real time. */
   realtime?: boolean;
+  /** 3D Space sessions: the speaker layout to write (omit for the session's). */
+  spaceLayout?: string;
+  /** 3D Space sessions: a stereo file for headphones. */
+  binaural?: boolean;
 }
 
 export interface MixdownResult {
@@ -648,6 +652,8 @@ export function exportMixdown(path: string, request: MixdownRequest): Promise<Mi
       track: request.track ?? null,
       format: request.format ?? null,
       realtime: request.realtime ?? false,
+      space_layout: request.spaceLayout ?? null,
+      binaural: request.binaural ?? false,
     },
   });
 }

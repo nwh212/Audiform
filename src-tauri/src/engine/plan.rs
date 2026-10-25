@@ -696,6 +696,8 @@ fn routing_hash(session: &Session) -> u64 {
     };
     let routed = crate::session::routing::is_routed(session);
     mix(u128::from(routed));
+    mix(session.space.map_or(0, |s| s.layout as u128 + 1));
+    mix(session.space.map_or(0, |s| s.listen as u128));
     let output = |o: &crate::session::model::Output| match o {
         crate::session::model::Output::Master => 0,
         crate::session::model::Output::Bus { bus_id } => bus_id.as_u128(),

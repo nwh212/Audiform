@@ -15,3 +15,4 @@ pub mod m4a_tags;
 pub mod mixdown;
 pub mod region;
 pub mod tags;
+pub mod wav_multi;

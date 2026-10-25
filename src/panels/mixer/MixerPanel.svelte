@@ -201,6 +201,9 @@
         {#if doc}
           <SendList {doc} {session} {runner} {onError} kind={t.kind} id={t.id} name={t.name} output={t.output} sends={t.sends} />
         {/if}
+        {#if doc?.space}
+          <div class="pan space3d" title="3D Space session: this plays at a spot in the room instead of a pan. Place it in the 3D Space panel (Multitrack > 3D Space).">3D</div>
+        {:else}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="pan"
@@ -212,6 +215,7 @@
           <div class="pan-dot" style:left="{(t.pan + 100) / 2}%"></div>
           <span>{formatPan(t.pan)}</span>
         </div>
+        {/if}
         <div class="buttons">
           <button type="button" class:on={t.muted} class="m" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
           <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo"} aria-pressed={t.solo} onclick={() => setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track")}>S</button>
@@ -303,6 +307,14 @@
 {/if}
 
 <style>
+  .pan.space3d {
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
   .mixer {
     display: flex;
     height: 100%;

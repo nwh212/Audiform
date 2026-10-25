@@ -89,6 +89,17 @@
       "format": "uint32",
       "minimum": 0
     },
+    "space": {
+      "description": "3D Space sessions: the speaker layout the mix is placed onto, each\ntrack and bus at a spot in the room instead of a pan. None for an\nordinary stereo (or mono) session.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Space"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "template_id": {
       "description": "Template this session was created from, if any.",
       "type": [
@@ -209,6 +220,17 @@
         },
         "solo": {
           "type": "boolean"
+        },
+        "space": {
+          "description": "3D Space sessions: where the bus sits in the room, when it feeds\nthe master (in place of its pan).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpacePos"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "volume_db": {
           "type": "number",
@@ -1165,6 +1187,86 @@
         "playhead"
       ]
     },
+    "Space": {
+      "description": "What makes a session a 3D Space session.",
+      "type": "object",
+      "properties": {
+        "layout": {
+          "description": "The layout it plays in and exports to unless an export picks another.",
+          "$ref": "#/$defs/SpaceLayout"
+        },
+        "listen": {
+          "$ref": "#/$defs/SpaceListen",
+          "default": "stereo"
+        }
+      },
+      "required": [
+        "layout"
+      ]
+    },
+    "SpaceLayout": {
+      "description": "A speaker layout a 3D Space session can be placed onto. Spots are\nkept in room terms, so any session plays and exports in any layout.",
+      "type": "string",
+      "enum": [
+        "2.0",
+        "5.1",
+        "7.1",
+        "5.1.2",
+        "7.1.2",
+        "5.1.4",
+        "7.1.4"
+      ]
+    },
+    "SpaceListen": {
+      "description": "How a 3D Space session is heard while working.",
+      "oneOf": [
+        {
+          "description": "Each sound folded to stereo by where it sits left to right.",
+          "type": "string",
+          "const": "stereo"
+        },
+        {
+          "description": "The layout's speakers heard as if around a head, for headphones.",
+          "type": "string",
+          "const": "binaural"
+        }
+      ]
+    },
+    "SpacePos": {
+      "description": "A spot in the room. x runs left (-1) to right (1), y back (-1) to\nfront (1), z floor (0) to ceiling (1).",
+      "type": "object",
+      "properties": {
+        "size": {
+          "description": "0 is a point; 1 fills the room.",
+          "type": "number",
+          "format": "double",
+          "default": 0.0
+        },
+        "width": {
+          "description": "Stereo sources: how far left and right of the spot their two\nsides sit, 0 (together) to 1 (a full room width apart each way).",
+          "type": "number",
+          "format": "double",
+          "default": 1.0
+        },
+        "x": {
+          "type": "number",
+          "format": "double"
+        },
+        "y": {
+          "type": "number",
+          "format": "double"
+        },
+        "z": {
+          "type": "number",
+          "format": "double",
+          "default": 0.0
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    },
     "StretchAdvanced": {
       "description": "Finer stretch settings. The window size sets the length of the\nanalysis frames; the rest are kept for files that carry them.",
       "type": "object",
@@ -1412,6 +1514,17 @@
         },
         "solo": {
           "type": "boolean"
+        },
+        "space": {
+          "description": "3D Space sessions: where the track sits in the room (in place of\nits pan). None sits at the front center.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpacePos"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "volume_db": {
           "type": "number",
