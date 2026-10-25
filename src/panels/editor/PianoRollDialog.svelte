@@ -14,16 +14,25 @@
   box; moving or stretching one picked note moves or stretches them all.
   Copy and paste (Ctrl+C, Ctrl+V) paste at the last spot clicked. Snap
   turns the grid on and off. The velocity lane below sets how hard each
-  note plays. Done (or Escape) keeps the changes as one undoable edit;
+  note plays.
+  Getting around: the mouse wheel scrolls up and down the keys, Shift
+  and the wheel scrolls along time, Ctrl and the wheel zooms time around
+  the pointer, Alt and the wheel makes the keys taller or shorter. Drag
+  with the middle button to pan either way. The bar under the roll shows
+  the part in view: drag it to scroll, drag its ends to zoom, and
+  double-click it to fit the clip. The wheel over the bar ruler zooms too. Done (or Escape) keeps the changes as one undoable edit;
   Cancel drops them.
 -->
 <script lang="ts" module>
   /** Copied notes, kept while the app runs, so they paste into any clip. */
   let clipboard: import("../../stores/session").NoteDoc[] = [];
+  /** Key height, kept while the app runs. */
+  let lastRow = 14;
 </script>
 <script lang="ts">
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
-  import { barBeats, segmentAtBeat } from "../../stores/tempo";
+  import { barAt, barBeats, segmentAtBeat } from "../../stores/tempo";
+  import { tick } from "svelte";
   import { GRIDS, MIN_NOTE, addNote, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
@@ -59,36 +68,193 @@
   /** Length (beats) of the next note added: the last one drawn or resized. */
   let drawLength = $state(0.25);
 
-  const ROW = 14;
+  /** Key height in pixels. */
+  let row = $state(lastRow);
+  $effect(() => {
+    lastRow = row;
+  });
+  const KEYS_W = 46;
+  const RULER_H = 18;
+  const ZOOM_MIN = 4;
+  const ZOOM_MAX = 600;
+  const ROW_MIN = 6;
+  const ROW_MAX = 36;
   const step = $derived(snapOn ? gridBeats(grid, tempo, original.start) : 0);
   /** Beats in a bar where the clip starts. */
   const barLen = $derived(barBeats(segmentAtBeat(tempo, original.start)));
   const changed = $derived(JSON.stringify($state.snapshot(clip)) !== JSON.stringify(original));
   /** The grid runs two bars past the clip's end (or its last note), so there is room to work. */
   const widthPx = $derived(
-    (Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * barLen) * zoom,
+    Math.max((Math.max(clip.length, ...clip.notes.map((n) => n.start + n.length), cursor ?? 0) + 2 * barLen) * zoom, viewW - KEYS_W),
   );
 
   let scroller = $state<HTMLDivElement | null>(null);
-  $effect(() => {
+  /** The scroll position and view size, kept for the zoom bar. */
+  let scrollX = $state(0);
+  let viewW = $state(800);
+  const totalBeats = $derived(widthPx / zoom);
+
+  /** Zooms time so the whole clip is in view. */
+  function fit() {
     if (!scroller) return;
+    const room = scroller.clientWidth - KEYS_W - 16;
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, room / Math.max(0.25, clip.length)));
+    scroller.scrollLeft = 0;
+  }
+
+  let opened = false;
+  $effect(() => {
+    if (!scroller || opened) return;
+    opened = true;
     // Open on the notes there are, or around middle C.
     const [lo, hi] = pitchRange(original.notes);
     const mid = (lo + hi) / 2;
-    scroller.scrollTop = (127 - mid) * ROW - scroller.clientHeight / 2;
+    scroller.scrollTop = (127 - mid) * row - scroller.clientHeight / 2;
     // And zoomed so the whole clip fits.
-    const room = scroller.clientWidth - 60;
-    zoom = Math.min(160, Math.max(16, room / Math.max(1, original.length)));
+    fit();
   });
 
-  const yOf = (pitch: number) => (127 - pitch) * ROW;
+  /** Zooms time to `next` pixels a beat, keeping the beat under `px` (pixels into the view) where it is. */
+  async function zoomTime(next: number, px = (viewW - KEYS_W) / 2) {
+    if (!scroller) return;
+    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+    const beat = (scroller.scrollLeft + px) / zoom;
+    zoom = z;
+    await tick();
+    scroller.scrollLeft = beat * z - px;
+  }
+
+  /** Makes the keys `next` pixels tall, keeping the key under `py` (pixels into the view) where it is. */
+  async function zoomKeys(next: number, py = scroller ? scroller.clientHeight / 2 : 0) {
+    if (!scroller) return;
+    const r = Math.round(Math.min(ROW_MAX, Math.max(ROW_MIN, next)));
+    if (r === row) return;
+    const key = (scroller.scrollTop + py - RULER_H) / row;
+    row = r;
+    await tick();
+    scroller.scrollTop = key * r - py + RULER_H;
+  }
+
+  function onRollWheel(e: WheelEvent) {
+    if (!scroller) return;
+    const rect = scroller.getBoundingClientRect();
+    const d = e.deltaY || e.deltaX;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      void zoomTime(zoom * (d < 0 ? 1.2 : 1 / 1.2), Math.max(0, e.clientX - rect.left - KEYS_W));
+    } else if (e.altKey) {
+      e.preventDefault();
+      void zoomKeys(row + (d < 0 ? 2 : -2), e.clientY - rect.top);
+    } else if (e.shiftKey) {
+      e.preventDefault();
+      scroller.scrollLeft += d;
+    }
+    // A plain wheel scrolls up and down the keys.
+  }
+
+  function onRulerWheel(e: WheelEvent) {
+    if (!scroller) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = scroller.getBoundingClientRect();
+    if (e.shiftKey) scroller.scrollLeft += e.deltaY || e.deltaX;
+    else void zoomTime(zoom * ((e.deltaY || e.deltaX) < 0 ? 1.2 : 1 / 1.2), Math.max(0, e.clientX - rect.left - KEYS_W));
+  }
+
+  /** Middle button: drag to pan either way. */
+  function onRollDown(e: PointerEvent) {
+    if (e.button !== 1 || !scroller) return;
+    e.preventDefault();
+    const el = scroller;
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const l0 = el.scrollLeft;
+    const t0 = el.scrollTop;
+    el.style.cursor = "grabbing";
+    const move = (ev: PointerEvent) => {
+      el.scrollLeft = l0 - (ev.clientX - x0);
+      el.scrollTop = t0 - (ev.clientY - y0);
+    };
+    const up = () => {
+      el.style.cursor = "";
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  }
+
+  // The zoom bar: the part of the clip in view, in beats.
+  const shownFrom = $derived(scrollX / zoom);
+  const shownTo = $derived((scrollX + Math.max(1, viewW - KEYS_W)) / zoom);
+  let zoomBar = $state<HTMLDivElement | null>(null);
+
+  function onZoomBarDown(e: PointerEvent, part: "move" | "start" | "end" | "track") {
+    if (e.button !== 0 || !zoomBar || !scroller) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const barW = zoomBar.getBoundingClientRect().width;
+    const total = totalBeats;
+    const perPx = total / Math.max(1, barW);
+    const a0 = shownFrom;
+    const b0 = shownTo;
+    const x0 = e.clientX;
+    const room = Math.max(1, viewW - KEYS_W);
+    if (part === "track") {
+      // Jump so the clicked spot is in the middle.
+      const r = zoomBar.getBoundingClientRect();
+      const at = ((e.clientX - r.left) / barW) * total;
+      scroller.scrollLeft = (at - (b0 - a0) / 2) * zoom;
+      return;
+    }
+    const move = async (ev: PointerEvent) => {
+      if (!scroller) return;
+      const d = (ev.clientX - x0) * perPx;
+      if (part === "move") {
+        scroller.scrollLeft = (a0 + d) * zoom;
+        return;
+      }
+      // An end: zoom so the other end stays put.
+      let a = a0;
+      let b = b0;
+      if (part === "start") a = Math.min(b0 - room / ZOOM_MAX, Math.max(0, a0 + d));
+      else b = Math.max(a0 + room / ZOOM_MAX, b0 + d);
+      const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, room / (b - a)));
+      zoom = z;
+      await tick();
+      scroller.scrollLeft = (part === "start" ? b * z - room : a * z);
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  }
+
+  /** Bar numbers along the top, counted as in the session. */
+  const firstBar = $derived(barAt(tempo, original.start).bar);
+  const rulerBars = $derived.by(() => {
+    const out: { x: number; label: string | null }[] = [];
+    const n = Math.ceil(totalBeats / barLen) + 1;
+    // Label every bar, or every few when bars are narrow.
+    const every = Math.max(1, 2 ** Math.ceil(Math.log2(Math.max(1, 34 / (barLen * zoom)))));
+    for (let k = 0; k < n; k++) out.push({ x: k * barLen * zoom, label: k % every === 0 ? String(firstBar + k + 1) : null });
+    return out;
+  });
+
+  const yOf = (pitch: number) => (127 - pitch) * row;
   const xOf = (beat: number) => beat * zoom;
 
   /** Where a pointer is on the grid: beat (unsnapped) and pitch. */
   function at(e: MouseEvent, el: HTMLElement): { beat: number; pitch: number } {
     const r = el.getBoundingClientRect();
     const beat = Math.max(0, (e.clientX - r.left) / zoom);
-    const pitch = Math.min(127, Math.max(0, 127 - Math.floor((e.clientY - r.top) / ROW)));
+    const pitch = Math.min(127, Math.max(0, 127 - Math.floor((e.clientY - r.top) / row)));
     return { beat, pitch };
   }
 
@@ -154,7 +320,7 @@
           const nx0 = xOf(n.start);
           const nx1 = xOf(n.start + n.length);
           const ny0 = yOf(n.pitch);
-          if (nx1 >= bx0 && nx0 <= bx1 && ny0 + ROW >= by0 && ny0 <= by1) inside.add(k);
+          if (nx1 >= bx0 && nx0 <= bx1 && ny0 + row >= by0 && ny0 <= by1) inside.add(k);
         });
         picked = inside;
       };
@@ -202,7 +368,7 @@
       if (mode === "move") {
         // The grabbed note lands on the grid; the rest keep their places around it.
         const d = step > 0 ? snap(grabbed.start + dBeats, step) - grabbed.start : dBeats;
-        const ds = -Math.round((ev.clientY - startY) / ROW);
+        const ds = -Math.round((ev.clientY - startY) / row);
         clip = { ...clip, notes: moveNotes(base, sel, d, ds) };
         // Moved to another pitch: hear it there.
         const now = Math.min(127, Math.max(0, grabbed.pitch + ds));
@@ -362,37 +528,60 @@
           onchange={(e) => (clip = { ...clip, notes: setVelocity(clip.notes, picked, Number(e.currentTarget.value) || 100) })}
         />
       </label>
-      <span class="zoom">
-        <button type="button" title="Zoom out" aria-label="Zoom out" onclick={() => (zoom = Math.max(12, zoom / 1.5))}>−</button>
-        <button type="button" title="Zoom in" aria-label="Zoom in" onclick={() => (zoom = Math.min(400, zoom * 1.5))}>+</button>
+      <span class="zoom" role="group" aria-label="Zoom">
+        <button type="button" title="Zoom out in time (Ctrl and the mouse wheel)" aria-label="Zoom out in time" onclick={() => void zoomTime(zoom / 1.5)}>−</button>
+        <button type="button" title="Zoom in in time (Ctrl and the mouse wheel)" aria-label="Zoom in in time" onclick={() => void zoomTime(zoom * 1.5)}>+</button>
+        <button type="button" title="Fit the clip in view (or double-click the bar under the roll)" onclick={fit}>Fit</button>
+        <button type="button" title="Shorter keys (Alt and the mouse wheel)" aria-label="Shorter keys" onclick={() => void zoomKeys(row - 2)}>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h10M3 10.5h10" stroke="currentColor" stroke-width="1.3" /><path d="M8 1.5v3l-1.5-1.5M8 4.5l1.5-1.5M8 14.5v-3l-1.5 1.5M8 11.5l1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.1" /></svg>
+        </button>
+        <button type="button" title="Taller keys (Alt and the mouse wheel)" aria-label="Taller keys" onclick={() => void zoomKeys(row + 2)}>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h10M3 10.5h10" stroke="currentColor" stroke-width="1.3" /><path d="M8 4.5v-3L6.5 3M8 1.5L9.5 3M8 11.5v3l-1.5-1.5M8 14.5l1.5-1.5" fill="none" stroke="currentColor" stroke-width="1.1" /></svg>
+        </button>
       </span>
       <button type="button" disabled={!picked.size} title="Copy the picked notes (Ctrl+C)" onclick={() => copyPicked()}>Copy</button>
       <button type="button" disabled={!hasCopy} title="Paste at the last spot clicked (Ctrl+V)" onclick={paste}>Paste</button>
       <button type="button" disabled={!picked.size} title="Delete the picked notes (Delete)" onclick={deletePicked}>Delete</button>
     </header>
 
-    <div class="roll" bind:this={scroller}>
-      <div class="keys" style:height="{128 * ROW}px">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="roll"
+      bind:this={scroller}
+      bind:clientWidth={viewW}
+      onscroll={() => (scrollX = scroller?.scrollLeft ?? 0)}
+      onwheel={onRollWheel}
+      onpointerdown={onRollDown}
+      onauxclick={(e) => e.preventDefault()}
+    >
+      <div class="keys" style:height="{128 * row + RULER_H}px">
+        <div class="keys-corner" style:height="{RULER_H}px"></div>
         {#each pitches as p (p)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{ROW}px" title={noteName(p)} onpointerdown={() => onAudition(p, 100, 0.4)}>{p % 12 === 0 ? noteName(p) : ""}</div>
+          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{row}px" title={noteName(p)} onpointerdown={(e) => e.button === 0 && onAudition(p, 100, 0.4)}>{p % 12 === 0 && row >= 9 ? noteName(p) : ""}</div>
         {/each}
       </div>
       <div class="area">
         <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="ruler" style:width="{widthPx}px" style:height="{RULER_H}px" onwheel={onRulerWheel} title="Bars. Mouse wheel here zooms time (Shift scrolls).">
+          {#each rulerBars as b, k (k)}
+            <span class="tick" class:labeled={b.label !== null} style:left="{b.x}px">{b.label ?? ""}</span>
+          {/each}
+        </div>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="grid"
           style:width="{widthPx}px"
-          style:height="{128 * ROW}px"
+          style:height="{128 * row}px"
           style:--beat="{zoom}px"
           style:--bar="{zoom * barLen}px"
-          style:--row="{ROW}px"
+          style:--row="{row}px"
           onpointerdown={onGridDown}
           ondblclick={deleteAt}
           oncontextmenu={deleteAt}
         >
           {#each pitches as p (p)}
-            {#if isBlackKey(p)}<div class="row-black" style:top="{yOf(p)}px" style:height="{ROW}px"></div>{/if}
+            {#if isBlackKey(p)}<div class="row-black" style:top="{yOf(p)}px" style:height="{row}px"></div>{/if}
           {/each}
           <div class="past" style:left="{xOf(clip.length)}px" title="Past the clip's end: notes here are not played. Lengthen the clip to hear them."></div>
           <div class="end" style:left="{xOf(clip.length)}px" title="The clip ends here"></div>
@@ -408,7 +597,7 @@
               style:left="{xOf(n.start)}px"
               style:top="{yOf(n.pitch) + 1}px"
               style:width="{Math.max(3, n.length * zoom - 1)}px"
-              style:height="{ROW - 2}px"
+              style:height="{row - 2}px"
               style:--vel={n.velocity / 127}
               title="{noteName(n.pitch)}, velocity {n.velocity}"
             >
@@ -422,6 +611,19 @@
             <div class="bar" class:picked={picked.has(i)} style:left="{xOf(n.start)}px" style:height="{(n.velocity / 127) * 100}%"></div>
           {/each}
         </div>
+      </div>
+    </div>
+
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="zoombar" bind:this={zoomBar} onpointerdown={(e) => onZoomBarDown(e, "track")} ondblclick={fit} title="The part of the clip in view. Drag to scroll, drag an end to zoom, double-click to fit the clip.">
+      <div
+        class="thumb"
+        style:left="{(Math.max(0, shownFrom) / Math.max(totalBeats, 1e-9)) * 100}%"
+        style:width="{Math.min(1, (shownTo - shownFrom) / Math.max(totalBeats, 1e-9)) * 100}%"
+        onpointerdown={(e) => onZoomBarDown(e, "move")}
+      >
+        <span class="edge s" onpointerdown={(e) => onZoomBarDown(e, "start")}></span>
+        <span class="edge e" onpointerdown={(e) => onZoomBarDown(e, "end")}></span>
       </div>
     </div>
 
@@ -447,7 +649,7 @@
   }
   .dialog {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr auto auto;
     gap: 8px;
     width: min(1100px, 96vw);
     height: min(720px, 90vh);
@@ -509,7 +711,8 @@
   .roll {
     display: flex;
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     border: 1px solid var(--border);
     background: var(--surface-1);
   }
@@ -521,6 +724,79 @@
     width: 46px;
     background: var(--surface-3);
   }
+  .keys-corner {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--surface-2);
+  }
+  .ruler {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    cursor: zoom-in;
+    overflow: hidden;
+  }
+  .ruler .tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    padding-left: 3px;
+    border-left: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 17px;
+    white-space: nowrap;
+  }
+  .ruler .tick:not(.labeled) {
+    top: 10px;
+  }
+  .zoombar {
+    position: relative;
+    height: 14px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface-1);
+    cursor: pointer;
+  }
+  .zoombar .thumb {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    min-width: 14px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 30%, var(--surface-3));
+    cursor: grab;
+    touch-action: none;
+  }
+  .zoombar .edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: color-mix(in srgb, var(--text) 25%, transparent);
+    cursor: ew-resize;
+  }
+  .zoombar .edge.s {
+    left: 0;
+    border-radius: 2px 0 0 2px;
+  }
+  .zoombar .edge.e {
+    right: 0;
+    border-radius: 0 2px 2px 0;
+  }
+  .zoom button svg {
+    width: 12px;
+    height: 12px;
+    vertical-align: middle;
+  }
   .key {
     cursor: pointer;
     box-sizing: border-box;
@@ -529,7 +805,10 @@
     background: #e8e8e8;
     color: #333;
     font-size: 9px;
-    line-height: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
   }
   .key.black {
     background: #2a2a2a;
