@@ -216,6 +216,8 @@ export interface TrackDoc {
   collapsed?: boolean;
   /** Its automation lanes show under it. */
   show_automation?: boolean;
+  /** Automation lanes: volume, pan and effect settings over the session's time. */
+  envelopes?: EnvelopeDoc[];
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
   hidden?: boolean;
   monitor_input?: boolean;

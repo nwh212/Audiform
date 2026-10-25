@@ -28,7 +28,7 @@
   import { rowTarget } from "../voice-chain/slot-drag";
   import { pluginMenuGroups, type MenuPlugin } from "../voice-chain/chain";
   import { effectWindowRequest } from "../voice-chain/effect-window";
-  import type { EffectSlotDoc, Op } from "../../stores/session";
+  import type { EffectSlotDoc, EnvelopeDoc, Op } from "../../stores/session";
   import { pluginsVersion } from "../../stores/plugins";
   import { stretchTo } from "./stretch";
   import { timeDisplayItems } from "./time-menu";
@@ -52,6 +52,8 @@
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
   import TempoStrip from "./TempoStrip.svelte";
   import MetronomeRow from "./MetronomeRow.svelte";
+  import AutoLane from "./AutoLane.svelte";
+  import { AUTO_H, autoAt, autoChoices, autoMode, autoName, autoRange, autoRest, dropLane, isOrphan, newLane, nextTarget, putLane, setMode, shownLanes, targetKey, type AutoTarget } from "./automation";
   import { setMetronomePrefs } from "../../stores/metronome";
   import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
   import type { Readable } from "svelte/store";
@@ -1722,6 +1724,7 @@
       { kind: "item", label: "Select All Clips on Track", disabled: track.clips.length === 0, run: () => editor.selectClips(withGroups(doc!, track.clips.map((c) => c.id)), track.id) },
       { kind: "sep" },
       { kind: "item", label: "Rename Track", run: () => (renaming = track.id) },
+      { kind: "item", label: track.show_automation ? "Hide Automation Lanes" : "Show Automation Lanes", run: () => toggleLanes(track) },
       { kind: "item", label: "Track Color...", run: () => (colorFor = { kind: "track", id: track.id, current: track.color ?? null }) },
       { kind: "item", label: "Duplicate Track", run: () => { editor.selectTrack(track.id); run("multitrack.duplicate-track"); } },
       { kind: "item", label: "Delete Track", run: () => { editor.selectTrack(track.id); run("multitrack.delete-track"); } },
@@ -1737,6 +1740,69 @@
 
   function setTrack(track: TrackDoc, changes: TrackChanges, label: string) {
     void session.edit(label, trackOp(doc, track.id, changes as Record<string, unknown>), runner).catch(onError);
+  }
+
+  // Automation lanes under a track.
+  const lanesHeight = (t: TrackDoc) => (t.show_automation && !t.collapsed ? shownLanes(t).length * AUTO_H : 0);
+
+  function setLanes(track: TrackDoc, envelopes: EnvelopeDoc[], label: string) {
+    void session.edit(label, { op: "set_envelopes", owner: track.id, envelopes }, runner).catch(onError);
+  }
+
+  function toggleLanes(track: TrackDoc) {
+    setTrack(track, { show_automation: !track.show_automation }, track.show_automation ? "Hide Automation Lanes" : "Show Automation Lanes");
+  }
+
+  function addLane(track: TrackDoc, target: AutoTarget | null = nextTarget(track, fxCatalog)) {
+    if (!target) return;
+    // The starting Volume lane is not saved until it has points; keep it when adding another.
+    const base = (track.envelopes?.length ?? 0) === 0 ? [newLane({ type: "volume" })] : (track.envelopes ?? []);
+    const envelopes = [...base, newLane(target)];
+    const ops: Op[] = [{ op: "set_envelopes", owner: track.id, envelopes }];
+    if (!track.show_automation) ops.push({ op: "set_track", id: track.id, changes: { show_automation: true } });
+    void session.edit("Add Automation Lane", ops.length === 1 ? ops[0]! : { op: "batch", ops }, runner).catch(onError);
+  }
+
+  /** Points a lane at another setting. Its points are kept only when the value range is the same kind. */
+  function pickTarget(track: TrackDoc, lane: EnvelopeDoc, key: string) {
+    const c = autoChoices(track, fxCatalog).find((x) => targetKey(x.target) === key);
+    if (!c || targetKey(c.target) === targetKey(lane.target)) return;
+    const same = c.target.type === lane.target.type && c.target.type !== "effect_param";
+    setLanes(track, putLane(track, { ...lane, target: c.target, points: same ? lane.points : [] }), `Automate ${c.label}`);
+  }
+
+  function laneItems(track: TrackDoc, lane: EnvelopeDoc, index: number): ContextItem[] {
+    const name = autoName(track, fxCatalog, lane.target);
+    const at = (v: number) => putLane(track, { ...lane, points: lane.points.filter((_, k) => k !== v) });
+    return [
+      { kind: "item", label: "Delete Point", disabled: index < 0, run: () => setLanes(track, at(index), "Delete Automation Point") },
+      {
+        kind: "item",
+        label: "Add Point at Playhead",
+        run: () => {
+          const v = lane.points.length ? autoAt(lane.points, playhead, autoRest(track, fxCatalog, lane.target)) : autoRest(track, fxCatalog, lane.target);
+          const pts = lane.points.filter((p) => p.position !== Math.round(playhead)).concat({ position: Math.max(0, Math.round(playhead)), value: v, curve: "linear" as const });
+          pts.sort((a, b) => a.position - b.position);
+          setLanes(track, putLane(track, { ...lane, points: pts }), "Add Automation Point");
+        },
+      },
+      {
+        kind: "item",
+        label: "Delete Points in Time Selection",
+        disabled: !doc?.view.selection || !lane.points.some((p) => p.position >= doc!.view.selection!.start && p.position <= doc!.view.selection!.end),
+        run: () => {
+          const sel = doc?.view.selection;
+          if (!sel) return;
+          setLanes(track, putLane(track, { ...lane, points: lane.points.filter((p) => p.position < sel.start || p.position > sel.end) }), "Delete Automation Points");
+        },
+      },
+      { kind: "item", label: `Clear ${name} Lane`, disabled: lane.points.length === 0, run: () => setLanes(track, putLane(track, { ...lane, points: [] }), "Clear Automation Lane") },
+      { kind: "sep" },
+      { kind: "item", label: lane.enabled ? "Turn Lane Off" : "Turn Lane On", disabled: !lane.id, run: () => setLanes(track, putLane(track, { ...lane, enabled: !lane.enabled }), lane.enabled ? "Automation Lane Off" : "Automation Lane On") },
+      { kind: "item", label: "Add Lane", disabled: !nextTarget(track, fxCatalog), run: () => addLane(track) },
+      { kind: "item", label: "Remove Lane", disabled: !lane.id, run: () => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane") },
+      { kind: "item", label: "Hide Automation Lanes", run: () => toggleLanes(track) },
+    ];
   }
 
   const formatDb = (v: number) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
@@ -2328,17 +2394,24 @@
                     {#if out.type === "bus" && !busChoices(doc, track.id).some((bc) => out.type === "bus" && bc.id === out.bus_id)}<option value={out.bus_id}>{outName(out)}</option>{/if}
                   </select>
                 </label>
+                {#if shownHeight(track) < ROW_AUTO}{@render lanesToggle(track)}{/if}
               </div>
             {/if}
             {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_AUTO}
               <div class="line">
-                <select class="auto" value="read" title="Automation mode. Read plays back the track's automation; Off, Write, Latch and Touch arrive with automation (P5).">
-                  <option value="off" disabled>Off (arrives with automation)</option>
+                <select
+                  class="auto"
+                  value={autoMode(track)}
+                  title="Automation mode. Read plays the track's automation lanes; Off plays none of them (the fader, pan and effects hold still). Write, Latch and Touch (recording moves while playing) are not built yet."
+                  onchange={(e) => setLanes(track, setMode(track, e.currentTarget.value === "off" ? "off" : "read"), "Automation Mode")}
+                >
+                  <option value="off" disabled={(track.envelopes?.length ?? 0) === 0}>Off</option>
                   <option value="read">Read</option>
-                  <option value="write" disabled>Write (arrives with automation)</option>
-                  <option value="latch" disabled>Latch (arrives with automation)</option>
-                  <option value="touch" disabled>Touch (arrives with automation)</option>
+                  <option value="write" disabled>Write (not built yet)</option>
+                  <option value="latch" disabled>Latch (not built yet)</option>
+                  <option value="touch" disabled>Touch (not built yet)</option>
                 </select>
+                {@render lanesToggle(track)}
               </div>
             {/if}
             {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_SENDS && doc}
@@ -2353,6 +2426,42 @@
             <!-- Level meter: the input while armed, otherwise playback. -->
             <TrackMeter levels={meterOf(track)} armed={track.record_armed} onClear={() => transport.clearOver(track.id)} />
           </div>
+          {#if track.show_automation && !track.collapsed}
+            {@const lanes = shownLanes(track)}
+            {#each lanes as lane, k (lane.id || "new")}
+              <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{AUTO_H}px">
+                <div class="line">
+                  <select
+                    class="auto-pick"
+                    value={targetKey(lane.target)}
+                    title="The setting this lane moves"
+                    onchange={(e) => pickTarget(track, lane, e.currentTarget.value)}
+                  >
+                    {#if isOrphan(track, fxCatalog, lane.target)}<option value={targetKey(lane.target)}>Removed effect</option>{/if}
+                    {#each autoChoices(track, fxCatalog) as c (targetKey(c.target))}
+                      <option value={targetKey(c.target)} disabled={targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}>{c.label}</option>
+                    {/each}
+                  </select>
+                </div>
+                <div class="line">
+                  <button
+                    type="button"
+                    class="ms wide"
+                    class:on={lane.enabled}
+                    title={lane.enabled ? "This lane plays (Read). Click to turn it off and hold the setting still." : "This lane is off. Click to play it."}
+                    aria-pressed={lane.enabled}
+                    disabled={!lane.id}
+                    onclick={() => setLanes(track, putLane(track, { ...lane, enabled: !lane.enabled }), lane.enabled ? "Automation Lane Off" : "Automation Lane On")}
+                  >{lane.enabled ? "Read" : "Off"}</button>
+                  <span class="auto-count">{lane.points.length === 0 ? "Click the lane to add points" : `${lane.points.length} point${lane.points.length === 1 ? "" : "s"}`}</span>
+                  {#if k === lanes.length - 1}
+                    <button type="button" class="ms" title="Add a lane for another setting" disabled={!nextTarget(track, fxCatalog)} onclick={() => addLane(track)}>+</button>
+                  {/if}
+                  <button type="button" class="ms" title="Remove this lane and its points" disabled={!lane.id} onclick={() => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane")}>×</button>
+                </div>
+              </div>
+            {/each}
+          {/if}
           {:else}
           {@const b = row.bus}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -2507,6 +2616,7 @@
                 dropTarget={midiDrop === track.id}
               />
             </div>
+            {@render autoLanes(track, row.i)}
             {:else if row.kind === "track"}
             {@const track = row.track}
             {@const i = row.i}
@@ -2545,6 +2655,7 @@
                 stretchHandles={ed.stretchHandles}
               />
             </div>
+            {@render autoLanes(track, i)}
             {:else}
             {@const b = row.bus}
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -2606,7 +2717,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer} onpointermove={onVbarHover} ondblclick={fitAllTracks} onwheel={onVbarWheel} title="Drag to scroll the tracks. Drag the thumb's ends, or use the mouse wheel here, to zoom: every track the same height. Double-click to fit them all.">
     {#each shown as track, i (track.id)}
-      <div class="vseg" style:height="{(shownHeight(track) / Math.max(1, rowsH)) * 100}%" style:background={trackColor(track.color, i)}></div>
+      <div class="vseg" style:height="{((shownHeight(track) + lanesHeight(track)) / Math.max(1, rowsH)) * 100}%" style:background={trackColor(track.color, i)}></div>
     {/each}
     {#if rowsH > 0}
       <div class="vthumb" style:top="{(scrollTop / rowsH) * 100}%" style:height="{(scrollerH / rowsH) * 100}%">
@@ -2630,6 +2741,39 @@
   />
 </section>
 {/if}
+
+{#snippet lanesToggle(track: TrackDoc)}
+<button
+  type="button"
+  class="ms autos"
+  class:on={!!track.show_automation}
+  class:has={(track.envelopes?.length ?? 0) > 0}
+  title={track.show_automation ? "Hide automation lanes" : (track.envelopes?.length ?? 0) > 0 ? `Show automation lanes (${track.envelopes!.length})` : "Show automation lanes: draw volume, pan or effect settings over time"}
+  aria-pressed={!!track.show_automation}
+  onclick={() => toggleLanes(track)}
+>
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 11.5L5 6l4 3.5 5.5-6" fill="none" stroke="currentColor" stroke-width="1.4" /><circle cx="5" cy="6" r="1.4" fill="currentColor" /><circle cx="9" cy="9.5" r="1.4" fill="currentColor" /></svg>
+</button>
+{/snippet}
+
+{#snippet autoLanes(track: TrackDoc, i: number)}
+  {#if track.show_automation && !track.collapsed}
+    {#each shownLanes(track) as lane (lane.id || "new")}
+      <AutoLane
+        {lane}
+        range={autoRange(track, fxCatalog, lane.target)}
+        rest={autoRest(track, fxCatalog, lane.target)}
+        {view}
+        width={lanesWidth}
+        height={AUTO_H}
+        color={trackColor(track.color, i)}
+        {playhead}
+        onPoints={(points, label) => setLanes(track, putLane(track, { ...lane, points }), label)}
+        onMenu={(e, index) => (menu = { x: e.clientX, y: e.clientY, items: laneItems(track, lane, index) })}
+      />
+    {/each}
+  {/if}
+{/snippet}
 
 {#if envTip}
   <div class="env-tip" style:left="{envTip.x}px" style:top="{envTip.y}px">{envTip.text}</div>
@@ -3132,6 +3276,49 @@
   .ms.on {
     background: var(--accent-dim);
     color: #fff;
+  }
+
+  .ms.autos {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ms.autos svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .ms.autos.has:not(.on) {
+    color: var(--accent);
+  }
+
+  .ms.wide {
+    width: auto;
+    padding: 0 6px;
+  }
+
+  .header.auto-head {
+    justify-content: center;
+    padding-left: 22px;
+    background: color-mix(in srgb, var(--header-a) 88%, var(--track-color) 12%);
+    cursor: default;
+  }
+
+  .auto-pick {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-small);
+  }
+
+  .auto-count {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: var(--font-size-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .ms.space3d {
