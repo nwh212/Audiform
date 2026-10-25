@@ -345,10 +345,10 @@ export function waveNewFromClips<S, C, M>(name: string, sampleRate: number, chan
  * clips) into a new untitled file and opens it in the Waveform editor.
  * Null when cancelled. Progress arrives as `export-progress` events.
  */
-export async function waveNewFromMix<S>(name: string, request: { range?: [number, number]; clips?: string[] }): Promise<{ doc: WaveDocRaw<S>; result: MixdownResult } | null> {
+export async function waveNewFromMix<S>(name: string, request: { range?: [number, number]; clips?: string[]; realtime?: boolean }): Promise<{ doc: WaveDocRaw<S>; result: MixdownResult } | null> {
   const r = await invoke<[WaveDocRaw<S>, MixdownResult] | null>("wave_new_from_mix", {
     name,
-    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: null },
+    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: null, realtime: request.realtime ?? false },
   });
   return r ? { doc: r[0], result: r[1] } : null;
 }
@@ -559,6 +559,8 @@ export interface MixdownRequest {
   clipOnly?: boolean;
   /** Leave every Voice Chain out (measuring the raw audio). */
   dry?: boolean;
+  /** Render at playback speed, for plug-ins that only work in real time. */
+  realtime?: boolean;
 }
 
 export interface MixdownResult {
@@ -601,6 +603,7 @@ export function exportMixdown(path: string, request: MixdownRequest): Promise<Mi
       bit_depth: request.bitDepth ?? null,
       track: request.track ?? null,
       format: request.format ?? null,
+      realtime: request.realtime ?? false,
     },
   });
 }

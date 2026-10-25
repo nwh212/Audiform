@@ -51,6 +51,8 @@ export interface AppSettings {
   waveInput: string | null;
   autosave: boolean;
   autosaveMinutes: number;
+  /** Mix down sessions that use VST3 plug-ins at playback speed, for plug-ins that only work in real time. */
+  realtimePlugins: boolean;
   /** Show the Voice Chain when an effect is added from the Effects menu. */
   openChainOnAdd: boolean;
   /** Soloing a track unsolos the others. */
@@ -120,6 +122,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autosave: true,
   autosaveMinutes: 2,
   openChainOnAdd: true,
+  realtimePlugins: false,
   soloExclusive: false,
   meterYellowDb: -12,
   meterRedDb: -3,
@@ -190,6 +193,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       num(o.autosaveMinutes, 1, 60, d.autosaveMinutes),
     ),
     openChainOnAdd: bool(o.openChainOnAdd, d.openChainOnAdd),
+    realtimePlugins: bool(o.realtimePlugins, d.realtimePlugins),
     soloExclusive: bool(o.soloExclusive, d.soloExclusive),
     meterYellowDb: yellow,
     // Red sits above yellow.

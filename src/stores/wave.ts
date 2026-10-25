@@ -129,7 +129,7 @@ export async function newWaveFromClips(sampleRate: number, clips: ClipDoc[], med
 }
 
 /** Mix Down to New File: the session's mix as a new untitled file. Null when cancelled. */
-export async function newWaveFromMix(name: string, request: { range?: [number, number]; clips?: string[] }): Promise<MixdownResult | null> {
+export async function newWaveFromMix(name: string, request: { range?: [number, number]; clips?: string[]; realtime?: boolean }): Promise<MixdownResult | null> {
   spectralSelection.set(null);
   await waveTransport.stop();
   const made = await waveNewFromMix<SessionDoc>(name, request);

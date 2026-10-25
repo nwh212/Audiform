@@ -59,6 +59,11 @@ pub struct MixdownRequest {
     /// rate, using `bit_depth` and `channels` above.
     #[serde(default)]
     pub format: Option<OutputFormat>,
+    /// Renders at playback speed rather than as fast as possible, for
+    /// plug-ins that only work in real time (pitch correction, immersive
+    /// panners and other tools that follow the clock).
+    #[serde(default)]
+    pub realtime: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -180,7 +185,16 @@ fn render_mix_inner(
     let mut out = vec![Vec::with_capacity(BLOCK * 2)];
     let mut peak = 0f32;
     let mut done = 0u64;
+    let clock = std::time::Instant::now();
     while done < total {
+        if req.realtime {
+            // Stay no more than a block ahead of the wall clock, as playback does.
+            let due = std::time::Duration::from_secs_f64(done as f64 / f64::from(rate));
+            let ahead = due.saturating_sub(clock.elapsed());
+            if ahead > std::time::Duration::from_millis(20) {
+                std::thread::sleep(ahead - std::time::Duration::from_millis(10));
+            }
+        }
         if cancel.load(Ordering::Relaxed) {
             return Ok(Rendered {
                 frames: done,
@@ -374,6 +388,26 @@ mod tests {
     }
 
     #[test]
+    fn a_realtime_mixdown_takes_as_long_as_the_audio() {
+        let dir = tempfile::tempdir().unwrap();
+        let (s, _a, _b) = session_with(dir.path());
+        let req = MixdownRequest {
+            range: Some((0, 24_000)),
+            realtime: true,
+            ..Default::default()
+        };
+        let at = std::time::Instant::now();
+        let r = render_mix(&s, &req, &AtomicBool::new(false), |_, _| {}, |_| Ok(())).unwrap();
+        assert_eq!(r.frames, 24_000);
+        // Paced a block at a time: done no sooner than the audio, less the last block.
+        assert!(
+            at.elapsed() >= std::time::Duration::from_millis(250),
+            "{:?}",
+            at.elapsed()
+        );
+    }
+
+    #[test]
     fn mixes_a_range_or_selected_clips_and_can_cancel() {
         let dir = tempfile::tempdir().unwrap();
         let (s, _a, b) = session_with(dir.path());
@@ -387,6 +421,7 @@ mod tests {
             dry: false,
             channels: None,
             format: None,
+            realtime: false,
         };
         let r = mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert_eq!(r.frames, 10_000);
@@ -505,6 +540,7 @@ mod tests {
             dry: false,
             channels: Some(1),
             format: None,
+            realtime: false,
         };
         mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
         let rd = hound::WavReader::open(&out).unwrap();

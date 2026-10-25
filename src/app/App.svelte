@@ -115,6 +115,7 @@
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
   import { CompoundCommand } from "../commands/compound";
   import { repointPlan, toCopy } from "./session-media";
+  import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
   import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase } from "../lib/platform";
@@ -723,7 +724,12 @@
   /** A mixdown with every plug-in's latest settings saved in the session first. */
   async function exportMix(path: string, req: Parameters<typeof exportMixdown>[1]) {
     await pluginSync.captureAll().catch(showError);
-    return exportMixdown(path, req);
+    return exportMixdown(path, { ...req, ...(realtimeMix() ? { realtime: true } : {}) });
+  }
+  /** Settings > Effects: sessions with VST3 plug-ins mix down at playback speed. */
+  function realtimeMix(): boolean {
+    const doc = session.current;
+    return settings.current.realtimePlugins && !!doc && pluginSlots(doc).length > 0;
   }
 
   /** Gives every `id` field inside a copied object a new value. */
@@ -1231,6 +1237,7 @@
       });
       await pluginSync.captureAll().catch(showError);
       const r = await newWaveFromMix(`${doc.name} ${suffix}`, {
+        ...(realtimeMix() ? { realtime: true } : {}),
         ...(what.range ? { range: what.range } : {}),
         ...(what.clips ? { clips: what.clips } : {}),
       });
