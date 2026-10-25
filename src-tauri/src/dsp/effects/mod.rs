@@ -23,6 +23,7 @@ mod pitch;
 pub mod print;
 mod restore;
 pub mod shaped;
+pub mod tube;
 
 use std::collections::BTreeMap;
 
@@ -182,6 +183,8 @@ pub fn catalog() -> Vec<EffectInfo> {
         dynamics::gate_info(),
         dynamics::deesser_info(),
         dynamics::leveler_info(),
+        tube::opto_info(),
+        tube::preamp_info(),
         filters::center_info(),
         pitch::pitch_info(),
         restore::noise_info(),
@@ -416,6 +419,16 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.noise_print" => Box::new(print::print_reducer(&p, rate)),
         "altaudio.sound_eraser" => Box::new(print::sound_eraser(&p, rate)),
         shaped::SHAPED_NOISE => Box::new(shaped::shaped_reducer(&p, rate)),
+        tube::OPTO => Box::new(tube::Opto::new(
+            &p,
+            rate,
+            crate::dsp::meters::for_slot(slot.id),
+        )),
+        tube::PREAMP => Box::new(tube::Preamp::new(
+            &p,
+            rate,
+            crate::dsp::meters::for_slot(slot.id),
+        )),
         "altaudio.hiss_reducer" => Box::new(restore::hiss_reducer(&p, rate)),
         "altaudio.room_reducer" => Box::new(restore::room_reducer(&p, rate)),
         "altaudio.click_repair" => Box::new(restore::GapRepair::clicks(&p, rate)),

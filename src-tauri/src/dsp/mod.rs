@@ -8,6 +8,7 @@ pub mod align;
 pub mod biquad;
 pub mod effects;
 pub mod elliptic;
+pub mod meters;
 pub mod musicfit;
 pub mod spectral;
 pub mod stft;

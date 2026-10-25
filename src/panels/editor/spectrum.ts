@@ -53,11 +53,16 @@ export function viewRange(v: FreqView, nyquist: number): [number, number] {
 export function viewFreq(frac: number, v: FreqView, nyquist: number): number {
   const [lo, hi] = viewRange(v, nyquist);
   const t = Math.min(1, Math.max(0, frac));
-  const lin = lo + (hi - lo) * t;
-  const l0 = Math.max(lo, LOG_FLOOR);
-  const lg = l0 * Math.pow(Math.max(hi, l0 + 1) / l0, t);
   const k = Math.min(1, Math.max(0, v.log));
-  return (1 - k) * lin + k * lg;
+  const l0 = Math.max(lo, LOG_FLOOR);
+  const top = Math.max(hi, l0 + 1);
+  // A curve that bends from straight (0) to fully logarithmic (1) by
+  // degrees: each step moves the middle of the view by a similar number of
+  // octaves, rather than staying mostly linear until the very end.
+  const a = k * Math.log(top / l0);
+  const start = lo + (l0 - lo) * k;
+  if (a < 1e-6) return start + (top - start) * t;
+  return start + ((top - start) * Math.expm1(a * t)) / Math.expm1(a);
 }
 
 /** How far up the view `hz` sits, 0 to 1 (outside the range: below 0 or above 1). */

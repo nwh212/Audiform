@@ -38,6 +38,6 @@ export const peaks = new PeakStore({
 
 /** Play, pause, stop and meters for the open session. */
 export const transport = new TransportStore(
-  { play: (from) => transportPlay(from, editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop" },
+  { play: (from) => transportPlay(from, editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip" },
   session,
 );

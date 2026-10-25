@@ -115,6 +115,7 @@
   import { allMidiClipIds, deleteClipsOps } from "../panels/editor/midi";
   import { CompoundCommand } from "../commands/compound";
   import { repointPlan, toCopy } from "./session-media";
+  import { exactSamples } from "../stores/exact-samples";
   import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
@@ -2089,6 +2090,7 @@
       await saveWaveFile(path);
       const saved = waveFile.current()?.path ?? f.path;
       peaks.invalidate(saved);
+      exactSamples.forget(saved);
       await syncSessionMedia(saved);
       const keepsMarkers = /\.wave?$/i.test(saved);
       showNotice(
@@ -2108,6 +2110,31 @@
   }
 
   /**
+   * Back to the Multitrack editor with unsaved Waveform editor changes to
+   * a file the session uses: the session plays files as saved on disk, so
+   * offer to save them now.
+   */
+  let lastMode = editor.current().mode;
+  $effect(() =>
+    editor.subscribe((e) => {
+      const was = lastMode;
+      lastMode = e.mode;
+      if (was !== "waveform" || e.mode !== "multitrack") return;
+      const f = waveFile.current();
+      const doc = session.current;
+      if (!f || f.untitled || !doc || !waveHistory.current.dirty) return;
+      const key = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+      if (!doc.media.some((m) => key(m.path) === key(f.path))) return;
+      void ask("Save changes for the session?", `"${f.path.split(/[\\/]/).pop()}" is used in this session. The session plays files as they are saved on disk, so your Waveform editor changes show here once the file is saved.`, [
+        { label: "Save", value: "save", primary: true },
+        { label: "Not Now", value: "later" },
+      ]).then((v) => {
+        if (v === "save") void saveWave(false);
+      });
+    }),
+  );
+
+  /**
    * After the Waveform editor saves a file the session also uses, the
    * session learns its new length (for example after recording more in the
    * Waveform editor), and clips that ran to the old end run to the new one.
@@ -2118,6 +2145,11 @@
     const key = (p: string) => p.replace(/\\/g, "/").toLowerCase();
     const used = doc.media.filter((m) => key(m.path) === key(path));
     if (!used.length) return;
+    // The session may spell the path differently (slashes, case): redraw it under its own spelling too.
+    for (const m of used) {
+      peaks.invalidate(m.path);
+      exactSamples.forget(m.path);
+    }
     try {
       const info = await probeMedia(path);
       for (const m of used) {

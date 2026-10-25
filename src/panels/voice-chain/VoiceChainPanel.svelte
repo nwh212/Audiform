@@ -58,6 +58,7 @@
   import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
   import EffectControls from "./EffectControls.svelte";
   import NoiseShapeGraph from "./NoiseShapeGraph.svelte";
+  import TubePanel from "./TubePanel.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
@@ -473,6 +474,8 @@
   // Noise Print Reducer: learn the print from the time selection. A bus
   // or the master has no audio of its own to learn from yet.
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
+  /** Effects whose window draws all of its own controls. */
+  const OWN_CONTROLS = new Set(["altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -688,6 +691,8 @@
             wave={inWave}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
           />
+        {:else if winSlot.effect === "altaudio.opto_leveler" || winSlot.effect === "altaudio.tube_preamp"}
+          <TubePanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if winSlot.effect === PHASE_CURVE}
           <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if GRAPHED.has(winSlot.effect)}
@@ -728,13 +733,13 @@
             </span>
           </div>
         {/if}
-        <EffectControls
+        {#if !OWN_CONTROLS.has(winSlot.effect)}<EffectControls
           info={winInfo}
           value={(p) => shown(winSlot, p)}
           shown={(g) => groupShown(winSlot.effect, winSlot, g)}
           oninput={(p, v) => drag(winSlot, p, v)}
           oncommit={(p, v) => setValue(winSlot, p, v)}
-        />
+        />{/if}
       {:else}
         <p class="hint">This effect is not built in. It stays in the file and is skipped on playback.</p>
       {/if}
@@ -999,9 +1004,14 @@
     width: 380px;
     /* Graph editors (the Parametric EQ) get room to work in. */
     &:has(:global(.eq)),
-    &:has(:global(.pc)),
-    &:has(:global(.ns)) {
+    &:has(:global(.pc)) {
       width: 560px;
+    }
+    &:has(:global(.ns)) {
+      width: 660px;
+    }
+    &:has(:global(.tube)) {
+      width: 620px;
     }
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 40px);

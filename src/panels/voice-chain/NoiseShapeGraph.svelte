@@ -17,6 +17,8 @@
   import { paramValue } from "./chain";
   import { formatHz } from "./eq-graph";
   import { freqAt, xOf } from "./graph";
+  import VSlider from "./VSlider.svelte";
+  import ValueField from "./ValueField.svelte";
 
   interface Props {
     slot: EffectSlotDoc;
@@ -200,9 +202,24 @@
     return { x: Math.min(w - 170, Math.max(4, p.x - 60)), y: Math.max(2, p.y - 30), text: parts.join(" · ") };
   });
   const learned = $derived((slot.params.printlen ?? 0) > 0);
+
+  // The controls around the graph.
+  let pick = $state(3);
+  const cur = $derived(placed.find((p) => p.b.i === pick) ?? placed[0] ?? null);
+  const P = (k: string) => byKey.get(k);
+  const val = (p: EffectParamInfo) => paramValue(slot, p);
+  const set = (p: EffectParamInfo, v: number, done: boolean) => onParams([[p, clampP(p, v)]], `${info.name} ${p.name}`, done);
 </script>
 
-<div class="ns" bind:clientWidth={w}>
+<div class="ns">
+  <div class="top">
+    <div class="sliders">
+      {#each ["threshold", "reduction"] as k (k)}
+        {@const p = P(k)}
+        {#if p}<VSlider param={p} value={val(p)} height={178} oninput={(v) => set(p, v, false)} oncommit={(v) => set(p, v, true)} />{/if}
+      {/each}
+    </div>
+    <div class="plot" bind:clientWidth={w}>
   <svg bind:this={svg} width={w} height={H} role="img" aria-label="{info.name}: the sound, the learned noise and the threshold">
     <rect class="bg" x={PAD.l} y={PAD.t} width={plotW} height={plotH} />
     {#if spectrumPath}<path class="spectrum" d={spectrumPath} />{/if}
@@ -224,7 +241,10 @@
         class:off={!p.on}
         class:on={active === p.b.i}
         transform="translate({p.x} {p.y})"
-        onpointerdown={(e) => dragNode(e, p.b, p.g)}
+        onpointerdown={(e) => {
+          pick = p.b.i;
+          dragNode(e, p.b, p.g);
+        }}
         onwheel={(e) => wheelWidth(e, p.b, p.q)}
         ondblclick={() => onParams([[p.b.on, p.on ? 0 : 1]], `Noise Shape ${p.b.i} ${p.on ? "Off" : "On"}`, true)}
         onpointerenter={() => (hover = p.b.i)}
@@ -242,15 +262,143 @@
     </g>
   </svg>
   {#if tip}<div class="tip" style:left="{tip.x}px" style:top="{tip.y}px">{tip.text}</div>{/if}
-  {#if learned}<p class="hint">Frequencies under the orange threshold are turned down. Drag a node to raise or lower the threshold around it; the mouse wheel over a node changes its width; double-click switches it on or off.</p>{/if}
+    </div>
+  </div>
+
+  {#if cur}
+    {@const b = cur.b}
+    <div class="band">
+      <div class="picks" role="group" aria-label="Shaping band">
+        {#each placed as p (p.b.i)}
+          <button type="button" class:sel={p.b.i === pick} class:off={!p.on} title="Edit shaping band {p.b.i}" onclick={() => (pick = p.b.i)}>{p.label}</button>
+        {/each}
+      </div>
+      <button type="button" class="pw" class:on={cur.on} aria-pressed={cur.on} title={cur.on ? "Switch this band off" : "Switch this band on"} onclick={() => set(b.on, cur.on ? 0 : 1, true)}>{cur.on ? "On" : "Off"}</button>
+      <label class="f"><span>Shape</span>
+        <select value={String(cur.kind)} onchange={(e) => set(b.kind, Number(e.currentTarget.value), true)}>
+          {#each b.kind.choices ?? [] as c, ci (c)}<option value={String(ci)}>{c}</option>{/each}
+        </select>
+      </label>
+      <div class="f"><span>Gain</span><ValueField param={b.gain} value={cur.g} oninput={(v) => set(b.gain, v, false)} oncommit={(v) => set(b.gain, v, true)} /></div>
+      <div class="f"><span>Frequency</span><ValueField param={b.freq} value={cur.f} oninput={(v) => set(b.freq, v, false)} oncommit={(v) => set(b.freq, v, true)} /></div>
+      <div class="f"><span>Q</span><ValueField param={b.q} value={cur.q} oninput={(v) => set(b.q, v, false)} oncommit={(v) => set(b.q, v, true)} /></div>
+    </div>
+  {/if}
+
+  <div class="row">
+    {#each ["attack", "release", "knee"] as k (k)}
+      {@const p = P(k)}
+      {#if p}<div class="f"><span>{p.name}</span><ValueField param={p} value={val(p)} oninput={(v) => set(p, v, false)} oncommit={(v) => set(p, v, true)} /></div>{/if}
+    {/each}
+    {#if P("adaptive")}
+      {@const a = P("adaptive")!}
+      <div class="f"><span>Print</span><button type="button" class="pw" class:on={val(a) >= 0.5} aria-pressed={val(a) >= 0.5} title="Adaptive: the learned noise follows a noise that drifts" onclick={() => set(a, val(a) >= 0.5 ? 0 : 1, true)}>Adaptive</button></div>
+    {/if}
+    {#if P("monitor")}
+      {@const m = P("monitor")!}
+      <div class="f"><span>Listen to</span>
+        <div class="seg" role="group" aria-label="Output">
+          <button type="button" class:sel={Math.round(val(m)) === 0} onclick={() => set(m, 0, true)}>Audio</button>
+          <button type="button" class:sel={Math.round(val(m)) === 1} title="Hear only what is being removed" onclick={() => set(m, 1, true)}>Removed</button>
+        </div>
+      </div>
+    {/if}
+  </div>
+  {#if learned}<p class="hint">Frequencies under the orange threshold are turned down. Drag a node to raise or lower the threshold around it, or pick it below to type its settings. The mouse wheel over a node changes its width; double-click switches it on or off.</p>{/if}
 </div>
 
 <style>
   .ns {
-    position: relative;
+    display: grid;
+    gap: 6px;
     width: 100%;
     margin-bottom: 6px;
     user-select: none;
+  }
+  .top {
+    display: flex;
+    gap: 4px;
+  }
+  .sliders {
+    display: flex;
+    gap: 2px;
+    padding: 4px 2px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.18);
+  }
+  .plot {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+  .band,
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: flex-end;
+    padding: 5px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.18);
+  }
+  .f {
+    display: grid;
+    gap: 2px;
+    min-width: 64px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .f > span {
+    text-align: center;
+  }
+  .f select {
+    height: 20px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-3, var(--surface-2));
+    color: var(--text);
+    font: inherit;
+    font-size: 11px;
+  }
+  .picks,
+  .seg {
+    display: flex;
+  }
+  .picks button,
+  .seg button,
+  .pw {
+    height: 20px;
+    min-width: 24px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-3, var(--surface-2));
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .picks button + button,
+  .seg button + button {
+    border-left: none;
+  }
+  .picks button.sel,
+  .seg button.sel {
+    background: #f0a040;
+    border-color: #f0a040;
+    color: #101012;
+    font-weight: 600;
+  }
+  .picks button.off:not(.sel) {
+    opacity: 0.5;
+  }
+  .pw {
+    border-radius: 2px;
+  }
+  .pw.on {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   svg {
     display: block;

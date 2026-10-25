@@ -232,8 +232,9 @@
     g.fillText("-90°", mid - R + 4, mid - 4);
     // The dots: distance from the center is the frequency, the angle from
     // straight up (clockwise) the phase, color the frequency, brightness
-    // the level and steadiness, size the level.
-    g.globalCompositeOperation = "lighter";
+    // the level and steadiness, size the level. Plain blending, so dots
+    // that overlap keep their own color instead of adding up to white.
+    g.globalCompositeOperation = "source-over";
     for (let i = 0; i + 3 < bins.length; i += 4) {
       const ph = bins[i]!;
       const level = bins[i + 1]!;
@@ -243,12 +244,11 @@
       const x = mid + r * Math.sin(ph);
       const y = mid - r * Math.cos(ph);
       const [cr, cg, cb] = palette[Math.max(0, Math.min(63, Math.round(pitch * 63)))]!;
-      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(1, (0.1 + 1.1 * level) * (0.5 + 0.5 * coherence))})`;
+      g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(0.85, (0.15 + 1.1 * level) * (0.5 + 0.5 * coherence))})`;
       g.beginPath();
       g.arc(x, y, 1.2 + 2.4 * level, 0, Math.PI * 2);
       g.fill();
     }
-    g.globalCompositeOperation = "source-over";
   }
 
   const corrText = $derived(`${correlation >= 0 ? "+" : ""}${correlation.toFixed(2)}`);

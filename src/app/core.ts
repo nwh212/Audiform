@@ -1085,6 +1085,11 @@ export function shapedNoiseCurves(slot: import("../stores/session").EffectSlotDo
   return invoke("shaped_noise_curves", { slot, points, scope });
 }
 
+/** An effect's own meter: gain reduction (dB) and output level (dBFS), or null before it has run. */
+export function effectMeter(slot: string): Promise<[number, number] | null> {
+  return invoke<[number, number] | null>("effect_meter", { slot });
+}
+
 export function effectResponse(slot: import("../stores/session").EffectSlotDoc, points: number): Promise<[number, number][]> {
   return invoke<[number, number][]>("effect_response", { slot, points });
 }

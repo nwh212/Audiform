@@ -58,6 +58,13 @@ class ExactSamples {
       .finally(() => this.asking.delete(key));
   }
 
+  /** Drops what is held for a file that changed on disk. */
+  forget(path: string): void {
+    this.held.delete(path);
+    this.failed.delete(path);
+    for (const fn of this.listeners) fn();
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

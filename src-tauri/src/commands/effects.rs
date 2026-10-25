@@ -130,6 +130,13 @@ pub fn shaped_noise_curves(
     Ok(NoiseCurves { print, threshold })
 }
 
+/// An effect's own meter (gain reduction in dB, output in dBFS), for
+/// windows that draw one. None until the effect has been built.
+#[tauri::command]
+pub fn effect_meter(slot: crate::session::model::Id) -> Option<[f32; 2]> {
+    crate::dsp::meters::read(slot)
+}
+
 /// Where to learn a noise print from: a stretch of the Waveform
 /// editor's file, or of one track or clip in the session.
 #[derive(Debug, Clone, Deserialize)]

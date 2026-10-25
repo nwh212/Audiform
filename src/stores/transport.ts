@@ -20,6 +20,17 @@ export interface TransportBackend {
   status(): Promise<TransportStatus>;
   /** True when playback should stop by itself at the end of the audio (not while looping). */
   stopAtEnd?: () => boolean;
+  /** True when playback jumps over the time selection (Skip Selection), so play never moves into it. */
+  skipsSelection?: () => boolean;
+}
+
+/**
+ * Where Play starts: the playhead, or the start of the time selection
+ * when the playhead is outside it (unless playback skips the selection).
+ */
+export function playStart(playhead: number, selection: { start: number; end: number } | null | undefined, skips: boolean): number {
+  if (!selection || skips || selection.end <= selection.start) return playhead;
+  return playhead >= selection.start && playhead < selection.end ? playhead : selection.start;
 }
 
 /** Meter level with a slow fall and a held peak, in 0..1 (above 1 means over). */
@@ -112,7 +123,8 @@ export class TransportStore {
   /** Plays from the playhead, or from `from` (session samples). */
   play(from?: number): Promise<void> {
     return this.serial(async () => {
-      const at = Math.max(0, Math.round(from ?? this.session.current?.view.playhead ?? 0));
+      const v = this.session.current?.view;
+      const at = Math.max(0, Math.round(from ?? playStart(v?.playhead ?? 0, v?.selection, this.backend.skipsSelection?.() ?? false)));
       await this.session.flushView?.();
       await this.backend.play(at);
       if (!this.state.playing) this.startedAt = at;

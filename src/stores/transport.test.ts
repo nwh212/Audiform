@@ -122,3 +122,15 @@ describe("TransportStore", () => {
     expect(t.current.chains.b).toBeUndefined();
   });
 });
+
+describe("where Play starts", () => {
+  it("starts at the selection when the playhead is outside it", async () => {
+    const { playStart } = await import("./transport");
+    const sel = { start: 100, end: 200 };
+    expect(playStart(500, sel, false)).toBe(100);
+    expect(playStart(50, sel, false)).toBe(100);
+    expect(playStart(150, sel, false)).toBe(150);
+    expect(playStart(500, sel, true)).toBe(500);
+    expect(playStart(500, null, false)).toBe(500);
+  });
+});
