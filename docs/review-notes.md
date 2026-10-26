@@ -62,3 +62,10 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 
 - **Only the I-beam and the resize arrows got glass versions.** The hand, crosshair and "not allowed" pointers keep their usual shapes; say if you want those too.
 - **The pointer is swapped a frame after the mouse moves onto an element,** so the standard shape can flash for one frame. Not tested on Windows yet.
+
+## Phosphor theme
+
+- **Named Phosphor**, not after the machine you mentioned (naming rule).
+- **Clips keep their track colors** (pink drums, orange bass and so on), since those are your session's own colors. A strict one-color screen would make every track green and hard to tell apart; say if you want clips forced to shades of green in this theme.
+- **Record and errors stay orange-red** for the same reason.
+- **The scan lines are faint on purpose.** They sit over everything, so stronger ones would hurt reading on long sessions.

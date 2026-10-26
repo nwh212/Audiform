@@ -1614,3 +1614,8 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **The scene themes (Meadow, Aqua, Moonlight, Prism) get glass versions of the text and time-selection I-beam and of the resize double arrows** (side to side, up and down, both diagonals), drawn in the same glowing blue glass as their arrow. Window edges, panel dividers, track and clip edges all use them.
 - **How:** many of these pointers are picked by code as the mouse moves, so a style sheet cannot reach them all. A small watcher (`src/app/glass-cursor.ts`) reads the pointer the element under the mouse asks for and swaps in the glass one, with the standard shape as the fallback. It does nothing in the other themes and puts every element back when the theme changes.
 - **Drag pointers (the open and closed hand) keep their usual shapes.**
+
+## 2026-10-28: Phosphor theme
+
+- **Asked for as a theme "based on" a named early-80s sampling computer.** Restated as behavior and given our own name: an early studio computer look, with green monochrome screens (glowing text, faint scan lines, a soft tube vignette) set into a warm beige case. The menu bar, tool strip, tab gaps and status bar are the case; the transport buttons are raised beige keys; the time readout is a small lit display. No logos, model names or copied screens.
+- **Everything is in one style sheet** (`src/styles/theme-phosphor.css`) on top of the dark theme's tokens; canvases already read their colors from the tokens, so lanes, rulers and meters follow. Settings > Appearance > Theme > Phosphor.

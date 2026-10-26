@@ -1,0 +1,195 @@
+/*
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Phosphor theme (Settings > Appearance > Theme, data-theme="phosphor"):
+  an early studio computer. The panels are green monochrome screens with
+  glowing text and faint scan lines; the menu bar, tab rows, tool strip
+  and status bar are the warm beige case around them, with chunky keys.
+*/
+
+:root[data-theme="phosphor"] {
+  color-scheme: dark;
+
+  /* Screens: black glass with a green cast. */
+  --surface-0: #040a05;
+  --surface-1: #071108;
+  --surface-2: #0b1a0d;
+  --menu-bg: #0b1a0d;
+  --surface-3: #10260f;
+  --border: #1b3d1f;
+  --border-strong: #2d6a35;
+
+  /* Phosphor green, bright to faint. */
+  --text: #6dff8e;
+  --text-dim: #3fc463;
+  --text-faint: #23803c;
+
+  --accent: #8dffaa;
+  --accent-dim: #2a8f45;
+  /* The playhead and values glow white-hot, the way bright spots do on the tube. */
+  --playhead: #e6ffe9;
+  --value: #b6ffc8;
+  --gutter: #b9ad8f;
+  --danger: #ff6a3d;
+  --selected-text: #021004;
+
+  --lane-a: #061008;
+  --lane-b: #08150a;
+  --lane-selected: #10301a;
+  --track-gap: #020502;
+  --header-a: #091609;
+  --header-b: #0c1c0d;
+
+  /* Clips: shades a green screen can show, plus a warm one so tracks stay apart. */
+  --clip-1: #4dff7a;
+  --clip-2: #2fd8b0;
+  --clip-3: #a6ff4d;
+  --clip-4: #ffb84d;
+  --clip-5: #d9ff8c;
+  --clip-6: #7affd6;
+  --clip-7: #3fae5c;
+  --clip-body-alpha: 0.16;
+  --clip-wave-tone: 0.25;
+  --clip-gloss: 0;
+
+  --font-ui: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace, monospace;
+  --font-mono: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace, monospace;
+  --font-size: 12px;
+  --font-size-small: 11px;
+
+  /* The case: beige plastic, brown lettering, darker seams. */
+  --p-case: #d8ccaa;
+  --p-case-light: #e9e0c6;
+  --p-case-dark: #a99c7a;
+  --p-ink: #3a3020;
+  --p-ink-dim: #6b5d42;
+  --p-glow: 0 0 3px rgba(80, 255, 130, 0.55);
+}
+
+:root[data-theme="phosphor"] body {
+  background: var(--p-case);
+  text-shadow: var(--p-glow);
+}
+
+/* Faint scan lines and a soft tube vignette over the whole window, never in the way of the mouse. */
+:root[data-theme="phosphor"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100000;
+  background:
+    repeating-linear-gradient(rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.13) 2px 3px),
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.18) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* The case parts: menu bar, tool strip, status bar and tab rows. */
+:root[data-theme="phosphor"] :is(header.top, .menubar, .strip, footer.status) {
+  background: linear-gradient(var(--p-case-light), var(--p-case));
+  color: var(--p-ink);
+  text-shadow: none;
+  border-color: var(--p-case-dark);
+}
+:root[data-theme="phosphor"] footer.status {
+  border-top: 1px solid var(--p-case-dark);
+}
+:root[data-theme="phosphor"] :is(.menubar .top, footer.status *) {
+  color: var(--p-ink);
+}
+:root[data-theme="phosphor"] :is(.menubar .top:hover, .menubar .top.open) {
+  background: var(--p-ink);
+  color: var(--p-case-light);
+}
+:root[data-theme="phosphor"] .dockview-theme-altaudio {
+  --dv-tabs-and-actions-container-background-color: var(--p-case);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--p-case);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--p-case);
+  --dv-activegroup-hiddenpanel-tab-color: var(--p-ink-dim);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--p-ink-dim);
+  --dv-tab-divider-color: var(--p-case-dark);
+  --dv-active-sash-color: var(--p-case-dark);
+  --dv-drag-over-background-color: rgba(109, 255, 142, 0.14);
+}
+/* Each panel is a screen set into the case: a dark bezel with rounded corners. */
+:root[data-theme="phosphor"] .dockview-theme-altaudio .dv-groupview {
+  border: 3px solid var(--gutter);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 18px rgba(60, 255, 110, 0.06);
+  overflow: hidden;
+}
+:root[data-theme="phosphor"] .dockview-theme-altaudio .dv-tab:not(.dv-active-tab) {
+  text-shadow: none;
+}
+
+/* Keys: raised beige plastic on the case, lit outlines on the screens. */
+:root[data-theme="phosphor"] :is(.strip, .bar:has(> .transport)) :is(button, .tool) {
+  background: linear-gradient(var(--p-case-light), var(--p-case) 70%, var(--p-case-dark));
+  color: var(--p-ink);
+  border: 1px solid var(--p-case-dark);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  text-shadow: none;
+}
+:root[data-theme="phosphor"] :is(.strip, .bar:has(> .transport)) :is(button, .tool):active:not(:disabled) {
+  border-bottom-width: 1px;
+  transform: translateY(1px);
+}
+:root[data-theme="phosphor"] :is(.strip, .bar:has(> .transport)) :is(.tool.on, button.on, .view.on) {
+  background: var(--p-ink);
+  color: var(--text);
+  text-shadow: var(--p-glow);
+}
+:root[data-theme="phosphor"] .bar:has(> .transport) .transport .tool.rec.on {
+  color: var(--danger);
+}
+:root[data-theme="phosphor"] .bar .clock {
+  background: #020602;
+  color: var(--text);
+  border: 2px solid var(--p-case-dark);
+  border-radius: 4px;
+  text-shadow: 0 0 6px rgba(80, 255, 130, 0.8);
+}
+
+/* Screen controls: green outlines, inverted when picked. */
+:root[data-theme="phosphor"] :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, select) {
+  background: #020602;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+:root[data-theme="phosphor"] :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--text-dim);
+}
+:root[data-theme="phosphor"] :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected) {
+  background: var(--text-dim);
+  color: var(--selected-text);
+  text-shadow: none;
+}
+:root[data-theme="phosphor"] :is(.menubar .dropdown, .context, .dialog, [role="dialog"]) {
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 0 0 3px var(--p-case-dark), 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+}
+:root[data-theme="phosphor"] ::selection {
+  background: var(--text-dim);
+  color: var(--selected-text);
+}
+
+/* Scroll bars: beige thumbs on a dark track. */
+:root[data-theme="phosphor"] ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+:root[data-theme="phosphor"] ::-webkit-scrollbar-track {
+  background: #020602;
+}
+:root[data-theme="phosphor"] ::-webkit-scrollbar-thumb {
+  background: var(--p-case-dark);
+  border: 2px solid #020602;
+  border-radius: 5px;
+}
+:root[data-theme="phosphor"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--p-case);
+}
