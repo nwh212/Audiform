@@ -203,7 +203,7 @@ describe("voice chain", () => {
     expect(sanitizePresets("nope")).toEqual([]);
   });
 
-  it("has character voice chains for the Voice Chain only, with unique names", () => {
+  it("has character voice chains for the FX Chain only, with unique names", () => {
     const names = BUILTIN_PRESETS.map((p) => p.name);
     expect(new Set(names).size).toBe(names.length);
     const batch = batchPresets(BUILTIN_PRESETS).map((p) => p.name);

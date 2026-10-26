@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * Whose Voice Chain the Voice Chain panel shows on its Track Effects tab:
+ * Whose FX Chain the FX Chain panel shows on its Track Effects tab:
  * a track id, a bus id, the master's id, or null (clip effects, the
  * Waveform editor). The Editor marks that row, so it is always clear
  * where effects go.

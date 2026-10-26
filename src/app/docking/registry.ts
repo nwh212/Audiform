@@ -69,7 +69,7 @@ export const PANELS: readonly PanelDef[] = [
   },
   {
     id: "voice-chain",
-    title: "Voice Chain",
+    title: "FX Chain",
     inDefault: true,
     home: LEFT_TABS,
     pending: null,

@@ -41,7 +41,7 @@ const FOCUSABLE = 'input, textarea, select, button, a[href], [tabindex]:not([tab
  * True when a press on `target` should take focus away from `active`.
  * Clicking a canvas or empty space would normally do that, but the
  * Editor's lanes stop the browser's default on press (so drags never
- * select text), which left focus where it was: a Voice Chain row then
+ * select text), which left focus where it was: an FX Chain row then
  * kept Alt+Up and Alt+Down for itself instead of moving clips.
  */
 export function shouldLeave(active: Element | null, target: EventTarget | null): boolean {

@@ -267,7 +267,7 @@ Defaults are stored in `src/keymap/default.json`. Users change them in Edit > Ke
 
 ## Naming conventions
 
-All feature, panel and workspace names are our own. Never use other products' panel names, workspace names or feature brand names in UI copy, code comments, docs or error messages; see the naming map in CLAUDE.local.md. When a name is in doubt, pick a plain descriptive one (for example Voice Chain, Audio FX Panel, Batch Convert, QuickPass, Time Info, Drive Manager, Noise Reducer, Speech Leveler, Dynamics, Limiter, Click Repair, Breath Gate, Loudness Match).
+All feature, panel and workspace names are our own. Never use other products' panel names, workspace names or feature brand names in UI copy, code comments, docs or error messages; see the naming map in CLAUDE.local.md. When a name is in doubt, pick a plain descriptive one (for example FX Chain (called Voice Chain before 2026-10-26), Audio FX Panel, Batch Convert, QuickPass, Time Info, Drive Manager, Noise Reducer, Speech Leveler, Dynamics, Limiter, Click Repair, Breath Gate, Loudness Match).
 
 ## Legal guardrails (non-negotiable)
 

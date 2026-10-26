@@ -16,7 +16,7 @@ import type { EffectInfo, EffectParamInfo } from "../../app/core";
 export const DB_MIN = -60;
 export const DB_MAX = 12;
 
-/** Which clip envelope. "fx" is one setting of an effect in the clip's Voice Chain. */
+/** Which clip envelope. "fx" is one setting of an effect in the clip's FX Chain. */
 export type EnvKind = "volume" | "pan" | "fx";
 
 export interface EnvRange {

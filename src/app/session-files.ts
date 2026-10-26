@@ -105,7 +105,7 @@ export function sesxSummary(r: SesxReport): string {
   if (r.stretched) parts.push(`${count(r.stretched, "clip keeps its", "clips keep their")} stretch and pitch.`);
   if (r.skippedEffects > 0) {
     const names = r.skippedNames?.length ? ` (${r.skippedNames.join(", ")})` : "";
-    parts.push(`${count(r.skippedEffects, "built-in effect was", "built-in effects were")} left out${names}; rebuild them in Voice Chain.`);
+    parts.push(`${count(r.skippedEffects, "built-in effect was", "built-in effects were")} left out${names}; rebuild them in FX Chain.`);
   }
   if (r.missingFiles.length > 0) {
     const n = r.missingFiles.length;

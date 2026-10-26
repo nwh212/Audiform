@@ -35,7 +35,7 @@ export interface EditorState {
   showVolume: boolean;
   /** Clip pan envelopes are shown and editable. */
   showPan: boolean;
-  /** Clip effect-setting envelopes (Voice Chain automation) are shown and editable. */
+  /** Clip effect-setting envelopes (FX Chain automation) are shown and editable. */
   showFx: boolean;
   /** Which effect setting each clip shows, by clip id. Not saved. */
   fxLanes: Record<string, { slot: string; param: string }>;

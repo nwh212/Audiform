@@ -4,7 +4,7 @@
 
 /**
  * Host profiles: a per-person starting point for a voice track, a
- * Voice Chain with the breath gate set for how close and how loud that
+ * FX Chain with the breath gate set for how close and how loud that
  * person usually is. Remote Guest also marks the track as a guest track
  * (Guest track mode): softer gate, heavier noise reduction and a
  * phone-band EQ that keeps call audio clean. Applying one replaces the

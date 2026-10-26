@@ -4,10 +4,10 @@
 
 /**
  * Multitrack > Speaker Balance: brings every voice track to the same
- * loudness in one click, before the Voice Chain, so gates and
+ * loudness in one click, before the FX Chain, so gates and
  * compressors see each speaker at a like level. The quietest voice is
  * the reference and the others come down to it, which never pushes
- * anyone into clipping. Measured raw (no Voice Chain, no faders);
+ * anyone into clipping. Measured raw (no FX Chain, no faders);
  * applied as clip gain, one undoable edit. Music, sound effect and
  * ambience tracks are left alone.
  */

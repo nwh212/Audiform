@@ -3,7 +3,7 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The response of an EQ or filter in the Voice Chain: how much each
+  The response of an EQ or filter in the FX Chain: how much each
   frequency is turned up or down, measured from the effect itself. The
   Curve EQ's points can be dragged on the graph (left and right for
   frequency, up and down for gain).

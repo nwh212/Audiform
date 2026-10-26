@@ -1413,3 +1413,4 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Empty slots** are drawn as empty dashed boxes, so the 16 slots read as a rack with room in it; later empty slots say "+ Add effect" on hover.
 - **Mono buttons** (track and bus Mono, the master's mono check) show an icon of two channels joining into one, instead of "MO" or "MONO".
 - **Name.** A request to rename the panel to a name another audio editor uses for its effects panel was set aside: the naming rule keeps other products' panel names out of the app. The project lead is choosing a name of our own.
+- **Name and handle (same day).** The project lead picked **FX Chain** as the panel's new name (on screen and in the docs; the panel id stays `voice-chain` so saved workspaces keep working). Track headers' grab strip is now a slim 4 px bar in the track color that widens and shows grip dots when pointed at; the area you can grab stays 10 px wide.

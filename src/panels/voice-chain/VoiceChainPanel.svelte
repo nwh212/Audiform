@@ -3,7 +3,7 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  Voice Chain: up to 16 effects in order on the selected clip or track.
+  FX Chain: up to 16 effects in order on the selected clip or track.
   Pick a preset or add effects one by one, bypass or reorder them, and
   set each effect's controls below the list. Every change is one
   undoable step, and playback picks it up from where it is: sliders
@@ -244,7 +244,7 @@
   const keyOwner = $derived(onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null));
   const why = $derived(
     inWave
-      ? "Open a file in the Waveform editor to try a Voice Chain on it."
+      ? "Open a file in the Waveform editor to try an FX Chain on it."
       : tab === "clip"
         ? ed.selectedClips.size > 1
           ? "Select one clip to see its effects."
@@ -310,7 +310,7 @@
   function commit(what: string, next: EffectChainDoc | null) {
     if (!target) return;
     if (!next) {
-      onNotice(`A Voice Chain holds ${MAX_SLOTS} effects.`);
+      onNotice(`An FX Chain holds ${MAX_SLOTS} effects.`);
       return;
     }
     const op = { op: "set_effects", target, chain: next } as const;
@@ -368,7 +368,7 @@
     if (inWave || !target || !doc) return;
     const ed = dropEdit(doc, target, $state.snapshot(s) as EffectSlotDoc, to, () => crypto.randomUUID());
     if (ed) void session.edit(ed.label, ed.op, runner).catch(onError);
-    else onNotice(`A Voice Chain holds ${MAX_SLOTS} effects.`);
+    else onNotice(`An FX Chain holds ${MAX_SLOTS} effects.`);
   }
 
   // Slot rows: drag to reorder, Alt+Up or Alt+Down on a row, and a right-click menu.
@@ -431,7 +431,7 @@
   }
 
   async function savePreset() {
-    const name = (await ask("Save Voice Chain Preset", "Preset name", ""))?.trim();
+    const name = (await ask("Save FX Chain Preset", "Preset name", ""))?.trim();
     if (!name) return;
     if (BUILTIN_PRESETS.some((p) => p.name === name)) {
       onNotice(`"${name}" is a built-in preset. Pick another name.`);
@@ -579,7 +579,7 @@
 
 </script>
 
-<section class="vc" aria-label="Voice Chain" style:--rack={accent}>
+<section class="vc" aria-label="FX Chain" style:--rack={accent}>
   <div class="tabs" role="tablist" hidden={inWave}>
     <button type="button" role="tab" aria-selected={tab === "clip"} class:on={tab === "clip"} onclick={() => setTab("clip")}>Clip Effects</button>
     <button type="button" role="tab" aria-selected={tab === "track"} class:on={tab === "track"} onclick={() => setTab("track")}>Track Effects</button>
@@ -598,7 +598,7 @@
           class:on={chain.enabled}
           title={chain.enabled ? "Chain on: click to bypass every effect" : "Chain bypassed: click to turn it on"}
           aria-pressed={chain.enabled}
-          onclick={() => commit(chain.enabled ? "Bypass Voice Chain" : "Turn On Voice Chain", { ...chain, enabled: !chain.enabled })}
+          onclick={() => commit(chain.enabled ? "Bypass FX Chain" : "Turn On FX Chain", { ...chain, enabled: !chain.enabled })}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
         </button>
@@ -844,9 +844,9 @@
             title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
             oninput={(t) => {
               const v = fromSlider(p, t);
-              dragChain(key, `Voice Chain ${p.name} Gain`, v, v);
+              dragChain(key, `FX Chain ${p.name} Gain`, v, v);
             }}
-            oncommit={(t) => setChain(key, `Voice Chain ${p.name} Gain`, fromSlider(p, t))}
+            oncommit={(t) => setChain(key, `FX Chain ${p.name} Gain`, fromSlider(p, t))}
           />
           <span class="val">{formatParam(p, cur)}</span>
         </div>
@@ -861,9 +861,9 @@
           step="1"
           aria-label="Mix"
           value={mixShown}
-          oninput={(e) => dragChain("mix", "Voice Chain Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
-          onchange={(e) => setChain("mix", "Voice Chain Mix", Number(e.currentTarget.value) / 100)}
-          ondblclick={() => setChain("mix", "Voice Chain Mix", 1)}
+          oninput={(e) => dragChain("mix", "FX Chain Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
+          onchange={(e) => setChain("mix", "FX Chain Mix", Number(e.currentTarget.value) / 100)}
+          ondblclick={() => setChain("mix", "FX Chain Mix", 1)}
           title="Double-click for 100 %"
         />
         <span class="end">Wet</span>

@@ -6,7 +6,7 @@
  * Keeps the session in step with running VST3 plug-ins. What the user
  * sets in a plug-in's own window lives in its host process; this brings
  * it back into the slot (controls as `p<id>` values, everything else as
- * `plugin_state`) as undoable "Plug-in Settings" edits (Voice Chain
+ * `plugin_state`) as undoable "Plug-in Settings" edits (FX Chain
  * slots and MIDI tracks' instruments alike), so it is saved
  * with the session and heard in exports. It also passes on plug-ins that
  * stopped, and restarts playback when a plug-in's look-ahead changes.
