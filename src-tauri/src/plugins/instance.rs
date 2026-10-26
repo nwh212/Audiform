@@ -1024,6 +1024,35 @@ pub fn audition(
     channel: u8,
     seconds: f64,
 ) -> Result<crate::engine::preview::MakeFill, String> {
+    let note = SeqNote {
+        pitch,
+        velocity,
+        channel,
+        pan: 0.0,
+        on: 0.0,
+        off: seconds.clamp(0.05, 8.0),
+    };
+    sequence(slot, vec![note])
+}
+
+/// A note of a [`sequence`], with its times in seconds from the start.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct SeqNote {
+    pub pitch: u8,
+    /// 0 to 1.
+    pub velocity: f32,
+    #[serde(default)]
+    pub channel: u8,
+    #[serde(default)]
+    pub pan: f32,
+    pub on: f64,
+    pub off: f64,
+}
+
+/// Plays notes through a MIDI track's instrument on their own (a MIDI
+/// clip heard alone, from the piano roll), then a short tail. Stopped
+/// early, every note still sounding is let go.
+pub fn sequence(slot: &EffectSlot, notes: Vec<SeqNote>) -> Result<crate::engine::preview::MakeFill, String> {
     let rate = crate::engine::output::device_rate();
     let host = host_for(slot, rate).ok_or("The instrument could not start.")?;
     if host.lock().map_err(|e| e.to_string())?.is_dead() {
@@ -1033,23 +1062,37 @@ pub fn audition(
         .lock()
         .map(|h| h.differing(&slot_params(slot)))
         .unwrap_or_default();
+    let frame = |s: f64| (s.max(0.0) * f64::from(rate)) as usize;
+    let mut events: Vec<(usize, NoteEvent)> = Vec::new();
+    for n in &notes {
+        let (on, off) = (frame(n.on), frame(n.off).max(frame(n.on) + 1));
+        let ev = |on_: bool| NoteEvent {
+            offset: 0,
+            on: on_,
+            pitch: n.pitch.min(127),
+            velocity: if on_ { n.velocity.clamp(0.0, 1.0) } else { 0.0 },
+            channel: n.channel.min(15),
+            pan: if on_ { n.pan.clamp(-1.0, 1.0) } else { 0.0 },
+        };
+        events.push((on, ev(true)));
+        events.push((off, ev(false)));
+    }
+    // In time order; at the same frame a note ends before the next starts.
+    events.sort_by_key(|(f, e)| (*f, e.on));
+    let total = events.last().map_or(0, |e| e.0) + rate as usize * 2 / 5;
     Ok(Box::new(move |channels: usize, _device_rate: u32| {
-        let hold = (seconds.clamp(0.05, 2.0) * f64::from(rate)) as usize;
-        let total = hold + rate as usize * 2 / 5;
-        let mut note = Audition {
+        let mut seq = Audition {
             host,
-            pitch: pitch.min(127),
-            velocity: velocity.clamp(0.0, 1.0),
-            channel: channel.min(15),
-            hold,
+            events,
+            next: 0,
+            sounding: Vec::new(),
             total,
             pos: 0,
-            released: false,
             pending,
             stereo: Vec::new(),
         };
         Ok(
-            Box::new(move |block: &mut Vec<f32>| note.fill(block, channels))
+            Box::new(move |block: &mut Vec<f32>| seq.fill(block, channels))
                 as crate::engine::preview::Fill,
         )
     }))
@@ -1057,13 +1100,13 @@ pub fn audition(
 
 struct Audition {
     host: Arc<Mutex<Host>>,
-    pitch: u8,
-    velocity: f32,
-    channel: u8,
-    hold: usize,
+    /// Note starts and ends by frame, in order.
+    events: Vec<(usize, NoteEvent)>,
+    next: usize,
+    /// Notes started and not yet let go: (pitch, channel).
+    sounding: Vec<(u8, u8)>,
     total: usize,
     pos: usize,
-    released: bool,
     pending: Vec<(u32, f64)>,
     stereo: Vec<f32>,
 }
@@ -1077,26 +1120,20 @@ impl Audition {
         }
         let n = Self::BLOCK.min(self.total - self.pos);
         let mut notes = Vec::new();
-        if self.pos == 0 {
+        while let Some((f, e)) = self.events.get(self.next).copied() {
+            if f >= self.pos + n {
+                break;
+            }
+            self.next += 1;
+            if e.on {
+                self.sounding.push((e.pitch, e.channel));
+            } else {
+                self.sounding.retain(|x| *x != (e.pitch, e.channel));
+            }
             notes.push(NoteEvent {
-                offset: 0,
-                on: true,
-                pitch: self.pitch,
-                velocity: self.velocity,
-                channel: self.channel,
-                pan: 0.0,
+                offset: f.saturating_sub(self.pos) as u32,
+                ..e
             });
-        }
-        if !self.released && self.pos + n > self.hold {
-            notes.push(NoteEvent {
-                offset: (self.hold.saturating_sub(self.pos)) as u32,
-                on: false,
-                pitch: self.pitch,
-                velocity: 0.0,
-                channel: self.channel,
-                pan: 0.0,
-            });
-            self.released = true;
         }
         self.stereo.clear();
         self.stereo.resize(n * 2, 0.0);
@@ -1124,19 +1161,24 @@ impl Audition {
 
 impl Drop for Audition {
     fn drop(&mut self) {
-        if self.pos > 0 && !self.released {
-            let off = [NoteEvent {
+        if self.sounding.is_empty() {
+            return;
+        }
+        let off: Vec<NoteEvent> = self
+            .sounding
+            .iter()
+            .map(|&(pitch, channel)| NoteEvent {
                 offset: 0,
                 on: false,
-                pitch: self.pitch,
+                pitch,
                 velocity: 0.0,
-                channel: self.channel,
+                channel,
                 pan: 0.0,
-            }];
-            let mut buf = vec![0.0; 64 * 2];
-            if let Ok(mut h) = self.host.lock() {
-                h.process(&[], &off, &mut buf);
-            }
+            })
+            .collect();
+        let mut buf = vec![0.0; 64 * 2];
+        if let Ok(mut h) = self.host.lock() {
+            h.process(&[], &off, &mut buf);
         }
     }
 }

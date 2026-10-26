@@ -24,7 +24,7 @@
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
   import { duplicateClips, newClip, replaceClip, transferClips } from "./midi";
-  import { effectsCatalog, midiAudition, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
+  import { effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
   import HeaderFx from "./HeaderFx.svelte";
   import { rowTarget } from "../voice-chain/slot-drag";
   import { pluginMenuGroups, type MenuPlugin } from "../voice-chain/chain";
@@ -2895,6 +2895,8 @@
       }}
       onClose={() => (pianoRoll = null)}
       onAudition={(pitch, velocity, seconds, channel) => void midiAudition(prTrack.id, pitch, velocity / 127, seconds, channel).catch(() => {})}
+      onPlay={(notes) => midiPlayNotes(prTrack.id, notes).catch(() => false)}
+      onStop={() => void previewStop().catch(() => {})}
     />
   {/if}
 {/if}

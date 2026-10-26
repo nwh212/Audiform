@@ -13,7 +13,10 @@
   Shift-click picks several, Shift-drag on empty space picks all in a
   box; moving or stretching one picked note moves or stretches them all.
   Copy and paste (Ctrl+C, Ctrl+V) paste at the last spot clicked. Snap
-  turns the grid on and off. The lane below sets how hard each note
+  turns the grid on and off (hold Alt while dragging to place or stretch
+  freely). Holding a note down holds it on the instrument, and dragging it
+  to other pitches plays each one. Play (or Space) hears the clip alone
+  from its start, or from the last spot clicked; Loop repeats it. The lane below sets how hard each note
   plays (Velocity) or where it sits left to right (Pan). Channel puts
   notes on a MIDI channel, shown as their color, for instruments with
   several parts; new notes go on the channel picked. Tools sets, scales
@@ -36,9 +39,10 @@
 </script>
 <script lang="ts">
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
+  import type { SeqNote } from "../../app/core";
   import { barAt, barBeats, segmentAtBeat } from "../../stores/tempo";
   import { tick } from "svelte";
-  import { CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
+  import { beatsToSamples, CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
     clip: MidiClipDoc;
@@ -51,9 +55,74 @@
     onClose: () => void;
     /** Plays a note through the track's instrument: pitch, velocity (1 to 127), length in seconds, MIDI channel (0 to 15). */
     onAudition?: (pitch: number, velocity: number, seconds: number, channel: number) => void;
+    /** Plays notes alone through the instrument (times in seconds). False when nothing played. */
+    onPlay?: (notes: SeqNote[]) => Promise<boolean>;
+    /** Stops what onPlay or onAudition started. */
+    onStop?: () => void;
   }
 
-  const { clip: original, tempo, instrument, color = "var(--accent)", onApply, onClose, onAudition = () => {} }: Props = $props();
+  const { clip: original, tempo, instrument, color = "var(--accent)", onApply, onClose, onAudition = () => {}, onPlay = async () => false, onStop = () => {} }: Props = $props();
+
+  /** Holds a note on the instrument while the mouse is down (let go on release). */
+  function hold(n: NoteDoc) {
+    onAudition(n.pitch, n.velocity, 8, n.channel ?? 0);
+  }
+
+  // Play: the clip alone through the instrument, with a moving line.
+  let playing = $state(false);
+  let loop = $state(false);
+  let playAt = $state<number | null>(null);
+  let raf = 0;
+  /** Seconds from beat `from` to beat `to` of the clip, through the tempo map. */
+  const secs = (from: number, to: number) => (beatsToSamples(original.start + to, tempo, 48_000) - beatsToSamples(original.start + from, tempo, 48_000)) / 48_000;
+  async function play() {
+    if (playing) return stop();
+    const from = cursor !== null && cursor < clip.length ? cursor : 0;
+    const notes: SeqNote[] = clip.notes
+      .filter((n) => n.start + n.length > from && n.start < clip.length)
+      .map((n) => ({
+        pitch: n.pitch,
+        velocity: n.velocity / 127,
+        ...(n.channel ? { channel: n.channel } : {}),
+        ...(n.pan ? { pan: n.pan } : {}),
+        on: secs(from, Math.max(from, n.start)),
+        off: secs(from, Math.min(clip.length, n.start + n.length)),
+      }));
+    if (!notes.length || !(await onPlay(notes))) return;
+    playing = true;
+    const t0 = performance.now();
+    const total = secs(from, clip.length);
+    const tick = () => {
+      if (!playing) return;
+      const t = (performance.now() - t0) / 1000;
+      if (t >= total) {
+        playing = false;
+        playAt = null;
+        if (loop) void play();
+        return;
+      }
+      // Beats from seconds: walk until the elapsed time is reached.
+      let lo = from;
+      let hi = clip.length;
+      for (let k = 0; k < 24; k++) {
+        const mid = (lo + hi) / 2;
+        if (secs(from, mid) < t) lo = mid;
+        else hi = mid;
+      }
+      playAt = lo;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+  }
+  function stop() {
+    playing = false;
+    playAt = null;
+    cancelAnimationFrame(raf);
+    onStop();
+  }
+  $effect(() => () => {
+    if (playing) stop();
+  });
 
   /** Hears a note, held for its length (within reason). */
   function hear(n: NoteDoc) {
@@ -113,6 +182,8 @@
   const ROW_MIN = 6;
   const ROW_MAX = 36;
   const step = $derived(snapOn ? gridBeats(grid, tempo, original.start) : 0);
+  /** The grid step for drags, which Alt can turn off for one drag. */
+  const gridStep = $derived(step);
   /** Beats in a bar where the clip starts. */
   const barLen = $derived(barBeats(segmentAtBeat(tempo, original.start)));
   const changed = $derived(JSON.stringify($state.snapshot(clip)) !== JSON.stringify(original));
@@ -375,7 +446,7 @@
       i = notes.findIndex((x) => x.start === n.start && x.pitch === n.pitch);
       picked = new Set([i]);
       mode = "end";
-      hear(n);
+      hold(n);
     } else {
       const n = clip.notes[i]!;
       // Near either end stretches that way; the middle moves.
@@ -390,7 +461,7 @@
         return;
       }
       if (!picked.has(i)) picked = new Set([i]);
-      hear(n);
+      hold(n);
     }
     const base = clip.notes;
     const sel = new Set(picked);
@@ -399,6 +470,8 @@
     let heardPitch = grabbed.pitch;
     const move = (ev: PointerEvent) => {
       const dBeats = (ev.clientX - startX) / zoom;
+      // Alt places and stretches freely, off the grid.
+      const step = ev.altKey ? 0 : gridStep;
       if (mode === "move") {
         // The grabbed note lands on the grid; the rest keep their places around it.
         const d = step > 0 ? snap(grabbed.start + dBeats, step) - grabbed.start : dBeats;
@@ -408,7 +481,7 @@
         const now = Math.min(127, Math.max(0, grabbed.pitch + ds));
         if (now !== heardPitch) {
           heardPitch = now;
-          hear({ ...grabbed, pitch: now });
+          hold({ ...grabbed, pitch: now });
         }
       } else if (mode === "end") {
         const end = grabbed.start + grabbed.length + dBeats;
@@ -424,6 +497,8 @@
     const up = () => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
+      // Let go of the held note (unless the clip is playing).
+      if (!playing) onStop();
       const keep = [...sel].map((k) => clip.notes[k]!).filter(Boolean);
       if (mode !== "move" && clip.notes[i]) drawLength = clip.notes[i]!.length;
       setNotes(clip.notes, keep);
@@ -507,7 +582,10 @@
       if (e.key === "Escape") t.blur();
       return;
     }
-    if (e.key === "Escape") done();
+    if (e.key === " ") {
+      e.preventDefault();
+      void play();
+    } else if (e.key === "Escape") done();
     else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       deletePicked();
@@ -542,7 +620,15 @@
         <input type="number" min="0.25" step="1" value={clip.length} onchange={(e) => (clip = { ...clip, length: Math.max(0.25, Number(e.currentTarget.value) || clip.length) })} />
         beats
       </label>
-      <label title="Snap notes to the grid while drawing, moving and stretching">
+      <span class="zoom" role="group" aria-label="Play">
+        <button type="button" class:on={playing} title={playing ? "Stop (Space)" : "Play the clip alone, from its start or the last spot clicked (Space)"} aria-label={playing ? "Stop" : "Play"} onclick={() => void play()}>
+          {#if playing}<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" fill="currentColor" /></svg>{:else}<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor" /></svg>{/if}
+        </button>
+        <button type="button" class:on={loop} aria-pressed={loop} title="Loop: play the clip again and again" aria-label="Loop" onclick={() => (loop = !loop)}>
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 6.5a3.5 3.5 0 0 1 3.5-3.5h5l-2-2M13 9.5a3.5 3.5 0 0 1-3.5 3.5h-5l2 2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
+        </button>
+      </span>
+      <label title="Snap notes to the grid while drawing, moving and stretching (hold Alt to place freely)">
         <input type="checkbox" bind:checked={snapOn} />
         Snap
       </label>
@@ -660,7 +746,8 @@
           {/each}
           <div class="past" style:left="{xOf(clip.length)}px" title="Past the clip's end: notes here are not played. Lengthen the clip to hear them."></div>
           <div class="end" style:left="{xOf(clip.length)}px" title="The clip ends here"></div>
-          {#if cursor !== null}<div class="cursor" style:left="{xOf(cursor)}px" title="Paste goes here"></div>{/if}
+          {#if cursor !== null}<div class="cursor" style:left="{xOf(cursor)}px" title="Paste and Play start here"></div>{/if}
+          {#if playAt !== null}<div class="playline" style:left="{xOf(playAt)}px"></div>{/if}
           {#if box}
             <div class="box" style:left="{Math.min(box.x0, box.x1)}px" style:top="{Math.min(box.y0, box.y1)}px" style:width="{Math.abs(box.x1 - box.x0)}px" style:height="{Math.abs(box.y1 - box.y0)}px"></div>
           {/if}
@@ -977,6 +1064,15 @@
     position: absolute;
     border: 1px dashed var(--text);
     background: color-mix(in srgb, var(--accent) 15%, transparent);
+    pointer-events: none;
+  }
+  .playline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
+    width: 1px;
+    background: var(--playhead);
     pointer-events: none;
   }
   .note {

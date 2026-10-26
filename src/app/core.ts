@@ -1264,3 +1264,18 @@ export function pluginPresetDelete(path: string): Promise<void> {
 export function effectChannels(slot: import("../stores/session").EffectSlotDoc): Promise<{ inputs: string[]; outputs: string[] }> {
   return invoke("effect_channels", { slot });
 }
+
+/** A note for {@link midiPlayNotes}: times in seconds from the start, velocity 0 to 1. */
+export interface SeqNote {
+  pitch: number;
+  velocity: number;
+  channel?: number;
+  pan?: number;
+  on: number;
+  off: number;
+}
+
+/** Plays notes alone through a MIDI track's instrument (the piano roll's Play). False when nothing played. */
+export function midiPlayNotes(trackId: string, notes: SeqNote[]): Promise<boolean> {
+  return invoke<boolean>("midi_play_notes", { trackId, notes });
+}

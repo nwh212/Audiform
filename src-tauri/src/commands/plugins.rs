@@ -358,6 +358,39 @@ pub async fn midi_audition(
     Ok(true)
 }
 
+/// Plays a MIDI clip's notes alone through its track's instrument (the
+/// piano roll's Play). Times are seconds from the start. Quietly does
+/// nothing while the session plays or when the track has no instrument.
+/// True when it started.
+#[tauri::command]
+pub async fn midi_play_notes(
+    open: tauri::State<'_, super::session::OpenSession>,
+    transport: tauri::State<'_, crate::engine::Transport>,
+    preview: tauri::State<'_, crate::engine::PreviewPlayer>,
+    track_id: Id,
+    notes: Vec<instance::SeqNote>,
+) -> Result<bool, String> {
+    if transport.is_playing() || notes.is_empty() {
+        return Ok(false);
+    }
+    let slot = {
+        let s = open.0.lock().map_err(|e| e.to_string())?;
+        s.session
+            .tracks
+            .iter()
+            .find(|t| t.id == track_id)
+            .and_then(|t| t.instrument.clone())
+    };
+    let Some(slot) = slot.filter(|s| s.enabled) else {
+        return Ok(false);
+    };
+    let make = spawn_blocking(move || instance::sequence(&slot, notes))
+        .await
+        .map_err(|e| e.to_string())??;
+    preview.play_made(make)?;
+    Ok(true)
+}
+
 /// Presets for a plug-in (`effect` is its `vst3:` id) in the standard
 /// VST3 preset folders, shared with every other VST3 host.
 #[tauri::command]
