@@ -2884,7 +2884,7 @@
         pianoRoll = null;
       }}
       onClose={() => (pianoRoll = null)}
-      onAudition={(pitch, velocity, seconds) => void midiAudition(prTrack.id, pitch, velocity / 127, seconds).catch(() => {})}
+      onAudition={(pitch, velocity, seconds, channel) => void midiAudition(prTrack.id, pitch, velocity / 127, seconds, channel).catch(() => {})}
     />
   {/if}
 {/if}

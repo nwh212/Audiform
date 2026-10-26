@@ -1132,6 +1132,8 @@ fn tidy_midi_clip(c: &MidiClip) -> MidiClip {
             velocity: n.velocity.clamp(1, 127),
             start: ok(n.start, 0.0),
             length: ok(n.length, 1.0 / 64.0),
+            channel: n.channel.min(15),
+            pan: if n.pan.is_finite() { n.pan.clamp(-1.0, 1.0) } else { 0.0 },
         })
         .collect();
     notes.sort_by(|a, b| a.start.total_cmp(&b.start).then(a.pitch.cmp(&b.pitch)));
@@ -1637,12 +1639,16 @@ mod tests {
                     velocity: 0,
                     start: 1.0,
                     length: 0.5,
+                    channel: 0,
+                    pan: 0.0,
                 },
                 Note {
                     pitch: 200,
                     velocity: 200,
                     start: -1.0,
                     length: f64::NAN,
+                    channel: 20,
+                    pan: f32::NAN,
                 },
             ],
         };

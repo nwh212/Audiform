@@ -13,7 +13,8 @@
 //! - `AUDIO`: one block. From the editor: frames (u32), the number of
 //!   parameter changes (u32), each change as id (u32) and value (f64),
 //!   the number of note events (u32), each as frame offset (u32), on or
-//!   off (u8), pitch (u8) and velocity (f32, 0 to 1), then the frames as
+//!   off (u8), pitch (u8), velocity (f32, 0 to 1), MIDI channel (u8,
+//!   0 to 15) and pan (f32, -1 left to 1 right), then the frames as
 //!   interleaved stereo f32. From the host: the processed frames,
 //!   interleaved stereo f32.
 
@@ -65,7 +66,7 @@ pub struct ClassInfo {
 }
 
 /// A note starting or ending within a block.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct NoteEvent {
     /// Frames from the start of the block.
     pub offset: u32,
@@ -73,6 +74,10 @@ pub struct NoteEvent {
     pub pitch: u8,
     /// 0 to 1.
     pub velocity: f32,
+    /// MIDI channel, 0 to 15 (shown as 1 to 16).
+    pub channel: u8,
+    /// The note's own pan, -1 (left) to 1 (right); 0 sends none.
+    pub pan: f32,
 }
 
 /// One plug-in control. Values are normalized, 0 to 1.
@@ -355,6 +360,8 @@ pub fn encode_audio(
         out.push(u8::from(n.on));
         out.push(n.pitch);
         out.extend_from_slice(&n.velocity.to_le_bytes());
+        out.push(n.channel.min(15));
+        out.extend_from_slice(&n.pan.to_le_bytes());
     }
     for s in samples {
         out.extend_from_slice(&s.to_le_bytes());
@@ -393,13 +400,17 @@ pub fn decode_audio(
         let on = *buf.get(at + 4)? != 0;
         let pitch = *buf.get(at + 5)?;
         let velocity = f32::from_le_bytes(buf.get(at + 6..at + 10)?.try_into().ok()?);
+        let channel = *buf.get(at + 10)?;
+        let pan = f32::from_le_bytes(buf.get(at + 11..at + 15)?.try_into().ok()?);
         notes.push(NoteEvent {
             offset,
             on,
             pitch,
             velocity,
+            channel,
+            pan,
         });
-        at += 10;
+        at += 15;
     }
     decode_samples(buf.get(at..)?, samples);
     (samples.len() == frames * 2).then_some(())
@@ -548,6 +559,8 @@ mod tests {
             on: true,
             pitch: 60,
             velocity: 0.75,
+            channel: 3,
+            pan: -0.5,
         };
         encode_audio(
             &mut body,

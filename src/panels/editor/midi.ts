@@ -233,3 +233,56 @@ export function pasteNotes(notes: NoteDoc[], copied: NoteDoc[], at: number): { n
   const all = sortNotes([...notes, ...added]);
   return { notes: all, pasted: new Set(added.map((a) => all.indexOf(a))) };
 }
+
+/** The notes an edit acts on: the picked ones, or every note when none are picked. */
+export function targetsOf(notes: NoteDoc[], picked: ReadonlySet<number>): Set<number> {
+  return picked.size ? new Set(picked) : new Set(notes.map((_, i) => i));
+}
+
+const clampVel = (v: number) => Math.min(127, Math.max(1, Math.round(v)));
+
+/** Scales the velocity of the notes at `indexes` by `percent` (100 leaves them). */
+export function scaleVelocity(notes: NoteDoc[], indexes: ReadonlySet<number>, percent: number): NoteDoc[] {
+  return notes.map((n, i) => (indexes.has(i) ? { ...n, velocity: clampVel((n.velocity * percent) / 100) } : n));
+}
+
+/** Moves each note's velocity by a random amount up to `range` either way. `rand` gives 0 to 1. */
+export function randomizeVelocity(notes: NoteDoc[], indexes: ReadonlySet<number>, range: number, rand: () => number = Math.random): NoteDoc[] {
+  return notes.map((n, i) => (indexes.has(i) ? { ...n, velocity: clampVel(n.velocity + (rand() * 2 - 1) * range) } : n));
+}
+
+/** Sets the pan of the notes at `indexes`, -1 (left) to 1 (right). */
+export function setPan(notes: NoteDoc[], indexes: ReadonlySet<number>, pan: number): NoteDoc[] {
+  const p = Math.min(1, Math.max(-1, pan));
+  return notes.map((n, i) => (indexes.has(i) ? { ...n, pan: Math.abs(p) < 0.005 ? 0 : p } : n));
+}
+
+/** Gives each note a random pan up to `range` (0 to 1) either side of where it is. */
+export function randomizePan(notes: NoteDoc[], indexes: ReadonlySet<number>, range: number, rand: () => number = Math.random): NoteDoc[] {
+  return notes.map((n, i) => {
+    if (!indexes.has(i)) return n;
+    const p = Math.min(1, Math.max(-1, (n.pan ?? 0) + (rand() * 2 - 1) * range));
+    return { ...n, pan: Math.round(p * 100) / 100 };
+  });
+}
+
+/**
+ * Humanize: moves each note's start a little earlier or later at random,
+ * up to `beats` either way (never before the clip's start). Lengths stay,
+ * so each note keeps its end the same distance from its start.
+ */
+export function humanize(notes: NoteDoc[], indexes: ReadonlySet<number>, beats: number, rand: () => number = Math.random): NoteDoc[] {
+  return sortNotes(notes.map((n, i) => (indexes.has(i) ? { ...n, start: Math.max(0, n.start + (rand() * 2 - 1) * beats) } : n)));
+}
+
+/** Puts the notes at `indexes` on MIDI channel `channel` (0 to 15). */
+export function setChannel(notes: NoteDoc[], indexes: ReadonlySet<number>, channel: number): NoteDoc[] {
+  const c = Math.min(15, Math.max(0, Math.round(channel)));
+  return notes.map((n, i) => (indexes.has(i) ? { ...n, channel: c } : n));
+}
+
+/** Each MIDI channel's note color (channel 1 uses the clip's own color). */
+export const CHANNEL_COLORS = [
+  "", "#e8564a", "#f0913a", "#e8c53a", "#8fcf4a", "#3fbf7f", "#36b8c9", "#4a8fe8",
+  "#7a6ae8", "#b55ce0", "#e05cb0", "#a8785a", "#8a9aa8", "#d4d46a", "#5ad4a8", "#f07a9a",
+];

@@ -1468,3 +1468,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **MIDI track instrument box:** clicking the instrument's name opens its window; the arrow changes the instrument. The separate open button is gone.
 - **Plug-ins open in their own window** when added from the Effects menu or by Replace With; before, those paths showed the built-in controls list first.
 - **No network question for plug-ins.** Some plug-ins listen on the network inside Audiform's plug-in host (licence checks, or one maker's plug-ins finding each other), and Windows then asks whether Audiform may use public networks. The Windows installer now adds a firewall rule blocking incoming network connections to Audiform, so Windows does not ask. Traffic within the computer is not filtered, so plug-ins still find each other. A per-user install without administrator rights cannot add the rule; there, answering Cancel once has the same effect.
+
+## 2026-10-28: Piano roll note tools and MIDI channels
+
+- **Tools** in the piano roll (the Tools button) act on the picked notes, or every note when none are picked: set, scale (percent) or randomize velocity; set or randomize pan; and **Humanize**, which moves each note's start up to a set number of milliseconds earlier or later at random (lengths stay). All of it is part of the piano roll's one undoable edit.
+- **Per-note pan.** Notes carry their own pan (-1 left to 1 right), shown and drawn in the lane under the roll (Lane: Velocity or Pan). It reaches the instrument as a per-note pan expression, which instruments that support it follow; others ignore it.
+- **MIDI channels as note colors.** Each note has a MIDI channel (1 to 16), shown as its color (channel 1 keeps the clip's color). The Channel picker sets the channel for new notes and the picked notes. Instruments with several parts (a split keyboard, an organ's upper and lower manuals) play each channel with its own part. Auditioned notes use their channel too.
+- Both are stored only when not the default, so older sessions and files are unchanged.

@@ -382,6 +382,10 @@ pub struct NotePlan {
     pub pitch: u8,
     /// 0 to 1.
     pub velocity: f32,
+    /// MIDI channel, 0 to 15.
+    pub channel: u8,
+    /// -1 to 1; 0 sends none.
+    pub pan: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -390,8 +394,8 @@ pub struct MidiPlan {
     pub tempo: Tempo,
     /// Every note of every unmuted clip, cut at its clip's end, in order of `on`.
     pub notes: Vec<NotePlan>,
-    /// Every note's end: (frame, pitch), in order.
-    pub offs: Vec<(u64, u8)>,
+    /// Every note's end: (frame, pitch, channel), in order.
+    pub offs: Vec<(u64, u8, u8)>,
 }
 
 /// What a MIDI track plays, or None when it has no instrument (silent).
@@ -415,11 +419,13 @@ fn midi_plan(t: &Track, tempo: &Tempo, out_rate: u32) -> Option<MidiPlan> {
                 pitch: n.pitch.min(127),
                 velocity: (f32::from(n.velocity.clamp(1, 127)) / 127.0 * level)
                     .clamp(1.0 / 127.0, 1.0),
+                channel: n.channel.min(15),
+                pan: n.pan.clamp(-1.0, 1.0),
             });
         }
     }
     notes.sort_by_key(|n| n.on);
-    let mut offs: Vec<(u64, u8)> = notes.iter().map(|n| (n.off, n.pitch)).collect();
+    let mut offs: Vec<(u64, u8, u8)> = notes.iter().map(|n| (n.off, n.pitch, n.channel)).collect();
     offs.sort_unstable();
     Some(MidiPlan {
         instrument,

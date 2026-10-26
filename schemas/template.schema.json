@@ -1009,10 +1009,22 @@
       "description": "One note in a MIDI clip.",
       "type": "object",
       "properties": {
+        "channel": {
+          "description": "MIDI channel, 0 to 15 (shown as 1 to 16, and as the note's color).\nInstruments with several parts (a split keyboard, an organ's\nmanuals) play each channel with its own part.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
         "length": {
           "description": "Beats.",
           "type": "number",
           "format": "double"
+        },
+        "pan": {
+          "description": "The note's own pan, -1 (left) to 1 (right), sent to instruments\nthat take per-note pan. 0 sends none.",
+          "type": "number",
+          "format": "float"
         },
         "pitch": {
           "description": "MIDI note number, 0 to 127 (60 is middle C).",

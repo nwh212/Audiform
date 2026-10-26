@@ -311,6 +311,8 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
                     velocity: 127,
                     start: 0.0,
                     length: 0.125,
+                    channel: 0,
+                    pan: 0.0,
                 }],
             }],
         },
@@ -377,7 +379,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     );
     // A note heard while editing: it sounds, lets go after the hold, and
     // the preview ends after a short tail.
-    let make = instance::audition(&inst, 60, 1.0, 0.1).expect("starts");
+    let make = instance::audition(&inst, 60, 1.0, 0, 0.1).expect("starts");
     let rate = audiform_lib::engine::output::device_rate();
     let mut fill = make(2, rate).unwrap();
     let mut heard = Vec::new();
@@ -464,6 +466,8 @@ fn a_real_reverb_rings_on_a_midi_track() {
                     velocity: 127,
                     start: 0.0,
                     length: 0.125,
+                    channel: 0,
+                    pan: 0.0,
                 }],
             }],
         },

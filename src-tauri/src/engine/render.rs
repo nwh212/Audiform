@@ -425,6 +425,8 @@ impl Playing {
                 on: true,
                 pitch: n.pitch,
                 velocity: n.velocity,
+                channel: n.channel,
+                pan: n.pan,
             })
             .collect();
         let mut p = Playing {
@@ -452,12 +454,14 @@ impl Playing {
         self.events.clear();
         self.events.append(&mut self.chase);
         let first = midi.offs.partition_point(|o| o.0 < from);
-        for &(f, pitch) in midi.offs[first..].iter().take_while(|o| o.0 < to) {
+        for &(f, pitch, channel) in midi.offs[first..].iter().take_while(|o| o.0 < to) {
             self.events.push(NoteEvent {
                 offset: (f - from) as u32,
                 on: false,
                 pitch,
                 velocity: 0.0,
+                channel,
+                pan: 0.0,
             });
         }
         let first = midi.notes.partition_point(|x| x.on < from);
@@ -467,6 +471,8 @@ impl Playing {
                 on: true,
                 pitch: x.pitch,
                 velocity: x.velocity,
+                channel: x.channel,
+                pan: x.pan,
             });
         }
         // In time order; at the same frame a note ends before the next starts.

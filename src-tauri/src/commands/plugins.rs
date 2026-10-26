@@ -300,6 +300,7 @@ pub fn plugin_restart(slot_id: Id) {
 /// nothing while the session plays (the instrument is busy then) or when
 /// the track has no instrument. True when a note played.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn midi_audition(
     open: tauri::State<'_, super::session::OpenSession>,
     transport: tauri::State<'_, crate::engine::Transport>,
@@ -307,6 +308,7 @@ pub async fn midi_audition(
     track_id: Id,
     pitch: u8,
     velocity: f32,
+    channel: Option<u8>,
     seconds: f64,
 ) -> Result<bool, String> {
     if transport.is_playing() {
@@ -323,7 +325,7 @@ pub async fn midi_audition(
     let Some(slot) = slot.filter(|s| s.enabled) else {
         return Ok(false);
     };
-    let make = spawn_blocking(move || instance::audition(&slot, pitch, velocity, seconds))
+    let make = spawn_blocking(move || instance::audition(&slot, pitch, velocity, channel.unwrap_or(0), seconds))
         .await
         .map_err(|e| e.to_string())??;
     preview.play_made(make)?;

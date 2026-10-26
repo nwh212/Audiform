@@ -253,6 +253,10 @@ export interface NoteDoc {
   velocity: number;
   start: number;
   length: number;
+  /** MIDI channel, 0 to 15 (shown as 1 to 16 and as the note's color). Missing is 0. */
+  channel?: number;
+  /** The note's own pan, -1 (left) to 1 (right). Missing is 0 (none sent). */
+  pan?: number;
 }
 
 /** A MIDI clip. Its start and length are in beats, so it follows the tempo. */

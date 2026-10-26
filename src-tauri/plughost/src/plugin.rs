@@ -12,7 +12,10 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
-use vst3::Steinberg::Vst::Event_::EventTypes_::{kNoteOffEvent, kNoteOnEvent};
+use vst3::Steinberg::Vst::Event_::EventTypes_::{
+    kNoteExpressionValueEvent, kNoteOffEvent, kNoteOnEvent,
+};
+use vst3::Steinberg::Vst::NoteExpressionTypeIDs_::kPanTypeID;
 use vst3::Steinberg::Vst::MediaTypes_::{kAudio, kEvent};
 use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
     kIsHidden, kIsProgramChange, kIsReadOnly,
@@ -26,7 +29,7 @@ use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, Event, Event__type0, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentHandler, IComponentTrait, IConnectionPoint,
     IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IParameterChanges,
-    NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext, ProcessData, ProcessSetup,
+    NoteExpressionValueEvent, NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext, ProcessData, ProcessSetup,
     SpeakerArr, SpeakerArrangement,
 };
 use vst3::Steinberg::{
@@ -410,9 +413,37 @@ unsafe fn setup_buses(
     )
 }
 
-/// A note as VST3 wants it, `offset` frames into the block.
+/// A note as VST3 wants it, `offset` frames into the block: the note,
+/// and for a note with its own pan, the pan right after it.
+fn vst_events(n: &NoteEvent, offset: u32) -> impl Iterator<Item = Event> {
+    let note = vst_event(n, offset);
+    let pan = (n.on && n.pan != 0.0).then(|| Event {
+        busIndex: 0,
+        sampleOffset: offset as i32,
+        ppqPosition: 0.0,
+        flags: 0,
+        r#type: kNoteExpressionValueEvent as u16,
+        __field0: Event__type0 {
+            noteExpressionValue: NoteExpressionValueEvent {
+                typeId: kPanTypeID,
+                noteId: note_id(n),
+                // 0 is left, 0.5 the center, 1 right.
+                value: f64::from(n.pan.clamp(-1.0, 1.0)) * 0.5 + 0.5,
+            },
+        },
+    });
+    std::iter::once(note).chain(pan)
+}
+
+/// One id for each pitch on each channel, so a note's end and its pan
+/// find the note.
+fn note_id(n: &NoteEvent) -> i32 {
+    i32::from(n.channel.min(15)) * 128 + i32::from(n.pitch.min(127))
+}
+
 fn vst_event(n: &NoteEvent, offset: u32) -> Event {
     let pitch = i16::from(n.pitch.min(127));
+    let channel = i16::from(n.channel.min(15));
     Event {
         busIndex: 0,
         sampleOffset: offset as i32,
@@ -422,21 +453,21 @@ fn vst_event(n: &NoteEvent, offset: u32) -> Event {
         __field0: if n.on {
             Event__type0 {
                 noteOn: NoteOnEvent {
-                    channel: 0,
+                    channel,
                     pitch,
                     tuning: 0.0,
                     velocity: n.velocity.clamp(0.0, 1.0),
                     length: 0,
-                    noteId: i32::from(pitch),
+                    noteId: note_id(n),
                 },
             }
         } else {
             Event__type0 {
                 noteOff: NoteOffEvent {
-                    channel: 0,
+                    channel,
                     pitch,
                     velocity: n.velocity.clamp(0.0, 1.0),
-                    noteId: i32::from(pitch),
+                    noteId: note_id(n),
                     tuning: 0.0,
                 },
             }
@@ -492,7 +523,7 @@ impl Audio {
             let events: Vec<Event> = notes
                 .iter()
                 .filter(|n| self.events && n.offset >= from && n.offset < to)
-                .map(|n| vst_event(n, n.offset - from))
+                .flat_map(|n| vst_events(n, n.offset - from))
                 .collect();
             self.block(&all, events, chunk);
         }

@@ -136,3 +136,26 @@ describe("moving clips between tracks", () => {
     expect(copied.to.map((c) => c.id)).toEqual(["new"]);
   });
 });
+
+describe("note tools", () => {
+  const n = (start: number, velocity = 100) => ({ pitch: 60, velocity, start, length: 0.5 });
+  const notes = [n(0), n(1, 50), n(2, 120)];
+  it("acts on every note when none are picked", async () => {
+    const { targetsOf } = await import("./midi");
+    expect([...targetsOf(notes, new Set())]).toEqual([0, 1, 2]);
+    expect([...targetsOf(notes, new Set([1]))]).toEqual([1]);
+  });
+  it("scales and randomizes velocity within 1 to 127", async () => {
+    const { scaleVelocity, randomizeVelocity } = await import("./midi");
+    expect(scaleVelocity(notes, new Set([0, 2]), 150).map((x) => x.velocity)).toEqual([127, 50, 127]);
+    expect(randomizeVelocity(notes, new Set([1]), 10, () => 1).map((x) => x.velocity)).toEqual([100, 60, 120]);
+    expect(randomizeVelocity(notes, new Set([1]), 100, () => 0)[1]!.velocity).toBe(1);
+  });
+  it("pans, humanizes and sets channels", async () => {
+    const { randomizePan, humanize, setChannel } = await import("./midi");
+    expect(randomizePan(notes, new Set([0]), 0.5, () => 0)[0]!.pan).toBe(-0.5);
+    const h = humanize(notes, new Set([0, 1]), 0.1, () => 0);
+    expect(h.map((x) => x.start)).toEqual([0, 0.9, 2]);
+    expect(setChannel(notes, new Set([2]), 20)[2]!.channel).toBe(15);
+  });
+});

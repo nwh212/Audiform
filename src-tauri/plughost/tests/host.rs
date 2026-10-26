@@ -341,12 +341,14 @@ fn plays_notes_on_an_instrument_at_their_frames() {
         on: true,
         pitch,
         velocity,
+        ..Default::default()
     };
     let off = |offset, pitch| NoteEvent {
         offset,
         on: false,
         pitch,
         velocity: 0.0,
+        ..Default::default()
     };
     let silent = vec![0.0; 256 * 2];
     // A note from frame 10 to 100.

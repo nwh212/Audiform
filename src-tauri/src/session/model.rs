@@ -374,6 +374,23 @@ pub struct Note {
     pub start: f64,
     /// Beats.
     pub length: f64,
+    /// MIDI channel, 0 to 15 (shown as 1 to 16, and as the note's color).
+    /// Instruments with several parts (a split keyboard, an organ's
+    /// manuals) play each channel with its own part.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub channel: u8,
+    /// The note's own pan, -1 (left) to 1 (right), sent to instruments
+    /// that take per-note pan. 0 sends none.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub pan: f32,
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
+}
+
+fn is_zero_f32(v: &f32) -> bool {
+    *v == 0.0
 }
 
 /// A MIDI clip: notes, placed in beats so they follow the tempo.

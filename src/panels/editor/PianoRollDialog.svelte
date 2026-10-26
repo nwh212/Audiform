@@ -13,8 +13,13 @@
   Shift-click picks several, Shift-drag on empty space picks all in a
   box; moving or stretching one picked note moves or stretches them all.
   Copy and paste (Ctrl+C, Ctrl+V) paste at the last spot clicked. Snap
-  turns the grid on and off. The velocity lane below sets how hard each
-  note plays.
+  turns the grid on and off. The lane below sets how hard each note
+  plays (Velocity) or where it sits left to right (Pan). Channel puts
+  notes on a MIDI channel, shown as their color, for instruments with
+  several parts; new notes go on the channel picked. Tools sets, scales
+  or randomizes velocity and pan, and Humanize moves notes a little
+  earlier or later at random; each acts on the picked notes, or every
+  note when none are picked.
   Getting around: the mouse wheel scrolls up and down the keys, Shift
   and the wheel scrolls along time, Ctrl and the wheel zooms time around
   the pointer, Alt and the wheel makes the keys taller or shorter. Drag
@@ -33,7 +38,7 @@
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
   import { barAt, barBeats, segmentAtBeat } from "../../stores/tempo";
   import { tick } from "svelte";
-  import { GRIDS, MIN_NOTE, addNote, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
+  import { CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
     clip: MidiClipDoc;
@@ -44,15 +49,15 @@
     color?: string;
     onApply: (clip: MidiClipDoc) => void;
     onClose: () => void;
-    /** Plays a note through the track's instrument: pitch, velocity (1 to 127), length in seconds. */
-    onAudition?: (pitch: number, velocity: number, seconds: number) => void;
+    /** Plays a note through the track's instrument: pitch, velocity (1 to 127), length in seconds, MIDI channel (0 to 15). */
+    onAudition?: (pitch: number, velocity: number, seconds: number, channel: number) => void;
   }
 
   const { clip: original, tempo, instrument, color = "var(--accent)", onApply, onClose, onAudition = () => {} }: Props = $props();
 
   /** Hears a note, held for its length (within reason). */
   function hear(n: NoteDoc) {
-    onAudition(n.pitch, n.velocity, Math.min(1, Math.max(0.15, (n.length * 60) / segmentAtBeat(tempo, original.start + n.start).bpm)));
+    onAudition(n.pitch, n.velocity, Math.min(1, Math.max(0.15, (n.length * 60) / segmentAtBeat(tempo, original.start + n.start).bpm)), n.channel ?? 0);
   }
 
   // svelte-ignore state_referenced_locally
@@ -67,6 +72,32 @@
   /** Shift-drag on empty space: the box being drawn, in pixels. */
   let box = $state<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   let zoom = $state(64);
+  /** MIDI channel (0 to 15) new notes go on. */
+  let channel = $state(0);
+  /** What the lane under the roll shows and sets. */
+  let lane = $state<"velocity" | "pan">("velocity");
+  /** The Tools panel, and its values. */
+  let toolsOpen = $state(false);
+  let tool = $state({ velocity: 100, scale: 110, velRandom: 10, pan: 0, panRandom: 30, strayMs: 10 });
+  /** Applies a note edit to the picked notes, or every note when none are picked, keeping the pick. */
+  function applyTool(edit: (notes: NoteDoc[], which: Set<number>) => NoteDoc[]) {
+    const keep = [...picked].map((k) => clip.notes[k]!).filter(Boolean);
+    const before = clip.notes;
+    const next = edit(before, targetsOf(before, picked));
+    // Edits that keep note order (all but Humanize) keep the same indexes picked.
+    if (next.length === before.length && next.every((n, k) => n.start === before[k]!.start && n.pitch === before[k]!.pitch)) clip = { ...clip, notes: next };
+    else setNotes(next, keep.map((k) => next[before.indexOf(k)] ?? k));
+  }
+  /** Humanize's range in beats, from milliseconds at the clip's tempo. */
+  const strayBeats = (ms: number) => (ms / 1000) * (segmentAtBeat(tempo, original.start).bpm / 60);
+  /** A note's color: its channel's, or the clip's on channel 1. */
+  const noteColor = (n: NoteDoc) => (n.channel ? CHANNEL_COLORS[n.channel] : undefined);
+  function pickChannel(c: number) {
+    channel = c;
+    if (picked.size) clip = { ...clip, notes: setChannel(clip.notes, picked, c) };
+  }
+  const pickedPan = $derived(picked.size ? Math.round(([...picked].reduce((s, i) => s + (clip.notes[i]?.pan ?? 0), 0) / picked.size) * 100) : null);
+
   /** Length (beats) of the next note added: the last one drawn or resized. */
   let drawLength = $state(0.25);
 
@@ -338,7 +369,7 @@
     }
     if (i < 0) {
       // A new note, one grid step (or the last length drawn), on the grid.
-      const n: NoteDoc = { pitch: p.pitch, velocity: 100, start: snapDown(p.beat, step), length: step > 0 ? Math.max(step, drawLength) : drawLength };
+      const n: NoteDoc = { pitch: p.pitch, velocity: 100, start: snapDown(p.beat, step), length: step > 0 ? Math.max(step, drawLength) : drawLength, ...(channel ? { channel } : {}) };
       const notes = addNote(clip.notes, n);
       clip = { ...clip, notes };
       i = notes.findIndex((x) => x.start === n.start && x.pitch === n.pitch);
@@ -441,12 +472,13 @@
     const set = (ev: PointerEvent) => {
       const r = el.getBoundingClientRect();
       const beat = (ev.clientX - r.left) / zoom;
-      const v = Math.round((1 - (ev.clientY - r.top) / r.height) * 127);
+      const f = 1 - (ev.clientY - r.top) / r.height;
       // The note under the pointer, or every picked note when it is one of them.
       const i = clip.notes.findIndex((n) => beat >= n.start && beat < n.start + Math.max(n.length, 4 / zoom));
       if (i < 0) return;
       const which = picked.has(i) ? picked : new Set([i]);
-      clip = { ...clip, notes: setVelocity(clip.notes, which, v) };
+      // Pan: the middle of the lane is the center, the top is right.
+      clip = { ...clip, notes: lane === "pan" ? setPan(clip.notes, which, Math.round((f * 2 - 1) * 20) / 20) : setVelocity(clip.notes, which, Math.round(f * 127)) };
     };
     set(e);
     const up = (ev: PointerEvent) => {
@@ -531,6 +563,20 @@
           onchange={(e) => (clip = { ...clip, notes: setVelocity(clip.notes, picked, Number(e.currentTarget.value) || 100) })}
         />
       </label>
+      <label title="The MIDI channel new notes go on, and the picked notes' channel. Each channel has its own color. Instruments with several parts (a split keyboard, an organ's upper and lower manuals) play each channel with its own part.">
+        Channel
+        <select value={channel} onchange={(e) => pickChannel(Number(e.currentTarget.value))} style:color={CHANNEL_COLORS[channel] || "inherit"}>
+          {#each CHANNEL_COLORS as c, k (k)}<option value={k} style:color={c || "inherit"}>● {k + 1}</option>{/each}
+        </select>
+      </label>
+      <button type="button" class:on={toolsOpen} aria-expanded={toolsOpen} title="Set, scale or randomize velocity and pan, and Humanize timing. Acts on the picked notes, or every note when none are picked." onclick={() => (toolsOpen = !toolsOpen)}>Tools ▾</button>
+      <label title="What the lane under the roll shows and sets">
+        Lane
+        <select bind:value={lane}>
+          <option value="velocity">Velocity</option>
+          <option value="pan">Pan</option>
+        </select>
+      </label>
       <span class="zoom" role="group" aria-label="Zoom">
         <button type="button" title="Zoom out in time (Ctrl and the mouse wheel)" aria-label="Zoom out in time" onclick={() => void zoomTime(zoom / 1.5)}>−</button>
         <button type="button" title="Zoom in in time (Ctrl and the mouse wheel)" aria-label="Zoom in in time" onclick={() => void zoomTime(zoom * 1.5)}>+</button>
@@ -546,6 +592,32 @@
       <button type="button" disabled={!hasCopy} title="Paste at the last spot clicked (Ctrl+V)" onclick={paste}>Paste</button>
       <button type="button" disabled={!picked.size} title="Delete the picked notes (Delete)" onclick={deletePicked}>Delete</button>
     </header>
+    {#if toolsOpen}
+      <div class="tools">
+        <span class="hint">{picked.size ? `${picked.size} picked ${picked.size === 1 ? "note" : "notes"}` : "Every note (none picked)"}:</span>
+        <span class="group">
+          <b>Velocity</b>
+          <label>Set to <input type="number" min="1" max="127" bind:value={tool.velocity} /></label>
+          <button type="button" onclick={() => applyTool((n, w) => setVelocity(n, w, tool.velocity))}>Set</button>
+          <label>Scale <input type="number" min="1" max="400" bind:value={tool.scale} />%</label>
+          <button type="button" title="Makes them harder (over 100%) or softer (under 100%), keeping the differences between them" onclick={() => applyTool((n, w) => scaleVelocity(n, w, tool.scale))}>Scale</button>
+          <label>Randomize ± <input type="number" min="1" max="127" bind:value={tool.velRandom} /></label>
+          <button type="button" title="Moves each note's velocity up or down by a random amount, up to this much" onclick={() => applyTool((n, w) => randomizeVelocity(n, w, tool.velRandom))}>Randomize</button>
+        </span>
+        <span class="group">
+          <b>Pan</b>
+          <label title="-100 is left, 0 the center, 100 right">Set to <input type="number" min="-100" max="100" bind:value={tool.pan} /></label>
+          <button type="button" onclick={() => applyTool((n, w) => setPan(n, w, tool.pan / 100))}>Set</button>
+          <label>Randomize ± <input type="number" min="1" max="100" bind:value={tool.panRandom} />%</label>
+          <button type="button" title="Moves each note left or right by a random amount, up to this much. Instruments that take per-note pan follow it; others ignore it." onclick={() => applyTool((n, w) => randomizePan(n, w, tool.panRandom / 100))}>Randomize</button>
+        </span>
+        <span class="group">
+          <b>Humanize</b>
+          <label title="Each note starts up to this much earlier or later, at random">± <input type="number" min="1" max="200" bind:value={tool.strayMs} /> ms</label>
+          <button type="button" title="Moves each note's start a little earlier or later at random, up to the amount set, so the part sounds played rather than programmed. Lengths stay the same." onclick={() => applyTool((n, w) => humanize(n, w, strayBeats(tool.strayMs)))}>Humanize</button>
+        </span>
+      </div>
+    {/if}
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -561,7 +633,7 @@
         <div class="keys-corner" style:height="{RULER_H}px"></div>
         {#each pitches as p (p)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{row}px" title={noteName(p)} onpointerdown={(e) => e.button === 0 && onAudition(p, 100, 0.4)}>{p % 12 === 0 && row >= 9 ? noteName(p) : ""}</div>
+          <div class="key" class:black={isBlackKey(p)} class:c={p % 12 === 0} style:height="{row}px" title={noteName(p)} onpointerdown={(e) => e.button === 0 && onAudition(p, 100, 0.4, channel)}>{p % 12 === 0 && row >= 9 ? noteName(p) : ""}</div>
         {/each}
       </div>
       <div class="area">
@@ -602,16 +674,22 @@
               style:width="{Math.max(3, n.length * zoom - 1)}px"
               style:height="{row - 2}px"
               style:--vel={n.velocity / 127}
-              title="{noteName(n.pitch)}, velocity {n.velocity}"
+              style:--note={noteColor(n)}
+              title="{noteName(n.pitch)}, velocity {n.velocity}, channel {(n.channel ?? 0) + 1}{n.pan ? `, pan ${n.pan < 0 ? 'L' : 'R'} ${Math.round(Math.abs(n.pan) * 100)}` : ''}"
             >
               <span class="h l"></span><span class="h r"></span>
             </div>
           {/each}
         </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="velocity" style:width="{widthPx}px" onpointerdown={onVelocityDown} title="Velocity: drag a bar up or down">
+        <div class="velocity" class:pan={lane === "pan"} style:width="{widthPx}px" onpointerdown={onVelocityDown} title={lane === "pan" ? "Pan: drag a bar up (right) or down (left); the middle line is the center" : "Velocity: drag a bar up or down"}>
           {#each clip.notes as n, i (i)}
-            <div class="bar" class:picked={picked.has(i)} style:left="{xOf(n.start)}px" style:height="{(n.velocity / 127) * 100}%"></div>
+            {#if lane === "pan"}
+              {@const pan = n.pan ?? 0}
+              <div class="bar" class:picked={picked.has(i)} style:--note={noteColor(n)} style:left="{xOf(n.start)}px" style:bottom="{50 + Math.min(0, pan) * 50}%" style:height="{Math.max(2, Math.abs(pan) * 50)}%"></div>
+            {:else}
+              <div class="bar" class:picked={picked.has(i)} style:--note={noteColor(n)} style:left="{xOf(n.start)}px" style:height="{(n.velocity / 127) * 100}%"></div>
+            {/if}
           {/each}
         </div>
       </div>
@@ -651,8 +729,8 @@
     background: rgba(0, 0, 0, 0.5);
   }
   .dialog {
-    display: grid;
-    grid-template-rows: auto 1fr auto auto;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
     width: min(1100px, 96vw);
     height: min(720px, 90vh);
@@ -711,8 +789,37 @@
     display: flex;
     gap: 2px;
   }
+  button.on {
+    border-color: var(--accent);
+  }
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    align-items: center;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+  .tools .group {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .tools b {
+    font-size: var(--font-size-small);
+    font-weight: 600;
+  }
+  .tools .hint {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+  }
+  .tools input[type="number"] {
+    width: 56px;
+  }
   .roll {
     display: flex;
+    flex: 1;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -915,6 +1022,9 @@
     bottom: 0;
     width: 4px;
     background: var(--note);
+  }
+  .velocity.pan {
+    background: linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border-strong) calc(50% - 0.5px), var(--border-strong) calc(50% + 0.5px), transparent calc(50% + 0.5px)), var(--surface-2);
   }
   .bar.picked {
     background: var(--text);

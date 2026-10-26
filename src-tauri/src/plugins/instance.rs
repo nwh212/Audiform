@@ -914,6 +914,7 @@ pub fn audition(
     slot: &EffectSlot,
     pitch: u8,
     velocity: f32,
+    channel: u8,
     seconds: f64,
 ) -> Result<crate::engine::preview::MakeFill, String> {
     let rate = crate::engine::output::device_rate();
@@ -932,6 +933,7 @@ pub fn audition(
             host,
             pitch: pitch.min(127),
             velocity: velocity.clamp(0.0, 1.0),
+            channel: channel.min(15),
             hold,
             total,
             pos: 0,
@@ -950,6 +952,7 @@ struct Audition {
     host: Arc<Mutex<Host>>,
     pitch: u8,
     velocity: f32,
+    channel: u8,
     hold: usize,
     total: usize,
     pos: usize,
@@ -973,6 +976,8 @@ impl Audition {
                 on: true,
                 pitch: self.pitch,
                 velocity: self.velocity,
+                channel: self.channel,
+                pan: 0.0,
             });
         }
         if !self.released && self.pos + n > self.hold {
@@ -981,6 +986,8 @@ impl Audition {
                 on: false,
                 pitch: self.pitch,
                 velocity: 0.0,
+                channel: self.channel,
+                pan: 0.0,
             });
             self.released = true;
         }
@@ -1016,6 +1023,8 @@ impl Drop for Audition {
                 on: false,
                 pitch: self.pitch,
                 velocity: 0.0,
+                channel: self.channel,
+                pan: 0.0,
             }];
             let mut buf = vec![0.0; 64 * 2];
             if let Ok(mut h) = self.host.lock() {
