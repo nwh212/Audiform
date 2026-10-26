@@ -47,7 +47,7 @@ export interface AppSettings {
   /** 3D Space sessions heard on speakers: each speaker's device output (from 0) by name. Missing speakers play on the output at their place in the layout. */
   speakerOutputs: Record<string, number>;
   /** Look of the app: the built-in dark theme, or a glass theme: Sky Glass (light) or Night Glass (dark). */
-  theme: "dark" | "sky" | "night" | "meadow" | "aqua";
+  theme: "dark" | "sky" | "night" | "meadow" | "aqua" | "moonlight";
   /** How lively the level meters are. */
   meterSpeed: "fast" | "medium" | "slow";
   /** The custom loudness target: integrated LUFS and true peak ceiling. */
@@ -234,7 +234,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       ),
     ),
     driver: o.driver === "asio" ? "asio" : "system",
-    theme: o.theme === "sky" || o.theme === "night" || o.theme === "meadow" || o.theme === "aqua" ? o.theme : "dark",
+    theme: o.theme === "sky" || o.theme === "night" || o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" ? o.theme : "dark",
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"
         ? o.meterSpeed
