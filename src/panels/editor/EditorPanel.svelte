@@ -400,7 +400,9 @@
 
   const rate = $derived(doc?.sample_rate ?? 48000);
   const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
-  const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  /** While the playhead is being dragged on the ruler: where the pointer has it, shown at once. */
+  let dragHead = $state<number | null>(null);
+  const playhead = $derived(dragHead ?? (tp?.playing ? tp.position : (doc?.view.playhead ?? 0)));
 
   // Following the playhead while playing is Follow Playhead's job (below):
   // it lets go when you move the view yourself.
@@ -715,19 +717,31 @@
     const cur = session.current;
     if (cur?.view.selection) session.setView({ ...cur.view, selection: null });
     const at = (clientX: number) => Math.max(0, sampleAt(Math.max(0, Math.min(lanesWidth, clientX - left)), view));
-    const wasPlaying = tp?.playing ?? false;
     let last = at(e.clientX);
-    if (!wasPlaying) void transport.seek(last);
+    // The line follows the pointer at once; the playhead itself moves once
+    // a frame at most, and playback jumps there when the button is let go.
+    dragHead = last;
+    let queued = false;
+    const settleSoon = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        if (dragHead !== null && !(tp?.playing ?? false)) void transport.seek(last);
+      });
+    };
+    settleSoon();
     document.body.style.cursor = "ew-resize";
     const move = (ev: PointerEvent) => {
       last = at(ev.clientX);
-      if (!wasPlaying) void transport.seek(last);
+      dragHead = last;
+      settleSoon();
     };
     const up = () => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       document.body.style.cursor = "";
-      void transport.seek(last);
+      void transport.seek(last).finally(() => (dragHead = null));
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
