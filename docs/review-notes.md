@@ -57,3 +57,8 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 
 - **One-time startup offer** to add the firewall rule (Windows, with plug-ins scanned, when no rule covers Audiform). Answering either way stops the offer; the Effects menu item stays.
 - **MSI would not remove the "unsigned" warning:** an unsigned MSI gets the same SmartScreen warning. The fix is code signing (see the reply in chat for options). Until then: the installed app warns only once per download; the portable zip warns every start unless the zip is unblocked first (now in the README).
+
+## Glass pointers
+
+- **Only the I-beam and the resize arrows got glass versions.** The hand, crosshair and "not allowed" pointers keep their usual shapes; say if you want those too.
+- **The pointer is swapped a frame after the mouse moves onto an element,** so the standard shape can flash for one frame. Not tested on Windows yet.

@@ -713,7 +713,8 @@
 
 
 /* A glowing blue glass arrow for the pointer, over everything you click
-   too. Text, resize and drag pointers keep their usual shapes. Elements
+   too. Text and resize pointers get glass versions too (src/app/glass-cursor.ts);
+   drag pointers keep their usual shapes. Elements
    whose own style asks for the hand or the plain arrow are marked by the
    app (data-aero-cursor) so they get the glass arrow as well. */
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]),

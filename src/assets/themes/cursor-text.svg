@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 32 32">
+  <!-- Audiform scene themes: a glowing blue glass I-beam, for text and time selection. Center (16, 16). -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d8f8ff"/>
+      <stop offset="0.35" stop-color="#5cc8ff"/>
+      <stop offset="0.75" stop-color="#1a86f0"/>
+      <stop offset="1" stop-color="#0a4fc8"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-30%" width="220%" height="160%">
+      <feGaussianBlur stdDeviation="1.1"/>
+    </filter>
+  </defs>
+  <path id="beam" d="M10.5 4 H14.4 Q16 4 16 5.6 Q16 4 17.6 4 H21.5 V6.4 H17.6 Q17.2 6.4 17.2 6.8 V25.2 Q17.2 25.6 17.6 25.6 H21.5 V28 H17.6 Q16 28 16 26.4 Q16 28 14.4 28 H10.5 V25.6 H14.4 Q14.8 25.6 14.8 25.2 V6.8 Q14.8 6.4 14.4 6.4 H10.5 Z" fill="none" stroke="#5ec6ff" stroke-width="2.6" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M10.5 4 H14.4 Q16 4 16 5.6 Q16 4 17.6 4 H21.5 V6.4 H17.6 Q17.2 6.4 17.2 6.8 V25.2 Q17.2 25.6 17.6 25.6 H21.5 V28 H17.6 Q16 28 16 26.4 Q16 28 14.4 28 H10.5 V25.6 H14.4 Q14.8 25.6 14.8 25.2 V6.8 Q14.8 6.4 14.4 6.4 H10.5 Z" fill="url(#body)" stroke="#8fdcff" stroke-width="0.9" stroke-linejoin="round"/>
+  <path d="M15.3 8 V18" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round" opacity="0.85"/>
+</svg>

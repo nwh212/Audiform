@@ -1608,3 +1608,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Built-in effects** are alphabetical within each family in the Audio FX Add menu.
 - **The menu bar nests deeper:** a menu entry can now open a list built when it opens, as a menu beside it with any number of levels.
 - **Type to jump:** in any open menu (the menu bar, right-click menus, the Add effect list), typing letters moves to the first item that starts with them. Quick letters build a longer prefix; the same letter again moves to the next item starting with it.
+
+## 2026-10-28: Glass text and resize pointers
+
+- **The scene themes (Meadow, Aqua, Moonlight, Prism) get glass versions of the text and time-selection I-beam and of the resize double arrows** (side to side, up and down, both diagonals), drawn in the same glowing blue glass as their arrow. Window edges, panel dividers, track and clip edges all use them.
+- **How:** many of these pointers are picked by code as the mouse moves, so a style sheet cannot reach them all. A small watcher (`src/app/glass-cursor.ts`) reads the pointer the element under the mouse asks for and swaps in the glass one, with the standard shape as the fallback. It does nothing in the other themes and puts every element back when the theme changes.
+- **Drag pointers (the open and closed hand) keep their usual shapes.**

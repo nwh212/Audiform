@@ -34,6 +34,7 @@
   import DockShell from "./docking/DockShell.svelte";
   import { ActionRegistry } from "./actions";
   import { MENUS } from "./menus/model";
+  import { watchGlassCursor } from "./glass-cursor";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
   import AboutDialog from "./AboutDialog.svelte";
@@ -2551,7 +2552,11 @@
   }
   onMount(() => {
     document.addEventListener("mouseover", markAeroCursor, true);
-    return () => document.removeEventListener("mouseover", markAeroCursor, true);
+    const stopGlass = watchGlassCursor();
+    return () => {
+      document.removeEventListener("mouseover", markAeroCursor, true);
+      stopGlass();
+    };
   });
 
   /** Puts settings that live outside the interface's own reads into effect. */

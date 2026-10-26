@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 32 32">
+  <!-- Audiform scene themes: a glowing blue glass double arrow, top right to bottom left. Center (16, 16). -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#d8f8ff"/>
+      <stop offset="0.35" stop-color="#5cc8ff"/>
+      <stop offset="0.75" stop-color="#1a86f0"/>
+      <stop offset="1" stop-color="#0a4fc8"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-60%" width="160%" height="220%">
+      <feGaussianBlur stdDeviation="1.1"/>
+    </filter>
+  </defs>
+  <g transform="rotate(-45 16 16)">
+    <path d="M2.5 16 L9.5 9 V13.6 H22.5 V9 L29.5 16 L22.5 23 V18.4 H9.5 V23 Z" fill="none" stroke="#5ec6ff" stroke-width="2.6" stroke-linejoin="round" filter="url(#glow)"/>
+    <path d="M2.5 16 L9.5 9 V13.6 H22.5 V9 L29.5 16 L22.5 23 V18.4 H9.5 V23 Z" fill="url(#body)" stroke="#8fdcff" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M5.5 15.2 L9 11.8 M11 14.6 H21" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round" opacity="0.85"/>
+  </g>
+</svg>
