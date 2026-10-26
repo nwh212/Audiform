@@ -917,6 +917,16 @@ export function outputChannels(): Promise<number> {
   return invoke<number>("output_channels");
 }
 
+/** Settings > Appearance: an Open dialog for a background picture. Null on cancel. */
+export function themePickBackground(): Promise<string | null> {
+  return invoke<string | null>("theme_pick_background");
+}
+
+/** The background picture's bytes. */
+export function themeBackground(path: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("theme_background", { path });
+}
+
 export interface CacheInfo {
   path: string;
   folders: { name: string; bytes: number; clearable: boolean }[];

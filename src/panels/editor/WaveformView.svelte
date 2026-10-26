@@ -20,7 +20,7 @@
   import { liveTakes, type LiveTakes } from "../../stores/record";
   import { clipLength, sessionEnd, stretchOf, type ClipDoc, type SessionDoc, type SessionStore } from "../../stores/session";
   import type { TransportState, TransportStore } from "../../stores/transport";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
   import { allOn, toggleChannel, waveChannels } from "./wave-channels";
   import { appearanceTick } from "../../stores/appearance";
@@ -83,7 +83,7 @@
   let peakTick = $state(0);
   $effect(() => peaks.subscribe(() => peakTick++));
   // The theme or colors changed: draw again.
-  $effect(() => appearanceTick.subscribe(() => peakTick++));
+  $effect(() => appearanceTick.subscribe(() => untrack(() => peakTick++)));
   /** The take being recorded into this file, drawn as it arrives. */
   let live = $state<LiveTakes | null>(null);
   $effect(() =>

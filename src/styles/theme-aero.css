@@ -703,3 +703,18 @@
   background: var(--a-shine), linear-gradient(135deg, rgba(26, 54, 96, 0.68), rgba(8, 20, 44, 0.62));
   backdrop-filter: blur(22px) saturate(1.4) brightness(0.8);
 }
+
+/* Your own picture behind the glass (Settings > Appearance). */
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"])[data-scene-picture] body {
+  background-image: var(--scene-picture);
+  background-size: cover;
+  background-position: center;
+}
+
+/* A glowing blue glass arrow for the pointer, over everything you click
+   too. Text, resize and drag pointers keep their usual shapes. */
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]),
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) body,
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
+  cursor: url("../assets/themes/cursor.svg") 4 3, default;
+}

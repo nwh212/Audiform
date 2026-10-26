@@ -48,6 +48,8 @@ export interface AppSettings {
   speakerOutputs: Record<string, number>;
   /** Look of the app: the built-in dark theme, or a glass theme: Sky Glass (light) or Night Glass (dark). */
   theme: "dark" | "sky" | "night" | "meadow" | "aqua" | "moonlight";
+  /** Scene themes: a picture of your own behind the glass, in place of the theme's scene. Null uses the theme's. */
+  themePicture: string | null;
   /** How lively the level meters are. */
   meterSpeed: "fast" | "medium" | "slow";
   /** The custom loudness target: integrated LUFS and true peak ceiling. */
@@ -157,6 +159,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   output: null,
   outputPair: [0, 1],
   theme: "dark",
+  themePicture: null,
   speakerOutputs: {},
   waveInput: null,
   driver: "system",
@@ -234,6 +237,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       ),
     ),
     driver: o.driver === "asio" ? "asio" : "system",
+    themePicture: typeof o.themePicture === "string" && o.themePicture.trim() ? o.themePicture : null,
     theme: o.theme === "sky" || o.theme === "night" || o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" ? o.theme : "dark",
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"

@@ -13,7 +13,7 @@
   import { trackOp } from "../mixer/solo";
   import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
   import SendList from "../mixer/SendList.svelte";
-  import { onDestroy, tick as nextFrame } from "svelte";
+  import { onDestroy, tick as nextFrame, untrack } from "svelte";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { FileDropRouter } from "../../app/filedrop";
@@ -141,7 +141,7 @@
   let peakTick = $state(0);
   $effect(() => peaks.subscribe(() => peakTick++));
   // The theme or colors changed: the ruler and overview draw again.
-  $effect(() => appearanceTick.subscribe(() => peakTick++));
+  $effect(() => appearanceTick.subscribe(() => untrack(() => peakTick++)));
 
   let tick = $state(0);
   $effect(() =>

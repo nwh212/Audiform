@@ -191,6 +191,8 @@ pub fn run() {
             commands::session::session_import_sesx,
             commands::session::session_export_sesx,
             commands::app::app_set_title,
+            commands::theme::theme_pick_background,
+            commands::theme::theme_background,
             commands::workspace::workspace_load,
             commands::workspace::workspace_save,
             commands::workspace::workspace_clear,
