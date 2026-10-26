@@ -436,6 +436,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         }
     }
     fn tone(frames: usize, level: f32, hz: f32) -> Vec<f32> {

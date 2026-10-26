@@ -26,6 +26,8 @@ pub(crate) struct Fx {
     keep: usize,
     /// Peaks in and out since last read: left in, right in, left out, right out.
     pub peaks: [f32; 4],
+    /// Channels per frame: 2, or one per speaker on a 3D Space master.
+    ch: usize,
 }
 
 impl Fx {
@@ -33,10 +35,21 @@ impl Fx {
         ChainProcessor::new(chain, rate).map(|c| Self::from(c, rate))
     }
 
+    /// A chain over channels named `names` (a 3D Space master's speakers).
+    pub fn with_channels(chain: &EffectChain, rate: u32, names: &[String]) -> Option<Self> {
+        ChainProcessor::with_channels(chain, rate, names).map(|c| Self::from_ch(c, rate, names.len()))
+    }
+
     pub fn from(c: ChainProcessor, rate: u32) -> Self {
+        Self::from_ch(c, rate, 2)
+    }
+
+    fn from_ch(c: ChainProcessor, rate: u32, ch: usize) -> Self {
         let latency = c.latency() as u64;
+        let ch = ch.max(1);
         Fx {
-            keep: (latency as usize + (f64::from(rate) * WARM_SECONDS) as usize) * 2,
+            ch,
+            keep: (latency as usize + (f64::from(rate) * WARM_SECONDS) as usize) * ch,
             latency,
             chain: c,
             primed: false,
@@ -59,14 +72,16 @@ impl Fx {
             let cut = self.hist.len() - self.keep;
             self.hist.drain(..cut);
         }
-        for f in buf.as_chunks::<2>().0 {
+        // The meters show the first two channels (L and R).
+        let ch = self.ch;
+        for f in buf.chunks_exact(ch) {
             self.peaks[0] = self.peaks[0].max(f[0].abs());
-            self.peaks[1] = self.peaks[1].max(f[1].abs());
+            self.peaks[1] = self.peaks[1].max(f[ch.min(2) - 1].abs());
         }
         self.chain.process_keyed(buf, keys);
-        for f in buf.as_chunks::<2>().0 {
+        for f in buf.chunks_exact(ch) {
             self.peaks[2] = self.peaks[2].max(f[0].abs());
-            self.peaks[3] = self.peaks[3].max(f[1].abs());
+            self.peaks[3] = self.peaks[3].max(f[ch.min(2) - 1].abs());
         }
     }
 }
@@ -74,7 +89,12 @@ impl Fx {
 /// Puts `chain` in place of the chain in `slot` while it plays. False,
 /// with nothing changed, when the look-ahead would change.
 pub(crate) fn swap_fx(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32) -> bool {
-    let new = ChainProcessor::new(chain, rate);
+    swap_fx_ch(slot, chain, rate, &crate::dsp::effects::routing::stereo())
+}
+
+/// [`swap_fx`] for a chain over channels named `names`.
+pub(crate) fn swap_fx_ch(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32, names: &[String]) -> bool {
+    let new = ChainProcessor::with_channels(chain, rate, names);
     let old_lat = slot.as_ref().map_or(0, |f| f.latency);
     if new.as_ref().map_or(0, |c| c.latency() as u64) != old_lat {
         return false;
@@ -83,7 +103,7 @@ pub(crate) fn swap_fx(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32) -> 
         *slot = None;
         return true;
     };
-    let mut fx = Fx::from(c, rate);
+    let mut fx = Fx::from_ch(c, rate, names.len());
     match slot.take() {
         // Not started yet: it primes itself on its first block.
         Some(old) if !old.primed => {}

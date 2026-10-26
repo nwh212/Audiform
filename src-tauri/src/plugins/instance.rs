@@ -25,7 +25,7 @@ use std::thread;
 use std::time::Duration;
 
 use altered_plughost::protocol::{
-    decode_samples, encode_audio, read_frame, write_frame, Message, NoteEvent, ParamInfo, Request,
+    decode_samples, encode_audio_ch, read_frame, write_frame, Message, NoteEvent, ParamInfo, Request,
     AUDIO, CONTROL, SELECT,
 };
 use serde::Serialize;
@@ -325,6 +325,10 @@ pub struct Host {
     rate: u32,
     /// The stretch of the tempo map the plug-in was last told.
     told: Option<TempoSegment>,
+    /// The main input's and output's speakers by name: L and R unless the
+    /// plug-in runs with its own layout.
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
     /// The settings the plug-in last reported or was given, so the same
     /// settings coming back from the session are not sent again.
     last_state: Option<String>,
@@ -337,6 +341,7 @@ impl Host {
         rate: u32,
         state: Option<String>,
         params: Vec<(u32, f64)>,
+        wide: bool,
     ) -> Result<Host, String> {
         let conn = conn_for(&found.info.vendor, rate)?;
         let id = conn.next_id.fetch_add(1, Ordering::SeqCst);
@@ -370,6 +375,8 @@ impl Host {
             rate,
             told: None,
             last_state: state.clone(),
+            inputs: vec!["L".into(), "R".into()],
+            outputs: vec!["L".into(), "R".into()],
         };
         let load = Request::Load {
             path: found.bundle.to_string_lossy().into_owned(),
@@ -377,17 +384,24 @@ impl Host {
             rate: f64::from(rate),
             state,
             params,
+            main: wide.then_some(0),
         };
         match host.request(&load, LOAD_TIMEOUT) {
             Some(Message::Loaded {
                 latency,
                 params,
                 has_editor,
+                inputs,
+                outputs,
                 ..
             }) => {
                 host.latency = latency as usize;
                 host.params = params;
                 host.has_editor = has_editor;
+                if wide {
+                    host.inputs = inputs;
+                    host.outputs = outputs;
+                }
                 Ok(host)
             }
             Some(Message::Error { message }) => Err(message),
@@ -425,6 +439,17 @@ impl Host {
     /// Processes interleaved stereo in place, playing `notes` (for
     /// instruments). False (and `io` untouched) when the plug-in is gone.
     pub fn process(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32]) -> bool {
+        self.process_ch(changes, notes, io, 2)
+    }
+
+    /// Channels per frame the plug-in's audio goes in and out with:
+    /// stereo, or its own layout's (the larger of input and output).
+    pub fn width(&self) -> usize {
+        self.inputs.len().max(self.outputs.len()).max(1)
+    }
+
+    /// [`Host::process`] for `channels` interleaved channels.
+    pub fn process_ch(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32], channels: usize) -> bool {
         if self.is_dead() || io.is_empty() {
             return false;
         }
@@ -446,7 +471,7 @@ impl Host {
                 }
             }
         }
-        encode_audio(&mut self.buf, position, changes, notes, io);
+        encode_audio_ch(&mut self.buf, position, changes, notes, io, channels);
         if !self.conn.write(self.id, AUDIO, &self.buf) {
             self.stop("The plug-in crashed and is bypassed.");
             return false;
@@ -603,6 +628,7 @@ pub fn block_position() -> i64 {
 struct Pooled {
     effect: String,
     rate: u32,
+    wide: bool,
     host: Arc<Mutex<Host>>,
 }
 
@@ -628,6 +654,11 @@ pub fn fresh<T>(f: impl FnOnce() -> T) -> T {
     out
 }
 
+/// True when the slot's plug-in runs with its own channel layout.
+fn wide_of(slot: &EffectSlot) -> bool {
+    slot.routing.as_ref().is_some_and(|r| r.wide)
+}
+
 fn slot_params(slot: &EffectSlot) -> Vec<(u32, f64)> {
     slot.params
         .iter()
@@ -647,7 +678,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         loop {
             if let Ok(p) = pool().lock() {
                 if let Some(e) = p.get(&slot.id) {
-                    if e.effect == slot.effect && e.rate == rate {
+                    if e.effect == slot.effect && e.rate == rate && e.wide == wide_of(slot) {
                         return Some(e.host.clone());
                     }
                 }
@@ -661,7 +692,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
             thread::sleep(Duration::from_millis(50));
         }
     }
-    let started = Host::start(&found, rate, slot.plugin_state.clone(), slot_params(slot));
+    let started = Host::start(&found, rate, slot.plugin_state.clone(), slot_params(slot), wide_of(slot));
     if !fresh {
         if let Ok(mut s) = starting().lock() {
             s.remove(&slot.id);
@@ -681,6 +712,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
                 Pooled {
                     effect: slot.effect.clone(),
                     rate,
+                    wide: wide_of(slot),
                     host: host.clone(),
                 },
             );
@@ -844,6 +876,11 @@ pub fn take_events() -> Vec<(Id, Events)> {
 pub struct PluginProcessor {
     host: Arc<Mutex<Host>>,
     latency: usize,
+    /// Its main input's and output's speakers, and the channels per frame
+    /// its audio travels with.
+    ins: Vec<String>,
+    outs: Vec<String>,
+    width: usize,
     pending: Vec<(u32, f64)>,
     /// When the plug-in has stopped, the dry sound still arrives as late
     /// as the plug-in's would have, so the track stays in time.
@@ -854,22 +891,25 @@ pub struct PluginProcessor {
 /// would not start (the chain then skips it).
 pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
     let host = host_for(slot, rate)?;
-    let (latency, pending) = {
+    let (latency, pending, ins, outs, width) = {
         let h = host.lock().ok()?;
-        (h.latency, h.differing(&slot_params(slot)))
+        (h.latency, h.differing(&slot_params(slot)), h.inputs.clone(), h.outputs.clone(), h.width())
     };
     Some(PluginProcessor {
         host,
         latency,
+        ins,
+        outs,
+        width,
         pending,
-        bypass: crate::dsp::effects::Delay::new(latency),
+        bypass: crate::dsp::effects::Delay::with_channels(latency, width),
     })
 }
 
 impl Processor for PluginProcessor {
     fn process(&mut self, buf: &mut [f32]) {
         let done = match self.host.lock() {
-            Ok(mut h) => h.process(&self.pending, &[], buf),
+            Ok(mut h) => h.process_ch(&self.pending, &[], buf, self.width),
             Err(_) => false,
         };
         if done {
@@ -877,6 +917,10 @@ impl Processor for PluginProcessor {
         } else {
             self.bypass.run(buf);
         }
+    }
+
+    fn channels(&self) -> (Vec<String>, Vec<String>) {
+        (self.ins.clone(), self.outs.clone())
     }
 
     fn latency(&self) -> usize {

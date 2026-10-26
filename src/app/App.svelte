@@ -2051,7 +2051,9 @@
     fxCatalog ??= await effectsCatalog();
     const info = fxCatalog.find((e) => e.id === effect);
     if (!info) return;
-    const slot = newSlot(info, uuid());
+    const made = newSlot(info, uuid());
+    // A plug-in on the master of a 3D Space session runs with its own channels.
+    const slot = info.plugin && at.target.kind === "master" && session.current?.space ? { ...made, routing: { wide: true } } : made;
     const next = addSlot(chainOf(at.chain), slot);
     if (!next) {
       showNotice("That Audio FX is full: it holds 16 effects.");

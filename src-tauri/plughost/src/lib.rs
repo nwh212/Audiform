@@ -146,19 +146,17 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                 cur = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
             }
             Ok(Some(AUDIO)) => {
-                if protocol::decode_audio(
+                let Some(channels) = protocol::decode_audio(
                     &buf,
                     &mut position,
                     &mut changes,
                     &mut notes,
                     &mut samples,
-                )
-                .is_none()
-                {
+                ) else {
                     break;
-                }
+                };
                 if let Some(a) = audio.get_mut(&cur) {
-                    a.process(position, &changes, &notes, &mut samples);
+                    a.process(position, &changes, &notes, &mut samples, channels);
                 }
                 if !changes.is_empty() {
                     let _ = tx.send(ToMain::Changes(cur, changes.clone()));
@@ -328,6 +326,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     rate,
                     state,
                     params,
+                    main,
                 } = req
                 else {
                     let _ = reply.send(None);
@@ -335,7 +334,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                 };
                 // Loading again in the same place replaces what was there.
                 loaded.remove(&id);
-                match Plugin::load(Path::new(&path), &cid, rate, state.as_deref()) {
+                match Plugin::load(Path::new(&path), &cid, rate, state.as_deref(), main) {
                     Ok((p, mut a)) => {
                         for (pid, v) in &params {
                             p.set_param(*pid, *v);
@@ -349,6 +348,8 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                                 params: p.params.clone(),
                                 has_editor: p.controller.is_some(),
                                 instrument: p.instrument,
+                                inputs: p.main_in.clone(),
+                                outputs: p.main_out.clone(),
                             },
                         );
                         let to_audio = a.from_editor.clone();
@@ -517,7 +518,7 @@ pub fn scan(bundle: &Path) -> i32 {
     for c in classes {
         let cid = module::cid_hex(&c.cid);
         stage(&format!("loading {}", c.name));
-        match Plugin::load_from(module.clone(), &cid, 48_000.0, None) {
+        match Plugin::load_from(module.clone(), &cid, 48_000.0, None, None) {
             Ok((p, a)) => {
                 scan_line(&ScanLine::Read(protocol::ClassInfo {
                     cid,

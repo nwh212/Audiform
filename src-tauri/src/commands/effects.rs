@@ -269,6 +269,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         let flat = response(&slot("altaudio.curve_eq", &[]), 32);
         assert_eq!(flat.len(), 32);
@@ -292,4 +293,30 @@ mod tests {
         assert_eq!(only.tracks[0].effects, Default::default());
         assert_eq!(only.tracks[0].volume_db, 0.0);
     }
+}
+
+/// An effect's input and output channels, by speaker name.
+#[derive(Serialize)]
+pub struct EffectChannels {
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
+}
+
+/// The channels a slot's effect hears and makes: L and R for built-in
+/// effects; for a plug-in, its main input and output (its own layout when
+/// the slot asks for it, which starts the plug-in if it is not running).
+#[tauri::command]
+pub async fn effect_channels(slot: EffectSlot) -> EffectChannels {
+    let stereo = crate::dsp::effects::routing::stereo;
+    if !crate::plugins::is_plugin(&slot.effect) {
+        return EffectChannels { inputs: stereo(), outputs: stereo() };
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let rate = crate::engine::output::device_rate();
+        crate::plugins::instance::host_for(&slot, rate)
+            .and_then(|h| h.lock().ok().map(|h| EffectChannels { inputs: h.inputs.clone(), outputs: h.outputs.clone() }))
+            .unwrap_or(EffectChannels { inputs: stereo(), outputs: stereo() })
+    })
+    .await
+    .unwrap_or(EffectChannels { inputs: stereo(), outputs: stereo() })
 }

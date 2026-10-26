@@ -259,6 +259,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         PhaseRotate::new(&Params::resolve(&info, &slot.params), 48_000)
     }

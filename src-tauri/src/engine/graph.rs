@@ -37,7 +37,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::fx::{swap_fx, Fx};
+use super::fx::{swap_fx_ch, swap_fx, Fx};
 use super::render::{ChainUpdate, Renderer};
 use crate::dsp::effects::Delay;
 use crate::session::model::{ChannelLayout, EffectChain, Id, Session, Tempo};
@@ -434,6 +434,11 @@ pub struct Graph {
     tempo: Arc<Tempo>,
     /// 3D Space sessions: speaker channels in the bed.
     bed_channels: usize,
+    /// 3D Space sessions: the speakers by name, for the master chain.
+    bed_names: Vec<String>,
+    /// 3D Space sessions: each speaker's share of the stereo listening mix,
+    /// used when the master chain changes the bed.
+    bed_fold: Vec<[f32; 2]>,
     /// The bed for the last block (interleaved, one channel per speaker),
     /// made only when asked for (exports).
     bed: Vec<f32>,
@@ -536,11 +541,35 @@ impl Graph {
                 ]));
             }
         }
+        // 3D Space sessions: the master chain runs on the speakers.
+        let bed_names: Vec<String> = s
+            .space
+            .map(|sp| crate::dsp::space::speakers(sp.layout).iter().map(|x| x.name.to_string()).collect())
+            .unwrap_or_default();
         let mut master = Strip {
             id: Id::nil(),
-            fx: if routed { fx(&s.master.effects) } else { None },
+            fx: match (routed, bed_names.is_empty()) {
+                (false, _) => None,
+                (true, true) => fx(&s.master.effects),
+                (true, false) => Fx::with_channels(&s.master.effects, rate, &bed_names).map(|mut f| {
+                    f.primed = true;
+                    f
+                }),
+            },
             ..Strip::default()
         };
+        // How each speaker folds to stereo for listening (the low-frequency channel stays out).
+        let bed_fold: Vec<[f32; 2]> = s
+            .space
+            .map(|sp| {
+                (0..bed_names.len())
+                    .map(|c| {
+                        let f = Place::speaker(sp.layout, c).fold;
+                        [f[0][0] + f[1][0], f[0][1] + f[1][1]]
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let ids: HashMap<Id, Node> = s
             .tracks
             .iter()
@@ -730,6 +759,8 @@ impl Graph {
                 .space
                 .map_or(0, |sp| crate::dsp::space::speakers(sp.layout).len()),
             bed: Vec::new(),
+            bed_names,
+            bed_fold,
             want_bed: false,
             binaural: s
                 .space
@@ -819,7 +850,9 @@ impl Graph {
             }
         }
         if let Some(chain) = &update.master {
-            if self.routed {
+            if self.routed && !self.bed_names.is_empty() {
+                ok &= swap_fx_ch(&mut self.master.fx, chain, rate, &self.bed_names);
+            } else if self.routed {
                 ok &= swap_fx(&mut self.master.fx, chain, rate);
             }
         }
@@ -1027,12 +1060,38 @@ impl Graph {
                 Node::Bus(i) => self.buses[i] = st,
             }
         }
+        // 3D Space: the master chain runs on the speakers, and the stereo
+        // listening mix comes from them, so it is heard as it exports.
+        let bed_fx = self.routed && nb > 0 && self.master.fx.is_some();
         if nb > 0 {
             // The low-frequency channel carries only lows: 120 Hz, steep.
             if let Some((c, filters)) = self.lfe_lp.as_mut() {
                 let c = *c;
                 for f in self.bed.chunks_exact_mut(nb) {
                     f[c] = filters.iter_mut().fold(f[c], |x, b| b.run(x));
+                }
+            }
+            if bed_fx {
+                let mut m = std::mem::take(&mut self.master);
+                self.fill_keys(&mut m.keys, n);
+                if let Some(fx) = m.fx.as_mut() {
+                    let keys: Vec<(Id, &[f32])> = m.keys.iter().map(|t| (t.id, t.buf.as_slice())).collect();
+                    fx.run_keyed(&mut self.bed, &keys);
+                }
+                self.master = m;
+                self.master.input.fill(0.0);
+                for (o, f) in self
+                    .master
+                    .input
+                    .as_chunks_mut::<2>()
+                    .0
+                    .iter_mut()
+                    .zip(self.bed.chunks_exact(nb))
+                {
+                    for (v, g) in f.iter().zip(&self.bed_fold) {
+                        o[0] += v * g[0];
+                        o[1] += v * g[1];
+                    }
                 }
             }
             if self.bed_peak.len() != nb {
@@ -1045,8 +1104,7 @@ impl Graph {
             }
         }
         if self.routed && nb > 0 {
-            // 3D Space sessions have no master chain: it would change only
-            // the stereo listening mix, not the speakers.
+            // The master chain, if any, already ran on the speakers.
             if let Some(o) = out.first_mut() {
                 match self.binaural.as_mut() {
                     Some(b) => b.process(&self.bed, o),
@@ -1394,6 +1452,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         });
         c
     }

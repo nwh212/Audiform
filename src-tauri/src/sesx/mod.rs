@@ -145,6 +145,7 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
                     position: u32::try_from(index)
                         .ok()
                         .filter(|i| (*i as usize) < MAX_SLOTS),
+                    routing: None,
                 });
                 report.converted += 1;
                 continue;
@@ -180,6 +181,7 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
             position: u32::try_from(index)
                 .ok()
                 .filter(|i| (*i as usize) < MAX_SLOTS),
+            routing: None,
         });
     }
     chain

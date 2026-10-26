@@ -1703,6 +1703,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         roundtrip(
             &mut s,
@@ -1839,6 +1840,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         });
         roundtrip(
             &mut s,
@@ -1992,6 +1994,7 @@ mod tests {
                 plugin_state: None,
                 data: None,
                 position: None,
+                routing: None,
             });
         }
         roundtrip(
@@ -2821,6 +2824,7 @@ mod tests {
                 plugin_state: None,
                 data: None,
                 position: None,
+                routing: None,
             });
         let pt = |position, value| EnvelopePoint {
             position,

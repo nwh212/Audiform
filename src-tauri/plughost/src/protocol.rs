@@ -10,13 +10,13 @@
 //! then the payload.
 //! - `CONTROL`: JSON. Requests from the editor ([`Request`]); replies and
 //!   events from the host ([`Message`]).
-//! - `AUDIO`: one block. From the editor: frames (u32), the number of
+//! - `AUDIO`: one block. From the editor: frames (u32), channels (u32), the number of
 //!   parameter changes (u32), each change as id (u32) and value (f64),
 //!   the number of note events (u32), each as frame offset (u32), on or
 //!   off (u8), pitch (u8), velocity (f32, 0 to 1), MIDI channel (u8,
 //!   0 to 15) and pan (f32, -1 left to 1 right), then the frames as
-//!   interleaved stereo f32. From the host: the processed frames,
-//!   interleaved stereo f32.
+//!   interleaved f32 (stereo, or the plug-in's own channels when it was
+//!   loaded with them). From the host: the processed frames, the same way.
 
 use std::io::{self, Read, Write};
 
@@ -241,6 +241,11 @@ pub enum Request {
         /// Control values to set after loading (normalized).
         #[serde(default)]
         params: Vec<(u32, f64)>,
+        /// The main input and output: missing for stereo, 0 for the
+        /// plug-in's own layout (5.1, 7.1.4 and so on), or a VST3 speaker
+        /// arrangement to ask for.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        main: Option<u64>,
     },
     /// Clears the plug-in's memory (filters, envelopes), as after a jump.
     Reset,
@@ -286,6 +291,11 @@ pub enum Message {
         has_editor: bool,
         #[serde(default)]
         instrument: bool,
+        /// The main input's and output's speakers, by name (L, R, C, LFE...).
+        #[serde(default)]
+        inputs: Vec<String>,
+        #[serde(default)]
+        outputs: Vec<String>,
     },
     /// Settings: base64 of the plug-in's component and controller state.
     State {
@@ -351,9 +361,23 @@ pub fn encode_audio(
     notes: &[NoteEvent],
     samples: &[f32],
 ) {
+    encode_audio_ch(out, position, changes, notes, samples, 2);
+}
+
+/// [`encode_audio`] for `channels` interleaved channels.
+pub fn encode_audio_ch(
+    out: &mut Vec<u8>,
+    position: i64,
+    changes: &[(u32, f64)],
+    notes: &[NoteEvent],
+    samples: &[f32],
+    channels: usize,
+) {
+    let channels = channels.max(1);
     out.clear();
     out.extend_from_slice(&position.to_le_bytes());
-    out.extend_from_slice(&((samples.len() / 2) as u32).to_le_bytes());
+    out.extend_from_slice(&((samples.len() / channels) as u32).to_le_bytes());
+    out.extend_from_slice(&(channels as u32).to_le_bytes());
     out.extend_from_slice(&(changes.len() as u32).to_le_bytes());
     for (id, v) in changes {
         out.extend_from_slice(&id.to_le_bytes());
@@ -373,14 +397,15 @@ pub fn encode_audio(
     }
 }
 
-/// Reads an audio request back: changes, notes and samples. None if malformed.
+/// Reads an audio request back: changes, notes and samples. Returns the
+/// channels per frame; None if malformed.
 pub fn decode_audio(
     buf: &[u8],
     position: &mut i64,
     changes: &mut Vec<(u32, f64)>,
     notes: &mut Vec<NoteEvent>,
     samples: &mut Vec<f32>,
-) -> Option<()> {
+) -> Option<usize> {
     *position = i64::from_le_bytes(buf.get(..8)?.try_into().ok()?);
     let buf = &buf[8..];
     let u32_at = |i: usize| {
@@ -388,8 +413,9 @@ pub fn decode_audio(
             .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     };
     let frames = u32_at(0)? as usize;
-    let n = u32_at(4)? as usize;
-    let mut at = 8;
+    let channels = (u32_at(4)? as usize).clamp(1, 64);
+    let n = u32_at(8)? as usize;
+    let mut at = 12;
     changes.clear();
     for _ in 0..n {
         let id = u32_at(at)?;
@@ -418,7 +444,7 @@ pub fn decode_audio(
         at += 15;
     }
     decode_samples(buf.get(at..)?, samples);
-    (samples.len() == frames * 2).then_some(())
+    (samples.len() == frames * channels).then_some(channels)
 }
 
 pub fn encode_samples(out: &mut Vec<u8>, samples: &[f32]) {

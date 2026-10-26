@@ -334,6 +334,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
         let frames = rate as usize * 2;

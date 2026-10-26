@@ -235,6 +235,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         s.tracks[1].effects.slots.push(slot.clone());
         assert!(!has_loop(&s));

@@ -1232,6 +1232,29 @@ pub struct EffectSlot {
     /// one before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<u32>,
+    /// Which of the chain's channels the effect hears and which it writes
+    /// back to. None maps channels by speaker name (L to L, R to R, and so
+    /// on), so a stereo effect works on L and R.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<SlotRouting>,
+}
+
+/// An effect's channel routing within its chain.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+pub struct SlotRouting {
+    /// Plug-ins: run with the plug-in's own channel layout (5.1, 7.1.4 and
+    /// so on) instead of stereo.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub wide: bool,
+    /// For each of the effect's inputs, the chain channel it hears (None
+    /// hears silence). Empty maps by speaker name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inputs: Vec<Option<u8>>,
+    /// For each of the effect's outputs, the chain channel it replaces
+    /// (None drops it). Channels no output goes to pass through untouched.
+    /// Empty maps by speaker name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<Option<u8>>,
 }
 
 /// A span of the timeline.

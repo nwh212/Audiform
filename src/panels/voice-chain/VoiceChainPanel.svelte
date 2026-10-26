@@ -16,6 +16,9 @@
 -->
 <script lang="ts">
   import EffectPresetBar from "./EffectPresetBar.svelte";
+  import ChannelRouting from "./ChannelRouting.svelte";
+  import { STEREO } from "./routing";
+  import { channelNames } from "../space/space";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
   import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
@@ -218,6 +221,14 @@
   const onTrackTab = $derived(!inWave && tab === "track");
   const bus = $derived(onTrackTab ? doc?.buses?.find((b) => b.id === ownerId) : undefined);
   const onMaster = $derived(onTrackTab && !!doc && ownerId === MASTER_ID);
+  /** The chain's channels: a 3D Space master runs on its speakers. */
+  const chainNames = $derived(onMaster && doc?.space && !inWave ? channelNames(doc.space.layout) : STEREO);
+  /** A plug-in added to a 3D Space master runs with its own channels. */
+  const fresh = (info: EffectInfo, id: string): EffectSlotDoc => {
+    const s = newSlot(info, id);
+    return info.plugin && chainNames.length > 2 ? { ...s, routing: { wide: true } } : s;
+  };
+  let routingOpen = $state(false);
   // Tell the Editor whose chain this is, so it can mark that row.
   $effect(() => {
     chainTarget.set(onTrackTab ? (onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null)) : null);
@@ -349,7 +360,7 @@
   function addAt(id: string, at: number) {
     const info = byId.get(id);
     if (!info) return;
-    const s = newSlot(info, crypto.randomUUID());
+    const s = fresh(info, crypto.randomUUID());
     commit(`Add ${info.name}`, addSlotAt(chain, s, at));
     openSlot(s);
   }
@@ -409,9 +420,9 @@
         }
         const ni = byId.get(id);
         if (!ni) return;
-        const fresh = newSlot(ni, crypto.randomUUID());
-        commit(`Replace with ${ni.name}`, replaceSlot(chain, s.id, fresh));
-        openSlot(fresh);
+        const made = fresh(ni, crypto.randomUUID());
+        commit(`Replace with ${ni.name}`, replaceSlot(chain, s.id, made));
+        openSlot(made);
       }),
     );
     return items;
@@ -733,10 +744,16 @@
           <span class="badge" style:background={winInfo ? (CATEGORY_COLORS[winInfo.category] ?? "#888") : "#666"}></span>
           <span class="wtitle">{winInfo?.name ?? winSlot.effect}{winSlot.preset ? ` · ${winSlot.preset}` : ""}</span>
           <button type="button" class="mini" class:on={winSlot.enabled} title={winSlot.enabled ? "Bypass" : "Turn on"} aria-pressed={winSlot.enabled} onclick={() => commit(winSlot.enabled ? "Bypass Effect" : "Turn On Effect", setSlot(chain, winSlot.id, { enabled: !winSlot.enabled }))}>{winSlot.enabled ? "On" : "Off"}</button>
+          <button type="button" class="mini" class:on={routingOpen} aria-pressed={routingOpen} title="Channel routing: which of the chain's channels this effect hears and writes to" aria-label="Channel routing" onclick={() => (routingOpen = !routingOpen)}>
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M2 4h5l3 8h4M2 12h5l3-8h4" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
+          </button>
           <button type="button" class="mini" title="Close (Esc)" aria-label="Close" onclick={() => (winOpen = false)}>✕</button>
         </header>
         <div class="editor">
       {#if winSlot && winInfo}
+        {#if routingOpen}
+          <ChannelRouting slot={winSlot} info={winInfo} chain={chainNames} {prefs} {ask} {onNotice} onChange={(routing, label) => commit(label, setSlot(chain, winSlot.id, { routing }))} />
+        {/if}
         <EffectPresetBar slot={winSlot} info={winInfo} {prefs} {ask} {onNotice} {onError} onChange={(change, label) => commit(label, setSlot(chain, winSlot.id, change))} />
                 {#if winSlot.effect === "altaudio.parametric_eq"}
           <EqGraph

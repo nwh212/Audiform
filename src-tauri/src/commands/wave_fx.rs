@@ -266,6 +266,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         });
         c
     }
@@ -380,6 +381,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         });
         let mut c = ChainProcessor::new(&lim, 48_000).unwrap();
         let lat = c.latency();

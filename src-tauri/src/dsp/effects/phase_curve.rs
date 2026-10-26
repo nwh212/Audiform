@@ -319,6 +319,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         };
         Params::resolve(&info, &slot.params)
     }

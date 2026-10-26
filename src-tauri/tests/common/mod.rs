@@ -44,6 +44,7 @@ pub fn effect_chain() -> EffectChain {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         }],
     }
 }

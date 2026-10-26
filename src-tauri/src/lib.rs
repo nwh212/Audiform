@@ -151,6 +151,7 @@ pub fn run() {
             commands::session::session_pick_open,
             commands::session::file_pick_open,
             commands::effects::effects_catalog,
+            commands::effects::effect_channels,
             commands::effects::learn_noise_print,
             commands::effects::effect_response,
             commands::effects::shaped_noise_curves,

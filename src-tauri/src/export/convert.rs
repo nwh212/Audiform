@@ -366,6 +366,7 @@ mod tests {
                 plugin_state: None,
                 data: None,
                 position: None,
+                routing: None,
             });
         }
         let fmt = OutputFormat {

@@ -46,6 +46,18 @@ export interface EffectSlotDoc {
   data?: string | null;
   /** Which numbered slot it shows in (0 first), so a chain can leave gaps. Missing follows the one before. */
   position?: number | null;
+  /** Which chain channels the effect hears and writes back to. Missing maps by speaker name. */
+  routing?: SlotRoutingDoc | null;
+}
+
+/** An effect's channel routing within its chain (see the core's `dsp/effects/routing.rs`). */
+export interface SlotRoutingDoc {
+  /** Plug-ins: run with the plug-in's own channel layout (5.1, 7.1.4...) instead of stereo. */
+  wide?: boolean | undefined;
+  /** Per effect input, the chain channel it hears (null: silence). Empty maps by speaker name. */
+  inputs?: (number | null)[];
+  /** Per effect output, the chain channel it replaces (null: dropped). Empty maps by speaker name. */
+  outputs?: (number | null)[];
 }
 
 /** An Audio FX chain on a clip, a track or the master. */

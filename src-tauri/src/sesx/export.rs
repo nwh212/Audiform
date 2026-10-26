@@ -588,6 +588,7 @@ mod tests {
                 plugin_state: Some(state.clone()),
                 data: None,
                 position: None,
+                routing: None,
             });
         s.tracks[0].clips[0].stretch = Some(crate::session::model::ClipStretch {
             ratio: 1.25,
@@ -633,6 +634,7 @@ mod tests {
                 plugin_state: None,
                 data: None,
                 position: None,
+                routing: None,
             });
         s.markers.push(crate::session::model::Marker {
             id: new_id(),

@@ -95,6 +95,7 @@ fn slot(params: &[(&str, f64)]) -> EffectSlot {
         plugin_state: None,
         data: None,
         position: None,
+        routing: None,
     }
 }
 

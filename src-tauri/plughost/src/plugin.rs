@@ -81,6 +81,9 @@ pub struct Plugin {
     /// Takes notes and has no audio input: it makes sound rather than
     /// processing it.
     pub instrument: bool,
+    /// The main input's and output's speakers, by name.
+    pub main_in: Vec<String>,
+    pub main_out: Vec<String>,
     _handler: ComWrapper<Handler>,
     _host: ComWrapper<HostApp>,
     _module: Arc<Module>,
@@ -127,10 +130,11 @@ impl Plugin {
         cid: &str,
         rate: f64,
         state: Option<&str>,
+        main: Option<u64>,
     ) -> Result<(Plugin, Audio), String> {
         crate::stage("loading its file");
         let module = Arc::new(Module::open(path)?);
-        Plugin::load_from(module, cid, rate, state)
+        Plugin::load_from(module, cid, rate, state, main)
     }
 
     /// Loads `cid` from a module already open. Several plug-ins of one
@@ -141,6 +145,7 @@ impl Plugin {
         cid: &str,
         rate: f64,
         state: Option<&str>,
+        main: Option<u64>,
     ) -> Result<(Plugin, Audio), String> {
         let want = parse_cid(cid).ok_or("Bad plug-in id.")?;
         let host = ComWrapper::new(HostApp);
@@ -239,7 +244,7 @@ impl Plugin {
                 .cast::<IAudioProcessor>()
                 .ok_or("This plug-in does not process audio.")?;
             crate::stage("setting up its inputs and outputs");
-            let (ins, outs, events) = setup_buses(&component, &processor);
+            let (ins, outs, events, main_in, main_out) = setup_buses(&component, &processor, main);
             let instrument = events && ins.is_empty();
             let mut setup = ProcessSetup {
                 processMode: kRealtime as i32,
@@ -283,6 +288,8 @@ impl Plugin {
                     latency,
                     params,
                     instrument,
+                    main_in,
+                    main_out,
                     _handler: handler,
                     _host: host,
                     _module: module,
@@ -378,14 +385,17 @@ fn split_state(data: &str) -> Option<(Vec<u8>, Vec<u8>)> {
     Some((comp, ctl))
 }
 
-/// Asks for stereo on the main buses, keeps the plug-in's own layout on
-/// any others (sidechain inputs and the like), and turns them all on,
-/// along with the first note input. Returns the channels of each input
-/// and output bus, and whether there is a note input.
+/// Asks for stereo on the main buses (or, with `main`, the plug-in's own
+/// layout or the one given), keeps the plug-in's own layout on any others
+/// (sidechain inputs and the like), and turns them all on, along with the
+/// first note input. Returns the channels of each input and output bus,
+/// whether there is a note input, and the main buses' speakers by name.
+#[allow(clippy::type_complexity)]
 unsafe fn setup_buses(
     component: &ComPtr<IComponent>,
     processor: &ComPtr<IAudioProcessor>,
-) -> (Vec<usize>, Vec<usize>, bool) {
+    main: Option<u64>,
+) -> (Vec<usize>, Vec<usize>, bool, Vec<String>, Vec<String>) {
     let events = component.getBusCount(kEvent as i32, kInput as i32) > 0;
     if events {
         component.activateBus(kEvent as i32, kInput as i32, 0, 1);
@@ -397,10 +407,15 @@ unsafe fn setup_buses(
         processor.getBusArrangement(dir, i, &mut a);
         a
     };
+    let first = |dir: i32| match main {
+        None => SpeakerArr::kStereo,
+        Some(0) => current(dir, 0),
+        Some(a) => a,
+    };
     let mut ins: Vec<SpeakerArrangement> = (0..nin)
         .map(|i| {
             if i == 0 {
-                SpeakerArr::kStereo
+                first(kInput as i32)
             } else {
                 current(kInput as i32, i)
             }
@@ -409,7 +424,7 @@ unsafe fn setup_buses(
     let mut outs: Vec<SpeakerArrangement> = (0..nout)
         .map(|i| {
             if i == 0 {
-                SpeakerArr::kStereo
+                first(kOutput as i32)
             } else {
                 current(kOutput as i32, i)
             }
@@ -430,7 +445,38 @@ unsafe fn setup_buses(
             .map(|i| channels(current(kOutput as i32, i)))
             .collect(),
         events,
+        if nin > 0 { speaker_names(current(kInput as i32, 0)) } else { Vec::new() },
+        if nout > 0 { speaker_names(current(kOutput as i32, 0)) } else { Vec::new() },
     )
+}
+
+/// The speakers of a VST3 arrangement by name, in channel order, named as
+/// the editor names them (L, R, C, LFE, Ls, Rs, Lss, Rss, Ltf...). Speakers
+/// with no name of their own are numbered.
+pub fn speaker_names(arr: SpeakerArrangement) -> Vec<String> {
+    // Bit order is channel order.
+    const NAMES: [&str; 32] = [
+        "L", "R", "C", "LFE", "Ls", "Rs", "Lc", "Rc", "Cs", "Lss", "Rss", "Tc", "Ltf", "Ctf",
+        "Rtf", "Ltr", "Ctr", "Rtr", "LFE2", "M", "", "", "", "", "", "", "", "", "", "", "", "",
+    ];
+    let mono = arr == SpeakerArr::kMono;
+    let mut out = Vec::new();
+    for (bit, name) in NAMES.iter().enumerate() {
+        if arr & (1u64 << bit) != 0 {
+            out.push(if mono {
+                "M".to_string()
+            } else if name.is_empty() {
+                format!("{}", out.len() + 1)
+            } else {
+                (*name).to_string()
+            });
+        }
+    }
+    // Rarer speakers (above the named ones) count as numbered channels.
+    for _ in out.len()..arr.count_ones() as usize {
+        out.push(format!("{}", out.len() + 1));
+    }
+    out
 }
 
 /// A note as VST3 wants it, `offset` frames into the block: the note,
@@ -517,8 +563,9 @@ unsafe fn read_params(c: &ComPtr<IEditController>) -> Vec<ParamInfo> {
 }
 
 impl Audio {
-    /// Processes interleaved stereo in place, applying `changes` first
-    /// and playing `notes` at their offsets.
+    /// Processes `channels` interleaved channels in place (the main
+    /// buses' channels, in order), applying `changes` first and playing
+    /// `notes` at their offsets.
     /// `position` is the timeline frame of the first sample, which the
     /// plug-in is told as the song position; below 0 it keeps counting on.
     pub fn process(
@@ -527,25 +574,27 @@ impl Audio {
         changes: &[(u32, f64)],
         notes: &[NoteEvent],
         io: &mut [f32],
+        channels: usize,
     ) {
         if position >= 0 {
             self.time = position;
         }
+        let ch = channels.max(1);
         let mut first = true;
-        for (i, chunk) in io.chunks_mut(MAX_BLOCK * 2).enumerate() {
+        for (i, chunk) in io.chunks_mut(MAX_BLOCK * ch).enumerate() {
             let mut all: Vec<(u32, f64)> = if first { changes.to_vec() } else { Vec::new() };
             if let Ok(mut e) = self.from_editor.lock() {
                 all.append(&mut e);
             }
             first = false;
             let from = (i * MAX_BLOCK) as u32;
-            let to = from + (chunk.len() / 2) as u32;
+            let to = from + (chunk.len() / ch) as u32;
             let events: Vec<Event> = notes
                 .iter()
                 .filter(|n| self.events && n.offset >= from && n.offset < to)
                 .flat_map(|n| vst_events(n, n.offset - from))
                 .collect();
-            self.block(&all, events, chunk);
+            self.block(&all, events, chunk, ch);
         }
     }
 
@@ -559,29 +608,23 @@ impl Audio {
         };
     }
 
-    fn block(&mut self, changes: &[(u32, f64)], events: Vec<Event>, io: &mut [f32]) {
-        let n = io.len() / 2;
+    fn block(&mut self, changes: &[(u32, f64)], events: Vec<Event>, io: &mut [f32], width: usize) {
+        let n = io.len() / width;
         if n == 0 {
             return;
         }
-        // Main input: stereo as it is, mono as the average.
+        // Main input: channel for channel; stereo into a mono input as the average.
         for (b, bus) in self.in_bufs.iter_mut().enumerate() {
             for (c, ch) in bus.iter_mut().enumerate() {
                 let ch = &mut ch[..n];
-                if b != 0 || c >= 2 {
+                if b != 0 || c >= width {
                     ch.fill(0.0);
                     continue;
                 }
-                let mono = self.ins[0] == 1;
+                let mono = self.ins[0] == 1 && width == 2;
                 for (i, s) in ch.iter_mut().enumerate() {
-                    let (l, r) = (io[i * 2], io[i * 2 + 1]);
-                    *s = if mono {
-                        (l + r) * 0.5
-                    } else if c == 0 {
-                        l
-                    } else {
-                        r
-                    };
+                    let f = &io[i * width..i * width + width];
+                    *s = if mono { (f[0] + f[1]) * 0.5 } else { f[c] };
                 }
             }
         }
@@ -679,14 +722,18 @@ impl Audio {
         let Some(main) = self.out_bufs.first().filter(|_| ok || wrote()) else {
             return;
         };
+        // A mono output fills both sides of a stereo stream; otherwise
+        // channel for channel, and channels it has no output for keep what came in.
         for i in 0..n {
-            let (l, r) = match main.len() {
-                0 => (io[i * 2], io[i * 2 + 1]),
-                1 => (main[0][i], main[0][i]),
-                _ => (main[0][i], main[1][i]),
-            };
-            io[i * 2] = l;
-            io[i * 2 + 1] = r;
+            let f = &mut io[i * width..i * width + width];
+            if main.len() == 1 && width == 2 {
+                f[0] = main[0][i];
+                f[1] = main[0][i];
+                continue;
+            }
+            for (c, v) in f.iter_mut().enumerate().take(main.len()) {
+                *v = main[c][i];
+            }
         }
     }
 

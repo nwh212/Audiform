@@ -14,6 +14,7 @@
 //! effects may keep state but must not block. Effects with look-ahead
 //! report a latency, which the renderer compensates for.
 
+pub mod routing;
 pub mod amp;
 mod dynamics;
 mod eq;
@@ -226,6 +227,7 @@ pub fn ui_catalog() -> Vec<EffectInfo> {
                 plugin_state: None,
                 data: None,
                 position: None,
+                routing: None,
             };
             build(&slot, 48_000).map_or(0, |p| p.latency())
         };
@@ -342,6 +344,11 @@ pub trait Processor: Send {
     fn process_keyed(&mut self, buf: &mut [f32], _key: &[f32]) {
         self.process(buf);
     }
+    /// The effect's input and output channels by speaker name. Built-in
+    /// effects are stereo; a plug-in may have its own layout.
+    fn channels(&self) -> (Vec<String>, Vec<String>) {
+        (routing::stereo(), routing::stereo())
+    }
 }
 
 /// A fixed delay for a stereo interleaved stream.
@@ -353,8 +360,13 @@ pub struct Delay {
 
 impl Delay {
     pub fn new(frames: usize) -> Self {
+        Self::with_channels(frames, 2)
+    }
+
+    /// A delay of `frames` for `channels` interleaved channels.
+    pub fn with_channels(frames: usize, channels: usize) -> Self {
         Self {
-            ring: vec![0.0; frames * 2],
+            ring: vec![0.0; frames * channels.max(1)],
             at: 0,
         }
     }
@@ -471,8 +483,26 @@ pub fn is_active(chain: &EffectChain) -> bool {
 /// so a stage can be rebuilt when automation needs it.
 type SlotState = (Id, EffectInfo, BTreeMap<String, f64>, Option<String>);
 
+/// A stage that does not simply run on the chain's channels as they
+/// are: what it hears is gathered from the chain, and what it makes is
+/// put back, by its routing.
+struct Route {
+    map: routing::Map,
+    /// Channels per frame the effect runs with.
+    width: usize,
+    buf: Vec<f32>,
+    /// Holds the channels the effect does not write back by its look-ahead.
+    pass: Delay,
+    /// Chain channels some output goes to.
+    targets: Vec<bool>,
+}
+
 pub struct ChainProcessor {
     stages: Vec<Box<dyn Processor>>,
+    /// Per stage: its routing, or None when it runs straight.
+    routes: Vec<Option<Route>>,
+    /// Channels per frame: 2, or one per speaker on a 3D Space master.
+    ch: usize,
     /// Per stage: the track or bus keying it, and a delay that holds the
     /// key back by the look-ahead of the stages before it, so key and
     /// signal still line up when they reach it.
@@ -497,9 +527,17 @@ impl ChainProcessor {
     /// None when the chain would do nothing (off, empty, or every effect
     /// bypassed with unity gains), so the renderer can skip it entirely.
     pub fn new(chain: &EffectChain, rate: u32) -> Option<Self> {
+        Self::with_channels(chain, rate, &routing::stereo())
+    }
+
+    /// A chain over channels named `names` (one per speaker on the
+    /// master of a 3D Space session), each effect routed to them.
+    pub fn with_channels(chain: &EffectChain, rate: u32, names: &[String]) -> Option<Self> {
         if !chain.enabled {
             return None;
         }
+        let ch = names.len().max(1);
+        let mut routes = Vec::new();
         let mut stages: Vec<Box<dyn Processor>> = Vec::new();
         let mut slots = Vec::new();
         let mut keys = Vec::new();
@@ -507,6 +545,21 @@ impl ChainProcessor {
         for s in chain.slots.iter().take(MAX_SLOTS).filter(|s| s.enabled) {
             if let (Some(p), Some(i)) = (build(s, rate), info(&s.effect)) {
                 keys.push(s.sidechain.map(|id| (id, Delay::new(before))));
+                let (ins, outs) = p.channels();
+                let map = routing::resolve(s.routing.as_ref(), &ins, &outs, names);
+                routes.push((!(map.is_straight(ch) && ins.len() == ch && outs.len() == ch)).then(|| {
+                    let mut targets = vec![false; ch];
+                    for c in map.outputs.iter().flatten() {
+                        targets[*c] = true;
+                    }
+                    Route {
+                        width: ins.len().max(outs.len()).max(1),
+                        buf: Vec::new(),
+                        pass: Delay::with_channels(p.latency(), ch),
+                        targets,
+                        map,
+                    }
+                }));
                 before += p.latency();
                 stages.push(p);
                 slots.push((s.id, i, s.params.clone(), s.data.clone()));
@@ -521,6 +574,8 @@ impl ChainProcessor {
         let latency = stages.iter().map(|s| s.latency()).sum();
         Some(Self {
             stages,
+            routes,
+            ch,
             keys,
             key_buf: Vec::new(),
             slots,
@@ -529,7 +584,7 @@ impl ChainProcessor {
             output,
             mix,
             dry: Vec::new(),
-            dry_delay: vec![0.0; latency * 2],
+            dry_delay: vec![0.0; latency * ch],
             dry_at: 0,
             latency,
         })
@@ -571,6 +626,7 @@ impl ChainProcessor {
             plugin_state: None,
             data: data.clone(),
             position: None,
+            routing: None,
         };
         if let Some(fresh) = build(&slot, self.rate) {
             if fresh.latency() == self.stages[i].latency() {
@@ -620,20 +676,58 @@ impl ChainProcessor {
                 *s *= self.input;
             }
         }
-        for (st, key) in self.stages.iter_mut().zip(&mut self.keys) {
+        let ch = self.ch;
+        let frames = buf.len() / ch;
+        for ((st, key), route) in self.stages.iter_mut().zip(&mut self.keys).zip(&mut self.routes) {
+            // Keys are stereo: they reach stages that run on two channels.
             let found = key.as_mut().and_then(|(id, delay)| {
                 keys.iter()
-                    .find(|(k, b)| k == id && b.len() == buf.len())
+                    .find(|(k, b)| k == id && b.len() == frames * 2)
                     .map(|(_, b)| (delay, *b))
             });
-            match found {
+            let key = match found {
                 Some((delay, k)) => {
                     self.key_buf.clear();
                     self.key_buf.extend_from_slice(k);
                     delay.run(&mut self.key_buf);
-                    st.process_keyed(buf, &self.key_buf);
+                    Some(self.key_buf.as_slice())
                 }
-                None => st.process(buf),
+                None => None,
+            };
+            let Some(r) = route.as_mut() else {
+                match key {
+                    Some(k) if ch == 2 => st.process_keyed(buf, k),
+                    _ => st.process(buf),
+                }
+                continue;
+            };
+            let w = r.width;
+            r.buf.clear();
+            r.buf.resize(frames * w, 0.0);
+            for f in 0..frames {
+                for (k, src) in r.map.inputs.iter().enumerate().take(w) {
+                    if let Some(c) = src {
+                        r.buf[f * w + k] = buf[f * ch + c];
+                    }
+                }
+            }
+            match key {
+                Some(k) if w == 2 => st.process_keyed(&mut r.buf, k),
+                _ => st.process(&mut r.buf),
+            }
+            r.pass.run(buf);
+            for f in 0..frames {
+                let o = &mut buf[f * ch..f * ch + ch];
+                for (v, t) in o.iter_mut().zip(&r.targets) {
+                    if *t {
+                        *v = 0.0;
+                    }
+                }
+                for (k, dst) in r.map.outputs.iter().enumerate().take(w) {
+                    if let Some(c) = dst {
+                        o[*c] += r.buf[f * w + k];
+                    }
+                }
             }
         }
         let out = self.output;
@@ -697,6 +791,7 @@ mod tests {
             plugin_state: None,
             data: None,
             position: None,
+            routing: None,
         }
     }
 

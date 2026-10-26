@@ -1257,3 +1257,8 @@ export function pluginPresetSave(slot: import("../stores/session").EffectSlotDoc
 export function pluginPresetDelete(path: string): Promise<void> {
   return invoke<void>("plugin_preset_delete", { path });
 }
+
+/** The channels a slot's effect hears and makes, by speaker name (L and R for built-in effects). */
+export function effectChannels(slot: import("../stores/session").EffectSlotDoc): Promise<{ inputs: string[]; outputs: string[] }> {
+  return invoke("effect_channels", { slot });
+}
