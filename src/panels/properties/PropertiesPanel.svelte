@@ -5,7 +5,8 @@
 
   Properties: the selected clip's details and its stretch and pitch.
   Stretch makes a clip play longer or shorter; pitch moves it up or down
-  in semitones without changing its length. The type picks how: a
+  in semitones without changing its length. The Channel Routing sets how
+  much of each of the file's channels goes to the left and right. The type picks how: a
   single voice or instrument, music with several notes at once, or
   varispeed, where the pitch follows the speed like tape. Live and
   Rendered sound the same here; Rendered is kept so files from other
@@ -18,6 +19,8 @@
   import { formatIn } from "../editor/timeline";
   import { naturalLength } from "../editor/stretch";
   import { changeFor, settingsOf, varispeedSemitones, type StretchSettings } from "./clip-props";
+  import { channelLabels, mixOf, presetFor, presets } from "./channel-mix";
+  import type { ChannelMixDoc } from "../../stores/session";
 
   interface Props {
     session: SessionStore;
@@ -67,6 +70,31 @@
     const v = num(e);
     if (Number.isFinite(v)) void apply({ pitch: Math.max(-24, Math.min(24, v)) });
   }
+  // Channel Routing: one setting for every selected clip whose file has the same channels.
+  const chans = $derived(media?.channels ?? 0);
+  const sameChans = $derived(picked.every((p) => doc?.media.find((m) => m.id === p.clip.media_id)?.channels === chans));
+  const mix = $derived(first && chans > 0 ? mixOf(first.clip.channel_mix, chans) : null);
+  const names = $derived(channelLabels(chans));
+  const quick = $derived(presets(chans));
+  const current = $derived(mix ? presetFor(mix, chans) : null);
+  const custom = $derived(picked.some((p) => p.clip.channel_mix));
+
+  function setMix(next: ChannelMixDoc | null, label = "Channel Routing") {
+    const changes: ClipChange[] = picked.map(({ clip }) => (next ? { id: clip.id, channel_mix: next } : { id: clip.id, clear_channel_mix: true }));
+    if (changes.length) void onEdit(label, changes).catch(onError);
+  }
+  function setSend(k: number, side: "left" | "right", pct: number) {
+    if (!mix || !Number.isFinite(pct)) return;
+    const sends = mix.sends.map((s) => ({ ...s }));
+    sends[k]![side] = Math.max(-100, Math.min(100, pct)) / 100;
+    setMix({ sends });
+  }
+  function invert(k: number) {
+    if (!mix) return;
+    setMix({ sends: mix.sends.map((s, i) => (i === k ? { left: -s.left, right: -s.right } : { ...s })) });
+  }
+  const pct = (v: number) => Math.round(v * 1000) / 10;
+
   const tone = (v: number) => `${v > 0 ? "+" : ""}${(Math.round(v * 100) / 100).toFixed(2)}`;
 </script>
 
@@ -145,6 +173,44 @@
         </div>
         <p class="note">The window changes the sound now; the rest are kept with the clip for files that use them.</p>
       </details>
+    {/if}
+
+    <h2>Channel Routing</h2>
+    {#if !mix}
+      <p class="note">The clip's file is missing.</p>
+    {:else if !sameChans}
+      <p class="note">The selected clips' files have different channels. Select clips of one kind to set their Channel Routing.</p>
+    {:else}
+      <p class="note">{chans} channel{chans === 1 ? "" : "s"}. How much of each goes to the track's left and right. Negative flips polarity.</p>
+      <div class="grid">
+        <label for="pp-mixp">Preset</label>
+        <select id="pp-mixp" value={current ?? ""} onchange={(e) => { const p = quick.find((x) => x.id === e.currentTarget.value); if (p) setMix(p.id === "default" ? null : p.mix, `Channel Routing: ${p.label}`); }}>
+          {#if !current}<option value="" disabled>Custom</option>{/if}
+          {#each quick as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
+        </select>
+      </div>
+      <table class="mixer">
+        <thead><tr><th>Channel</th><th>Left</th><th>Right</th><th></th></tr></thead>
+        <tbody>
+          {#each mix.sends as s, k (k)}
+            <tr>
+              <th scope="row">{names[k]}</th>
+              {#each ["left", "right"] as const as side (side)}
+                <td>
+                  <span class="send">
+                    <span class="bar" class:neg={s[side] < 0} style:width="{Math.abs(s[side]) * 100}%"></span>
+                    <input type="number" min="-100" max="100" step="1" aria-label="{names[k]} to {side}" value={pct(s[side])} onchange={(e) => setSend(k, side, num(e))} />
+                  </span>
+                </td>
+              {/each}
+              <td><button type="button" class="inv" class:on={s.left < 0 || s.right < 0} title="Flip this channel's polarity" aria-label="Flip {names[k]} polarity" onclick={() => invert(k)}>ø</button></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="quick">
+        <button type="button" disabled={!custom} onclick={() => setMix(null, "Channel Routing: Reset")}>Reset</button>
+      </div>
     {/if}
   {/if}
 </section>
@@ -253,6 +319,53 @@
   button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .mixer {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .mixer th,
+  .mixer td {
+    padding: 1px 4px 1px 0;
+    font-weight: normal;
+    text-align: left;
+  }
+  .mixer thead th {
+    color: var(--text-faint);
+  }
+  .mixer tbody th {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .send {
+    position: relative;
+    display: block;
+  }
+  .send input {
+    position: relative;
+    width: 100%;
+    max-width: 72px;
+    background: transparent;
+  }
+  .send .bar {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    left: 1px;
+    max-width: calc(min(100%, 72px) - 2px);
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    pointer-events: none;
+  }
+  .send .bar.neg {
+    background: color-mix(in srgb, var(--danger) 35%, transparent);
+  }
+  .inv {
+    width: 22px;
+    padding: 0;
+  }
+  .inv.on {
+    border-color: var(--danger);
+    color: var(--danger);
   }
   details summary {
     color: var(--text-dim);

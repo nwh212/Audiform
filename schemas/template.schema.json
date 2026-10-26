@@ -159,6 +159,39 @@
         "stereo"
       ]
     },
+    "ChannelMix": {
+      "description": "A clip's Channel Routing: one entry per channel of its file, in file order.",
+      "type": "object",
+      "properties": {
+        "sends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChannelSend"
+          }
+        }
+      },
+      "required": [
+        "sends"
+      ]
+    },
+    "ChannelSend": {
+      "description": "How much of one source channel goes to each side, from -1 to 1\n(1 is all of it; negative flips its polarity).",
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "number",
+          "format": "float"
+        },
+        "right": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ]
+    },
     "ChapterInfo": {
       "description": "Scaffolding (P7): extra data for chapter markers.",
       "type": "object",
@@ -186,6 +219,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/AudioType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "channel_mix": {
+          "description": "Channel Routing: how much of each of the file's channels goes to the\nleft and right. None uses the default for the file's channels.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChannelMix"
             },
             {
               "type": "null"

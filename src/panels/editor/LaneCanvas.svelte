@@ -11,6 +11,7 @@
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
   import { clipLength, stretchOf, type ClipDoc, type FadeDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
   import type { LiveWave } from "../../stores/record";
+  import { channelLabels } from "../properties/channel-mix";
   import { defaultTrackColor, trackHeight, peakRange, pickLevel, xOf, type Viewport, TRACK_GAP } from "./timeline";
   import { chipBox, chipLabel, fxLaneOf, pointsOf, rangeOf, restValue, valueToY, type EnvKind, type FxLane } from "./envelope";
   import { exactSamples, SAMPLE_VIEW } from "../../stores/exact-samples";
@@ -297,6 +298,17 @@
             }
           }
           g.globalAlpha = 1;
+        }
+        // Multichannel files: each row's channel name, when rows are tall enough.
+        if (ch > 2 && body.height / ch >= 12) {
+          const names = channelLabels(ch);
+          const rowH = body.height / ch;
+          g.save();
+          g.font = `9px ${css("--font-mono")}`;
+          g.fillStyle = "rgba(255, 255, 255, 0.6)";
+          g.textBaseline = "top";
+          for (let k = 0; k < ch; k++) g.fillText(names[k]!, Math.max(x0, 0) + 3, body.top + rowH * k + 1);
+          g.restore();
         }
         // Looped clips: a dashed line where each repeat begins.
         if (clip.looped && clip.source_out > clip.source_in) {

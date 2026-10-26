@@ -6,8 +6,8 @@
 //!
 //! For each media file we store the minimum and maximum sample of every
 //! block of 256 frames, plus coarser levels of 4,096 and 65,536 frames
-//! for zoomed-out views. Values are 16-bit. At most two channels are
-//! kept; files with more show their first two.
+//! for zoomed-out views. Values are 16-bit. Every channel is kept, up
+//! to 64.
 //!
 //! The cache is a rebuildable file, not a document, so it is compact
 //! binary rather than JSON. It carries a version and the source file's
@@ -136,7 +136,11 @@ pub fn ensure(
     let cache = cache_path(cache_dir, source);
     let stamp = source_stamp(source)?;
     if let Ok(h) = read_header(&cache) {
-        if (h.source_size, h.source_modified) == stamp {
+        // Caches made before every channel was kept hold two of a
+        // multichannel file's channels: those are made again.
+        let partial =
+            h.summary.channels == 2 && crate::codecs::probe(source).is_ok_and(|i| i.channels > 2);
+        if (h.source_size, h.source_modified) == stamp && !partial {
             return Ok(h.summary);
         }
     }
@@ -150,7 +154,7 @@ fn build(
     progress: &mut impl FnMut(f64) -> bool,
 ) -> Result<PeakSummary, PeakError> {
     let info = crate::codecs::probe(source)?;
-    let channels = usize::from(info.channels).clamp(1, 2);
+    let channels = usize::from(info.channels).clamp(1, 64);
     let mut reader = AudioReader::open(source, channels, None)?;
     let blocks = levels_for(info.length, info.sample_rate);
     let block0 = blocks[0] as usize;

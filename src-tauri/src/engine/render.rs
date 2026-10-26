@@ -117,6 +117,9 @@ impl Active {
         let reader = AudioReader::open(&clip.path, 2, Some(read_rate))
             .ok()
             .and_then(|mut r| {
+                if let Some(g) = &clip.mix {
+                    r.set_mix(g.clone());
+                }
                 let secs = clip.source_start + source_secs;
                 if secs > 0.0 {
                     r.seek(secs).ok()?;

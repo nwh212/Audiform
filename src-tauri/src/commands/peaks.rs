@@ -82,7 +82,7 @@ pub async fn media_frames(path: PathBuf, start: u64, count: u64) -> Result<Respo
 
 fn read_frames(path: &std::path::Path, start: u64, count: u64) -> Result<Vec<u8>, String> {
     let probe = crate::codecs::AudioReader::open(path, 2, None).map_err(|e| e.to_string())?;
-    let channels = probe.source_channels().clamp(1, 2);
+    let channels = probe.source_channels().clamp(1, 64);
     drop(probe);
     let mut r =
         crate::codecs::AudioReader::open(path, channels, None).map_err(|e| e.to_string())?;

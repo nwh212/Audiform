@@ -15,10 +15,10 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use super::model::{
-    AudioType, Bus, ChannelLayout, Clip, ClipLoop, ClipStretch, EffectChain, EffectSlot, Envelope,
-    EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef, MidiClip, Output, Send,
-    Session, SessionView, Space, SpacePos, Tempo, Track, TrackKind, TrackRole, STRETCH_MAX,
-    STRETCH_MIN,
+    AudioType, Bus, ChannelLayout, ChannelMix, Clip, ClipLoop, ClipStretch, EffectChain,
+    EffectSlot, Envelope, EnvelopePoint, EnvelopeTarget, Fade, Id, Marker, MarkerKind, MediaRef,
+    MidiClip, Output, Send, Session, SessionView, Space, SpacePos, Tempo, Track, TrackKind,
+    TrackRole, STRETCH_MAX, STRETCH_MIN,
 };
 
 /// Points for one effect setting's envelope on a clip.
@@ -61,6 +61,7 @@ impl ClipSpec {
             looped: None,
             stretch: None,
             audio_type: None,
+            channel_mix: None,
         }
     }
 }
@@ -219,6 +220,12 @@ pub struct ClipChange {
     /// Clears the clip's audio type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_audio_type: Option<bool>,
+    /// Sets the clip's Channel Routing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_mix: Option<ChannelMix>,
+    /// Goes back to the default Channel Routing for the file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_channel_mix: Option<bool>,
     /// Where the clip sits in its track's stacking order after the change:
     /// 0 is the bottom; past the end puts it on top. Later clips play over
     /// earlier ones where they overlap.
@@ -1328,6 +1335,32 @@ fn set_clip(s: &mut Session, ch: &ClipChange) -> Result<ClipChange, OpError> {
         match std::mem::replace(&mut c.audio_type, new) {
             Some(old) => inv.audio_type = Some(old),
             None => inv.clear_audio_type = Some(true),
+        }
+    }
+    if ch.channel_mix.is_some() || ch.clear_channel_mix == Some(true) {
+        let new = if ch.clear_channel_mix == Some(true) {
+            None
+        } else {
+            ch.channel_mix.clone().map(|mut m| {
+                m.sends.truncate(64);
+                for x in &mut m.sends {
+                    x.left = if x.left.is_finite() {
+                        x.left.clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    x.right = if x.right.is_finite() {
+                        x.right.clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                }
+                m
+            })
+        };
+        match std::mem::replace(&mut c.channel_mix, new) {
+            Some(old) => inv.channel_mix = Some(old),
+            None => inv.clear_channel_mix = Some(true),
         }
     }
     if let Some(points) = &ch.volume {

@@ -124,8 +124,15 @@ export interface ClipDoc {
   stretch?: StretchDoc | null;
   /** What the clip holds. */
   audio_type?: AudioType | null;
+  /** Channel Routing: how much of each of the file's channels goes left and right. Missing uses the default. */
+  channel_mix?: ChannelMixDoc | null;
   effects?: EffectChainDoc;
   [key: string]: unknown;
+}
+
+/** One entry per channel of the file, in file order. Amounts run -1 to 1 (negative flips polarity). */
+export interface ChannelMixDoc {
+  sends: { left: number; right: number }[];
 }
 
 export type AudioType = "dialogue" | "music" | "sfx" | "ambience";
@@ -407,6 +414,10 @@ export interface ClipChange {
   audio_type?: AudioType;
   /** Clears the audio type. */
   clear_audio_type?: boolean;
+  /** Sets the Channel Routing. */
+  channel_mix?: ChannelMixDoc;
+  /** Back to the default Channel Routing for the file. */
+  clear_channel_mix?: boolean;
   /** Place in the track's stacking order after the change: 0 is the bottom; past the end is the top. */
   layer?: number;
 }

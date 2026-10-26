@@ -47,11 +47,26 @@ pub struct AudioReader {
     /// Decoded, channel-mapped samples waiting for the resampler.
     pending: Vec<f32>,
     scratch: Vec<f32>,
+    /// Channel Routing: `[left, right]` per source channel, mixing to stereo
+    /// instead of the plain channel mapping.
+    mix: Option<Vec<[f32; 2]>>,
     ended: bool,
     flushed: bool,
 }
 
 impl AudioReader {
+    /// Mixes the file's channels to stereo by these amounts (one
+    /// `[left, right]` per source channel). Only for a reader opened for
+    /// two channels; call before reading.
+    pub fn set_mix(&mut self, gains: Vec<[f32; 2]>) {
+        self.mix = Some(gains);
+        // A format that only revealed its channels by decoding has one
+        // packet mapped the plain way already: read it again.
+        if !self.pending.is_empty() {
+            let _ = self.seek(0.0);
+        }
+    }
+
     /// Opens a file. `out_rate` of None keeps the file's own rate.
     pub fn open(
         path: &Path,
@@ -100,6 +115,7 @@ impl AudioReader {
             resampler: None,
             pending: Vec::new(),
             scratch: Vec::new(),
+            mix: None,
             ended: false,
             flushed: false,
             skip: 0,
@@ -281,12 +297,17 @@ impl AudioReader {
                     continue;
                 }
             }
-            map_channels(
-                &self.scratch,
-                channels,
-                self.out_channels,
-                &mut self.pending,
-            );
+            match self.mix.as_deref() {
+                Some(g) if self.out_channels == 2 => {
+                    crate::dsp::channels::mix_into(&self.scratch, channels, g, &mut self.pending);
+                }
+                _ => map_channels(
+                    &self.scratch,
+                    channels,
+                    self.out_channels,
+                    &mut self.pending,
+                ),
+            }
             return Ok(());
         }
     }
@@ -344,5 +365,33 @@ mod tests {
         out.clear();
         map_channels(&[0.7], 1, 4, &mut out);
         assert_eq!(out, [0.7, 0.7, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn mixes_a_surround_file_to_stereo() {
+        // Six channels, each holding its own steady value.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("surround.wav");
+        let spec = hound::WavSpec {
+            channels: 6,
+            sample_rate: 48_000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..4_800 {
+            for c in 0..6 {
+                w.write_sample(0.1 * (c + 1) as f32).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+        let mut r = AudioReader::open(&path, 2, None).unwrap();
+        // Ls only, to both sides at half.
+        let mut g = vec![[0.0f32; 2]; 6];
+        g[4] = [0.5, 0.5];
+        r.set_mix(g);
+        let mut out = Vec::new();
+        assert!(r.read_into(&mut out).unwrap());
+        assert!((out[0] - 0.25).abs() < 1e-5 && (out[1] - 0.25).abs() < 1e-5);
     }
 }

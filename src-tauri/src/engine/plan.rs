@@ -68,6 +68,9 @@ pub struct ClipPlan {
     /// Clips above this one on the track that overlap it. A clip on top
     /// covers the ones under it; they come through only where it fades.
     pub covers: Vec<Cover>,
+    /// Channel Routing: `[left, right]` per channel of the file. None plays
+    /// mono to both sides and stereo as it is.
+    pub mix: Option<Vec<[f32; 2]>>,
 }
 
 /// Where a clip on top covers this one, in frames from this clip's start.
@@ -217,6 +220,7 @@ impl ClipPlan {
             effects: EffectChain::default(),
             automation: Vec::new(),
             covers: Vec::new(),
+            mix: None,
         }
     }
 
@@ -489,6 +493,10 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                     let fade = |l: u64| convert(l, session.sample_rate, out_rate).min(len);
                     Some(ClipPlan {
                         id: c.id,
+                        mix: crate::dsp::channels::effective(
+                            c.channel_mix.as_ref(),
+                            usize::from(m.channels),
+                        ),
                         path: m.path.clone(),
                         start: convert(c.start, session.sample_rate, out_rate),
                         len,

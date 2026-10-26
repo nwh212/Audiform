@@ -527,6 +527,7 @@ mod tests {
             looped: None,
             stretch: None,
             audio_type: None,
+            channel_mix: None,
         });
         s.media.push(m);
         s.tracks.push(t);

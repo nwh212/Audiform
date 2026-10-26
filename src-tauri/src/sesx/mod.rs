@@ -574,6 +574,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 looped: None,
                 stretch: clip_stretch,
                 audio_type: None,
+                channel_mix: None,
             });
             report.clips += 1;
         }
