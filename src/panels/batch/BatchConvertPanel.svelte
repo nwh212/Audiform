@@ -3,7 +3,7 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  Batch Convert: a list of files, an optional FX Chain preset run on
+  Batch Convert: a list of files, an optional Audio FX preset run on
   each one, and one set of output settings (in the Output Settings
   dialog), turned into new files one after another. Add files with the
   buttons, from the Files panel's selection, or by dropping them on the
@@ -72,7 +72,7 @@
     new Map(rows.map((r, i) => [r.id, destFor(r.source, { template, folder: s.folder, kind: s.format.kind }, { number: i + 1, count: rows.length, date: today })])),
   );
 
-  // Processing presets: the user's FX Chain presets and the built-in ones.
+  // Processing presets: the user's Audio FX presets and the built-in ones.
   let userPresets = $state<ChainPreset[]>([]);
   // svelte-ignore state_referenced_locally
   void prefs.load().then(() => (userPresets = sanitizePresets(prefs.raw("voiceChain.presets"))));
@@ -220,7 +220,7 @@
     </button>
   </div>
 
-  <label class="process" title="An FX Chain preset run on every file before it is saved">
+  <label class="process" title="An Audio FX chain preset run on every file before it is saved">
     <span>Process with</span>
     <select value={s.process ?? ""} disabled={running} onchange={(e) => (s.process = e.currentTarget.value || null)}>
       <option value="">Nothing (convert only)</option>

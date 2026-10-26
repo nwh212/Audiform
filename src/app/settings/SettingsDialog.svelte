@@ -106,7 +106,7 @@
   const CACHE_NOTES: Record<string, string> = {
     peaks: "Waveform drawings",
     spectral: "Spectrum edit results",
-    "wave-fx": "FX Chain apply results",
+    "wave-fx": "Audio FX apply results",
     untitled: "Untitled Waveform files",
     recordings: "Recordings not yet saved with a session",
   };
@@ -301,7 +301,7 @@
           <label class="off"><input type="number" disabled value="1" /> Files processed at once in Batch Convert <span class="why">One at a time for now.</span></label>
           <label class="off"><select disabled><option>High</option></select> Sample rate conversion quality <span class="why">Always the high-quality converter.</span></label>
         {:else if page === "Effects"}
-          <label><input type="checkbox" bind:checked={d.app.openChainOnAdd} /> Show the FX Chain when adding an effect from the Effects menu</label>
+          <label><input type="checkbox" bind:checked={d.app.openChainOnAdd} /> Show the Audio FX chain when adding an effect from the Effects menu</label>
           <label><input type="checkbox" bind:checked={d.app.realtimePlugins} /> Mix down sessions that use VST3 plug-ins in real time</label>
           <p class="note">Some plug-ins only work while audio plays at normal speed: pitch correction, immersive panners and other tools that follow the clock. With this on, any mixdown, stem export or Mix Down to New File of a session with VST3 plug-ins runs at playback speed, so an hour takes an hour. Built-in effects never need it.</p>
           <label class="off"><input type="checkbox" disabled checked /> Bypassed effects are skipped on playback <span class="why">Always on: a bypassed effect costs nothing.</span></label>

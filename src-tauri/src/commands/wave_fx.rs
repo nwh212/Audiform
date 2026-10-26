@@ -77,7 +77,7 @@ pub async fn wave_apply_chain(
         if end <= start {
             return Err("Select some audio first, or apply to the whole file.".into());
         }
-        let empty = || "The FX Chain is empty or bypassed, so there is nothing to apply.";
+        let empty = || "The Audio FX chain is empty or bypassed, so there is nothing to apply.";
         let latency = ChainProcessor::new(&chain, rate).ok_or(empty())?.latency();
         let warm = (f64::from(rate) * WARM_SECONDS) as usize;
         let from = start as i64 - warm as i64;

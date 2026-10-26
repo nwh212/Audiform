@@ -95,7 +95,7 @@ describe("SessionFiles", () => {
     expect(session.path).toBeNull();
     expect(stack.current.dirty).toBe(true);
     expect(notices.at(-1)).toBe(
-      "Imported 6 tracks and 6 clips. 19 built-in effects were left out; rebuild them in FX Chain. 1 media file was not found.",
+      "Imported 6 tracks and 6 clips. 19 built-in effects were left out; rebuild them in Audio FX. 1 media file was not found.",
     );
   });
 

@@ -3,14 +3,14 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * The floating settings window for one FX Chain effect. Adding an
+ * The floating settings window for one Audio FX chain effect. Adding an
  * effect (from the panel or the Effects menu) opens it; clicking an
  * effect's name or its open button opens it again.
  */
 
 import { writable } from "svelte/store";
 
-/** Slot id to open in the effect window. The FX Chain panel takes it and clears it. */
+/** Slot id to open in the effect window. The Audio FX panel takes it and clears it. */
 export const effectWindowRequest = writable<string | null>(null);
 
 export interface WindowBox {

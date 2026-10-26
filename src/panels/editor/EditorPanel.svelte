@@ -84,7 +84,7 @@
     waveTransport?: TransportStore;
     /** Waveform editor quick level: dB for the selection or whole file. */
     onWaveLevel?: (db: number) => void;
-    /** Brings the FX Chain panel forward. */
+    /** Brings the Audio FX panel forward. */
     onShowChain?: () => void;
   }
 
@@ -235,7 +235,7 @@
     }),
   );
 
-  /** Opens an effect from a header: a plug-in in its own window, anything else in the FX Chain. */
+  /** Opens an effect from a header: a plug-in in its own window, anything else in the Audio FX chain. */
   function openHeaderEffect(rowId: string, rowName: string, slot: EffectSlotDoc) {
     const info = fxCatalog.find((e) => e.id === slot.effect);
     if (info?.plugin && info.hasWindow) {
@@ -1136,7 +1136,7 @@
             }),
           ),
         ]
-      : [{ kind: "item", label: "Add an effect to this clip's FX Chain first", disabled: true, run: () => {} }];
+      : [{ kind: "item", label: "Add an effect to this clip's Audio FX chain first", disabled: true, run: () => {} }];
     menu = {
       x: e.clientX,
       y: e.clientY + 8,
@@ -2170,10 +2170,10 @@
         <button type="button" class="view" role="radio" aria-checked="false" disabled title="Inputs and Outputs: arrives with recording (P4)">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
         </button>
-        <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's FX Chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>
+        <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's Audio FX chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1.5" y="12" font-size="10" font-style="italic" font-family="serif" fill="currentColor">fx</text></svg>
         </button>
-        <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the FX Chain (P5)">
+        <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the Audio FX chain (P5)">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="7" width="2.5" height="7" fill="currentColor" /><rect x="6.75" y="3" width="2.5" height="11" fill="currentColor" /><rect x="11.5" y="9" width="2.5" height="5" fill="currentColor" /></svg>
         </button>
       </div>
@@ -2301,8 +2301,8 @@
             }}
           >
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="grab" title="Click to select the track (its effects show in the FX Chain). Drag to move it up or down." onpointerdown={(e) => onHeaderPointer(e, track)}></div>
-            {#if $chainTarget === track.id}<span class="fx-tag" title="The FX Chain is showing this track's effects">FX</span>{/if}
+            <div class="grab" title="Click to select the track (its effects show in the Audio FX chain). Drag to move it up or down." onpointerdown={(e) => onHeaderPointer(e, track)}></div>
+            {#if $chainTarget === track.id}<span class="fx-tag" title="The Audio FX chain is showing this track's effects">FX</span>{/if}
             <div class="line">
               <button
                 type="button"
@@ -2525,7 +2525,7 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="grab" title="Drag to move the bus up or down" onpointerdown={(e) => startRowDrag(e, b.id, "Move Bus")}></div>
             <div class="line">
-              <span class="bus-tag" title="Bus track: sums the tracks routed or sent to it, then runs its own FX Chain and fader">BUS</span>
+              <span class="bus-tag" title="Bus track: sums the tracks routed or sent to it, then runs its own Audio FX chain and fader">BUS</span>
               {#if renaming === b.id}
                 <!-- svelte-ignore a11y_autofocus -->
                 <input
@@ -2593,7 +2593,7 @@
             class:selected={ed.selectedTrack === MASTER_ID}
             class:fx={$chainTarget === MASTER_ID}
             style:height="72px"
-            title="Master: every track and bus ends here. Click to show its FX Chain."
+            title="Master: every track and bus ends here. Click to show its Audio FX chain."
             onclick={() => editor.selectTrack(MASTER_ID)}
             oncontextmenu={(e) => {
               e.preventDefault();
@@ -2603,7 +2603,7 @@
             <div class="line">
               <span class="bus-tag">OUT</span>
               <span class="name">Master</span>
-              <button type="button" class="ms fx" class:on={mfx > 0} title={mfx > 0 ? `Master FX Chain: ${mfx} effect${mfx === 1 ? "" : "s"}. Click to edit.` : "Master FX Chain: empty. Click to add effects."} onclick={() => editor.selectTrack(MASTER_ID)}>fx</button>
+              <button type="button" class="ms fx" class:on={mfx > 0} title={mfx > 0 ? `Master Audio FX: ${mfx} effect${mfx === 1 ? "" : "s"}. Click to edit.` : "Master Audio FX: empty. Click to add effects."} onclick={() => editor.selectTrack(MASTER_ID)}>fx</button>
             </div>
             <div class="line">
               <Dial value={doc.master?.volume_db ?? 0} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={setMasterVolume} />
@@ -2724,7 +2724,7 @@
           {/each}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="lane bus-lane master-lane" class:selected={ed.selectedTrack === MASTER_ID} style:height="72px" onpointerdown={startSelectFromLane} onclick={() => editor.selectTrack(MASTER_ID)}>
-            <span>Master: the whole mix, after every track and bus. Its fader and FX Chain apply last.</span>
+            <span>Master: the whole mix, after every track and bus. Its fader and Audio FX apply last.</span>
           </div>
           {#each shownMarkers as m (m.id)}
             {@const mx = xOf(m.position, view)}
@@ -3253,7 +3253,7 @@
     background: var(--lane-selected);
   }
 
-  /* The row whose effects the FX Chain shows. */
+  /* The row whose effects the Audio FX chain shows. */
   .header.fx::after {
     content: "";
     position: absolute;

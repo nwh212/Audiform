@@ -59,7 +59,7 @@ export interface AppSettings {
   autosaveMinutes: number;
   /** Mix down sessions that use VST3 plug-ins at playback speed, for plug-ins that only work in real time. */
   realtimePlugins: boolean;
-  /** Show the FX Chain when an effect is added from the Effects menu. */
+  /** Show the Audio FX chain when an effect is added from the Effects menu. */
   openChainOnAdd: boolean;
   /** Soloing a track unsolos the others. */
   soloExclusive: boolean;

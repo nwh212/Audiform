@@ -17,7 +17,6 @@ export type PanelId =
   | "editor"
   | "mixer"
   | "levels"
-  | "audio-fx"
   | "time-info"
   | "history"
   | "drive-manager"
@@ -69,7 +68,7 @@ export const PANELS: readonly PanelDef[] = [
   },
   {
     id: "voice-chain",
-    title: "FX Chain",
+    title: "Audio FX",
     inDefault: true,
     home: LEFT_TABS,
     pending: null,
@@ -110,25 +109,10 @@ export const PANELS: readonly PanelDef[] = [
     pending: null,
   },
   {
-    id: "audio-fx",
-    title: "Audio FX Panel",
-    inDefault: true,
-    home: [
-      { reference: "libraries", direction: "above" },
-      { reference: "editor", direction: "right" },
-      { edge: "right" },
-    ],
-    pending: "Not built yet.",
-  },
-  {
     id: "libraries",
     title: "Libraries",
     inDefault: true,
-    home: [
-      { reference: "audio-fx", direction: "below" },
-      { reference: "editor", direction: "right" },
-      { edge: "right" },
-    ],
+    home: [{ reference: "editor", direction: "right" }, { edge: "right" }],
     pending: null,
   },
   {
@@ -184,7 +168,7 @@ export const PANELS: readonly PanelDef[] = [
     id: "phase-wheel",
     title: "Phase Wheel",
     inDefault: false,
-    home: [{ reference: "audio-fx", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
+    home: [{ reference: "libraries", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
     pending: null,
   },
   {
@@ -246,11 +230,10 @@ export const DEFAULT_LAYOUT: readonly LayoutStep[] = [
     inactive: true,
   },
   {
-    id: "audio-fx",
+    id: "libraries",
     placement: { reference: "editor", direction: "right" },
     width: DEFAULT_SIZES.rightWidth,
   },
-  { id: "libraries", placement: { reference: "audio-fx", direction: "below" } },
   {
     id: "levels",
     placement: { edge: "below" },
@@ -279,7 +262,7 @@ export const DEFAULT_LAYOUT: readonly LayoutStep[] = [
  * Bump when DEFAULT_LAYOUT changes. A saved layout from an older
  * Default is replaced by the new Default on next launch.
  */
-export const DEFAULT_LAYOUT_VERSION = 6;
+export const DEFAULT_LAYOUT_VERSION = 7;
 
 /** A workspace that ships with the app. */
 export interface WorkspacePreset {
@@ -354,7 +337,37 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
       { id: "files", placement: { edge: "left" }, width: S.leftWidth },
       { id: "markers", placement: { reference: "files", direction: "below" } },
     ],
+  },  {
+    id: "music",
+    name: "Music",
+    description:
+      "Tracks in the center; effects, properties and history on the left; Phase Wheel and 3D Space on the right.",
+    version: 1,
+    steps: [
+      { id: "editor", placement: null },
+      { id: "mixer", placement: { reference: "editor", direction: "within" }, inactive: true },
+      {
+        id: "phase-wheel",
+        placement: { reference: "editor", direction: "right" },
+        width: S.rightWidth,
+      },
+      { id: "space", placement: { reference: "phase-wheel", direction: "below" } },
+      { id: "libraries", placement: { reference: "space", direction: "within" }, inactive: true },
+      { id: "levels", placement: { edge: "below" }, height: S.levelsHeight },
+      {
+        id: "time-info",
+        placement: { reference: "levels", direction: "right" },
+        width: S.timeInfoWidth,
+      },
+      { id: "files", placement: { edge: "left" }, width: S.leftWidth },
+      { id: "voice-chain", placement: { reference: "files", direction: "below" } },
+      { id: "quickpass", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
+      { id: "properties", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
+      { id: "batch-convert", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
+      { id: "history", placement: { reference: "voice-chain", direction: "below" } },
+    ],
   },
+
   {
     id: "voiceover",
     name: "Voiceover",

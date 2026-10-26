@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * Routing as the Mixer and FX Chain offer it: outputs, aux sends and
+ * Routing as the Mixer and Audio FX offer it: outputs, aux sends and
  * sidechain keys. The core refuses any routing that would feed sound
  * back into itself; these helpers leave those choices out of the lists
  * so the user never meets the refusal.
@@ -12,7 +12,7 @@
 import type { BusDoc, EffectChainDoc, Op, OutputDoc, SendDoc, SessionDoc } from "../../stores/session";
 import { settings } from "../../stores/settings";
 
-/** Id the Mixer and FX Chain use for the master. */
+/** Id the Mixer and Audio FX use for the master. */
 export const MASTER_ID = "master";
 
 interface Owner {

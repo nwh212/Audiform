@@ -103,8 +103,7 @@ Center (fills remaining width):
 - Bottom: Levels panel under the center and right columns only (the left column runs the full window height), with Time Info (~270px) at its right end, lined up under the right column. Time Info has Start/End/Duration fields and sample rate/bit depth/size readout.
 
 Right column (~270px, same width as Time Info below it):
-- Top: Audio FX Panel (no selection state shows audio type buttons: Dialogue, Music, SFX, Ambience)
-- Bottom: Libraries
+- Libraries (the Audio FX Panel placeholder that sat above it was removed on 2026-10-27; audio types are set from the Clip menu)
 
 ## Host profiles and preset inventory
 
@@ -267,7 +266,7 @@ Defaults are stored in `src/keymap/default.json`. Users change them in Edit > Ke
 
 ## Naming conventions
 
-All feature, panel and workspace names are our own. Never use other products' panel names, workspace names or feature brand names in UI copy, code comments, docs or error messages; see the naming map in CLAUDE.local.md. When a name is in doubt, pick a plain descriptive one (for example FX Chain (called Voice Chain before 2026-10-26), Audio FX Panel, Batch Convert, QuickPass, Time Info, Drive Manager, Noise Reducer, Speech Leveler, Dynamics, Limiter, Click Repair, Breath Gate, Loudness Match).
+All feature, panel and workspace names are our own. Never use other products' panel names, workspace names or feature brand names in UI copy, code comments, docs or error messages; see the naming map in CLAUDE.local.md. When a name is in doubt, pick a plain descriptive one (for example Audio FX (called Voice Chain, then briefly FX Chain, before 2026-10-27), Batch Convert, QuickPass, Time Info, Drive Manager, Noise Reducer, Speech Leveler, Dynamics, Limiter, Click Repair, Breath Gate, Loudness Match).
 
 ## Legal guardrails (non-negotiable)
 
@@ -337,7 +336,7 @@ This is the canonical step order for podcast editing. Every podcast-specific fea
 | 3b Voice Chain | Host profiles load per track, user tweaks | Breath gate fires at the host profile's threshold (Low −14 dB, Medium −20 dB); full chain: Noise Reducer > Speech Leveler > Dynamics > Parametric EQ > Limiter > Breath Gate |
 | 4 Transcribe | Multitrack > Transcribe Session (whisper.cpp, local GPU) | Filler word removal (P7) unlocks; chapter and show notes seeds generated |
 | 5 Edit | Timeline cuts, text-based editing, chapter markers | Ad read timer (P5) shows live duration on ad slot markers |
-| 6 Music Remover | Right-click clip > Audio FX Panel > Remove Music | Music Remover via Demucs (P7), local GPU, vocals-only or full stems |
+| 6 Music Remover | Right-click clip > Remove Music | Music Remover via Demucs (P7), local GPU, vocals-only or full stems |
 | 7 QC | File > Check Loudness | Pre-export loudness scan (P5): pass/fail card blocks export until acknowledged; ad slot duration warnings |
 | 8 Export | File > Publish Package | Publish Package (P7): MP3 + chapters + transcripts + show notes + social clips; Podcast Manager write-back; RSS.com upload |
 

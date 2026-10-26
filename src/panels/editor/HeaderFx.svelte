@@ -3,7 +3,7 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  A track's or bus's FX Chain inside its header (the Effects view):
+  A track's or bus's Audio FX chain inside its header (the Effects view):
   the chain's power, then the numbered slots, each with its power and
   name. Click a name to open the effect, the arrow (or an empty slot) to
   add or replace one. Drag an effect to another slot to move it, or onto
@@ -88,7 +88,7 @@
       class:on={chain.enabled}
       title={chain.enabled ? "Effects on: click to bypass the whole chain" : "Effects bypassed: click to turn them on"}
       aria-pressed={chain.enabled}
-      onclick={() => commit(chain.enabled ? "Bypass FX Chain" : "Turn On FX Chain", { ...chain, enabled: !chain.enabled })}
+      onclick={() => commit(chain.enabled ? "Bypass Audio FX" : "Turn On Audio FX", { ...chain, enabled: !chain.enabled })}
     >
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.8" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
     </button>

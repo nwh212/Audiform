@@ -7,7 +7,7 @@
 //!
 //! Before playback or export, such a clip leaves its track, and each of
 //! its channels plays from a hidden copy of the track (same fader, mute,
-//! solo, FX Chain, output and sends; no pan or room spot of its own) that
+//! solo, Audio FX, output and sends; no pan or room spot of its own) that
 //! is pinned to one speaker. A channel whose speaker the layout lacks
 //! (heights in a 5.1 session, say) plays from where that speaker would
 //! stand. The copies exist only while playing or exporting; the session

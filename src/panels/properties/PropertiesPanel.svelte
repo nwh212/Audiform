@@ -186,7 +186,7 @@
     {:else}
       <p class="note">{chans} channel{chans === 1 ? "" : "s"}. How much of each goes to the track's left and right. Negative flips polarity.</p>
       {#if in3d && chans > 1}
-        <label class="check" title="Each channel plays straight from the speaker of the same name (L, R, C, LFE, Ls...), with the track's fader, mute and FX Chain. A channel whose speaker the layout lacks plays from where it would stand.">
+        <label class="check" title="Each channel plays straight from the speaker of the same name (L, R, C, LFE, Ls...), with the track's fader, mute and Audio FX. A channel whose speaker the layout lacks plays from where it would stand.">
           <input type="checkbox" checked={speakers} onchange={(e) => mix && setMix({ sends: mix.sends, to_speakers: e.currentTarget.checked }, e.currentTarget.checked ? "Source Channels: Each From Its Speaker" : "Source Channels: Mix To Left and Right")} />
           Each channel from its own speaker
         </label>

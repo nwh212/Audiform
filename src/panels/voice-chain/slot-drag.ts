@@ -10,7 +10,7 @@
  * Windows. Slot rows mark themselves with `data-slot-owner` (an owner
  * key, see `ownerKey`) and `data-slot-index`.
  *
- * Also the Add effect menu, shared by the FX Chain and the Editor's
+ * Also the Add effect menu, shared by the Audio FX chain and the Editor's
  * track headers.
  */
 

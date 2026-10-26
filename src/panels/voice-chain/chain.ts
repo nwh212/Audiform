@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * FX Chain edits as plain functions: each returns a new chain, so the
+ * Audio FX edits as plain functions: each returns a new chain, so the
  * panel sends one undoable `set_effects` per change. Also the built-in
  * presets and the slider maths.
  */
@@ -249,7 +249,7 @@ export interface ChainPreset {
   name: string;
   /** "Voice chains" replace the chain; the single-effect groups add one slot. */
   group: string;
-  /** A full per-voice chain for a host's track: offered in the FX Chain only, not in Batch Convert. */
+  /** A full per-voice chain for a host's track: offered in the Audio FX chain only, not in Batch Convert. */
   trackOnly?: boolean;
   chain: Omit<EffectChainDoc, "slots"> & {
     slots: { effect: string; params: Record<string, number> }[];
