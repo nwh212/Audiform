@@ -1536,3 +1536,8 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **One tall slider per band** (10, 20 or 30), lowest on the left, with its level above (click to type one) and its frequency below; a dB scale on the left and Output on the right. Drag (Ctrl fine, Shift coarse), wheel, arrow keys, or double-click for 0 dB.
 - **Alt+drag across the sliders draws a shape**, one undoable step. **Flat** puts every band back to 0 dB in one step.
 - The response graph stays above the sliders, so the combined curve is still in view.
+
+## 2026-10-28: Notch Filter window
+
+- **Graph:** the response on the shared frequency ruler, 0 to -60 dB, with a numbered marker per notch. Drag a marker for frequency (across) and depth (up and down); double-click it to switch that notch on or off.
+- **Table:** a column per notch (1 to 6): Frequency, Depth and its on switch. The width (Q) shared by all notches sits under it. The effect and its settings are unchanged, so old sessions sound the same.

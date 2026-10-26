@@ -12,3 +12,7 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Kept the response graph** above the new slider row, so the overall curve stays visible. Easy to drop if the window should be sliders only.
 - **Range stays ±15 dB per band**, as before. A wider range (±24 or more) would only need the limit raised in `filters.rs`; old sessions would still load.
 - **Added Alt+drag to draw across bands and a Flat button.** Alt+drag is a mouse gesture inside this window, not a new keyboard shortcut.
+
+## Notch Filter window
+
+- **One width for all six notches**, as the effect already had. A width per notch would be a new setting per notch (old sessions would load with the shared width); say if you want it.
