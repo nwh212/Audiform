@@ -1,0 +1,264 @@
+/*
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Scene themes (Settings > Appearance > Theme): the app floats as clear
+  frosted glass over a bright natural scene.
+  - Meadow (data-theme="meadow"): blue sky and clouds over green hills,
+    a sun flare and bubbles.
+  - Aqua (data-theme="aqua"): sunlit water with light rays and rising
+    bubbles.
+  The scenes are the theme's own artwork in src/assets/themes.
+*/
+
+:root:is([data-theme="meadow"], [data-theme="aqua"]) {
+  color-scheme: light;
+
+  /* Glass: white at partial strength, so the scene shows through. */
+  --surface-0: rgba(255, 255, 255, 0.42);
+  --surface-1: rgba(255, 255, 255, 0.58);
+  --surface-2: rgba(255, 255, 255, 0.82);
+  --surface-3: rgba(255, 255, 255, 0.7);
+  --border: rgba(255, 255, 255, 0.75);
+  --border-strong: rgba(70, 150, 200, 0.45);
+
+  --text: #0b2a3a;
+  --text-dim: #2f5568;
+  --text-faint: #5f8494;
+
+  --accent: #12a7e0;
+  --accent-dim: #8fd8f5;
+  --playhead: #ff8a1a;
+  --value: #0b74b0;
+  --gutter: transparent;
+  --danger: #e2283a;
+  --selected-text: #0a3550;
+
+  --lane-a: rgba(255, 255, 255, 0.62);
+  --lane-b: rgba(255, 255, 255, 0.5);
+  --lane-selected: rgba(200, 240, 255, 0.78);
+  --track-gap: rgba(255, 255, 255, 0.25);
+  --header-a: rgba(255, 255, 255, 0.68);
+  --header-b: rgba(255, 255, 255, 0.58);
+
+  --clip-1: #2fae4a;
+  --clip-2: #1f86e0;
+  --clip-3: #7a4fd8;
+  --clip-4: #f0861f;
+  --clip-5: #d6aa10;
+  --clip-6: #e04aa8;
+  --clip-7: #10a8c8;
+  --clip-body-alpha: 0.45;
+  --clip-wave-tone: -0.35;
+  --clip-gloss: 1;
+
+  --font-ui: "Segoe UI", "Frutiger", "Myriad Pro", "Source Sans 3", system-ui, sans-serif;
+
+  --a-glass: rgba(255, 255, 255, 0.38);
+  --a-glass-strong: rgba(255, 255, 255, 0.72);
+  --a-edge: rgba(255, 255, 255, 0.85);
+  --a-shadow: rgba(0, 60, 100, 0.22);
+  --a-shine: linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0) 51%);
+  --a-pick: linear-gradient(#7fe0ff, #19aee6 52%, #0f97d2);
+  --a-go: linear-gradient(#a8f08a, #45bf3c 52%, #2fa52f);
+}
+
+:root[data-theme="meadow"] body {
+  background: #6fbff0 url("../assets/themes/meadow.webp") center / cover no-repeat fixed;
+}
+:root[data-theme="aqua"] body {
+  background: #1a7fc0 url("../assets/themes/aqua.webp") center / cover no-repeat fixed;
+}
+
+/* The shell is clear, so the scene fills the window. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(header.top, main.body, .dv-dockview, .dv-grid-view, .dv-split-view-container, .dv-view-container, .dv-view) {
+  background: transparent !important;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) header.top {
+  border-bottom: 0;
+}
+
+/* Panels: clear frosted glass with a bright edge and soft rounded corners. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .dockview-theme-altaudio {
+  --dv-group-view-background-color: var(--a-glass);
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--a-glass-strong);
+  --dv-inactivegroup-visiblepanel-tab-background-color: rgba(255, 255, 255, 0.5);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-tab-divider-color: transparent;
+  --dv-floating-box-shadow: 0 14px 36px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .dockview-theme-altaudio .dv-groupview {
+  border: 4px solid transparent;
+  border-radius: 16px;
+  overflow: hidden;
+  background-clip: padding-box;
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 0 0 1px var(--a-edge) inset, 0 6px 20px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .dockview-theme-altaudio .dv-tab {
+  border-radius: 10px 10px 0 0;
+}
+
+/* Bars float as glass pills. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar, .strip, footer.status) {
+  margin: 5px 8px 0;
+  border: 1px solid var(--a-edge);
+  border-radius: 14px;
+  background: var(--a-shine), var(--a-glass);
+  backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: 0 4px 14px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .strip {
+  margin-bottom: 5px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) footer.status {
+  margin: 0 8px 5px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.editor .toolbar, .bar:has(> .transport)) {
+  background: var(--a-shine), rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Controls: clear glass with a light shine; the picked one turns aqua. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+  border-radius: 8px;
+  border-color: rgba(70, 150, 200, 0.45);
+  background-image: var(--a-shine);
+  box-shadow: 0 1px 3px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
+  box-shadow: 0 0 0 2px rgba(120, 220, 255, 0.55), 0 2px 6px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea) {
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(70, 150, 200, 0.4);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: #19aee6;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.tool, .view) {
+  border-radius: 9px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.tool, .view):hover:not(:disabled) {
+  border-color: var(--a-edge);
+  background: var(--a-shine), rgba(255, 255, 255, 0.55);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.tool.on:not(.rec, .play), .view.on, .modes button.on, .header .ms.on:not(.solo, .rec)) {
+  border-color: #0f97d2;
+  background: var(--a-pick);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(40, 190, 255, 0.6);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .modes {
+  border-radius: 10px;
+  overflow: hidden;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .modes button {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Transport: clear glass orbs; play turns leaf green, record red. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .bar:has(> .transport) .transport .tool {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--a-edge);
+  border-radius: 50%;
+  background: var(--a-shine), rgba(255, 255, 255, 0.55);
+  box-shadow: 0 2px 6px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .bar:has(> .transport) .transport .tool.play.on {
+  background: var(--a-shine), var(--a-go);
+  color: #fff;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .bar:has(> .transport) .transport .tool.rec.on {
+  background: var(--a-shine), linear-gradient(#ff9a9a, #e2283a);
+  color: #fff;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .bar .clock {
+  padding: 1px 12px;
+  border: 1px solid var(--a-edge);
+  border-radius: 12px;
+  background: var(--a-shine), rgba(255, 255, 255, 0.6);
+  color: #075e8c;
+}
+
+/* Menus: glass; the row under the pointer is aqua. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .menubar .top {
+  border-radius: 8px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar .top:hover, .menubar .top.open, .menubar .row.active, .context button.active) {
+  background: var(--a-pick);
+  color: #fff;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar .dropdown, .context) {
+  border: 1px solid var(--a-edge);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 12px 30px var(--a-shadow);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar .row, .context button) {
+  border-radius: 6px;
+}
+
+/* Track headers: the selected one glows aqua. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .header.selected {
+  box-shadow: 0 0 0 1px rgba(25, 174, 230, 0.8) inset, 0 0 14px rgba(25, 174, 230, 0.3) inset;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .header .ms {
+  border-radius: 6px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.header .auto, .auto-pick) {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+}
+
+/* Lists. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(tr, li, .item, .file):hover {
+  background-color: rgba(255, 255, 255, 0.45);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+  background-color: rgba(150, 225, 255, 0.6);
+}
+
+/* Dialogs: a pane of glass over the softly blurred scene. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .backdrop {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(3px);
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.dialog, [role="dialog"]) {
+  border: 1px solid var(--a-edge);
+  border-radius: 18px;
+  background: var(--a-shine), rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow: 0 20px 50px var(--a-shadow);
+}
+
+/* Scrollbars: thin clear pills. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) ::-webkit-scrollbar-track {
+  background: transparent;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85) padding-box;
+  box-shadow: 0 0 0 1px rgba(70, 150, 200, 0.35) inset;
+}
+
+/* Meters: the cover over the unlit part must stay solid, or the color
+   scale shows through the glass. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.levels, .meter) .cover {
+  background: #e6f3f9;
+}

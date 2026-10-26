@@ -3,339 +3,389 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  Sky Glass: an optional light theme (Settings > Appearance > Theme).
-  A bright sky behind frosted glass panels, glossy rounded controls with
-  a shine across their top half, aqua highlights, and clip colors taken
-  from the Audiform mark. Only applies when the root element carries
-  data-theme="sky"; the Dark theme is untouched.
+  Glass themes (Settings > Appearance > Theme), in the colors of the
+  Audiform mark:
+  - Sky Glass (data-theme="sky"): a bright blue-violet sky warming toward
+    the horizon, frosted glass panels, glossy rounded controls.
+  - Night Glass (data-theme="night"): the same glass and gloss on a deep
+    night sky with soft aurora glows.
+  Each theme sets a palette; the rules after the palettes draw both. The
+  plain Dark theme (no data-theme) is untouched.
 */
+
+/* ---------- Palettes ---------- */
 
 :root[data-theme="sky"] {
   color-scheme: light;
 
-  /* Surfaces: frosted glass over the sky. */
-  --surface-0: #e4f3fc;
-  --surface-1: #f3faff;
+  --surface-0: #e8edff;
+  --surface-1: #f5f7ff;
   --surface-2: #ffffff;
-  --surface-3: #dcf0fc;
-  --border: #b4d9ee;
-  --border-strong: #8cc3e2;
+  --surface-3: #e2e8ff;
+  --border: #c0cbf3;
+  --border-strong: #98a8ea;
 
-  --text: #0e2c42;
-  --text-dim: #3c637d;
-  --text-faint: #7896ab;
+  --text: #141a46;
+  --text-dim: #464f86;
+  --text-faint: #8088b4;
 
-  --accent: #0f9be6;
-  --accent-dim: #73c6f2;
-  --playhead: #ff7a00;
-  --value: #006fc0;
+  --accent: #4f62f2;
+  --accent-dim: #9aa6fa;
+  --playhead: #ff7a1a;
+  --value: #3a3fd0;
   --gutter: transparent;
   --danger: #e2283a;
+  --selected-text: #1d2470;
 
-  --lane-a: #f6fcff;
-  --lane-b: #ebf7fe;
-  --lane-selected: #cbecfd;
-  --track-gap: #a9d6ef;
-  --header-a: #eef8ff;
-  --header-b: #e2f3fe;
+  --lane-a: #f8f9ff;
+  --lane-b: #eff2ff;
+  --lane-selected: #d9dfff;
+  --track-gap: #b8c3f2;
+  --header-a: #f1f4ff;
+  --header-b: #e7ecff;
 
-  /* Clip colors from the mark: blue, violet, pink, orange, gold, leaf, aqua. */
+  /* Clip colors from the mark: leaf, blue, violet, orange, gold, pink, aqua. */
   --clip-1: #2fa35a;
-  --clip-2: #2d74e0;
-  --clip-3: #8148d8;
+  --clip-2: #2d6fe8;
+  --clip-3: #7f45e0;
   --clip-4: #ee7a1c;
   --clip-5: #d9a514;
-  --clip-6: #dc3fae;
-  --clip-7: #14a7c4;
+  --clip-6: #dc3fb6;
+  --clip-7: #149fd0;
   --clip-body-alpha: 0.42;
   --clip-wave-tone: -0.35;
   --clip-gloss: 1;
 
-  --font-ui: "Segoe UI", "Frutiger", "Myriad Pro", "Source Sans 3", system-ui, sans-serif;
-
-  --selected-text: #063b63;
-
-  /* Shared glass and gloss. */
-  --sky-gloss: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.35) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.25));
-  --sky-glow: 0 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(10, 70, 120, 0.25);
+  /* The look: sky, glass, gloss, and the "picked" bubble. */
+  --g-sky:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.7) 0 2.5%, rgba(255, 255, 255, 0) 3%),
+    radial-gradient(circle at 86% 24%, rgba(255, 255, 255, 0.5) 0 1.5%, rgba(255, 255, 255, 0) 2%),
+    radial-gradient(circle at 68% 86%, rgba(255, 255, 255, 0.45) 0 3%, rgba(255, 255, 255, 0) 3.6%),
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 55%),
+    radial-gradient(ellipse at 95% 110%, rgba(255, 150, 80, 0.55), rgba(255, 150, 80, 0) 45%),
+    radial-gradient(ellipse at 60% 115%, rgba(240, 90, 200, 0.4), rgba(240, 90, 200, 0) 45%),
+    radial-gradient(ellipse at 10% 110%, rgba(110, 210, 120, 0.45), rgba(110, 210, 120, 0) 40%),
+    linear-gradient(#3f6ff0 0%, #7b93fb 32%, #b6c2ff 62%, #ece6ff 100%);
+  --g-strip: linear-gradient(#ffffff, #eef1ff 50%, #dfe5ff 51%, #eef1ff);
+  --g-strip-border: #aab7f0;
+  --g-tabs: linear-gradient(rgba(255, 255, 255, 0.92), rgba(220, 228, 255, 0.92));
+  --g-glass: rgba(246, 248, 255, 0.94);
+  --g-menu: rgba(248, 249, 255, 0.93);
+  --g-gloss: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.35) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.25));
+  --g-header-gloss: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 45%);
+  --g-inner: rgba(255, 255, 255, 0.75);
+  --g-shadow: rgba(30, 40, 120, 0.25);
+  --g-pick: linear-gradient(#b8c4ff, #6a7ff6 50%, #4d5ee8 51%, #8597ff);
+  --g-pick-border: #4555d6;
+  --g-pick-glow: rgba(90, 110, 245, 0.55);
+  --g-orb: radial-gradient(circle at 50% 80%, #d7defe, #f4f6ff 70%);
+  --g-clock: linear-gradient(#f1f0ff, #cdd6ff);
+  --g-clock-text: #2a2f9e;
+  --g-clock-glow: rgba(120, 130, 255, 0.6);
+  --g-input: rgba(255, 255, 255, 0.92);
+  --g-row-hover: rgba(140, 160, 250, 0.2);
+  --g-row-pick: #d4dbff;
+  --g-backdrop: rgba(40, 50, 140, 0.22);
+  --g-scroll-track: rgba(255, 255, 255, 0.5);
+  --g-scroll-thumb: linear-gradient(90deg, #a9b6ff, #6276f2 50%, #9aa8ff);
 }
 
-/* The sky: blue overhead fading to a pale horizon, with soft light and bubbles. */
-:root[data-theme="sky"] body {
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.75) 0 2.5%, rgba(255, 255, 255, 0) 3%),
-    radial-gradient(circle at 86% 26%, rgba(255, 255, 255, 0.55) 0 1.5%, rgba(255, 255, 255, 0) 2%),
-    radial-gradient(circle at 70% 84%, rgba(255, 255, 255, 0.45) 0 3%, rgba(255, 255, 255, 0) 3.6%),
-    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 55%),
-    radial-gradient(ellipse at 20% 110%, rgba(120, 220, 120, 0.55), rgba(120, 220, 120, 0) 45%),
-    radial-gradient(ellipse at 85% 115%, rgba(80, 200, 160, 0.45), rgba(80, 200, 160, 0) 45%),
-    linear-gradient(#38aeea 0%, #7fd0f6 38%, #c6ecfb 70%, #e9f9ef 100%);
+:root[data-theme="night"] {
+  color-scheme: dark;
+
+  --surface-0: #12142e;
+  --surface-1: #181b3a;
+  --surface-2: #1f2348;
+  --surface-3: #282d58;
+  --border: #323866;
+  --border-strong: #454c82;
+
+  --text: #e4e7ff;
+  --text-dim: #a6acd8;
+  --text-faint: #6e74a6;
+
+  --accent: #7e8cff;
+  --accent-dim: #4c58c8;
+  --playhead: #ffa33a;
+  --value: #9fb0ff;
+  --gutter: transparent;
+  --danger: #ff4d5e;
+  --selected-text: #ffffff;
+
+  --lane-a: #14173a;
+  --lane-b: #191c43;
+  --lane-selected: #2a2f6a;
+  --track-gap: #0a0b20;
+  --header-a: #1c2050;
+  --header-b: #212559;
+
+  --clip-1: #3fbf6e;
+  --clip-2: #4a86ff;
+  --clip-3: #9a64ff;
+  --clip-4: #ff8c33;
+  --clip-5: #f0c030;
+  --clip-6: #f05cc8;
+  --clip-7: #2ec0ea;
+  --clip-body-alpha: 0.3;
+  --clip-wave-tone: 0.55;
+  --clip-gloss: 1;
+
+  --g-sky:
+    radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.5) 0 0.25%, rgba(255, 255, 255, 0) 0.4%),
+    radial-gradient(circle at 74% 9%, rgba(255, 255, 255, 0.45) 0 0.2%, rgba(255, 255, 255, 0) 0.35%),
+    radial-gradient(circle at 46% 22%, rgba(255, 255, 255, 0.35) 0 0.18%, rgba(255, 255, 255, 0) 0.3%),
+    radial-gradient(ellipse at 20% 0%, rgba(70, 120, 255, 0.45), rgba(70, 120, 255, 0) 50%),
+    radial-gradient(ellipse at 75% 5%, rgba(150, 80, 255, 0.4), rgba(150, 80, 255, 0) 50%),
+    radial-gradient(ellipse at 55% 110%, rgba(230, 70, 190, 0.35), rgba(230, 70, 190, 0) 45%),
+    radial-gradient(ellipse at 95% 110%, rgba(255, 130, 40, 0.3), rgba(255, 130, 40, 0) 40%),
+    radial-gradient(ellipse at 5% 110%, rgba(60, 200, 120, 0.25), rgba(60, 200, 120, 0) 40%),
+    linear-gradient(#0a0d2a 0%, #141443 45%, #1d1450 75%, #2a1240 100%);
+  --g-strip: linear-gradient(rgba(70, 78, 150, 0.95), rgba(36, 40, 92, 0.95) 50%, rgba(24, 27, 70, 0.95) 51%, rgba(34, 38, 88, 0.95));
+  --g-strip-border: #3d4488;
+  --g-tabs: linear-gradient(rgba(54, 60, 128, 0.95), rgba(26, 29, 74, 0.95));
+  --g-glass: rgba(24, 27, 62, 0.94);
+  --g-menu: rgba(26, 29, 68, 0.94);
+  --g-gloss: linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.05));
+  --g-header-gloss: linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 45%);
+  --g-inner: rgba(255, 255, 255, 0.12);
+  --g-shadow: rgba(0, 0, 10, 0.55);
+  --g-pick: linear-gradient(#a4b0ff, #6170f0 50%, #4652d8 51%, #7884ff);
+  --g-pick-border: #8a96ff;
+  --g-pick-glow: rgba(130, 140, 255, 0.6);
+  --g-orb: radial-gradient(circle at 50% 80%, #2d3378, #1a1d4a 70%);
+  --g-clock: linear-gradient(#0f1238, #1d2260);
+  --g-clock-text: #a8c0ff;
+  --g-clock-glow: rgba(110, 150, 255, 0.8);
+  --g-input: rgba(14, 16, 44, 0.9);
+  --g-row-hover: rgba(120, 130, 255, 0.14);
+  --g-row-pick: #2f3580;
+  --g-backdrop: rgba(4, 4, 20, 0.5);
+  --g-scroll-track: rgba(255, 255, 255, 0.05);
+  --g-scroll-thumb: linear-gradient(90deg, #5a66d8, #3a44b0 50%, #5260d0);
+}
+
+/* ---------- Drawing (both glass themes) ---------- */
+
+:root:is([data-theme="sky"], [data-theme="night"]) {
+  --font-ui: "Segoe UI", "Frutiger", "Myriad Pro", "Source Sans 3", system-ui, sans-serif;
+}
+
+:root:is([data-theme="sky"], [data-theme="night"]) body {
+  background: var(--g-sky);
   background-attachment: fixed;
 }
 
-/* Panels: rounded frosted glass with a soft shadow, the sky between them. */
-:root[data-theme="sky"] .dockview-theme-altaudio {
-  background: transparent;
-  --dv-floating-box-shadow: 0 12px 32px rgba(10, 70, 120, 0.35);
-  --dv-drag-over-background-color: rgba(15, 155, 230, 0.18);
+/* The app's shell lets the sky through. */
+:root:is([data-theme="sky"], [data-theme="night"]) :is(header.top, main.body, .dv-dockview, .dv-grid-view, .dv-split-view-container, .dv-view-container, .dv-view) {
+  background: transparent !important;
 }
-:root[data-theme="sky"] .dockview-theme-altaudio .dv-groupview {
+:root:is([data-theme="sky"], [data-theme="night"]) header.top {
+  border-bottom: 0;
+}
+
+/* Panels: rounded glass with a soft shadow. */
+:root:is([data-theme="sky"], [data-theme="night"]) .dockview-theme-altaudio {
+  --dv-floating-box-shadow: 0 12px 32px var(--g-shadow);
+  --dv-drag-over-background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+:root:is([data-theme="sky"], [data-theme="night"]) .dockview-theme-altaudio .dv-groupview {
   border: 3px solid transparent;
   border-radius: 10px;
   overflow: hidden;
   background-clip: padding-box;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
-    0 4px 14px rgba(10, 70, 120, 0.22);
+    0 0 0 1px var(--g-inner) inset,
+    0 4px 14px var(--g-shadow);
   backdrop-filter: blur(6px);
 }
-:root[data-theme="sky"] .dockview-theme-altaudio .dv-tabs-and-actions-container {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.9), rgba(205, 236, 252, 0.9));
+:root:is([data-theme="sky"], [data-theme="night"]) .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  background-image: var(--g-tabs);
   border-bottom: 1px solid var(--border);
 }
-:root[data-theme="sky"] .dockview-theme-altaudio .dv-tab.dv-active-tab {
-  background-image: var(--sky-gloss);
+:root:is([data-theme="sky"], [data-theme="night"]) .dockview-theme-altaudio .dv-tab.dv-active-tab {
+  background-image: var(--g-gloss);
   border-radius: 6px 6px 0 0;
 }
 
 /* Glossy controls: a shine over each control's own color, so on, off and
-   accent states still read. Menu rows, flat tool buttons and list rows
-   get their own treatment below. */
-:root[data-theme="sky"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
-  background-image: var(--sky-gloss);
+   accent states still read. Menu rows, flat tools and list rows get their
+   own treatment below. */
+:root:is([data-theme="sky"], [data-theme="night"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+  background-image: var(--g-gloss);
   border-radius: 5px;
-  box-shadow: var(--sky-glow);
+  box-shadow: 0 0 0 1px var(--g-inner) inset, 0 1px 2px var(--g-shadow);
 }
-:root[data-theme="sky"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.7) inset,
-    0 0 6px rgba(15, 155, 230, 0.55);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--g-inner) inset, 0 0 7px var(--g-pick-glow);
 }
-:root[data-theme="sky"] :is(button):not(.row, .top, .context button, .grab, .fold):active:not(:disabled) {
-  background-image: linear-gradient(rgba(0, 60, 110, 0.14), rgba(255, 255, 255, 0.25));
+:root:is([data-theme="sky"], [data-theme="night"]) button:not(.row, .top, .context button, .grab, .fold):active:not(:disabled) {
+  background-image: linear-gradient(rgba(0, 0, 40, 0.16), rgba(255, 255, 255, 0.12));
 }
-:root[data-theme="sky"] input[type="text"],
-:root[data-theme="sky"] input[type="number"],
-:root[data-theme="sky"] input[type="search"],
-:root[data-theme="sky"] input:not([type]),
-:root[data-theme="sky"] textarea {
+:root:is([data-theme="sky"], [data-theme="night"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea) {
   border-radius: 5px;
-  box-shadow: 0 1px 2px rgba(10, 70, 120, 0.2) inset;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: var(--g-input);
+  box-shadow: 0 1px 2px var(--g-shadow) inset;
 }
-:root[data-theme="sky"] input[type="checkbox"],
-:root[data-theme="sky"] input[type="radio"],
-:root[data-theme="sky"] input[type="range"] {
-  accent-color: #10a0e8;
+:root:is([data-theme="sky"], [data-theme="night"]) :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--accent);
 }
 
-/* Aqua highlight for anything "active" or picked: a glossy blue bubble. */
-:root[data-theme="sky"] {
-  --sky-aqua: linear-gradient(#8fdcff, #36aef0 50%, #1592de 51%, #4fc0f6);
+/* Menu bar, tool strip, toolbars and the status bar: glossy rounded strips. */
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.menubar, .strip, .editor .toolbar, .bar:has(> .transport), footer.status) {
+  background: var(--g-strip);
+  border-color: var(--g-strip-border);
+}
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.menubar, .strip, footer.status) {
+  margin: 4px 6px 0;
+  border: 1px solid var(--g-strip-border);
+  border-radius: 9px;
+  box-shadow: 0 2px 8px var(--g-shadow), 0 0 0 1px var(--g-inner) inset;
+}
+:root:is([data-theme="sky"], [data-theme="night"]) .strip {
+  margin-bottom: 4px;
+}
+:root:is([data-theme="sky"], [data-theme="night"]) footer.status {
+  margin: 0 6px 4px;
 }
 
-/* Menu bar: a glossy strip; open menus are frosted glass. */
-:root[data-theme="sky"] .menubar {
-  background: linear-gradient(#ffffff, #e3f4fd 55%, #cfeafb);
-  border-bottom: 1px solid #9fd0ec;
-}
-:root[data-theme="sky"] .menubar .top {
+/* Menus: open menus and right-click menus are glass; the row under the
+   pointer is the glossy "picked" bubble. */
+:root:is([data-theme="sky"], [data-theme="night"]) .menubar .top {
   border-radius: 5px;
 }
-:root[data-theme="sky"] .menubar .top:hover,
-:root[data-theme="sky"] .menubar .top.open {
-  background: var(--sky-aqua);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.menubar .top:hover, .menubar .top.open, .menubar .row.active, .context button.active) {
+  background: var(--g-pick);
   color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 60, 110, 0.4);
+  text-shadow: 0 1px 1px rgba(0, 0, 60, 0.4);
 }
-:root[data-theme="sky"] .menubar .dropdown,
-:root[data-theme="sky"] .context {
-  border: 1px solid rgba(120, 190, 230, 0.9);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.menubar .dropdown, .context) {
+  border: 1px solid var(--g-strip-border);
   border-radius: 8px;
-  background: rgba(246, 252, 255, 0.92);
+  background: var(--g-menu);
   backdrop-filter: blur(10px);
-  box-shadow: 0 10px 28px rgba(10, 70, 120, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  box-shadow: 0 10px 28px var(--g-shadow), 0 0 0 1px var(--g-inner) inset;
 }
-:root[data-theme="sky"] .menubar .row {
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.menubar .row, .context button) {
   border-radius: 4px;
 }
-:root[data-theme="sky"] .menubar .row.active,
-:root[data-theme="sky"] .context button.active {
-  background: var(--sky-aqua);
-  color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 60, 110, 0.35);
-}
-:root[data-theme="sky"] .context button {
-  border-radius: 4px;
-}
-:root[data-theme="sky"] .menubar .row.disabled.active {
-  background: rgba(150, 200, 230, 0.35);
+:root:is([data-theme="sky"], [data-theme="night"]) .menubar .row.disabled.active {
+  background: var(--g-row-hover);
   color: var(--text-dim);
   text-shadow: none;
 }
 
-/* Tool strip and every toolbar: glossy strips; flat tools become glass
-   bubbles when pointed at or on. */
-:root[data-theme="sky"] .strip,
-:root[data-theme="sky"] .editor .toolbar,
-:root[data-theme="sky"] .bar:has(> .transport),
-:root[data-theme="sky"] footer.status {
-  background: linear-gradient(#ffffff, #e6f5fd 50%, #d5eefb 51%, #e9f7fe);
-  border-color: #a8d6ee;
-}
-:root[data-theme="sky"] .tool,
-:root[data-theme="sky"] .view {
+/* Flat tools turn into glass bubbles when pointed at, and the picked
+   bubble when on. */
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.tool, .view) {
   border-radius: 6px;
 }
-:root[data-theme="sky"] .tool:hover:not(:disabled),
-:root[data-theme="sky"] .view:hover:not(:disabled) {
-  border-color: #8ccbee;
-  background: var(--sky-gloss), rgba(200, 235, 252, 0.6);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.tool, .view):hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--g-gloss), var(--g-row-hover);
 }
-:root[data-theme="sky"] .tool.on:not(.rec),
-:root[data-theme="sky"] .view.on {
-  border-color: #1a8fd6;
-  background: var(--sky-aqua);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.tool.on:not(.rec, .play), .view.on, .modes button.on) {
+  border-color: var(--g-pick-border);
+  background: var(--g-pick);
   color: #fff;
-  box-shadow: 0 0 6px rgba(15, 155, 230, 0.5);
+  box-shadow: 0 0 7px var(--g-pick-glow);
 }
-:root[data-theme="sky"] .modes {
+:root:is([data-theme="sky"], [data-theme="night"]) .modes {
   border-radius: 7px;
   overflow: hidden;
-  border-color: #8cc3e2;
+  border-color: var(--border-strong);
 }
-:root[data-theme="sky"] .modes button {
+:root:is([data-theme="sky"], [data-theme="night"]) .modes button {
   border-radius: 0;
   box-shadow: none;
 }
-:root[data-theme="sky"] .modes button.on {
-  background: var(--sky-aqua);
-  color: #fff;
-  box-shadow: none;
-}
 
-/* Transport: round glass orbs, and the clock as a glass display. */
-:root[data-theme="sky"] .bar:has(> .transport) .transport .tool {
+/* Transport: round glass orbs; play glows green, record red. The clock is
+   a glass display. */
+:root:is([data-theme="sky"], [data-theme="night"]) .bar:has(> .transport) .transport .tool {
   width: 28px;
   height: 28px;
-  border: 1px solid #8cc3e2;
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
-  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #c9ecfd, #eaf7ff 70%);
-  box-shadow: 0 1px 3px rgba(10, 70, 120, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  background: var(--g-gloss), var(--g-orb);
+  box-shadow: 0 1px 3px var(--g-shadow), 0 0 0 1px var(--g-inner) inset;
 }
-:root[data-theme="sky"] .bar:has(> .transport) .transport .tool.play.on {
-  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #8be08f, #3fb35a 70%);
+:root:is([data-theme="sky"], [data-theme="night"]) .bar:has(> .transport) .transport .tool.on:not(.play, .rec) {
+  background: var(--g-gloss), var(--g-pick);
   color: #fff;
 }
-:root[data-theme="sky"] .bar:has(> .transport) .transport .tool.rec.on {
-  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #ff9a9a, #e2283a 70%);
+:root:is([data-theme="sky"], [data-theme="night"]) .bar:has(> .transport) .transport .tool.play.on {
+  background: var(--g-gloss), radial-gradient(circle at 50% 80%, #8be08f, #2fa34e 70%);
   color: #fff;
 }
-:root[data-theme="sky"] .bar .clock {
+:root:is([data-theme="sky"], [data-theme="night"]) .bar:has(> .transport) .transport .tool.rec.on {
+  background: var(--g-gloss), radial-gradient(circle at 50% 80%, #ff9a9a, #e2283a 70%);
+  color: #fff;
+}
+:root:is([data-theme="sky"], [data-theme="night"]) .bar .clock {
   padding: 1px 10px;
-  border: 1px solid #8cc3e2;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: linear-gradient(#e8fbff, #bfe8fb);
-  box-shadow: 0 1px 3px rgba(10, 70, 120, 0.25) inset, 0 0 0 1px rgba(255, 255, 255, 0.7);
-  color: #05507f;
-  text-shadow: 0 0 6px rgba(80, 200, 255, 0.6);
+  background: var(--g-clock);
+  box-shadow: 0 1px 3px var(--g-shadow) inset, 0 0 0 1px var(--g-inner);
+  color: var(--g-clock-text);
+  text-shadow: 0 0 6px var(--g-clock-glow);
 }
 
-/* Track headers and lanes: glassy rows; the selected track glows aqua. */
-:root[data-theme="sky"] .header {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 45%);
+/* Track headers: glassy rows; the selected track glows. */
+:root:is([data-theme="sky"], [data-theme="night"]) .header {
+  background-image: var(--g-header-gloss);
 }
-:root[data-theme="sky"] .header.selected {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 50%);
-  box-shadow: 0 0 0 1px #7cc8f0 inset;
+:root:is([data-theme="sky"], [data-theme="night"]) .header.selected {
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent) inset;
 }
-:root[data-theme="sky"] .header .ms {
-  border-color: #8cc3e2;
+:root:is([data-theme="sky"], [data-theme="night"]) .header .ms {
+  border-color: var(--border-strong);
   border-radius: 5px;
 }
-:root[data-theme="sky"] .header .ms.on {
-  background-color: #1592de;
+:root:is([data-theme="sky"], [data-theme="night"]) .header .ms.on:not(.solo, .rec) {
+  background-color: var(--accent);
+  color: #fff;
 }
-:root[data-theme="sky"] .header .auto {
-  border-color: #8cc3e2;
-  background-color: rgba(255, 255, 255, 0.85);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.header .auto, .auto-pick) {
+  border-color: var(--border-strong);
+  background-color: var(--g-input);
+  color: var(--text);
 }
 
 /* Lists (files, libraries, markers, history, playlist, batch): hover and
-   picked rows as aqua glass. */
-:root[data-theme="sky"] :is(tr, li, .item, .file):hover {
-  background-color: rgba(150, 215, 248, 0.25);
+   picked rows. */
+:root:is([data-theme="sky"], [data-theme="night"]) :is(tr, li, .item, .file):hover {
+  background-color: var(--g-row-hover);
 }
-:root[data-theme="sky"] :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 50%);
-  background-color: #bfe6fb;
+:root:is([data-theme="sky"], [data-theme="night"]) :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+  background-image: var(--g-header-gloss);
+  background-color: var(--g-row-pick);
 }
 
-/* Dialogs: frosted glass windows with a glossy title area, over a soft
-   blue wash instead of black. */
-:root[data-theme="sky"] .backdrop {
-  background: rgba(40, 110, 160, 0.25);
+/* Dialogs: glass windows with a glossy top, over a soft wash. */
+:root:is([data-theme="sky"], [data-theme="night"]) .backdrop {
+  background: var(--g-backdrop);
   backdrop-filter: blur(2px);
 }
-:root[data-theme="sky"] .dialog,
-:root[data-theme="sky"] [role="dialog"] {
-  border: 1px solid rgba(120, 190, 230, 0.95);
+:root:is([data-theme="sky"], [data-theme="night"]) :is(.dialog, [role="dialog"]) {
+  border: 1px solid var(--g-strip-border);
   border-radius: 12px;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70px),
-    rgba(240, 249, 255, 0.95);
-  box-shadow: 0 18px 44px rgba(10, 70, 120, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+  background: var(--g-header-gloss), var(--g-glass);
+  box-shadow: 0 18px 44px var(--g-shadow), 0 0 0 1px var(--g-inner) inset;
   backdrop-filter: blur(12px);
 }
 
-/* Scrollbars: aqua pills. */
-:root[data-theme="sky"] ::-webkit-scrollbar {
+/* Scrollbars: glossy pills. */
+:root:is([data-theme="sky"], [data-theme="night"]) ::-webkit-scrollbar {
   width: 11px;
   height: 11px;
 }
-:root[data-theme="sky"] ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.45);
+:root:is([data-theme="sky"], [data-theme="night"]) ::-webkit-scrollbar-track {
+  background: var(--g-scroll-track);
   border-radius: 6px;
 }
-:root[data-theme="sky"] ::-webkit-scrollbar-thumb {
+:root:is([data-theme="sky"], [data-theme="night"]) ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 6px;
-  background:
-    linear-gradient(90deg, #8fd6fa, #3fb0ec 50%, #7fcdf6) padding-box;
-}
-
-/* The app's shell lets the sky through: the top bar, the main area and the
-   docking grid have no fill of their own. */
-:root[data-theme="sky"] header.top,
-:root[data-theme="sky"] main.body,
-:root[data-theme="sky"] .dv-dockview,
-:root[data-theme="sky"] .dv-grid-view,
-:root[data-theme="sky"] .dv-split-view-container,
-:root[data-theme="sky"] .dv-view-container,
-:root[data-theme="sky"] .dv-view {
-  background: transparent !important;
-}
-:root[data-theme="sky"] header.top {
-  border-bottom: 0;
-}
-:root[data-theme="sky"] .menubar {
-  margin: 4px 6px 0;
-  border: 1px solid #9fd0ec;
-  border-radius: 9px;
-  box-shadow: 0 2px 8px rgba(10, 70, 120, 0.18);
-}
-:root[data-theme="sky"] .strip {
-  margin: 4px 6px;
-  border: 1px solid #9fd0ec;
-  border-radius: 9px;
-  box-shadow: 0 2px 8px rgba(10, 70, 120, 0.18);
-}
-:root[data-theme="sky"] footer.status {
-  margin: 0 6px 4px;
-  border: 1px solid #9fd0ec;
-  border-radius: 9px;
-}
-:root[data-theme="sky"] .auto-pick {
-  background-color: rgba(255, 255, 255, 0.92);
-  color: var(--text);
+  background: var(--g-scroll-thumb) padding-box;
 }

@@ -184,12 +184,15 @@
           </div>
           <label class="row">
             Theme
-            <select value={d.app.theme} onchange={(e) => (d.app.theme = e.currentTarget.value === "sky" ? "sky" : "dark")}>
+            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "sky" || v === "night" || v === "meadow" || v === "aqua" ? v : "dark"; }}>
               <option value="dark">Dark</option>
               <option value="sky">Sky Glass (light, glossy)</option>
+              <option value="night">Night Glass (dark, glossy)</option>
+              <option value="meadow">Meadow (clear glass over sky and hills)</option>
+              <option value="aqua">Aqua (clear glass over sunlit water)</option>
             </select>
           </label>
-          <p class="note">Sky Glass is an experiment: a bright sky behind frosted glass panels and glossy controls. Your colors above still apply on top of either theme.</p>
+          <p class="note">The glass themes are an experiment: a sky (bright, or a night sky) behind glass panels and glossy controls, in the colors of the Audiform mark. Your colors above still apply on top of either theme.</p>
         {:else if page === "Audio Devices"}
           <label class="row">
             Play through
