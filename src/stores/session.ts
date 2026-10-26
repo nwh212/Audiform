@@ -29,7 +29,7 @@ export interface FadeDoc {
   curve: number;
 }
 
-/** One effect in an FX Chain. */
+/** One effect in an Audio FX chain. */
 export interface EffectSlotDoc {
   id: string;
   /** Effect id, for example `altaudio.parametric_eq`. */
@@ -48,7 +48,7 @@ export interface EffectSlotDoc {
   position?: number | null;
 }
 
-/** An FX Chain on a clip, a track or the master. */
+/** An Audio FX chain on a clip, a track or the master. */
 export interface EffectChainDoc {
   enabled: boolean;
   input_gain_db: number;
@@ -95,7 +95,7 @@ export interface BusDoc {
   effects: EffectChainDoc;
   /** Shows below this many tracks in the Editor; missing shows it below the last. */
   position?: number | null;
-  /** Folded to mono after its FX Chain. Missing when off. */
+  /** Folded to mono after its Audio FX chain. Missing when off. */
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
@@ -218,7 +218,7 @@ export interface TrackDoc {
   record_armed: boolean;
   /** Missing in files where it is off. */
   polarity_inverted?: boolean;
-  /** Folded to mono after its FX Chain. Missing in files where it is off. */
+  /** Folded to mono after its Audio FX chain. Missing in files where it is off. */
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
@@ -746,7 +746,7 @@ class OpCommand implements Command {
   /** A run of drags on one fader is one undo step back to where it started. */
   mergeWith(next: Command): boolean {
     if (!(next instanceof OpCommand)) return false;
-    // A slider dragged in the FX Chain applies as it moves; the drag is one step.
+    // A slider dragged in the Audio FX chain applies as it moves; the drag is one step.
     if (this.op.op === "set_effects" && next.op.op === "set_effects") {
       const a = this.op.target;
       const b = next.op.target;

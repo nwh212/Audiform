@@ -357,8 +357,7 @@ export const MENUS: readonly Menu[] = [
     label: "Effects",
     mnemonic: "T",
     items: [
-      item("window.panel.voice-chain", "FX Chain"),
-      item("window.panel.audio-fx", "Audio FX Panel"),
+      item("window.panel.voice-chain", "Audio FX"),
       item("fx.hide-windows", "Hide All Effect Windows", { pending: LATER }),
       item("fx.capture-noise-print", "Capture Noise Print", { pending: LATER }),
       sep,
@@ -372,7 +371,7 @@ export const MENUS: readonly Menu[] = [
         item("fx.spectrum.repair", "Repair Selected Area"),
       ]),
       sub("Amplitude", [
-        item("fx.add.gain", "Gain (in the FX Chain)"),
+        item("fx.add.gain", "Gain (in the Audio FX chain)"),
         item("fx.amplify", "Amplify..."),
         item("fx.normalize", "Normalize..."),
         item("fx.fade-in", "Fade In"),

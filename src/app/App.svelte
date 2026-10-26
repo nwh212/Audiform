@@ -1929,7 +1929,7 @@
   // Waveform editor. Edits act on the selection; Amplify and Normalize
   // act on the whole file when nothing is selected.
   const inWave = () => editor.current().mode === "waveform";
-  // Effects menu: adds an effect to the FX Chain of the one selected
+  // Effects menu: adds an effect to the Audio FX chain of the one selected
   // clip, or else the selected track, and shows the panel.
   const FX_MENU = [
     "dynamics",
@@ -1989,7 +1989,7 @@
     const slot = newSlot(info, uuid());
     const next = addSlot(chainOf(at.chain), slot);
     if (!next) {
-      showNotice("That FX Chain is full: it holds 16 effects.");
+      showNotice("That Audio FX is full: it holds 16 effects.");
       return;
     }
     const op = { op: "set_effects", target: at.target, chain: next } as const;
@@ -2134,7 +2134,7 @@
       );
       if (ok !== "yes") return false;
     }
-    // Save writes the FX Chain into the file, unless the chain is bypassed.
+    // Save writes the Audio FX chain into the file, unless the chain is bypassed.
     // One undo step takes the applied chain back out.
     const pending = chainOf(wave.current?.tracks[0]?.effects);
     if (pending.enabled && pending.slots.some((x) => x.enabled)) {
@@ -2319,7 +2319,7 @@
     const r = wholeFile && d ? clampRange(d, 0, sessionEnd(d)) : waveAll();
     const t = d?.tracks[0];
     if (!d || !r || !t) return;
-    const label = !wholeFile && waveSel() ? "Apply FX Chain to Selection" : "Apply FX Chain";
+    const label = !wholeFile && waveSel() ? "Apply Audio FX to Selection" : "Apply Audio FX";
     const res = await waveApplyChain(chain, r[0], r[1]);
     // The result belongs to the file the job started on. If another file is open now, do not apply it there.
     if (wave.current?.tracks[0]?.id !== t.id) {

@@ -529,7 +529,7 @@ export interface TransportStatus {
   meters: [number, number][];
   master: [number, number];
   underruns: number;
-  /** Per track, its FX Chain's peaks for the audio just heard: left in, right in, left out, right out. Null when the track's chain does nothing. */
+  /** Per track, its Audio FX chain's peaks for the audio just heard: left in, right in, left out, right out. Null when the track's chain does nothing. */
   chainMeters?: ([number, number, number, number] | null)[];
   /** Buses, with their levels after the fader and their chains' peaks. Empty unless the mix is routed. */
   busIds?: string[];
@@ -603,7 +603,7 @@ export interface MixdownRequest {
   format?: OutputFormat;
   /** Only what belongs to the clips: track volume, pan and the Master are left out. */
   clipOnly?: boolean;
-  /** Leave every FX Chain out (measuring the raw audio). */
+  /** Leave every Audio FX chain out (measuring the raw audio). */
   dry?: boolean;
   /** Render at playback speed, for plug-ins that only work in real time. */
   realtime?: boolean;

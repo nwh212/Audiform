@@ -571,6 +571,7 @@ export class DockController {
       try {
         this.suppressSave = true;
         api.fromJSON(stored.dockview);
+        this.dropRetired();
         this.syncOpen();
         return;
       } catch (e) {
@@ -593,6 +594,13 @@ export class DockController {
     } else this.buildSteps(DEFAULT_LAYOUT);
     // Store the rebuilt layout right away so the file matches what is shown.
     this.saveNow();
+  }
+
+  /** Removes panels the app no longer has (a saved layout can still hold them). */
+  private dropRetired(): void {
+    const api = this.api;
+    if (!api) return;
+    for (const p of [...api.panels]) if (!panelDef(p.id)) api.removePanel(p);
   }
 
   private buildSteps(steps: readonly LayoutStep[]): void {

@@ -1450,3 +1450,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **The project lead designed Audiform's mark:** a large glass wave arching over a smaller one, blue through violet and pink to gold and orange, with leaves. It is now the app icon at every size (Windows, macOS, Linux), the logo's mark in the README and the About dialog, and the source file in `brand/mark/`. The "Audiform" wordmark and its line below stay exactly as they were.
 - The previous mark (a wave inside the 3D Space rings) and its vector files are removed. The new mark is raster artwork, so the brand pack keeps full-size PNGs in place of SVGs.
+
+## 2026-10-27: Audio FX, no placeholder panel, a Music workspace
+
+- **Audio FX.** The project lead renamed the effects panel (Voice Chain, then briefly FX Chain) to **Audio FX**, taking the name of the planned Audio FX Panel. A track's or clip's chain is "the Audio FX chain" in sentences. The panel id stays `voice-chain`, so saved workspaces keep working.
+- **The Audio FX Panel placeholder is gone.** It never had content ("Not built yet"). Libraries now has the Default layout's whole right column (Default layout version 7, so saved Default layouts are rebuilt), the Phase Wheel's home moves to Libraries' group, and a saved workspace that still holds the old panel drops it when it loads.
+- **Music workspace** (Window > Workspace), laid out by the project lead: Files over Audio FX (with QuickPass, Properties and Batch Convert) over History on the left; Editor and Mixer in the center over Levels; Phase Wheel over 3D Space (with Libraries) on the right, Time Info beside Levels.
+- **Window title** says Audiform (it still named the original app), and two Settings notes too.

@@ -33,7 +33,7 @@ export interface BatchSettings {
   suffix: string;
   /** How output files are named: text plus {name}, {number}, {date} and {format}. */
   template: string;
-  /** FX Chain preset run on each file first; null converts as is. */
+  /** Audio FX preset run on each file first; null converts as is. */
   process: string | null;
   /** After the preset: peak normalize and fades. */
   level: LevelSettings;

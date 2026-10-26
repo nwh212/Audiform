@@ -208,7 +208,7 @@
     </section>
 
     <p class="note">
-      Effects appear in the FX Chain's Add effect list under Plug-ins (VST3); instruments in MIDI track headers. ⚠ marks a plug-in that crashed while being read: it is
+      Effects appear in the Audio FX chain's Add effect list under Plug-ins (VST3); instruments in MIDI track headers. ⚠ marks a plug-in that crashed while being read: it is
       listed anyway, and hover it to see where it stopped. Each runs in a process of its own (or its maker's, when set to run together), so one that crashes is
       bypassed and the editor carries on. VST2 plug-ins are not supported.
     </p>

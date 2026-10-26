@@ -48,7 +48,7 @@ export interface TransportState {
   master: [MeterLevel, MeterLevel];
   /** Levels after the fader by track id, and by bus id while the mix is routed. */
   tracks: Record<string, [MeterLevel, MeterLevel]>;
-  /** FX Chain meters by track or bus id, and `master` for the master chain: left in, right in, left out, right out. Only chains that do something. */
+  /** Audio FX meters by track or bus id, and `master` for the master chain: left in, right in, left out, right out. Only chains that do something. */
   chains: Record<string, [MeterLevel, MeterLevel, MeterLevel, MeterLevel]>;
   /** 3D Space sessions: the master's speaker channels in the layout's order, after its fader. Missing otherwise. */
   bed?: MeterLevel[];

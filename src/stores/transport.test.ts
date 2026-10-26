@@ -115,7 +115,7 @@ describe("TransportStore", () => {
     expect(meterFraction(0.001)).toBe(0);
     expect(meterFraction(10 ** (-30 / 20))).toBeCloseTo(0.5);
   });
-  it("folds FX Chain meters for tracks whose chain plays", () => {
+  it("folds Audio FX meters for tracks whose chain plays", () => {
     const t = new TransportStore({ play: async () => {}, stop: async () => null, status: async () => ({ playing: false, position: 0, trackIds: [], meters: [], master: [0, 0], underruns: 0 }) }, { current: null } as never);
     t.applyStatus({ playing: true, position: 0, trackIds: ["a", "b"], meters: [[0, 0], [0, 0]], master: [0, 0], underruns: 0, chainMeters: [[0.5, 0.4, 0.25, 0.2], null] });
     expect(t.current.chains.a!.map((m) => m.level)).toEqual([0.5, 0.4, 0.25, 0.2]);
