@@ -940,3 +940,14 @@
 :root[data-theme="prism"] body::before {
   background: none;
 }
+
+/* Open drop-down lists: solid glass colors, so they read over anything. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) {
+  --menu-bg: #eef7fd;
+}
+:root[data-theme="moonlight"] {
+  --menu-bg: #13284c;
+}
+:root[data-theme="prism"] {
+  --menu-bg: #1c2030;
+}

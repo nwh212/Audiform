@@ -969,6 +969,10 @@ impl Processor for PluginProcessor {
 
 /// A MIDI track's instrument, played by the renderer: notes in, sound out.
 /// When it is missing or stops, the track is silent.
+/// How long an instrument started for an export runs on silence first,
+/// so instruments that load their sounds in the background are ready.
+const INSTRUMENT_WARMUP: Duration = Duration::from_millis(2_500);
+
 pub struct Instrument {
     host: Option<Arc<Mutex<Host>>>,
     pub latency: usize,
@@ -980,11 +984,34 @@ impl Instrument {
     /// tempo, with every note let go.
     pub fn start(slot: &EffectSlot, rate: u32, tempo: &Tempo) -> Instrument {
         let host = host_for(slot, rate);
+        let fresh = FRESH.with(|c| c.get());
         let (latency, pending) = match host.as_ref().and_then(|h| h.lock().ok()) {
             Some(mut h) => {
                 h.reset();
                 h.set_tempo(tempo);
-                (h.latency, h.differing(&slot_params(slot)))
+                let pending = h.differing(&slot_params(slot));
+                if fresh {
+                    // A copy just started for an export: sample-based
+                    // instruments load their sounds in the background, and
+                    // would be silent at first. Run it on silence, at about
+                    // the pace of playback, so they finish loading.
+                    let mut buf = vec![0.0f32; 1_024 * 2];
+                    let started = std::time::Instant::now();
+                    let mut first = true;
+                    while started.elapsed() < INSTRUMENT_WARMUP {
+                        let changes: &[(u32, f64)] = if first { &pending } else { &[] };
+                        first = false;
+                        buf.fill(0.0);
+                        if !h.process(changes, &[], &mut buf) {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(15));
+                    }
+                    h.reset();
+                    (h.latency, Vec::new())
+                } else {
+                    (h.latency, pending)
+                }
             }
             None => (0, Vec::new()),
         };

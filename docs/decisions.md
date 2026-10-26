@@ -1499,3 +1499,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Notices.** The About window and the README now say in one line that Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor (linking their trademark notice, kept in TRADEMARKS.md). The longer trademark sentences and the line naming another company are gone at the project lead's request; the GPL needs only the copyright and license notices, which stay.
 - **Stereo** is a new effect family (Effects > Stereo and the Add effect menus): Phase Curve and the center remover.
 - **Phase Rotate is retired**: Phase Curve does what it did and more. It is no longer offered anywhere; sessions that already use it still play it.
+
+## 2026-10-28: Scrubbing, bounce placement, instruments in mixdowns, themed drop-downs
+
+- **Held Left and Right arrows scrub** back and forward at four times normal speed (keys chosen by the project lead). Stopped, the playhead glides silently; playing, playback skips along at that speed so you hear where it is. Letting go leaves the playhead there. Arrows typed into a field, list, slider or menu, and under an open dialog, are left alone. Ctrl+arrows keep their jobs.
+- **Bouncing a track** (MIDI tracks included, with the track's own effects) puts the new track right below it, named after it. A mono track bounces to a mono file; others to stereo.
+- **Instruments in mixdowns.** An export starts its own copy of each instrument so playback is never disturbed. Instruments that load their sounds in the background were still loading when the render began, and came out silent. A copy started for an export now runs on silence for about two and a half seconds first, at about the pace of playback.
+- **Drop-down lists** (effect presets, routing, and every other list) open in the theme's own colors instead of the system's gray.

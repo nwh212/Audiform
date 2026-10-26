@@ -14,6 +14,8 @@
   --surface-0: #141416;
   --surface-1: #1b1b1e;
   --surface-2: #232327;
+  /* Open drop-down lists: solid, so they read over anything. */
+  --menu-bg: #232327;
   --surface-3: #2c2c31;
   --border: #34343a;
   --border-strong: #44444b;
@@ -91,4 +93,11 @@ body {
   font-size: var(--font-size);
   user-select: none;
   overflow: hidden;
+}
+
+/* Open drop-down lists take the theme's colors, not the system's. */
+option,
+optgroup {
+  background-color: var(--menu-bg);
+  color: var(--text);
 }

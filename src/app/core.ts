@@ -605,6 +605,8 @@ export interface MixdownRequest {
   clipOnly?: boolean;
   /** Leave every Audio FX chain out (measuring the raw audio). */
   dry?: boolean;
+  /** 1 writes a mono file (left and right averaged). */
+  channels?: number;
   /** Render at playback speed, for plug-ins that only work in real time. */
   realtime?: boolean;
   /** 3D Space sessions: the speaker layout to write (omit for the session's). */
@@ -687,7 +689,7 @@ export function exportBounce(folder: string, name: string, request: MixdownReque
   return invoke<MergeResult>("export_bounce", {
     folder,
     name,
-    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: request.track ?? null, realtime: request.realtime ?? false },
+    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: request.track ?? null, realtime: request.realtime ?? false, channels: request.channels ?? null },
   });
 }
 

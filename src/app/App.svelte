@@ -74,6 +74,7 @@
   import type { SettingsDraft } from "./settings/pages";
   import { colorVars, meterPercent, sanitizeSettings, settings, type AppSettings } from "../stores/settings";
   import { appearanceChanged } from "../stores/appearance";
+  import { bindScrub } from "./scrub";
   import { setMeterSpeed, type TransportStore } from "../stores/transport";
   import GenerateDialog, { type GenerateMode, type GenerateValues } from "./GenerateDialog.svelte";
   import { naturalLength, stretchTo, unstretch } from "../panels/editor/stretch";
@@ -301,7 +302,7 @@
    * The ops that put `paths` on a track (null makes a new track) one
    * after another from `at`. Null when none of the files can be read.
    */
-  async function placeOps(paths: string[], trackId: string | null, at: number): Promise<{ ops: Op[]; clips: { id: string }[]; target: string } | null> {
+  async function placeOps(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string } = {}): Promise<{ ops: Op[]; clips: { id: string }[]; target: string } | null> {
     if (!session.current || paths.length === 0) return null;
     const imported = await mediaPool.importPaths(paths, sessionHistory);
     await mediaPool.whenIdle();
@@ -314,8 +315,8 @@
     /** A new track at the bottom for `it`, named after the file when files go side by side. */
     const newTrack = (it: (typeof items)[number], byFile: boolean): string => {
       const id = uuid();
-      const name = byFile ? stem(it!.name) : nextTrackName(names);
-      ops.push({ op: "add_track", id, name, stereo: (it!.info!.channels ?? 2) > 1, index: names.length });
+      const name = place.name ?? (byFile ? stem(it!.name) : nextTrackName(names));
+      ops.push({ op: "add_track", id, name, stereo: (it!.info!.channels ?? 2) > 1, index: place.index ?? names.length });
       names.push({ name });
       return id;
     };
@@ -405,9 +406,9 @@
     if (doc0.tracks.every((t) => t.clips.length === 0)) await actions.run("view.zoom-session");
   }
 
-  async function placeFiles(paths: string[], trackId: string | null, at: number) {
+  async function placeFiles(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string } = {}) {
     if (!session.current || paths.length === 0) return;
-    const placed = await placeOps(paths, trackId, at);
+    const placed = await placeOps(paths, trackId, at, place);
     if (!placed) {
       showNotice("None of those files could be read.");
       return;
@@ -1343,7 +1344,7 @@
   type BounceSource = "selection" | "clips" | "track" | "clips-selection";
 
   /** What a Bounce to New Track renders: its range, clips and track, and a name for the file. */
-  function bounceRange(source: BounceSource): { range: [number, number]; clips?: string[]; track?: string; name: string } | null {
+  function bounceRange(source: BounceSource): { range: [number, number]; clips?: string[]; track?: string; name: string; mono?: boolean } | null {
     const doc = session.current;
     if (!doc) return null;
     const sel = timeSel();
@@ -1358,7 +1359,7 @@
         ...(t.midi_clips ?? []).map((c) => ({ start: c.start, end: c.start + c.length })),
       ];
       const r = sel ? ([sel.start, sel.end] as [number, number]) : extent(spans);
-      return r ? { range: r, track: t.id, name: `${t.name} Bounce` } : null;
+      return r ? { range: r, track: t.id, name: `${t.name} Bounce`, ...(t.channels === "mono" || t.mono ? { mono: true } : {}) } : null;
     }
     const found = findClips(doc, editor.current().selectedClips);
     if (found.length === 0) return null;
@@ -1390,13 +1391,16 @@
         range: what.range,
         ...(what.clips ? { clips: what.clips } : {}),
         ...(what.track ? { track: what.track } : {}),
+        ...(what.mono ? { channels: 1 } : {}),
         ...(realtimeMix() ? { realtime: true } : {}),
       });
       if (r.cancelled) {
         showNotice("Bounce cancelled.");
         return;
       }
-      await placeFiles([r.path], null, what.range[0]);
+      // A track's bounce goes on a new track right below it.
+      const from = what.track ? (session.current?.tracks.findIndex((t) => t.id === what.track) ?? -1) : -1;
+      await placeFiles([r.path], null, what.range[0], from >= 0 ? { index: from + 1, name: what.name } : {});
       const clipped = r.peak > 1 ? ` It goes above 0 dBFS (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); it is kept as float, so nothing is lost.` : "";
       showNotice(`Bounced to ${r.path.split(/[\\/]/).pop()} on a new track.${clipped}`);
     } catch (e) {
@@ -4594,6 +4598,20 @@
       .then((o) => keymap.setOverrides(o))
       .catch((e: unknown) => showError(`Saved shortcuts could not be read, using defaults: ${String(e)}`));
     offs.push(bindKeymap(keymap, actions, showError));
+    // Held Left and Right arrows scrub (the project lead's choice of keys).
+    offs.push(
+      bindScrub(() => {
+        const w = inWave();
+        const d = w ? wave.current : session.current;
+        if (!d) return null;
+        return {
+          transport: w ? waveTransport : transport,
+          playhead: () => (w ? wave.current : session.current)?.view.playhead ?? 0,
+          end: () => { const x = w ? wave.current : session.current; return x ? sessionEnd(x) : 0; },
+          rate: () => d.sample_rate,
+        };
+      }),
+    );
     return () => offs.forEach((off) => off());
   });
 </script>

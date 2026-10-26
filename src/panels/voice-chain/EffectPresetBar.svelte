@@ -131,6 +131,19 @@
 </div>
 
 <style>
+  select,
+  button {
+    background: var(--surface-0);
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    color: var(--text);
+    font: inherit;
+    padding: 1px 4px;
+  }
+  button:disabled {
+    opacity: 0.45;
+  }
+
   .presets {
     display: flex;
     gap: 4px;
