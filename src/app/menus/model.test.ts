@@ -214,7 +214,7 @@ describe("menu model", () => {
       "fx.add.notch",
       "fx.add.pitch_shift",
       "fx.add.center_remover",
-      "fx.add.phase_rotate",
+      "fx.add.phase_curve",
       "file.export.sesx",
       "clip.to-track-above",
       "clip.to-track-below",

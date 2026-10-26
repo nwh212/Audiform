@@ -29,6 +29,9 @@ pub struct CatalogEntry {
     sidechain: bool,
     plugin: bool,
     has_window: bool,
+    /// Kept so older sessions still play it, but no longer offered.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    retired: bool,
 }
 
 #[tauri::command]
@@ -41,6 +44,7 @@ pub fn effects_catalog() -> Vec<CatalogEntry> {
                 sidechain: KEYED.contains(&info.id),
                 plugin: found.is_some(),
                 has_window: found.is_some_and(|f| f.info.has_editor),
+                retired: crate::dsp::effects::RETIRED.contains(&info.id),
                 info,
             }
         })

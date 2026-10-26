@@ -412,6 +412,10 @@ pub(crate) fn db_to_gain(db: f64) -> f32 {
     10f64.powf(db / 20.0) as f32
 }
 
+/// Effects no longer offered (Phase Curve does what Phase Rotate did, and
+/// more). Sessions that use them still play them.
+pub const RETIRED: [&str; 1] = ["altaudio.phase_rotate"];
+
 /// Builds the processor for one slot, or None for an unknown effect (or a
 /// plug-in that is not installed or would not start).
 pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {

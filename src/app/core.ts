@@ -1081,6 +1081,8 @@ export interface EffectInfo {
   plugin?: boolean;
   /** A plug-in with a window of its own. */
   hasWindow?: boolean;
+  /** No longer offered; older sessions still play it. */
+  retired?: boolean;
 }
 
 /** The Plug-in Manager's list. */

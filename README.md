@@ -24,7 +24,7 @@ If Audiform is useful to you, please consider supporting the original project to
 
 Audiform is a different flavor and is developed through a different pipeline - it moves faster, tries new angles and breaks things more often, while Altered Audio Editor stays the steadier choice. Everything in Audiform is offered back: Altered Audio Editor is welcome to take any of it (see [Contributing](#contributing)).
 
-**Please report Audiform problems here, in [Audiform's issues](https://github.com/nwh212/audiform/issues), not to the Altered Audio Editor project.** Audiform is not made or endorsed by The GeekCast Radio Network.
+**Please report Audiform problems here, in [Audiform's issues](https://github.com/nwh212/audiform/issues), not to the Altered Audio Editor project.**
 
 > Status: in active development. Pre-release: keep backups of your recordings.
 
@@ -166,4 +166,4 @@ Copyright (c) The Audiform contributors (changes since October 2026).
 
 Licensed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
-"Altered Audio Editor" and its logo are trademarks of The GeekCast Radio Network, LLC, used here only to say what Audiform is based on, as their [trademark notice](TRADEMARKS.md) allows. Audiform has its own name and artwork. Audiform is independent and not affiliated with or endorsed by The GeekCast Radio Network or any other software company.
+Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor ([trademark notice](TRADEMARKS.md)).

@@ -43,9 +43,7 @@
       You may redistribute it under the terms of that license.
     </p>
     <p class="fine">
-      "Altered Audio Editor" is a trademark of The GeekCast Radio Network, LLC, used here only to name the project Audiform is based on.
-      Audiform is not made or endorsed by The GeekCast Radio Network, LLC; please report problems with Audiform to Audiform (Help &gt; Report a Problem).
-      Not affiliated with or endorsed by Adobe.
+      Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor. Please report problems to Audiform (Help &gt; Report a Problem).
     </p>
     <div class="actions">
       <button type="button" onclick={onClose}>OK</button>

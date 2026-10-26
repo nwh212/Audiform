@@ -2021,7 +2021,7 @@
     "notch",
     "pitch_shift",
     "center_remover",
-    "phase_rotate",
+    "phase_curve",
   ];
   function fxTarget(): { target: EffectTarget; chain: EffectChainDoc | undefined; name: string; wave?: boolean } | null {
     if (inWave()) {

@@ -241,6 +241,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Amplitude: "#8bc06a",
   Restoration: "#b07ad8",
   "Time and Pitch": "#d86f9b",
+  Stereo: "#4fc8b8",
 };
 
 // --- Presets ---

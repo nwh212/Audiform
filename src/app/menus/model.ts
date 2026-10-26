@@ -431,9 +431,9 @@ export const MENUS: readonly Menu[] = [
           pending: NEXT_FX,
         }),
       ]),
-      sub("Stereo and Channels", [
+      sub("Stereo", [
+        item("fx.add.phase_curve", "Phase Curve"),
         item("fx.add.center_remover", "Center Remover (remove vocals)"),
-        item("fx.add.phase_rotate", "Phase Rotate"),
       ]),
       sub("QuickPass", [
         item("fx.quickpass", "Presets arrive in P5", {

@@ -87,7 +87,7 @@ pub fn phase_curve_info() -> EffectInfo {
     EffectInfo {
         id: "altaudio.phase_curve",
         name: "Phase Curve",
-        category: "Filter and EQ",
+        category: "Stereo",
         description: "Turns the phase of each frequency by its own angle, along a curve of points, to line up sound that is out of phase in only some frequencies.",
         params,
     }

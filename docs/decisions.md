@@ -1493,3 +1493,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Plug-ins can run with their own channel layout** ("Use the plug-in's own channels"): a 5.1 or 7.1.4 plug-in then gets all its channels, named by speaker. Plug-ins added to the master of a 3D Space session start this way. A 5.1 plug-in on a 7.1.4 master works on L, R, C, LFE and the side surrounds; one with both rear and side surrounds lines up with both.
 - **The master chain runs on the speakers in 3D Space sessions.** Before, a 3D master had no chain at all (a chain on the stereo listening mix would not have reached the speakers). Now it runs on every speaker channel, and the stereo listening mix is folded from the processed speakers, so what you hear matches what exports. Headphone (binaural) listening and Speakers listening use the processed speakers too. The master meters show L and R.
 - Under the hood: the plug-in host's audio frames carry their channel count, and the host asks a plug-in for its own layout only when the slot says so (others stay stereo, as before).
+
+## 2026-10-28: Shorter notices; Stereo effects; Phase Rotate retired
+
+- **Notices.** The About window and the README now say in one line that Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor (linking their trademark notice, kept in TRADEMARKS.md). The longer trademark sentences and the line naming another company are gone at the project lead's request; the GPL needs only the copyright and license notices, which stay.
+- **Stereo** is a new effect family (Effects > Stereo and the Add effect menus): Phase Curve and the center remover.
+- **Phase Rotate is retired**: Phase Curve does what it did and more. It is no longer offered anywhere; sessions that already use it still play it.

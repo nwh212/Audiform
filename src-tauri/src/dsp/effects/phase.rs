@@ -25,7 +25,7 @@ pub fn phase_info() -> EffectInfo {
     EffectInfo {
         id: "altaudio.phase_rotate",
         name: "Phase Rotate",
-        category: "Filter and EQ",
+        category: "Stereo",
         description: "Turns the phase of the whole signal by an angle, flips either channel's polarity, and adds a fine delay, to line up tracks that partly cancel each other.",
         params: vec![
             num("angle", "Angle", "°", -180.0, 180.0, 0.0, 1.0),

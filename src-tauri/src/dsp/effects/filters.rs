@@ -543,7 +543,7 @@ pub fn center_info() -> EffectInfo {
     EffectInfo {
         id: "altaudio.center_remover",
         name: "Center Remover",
-        category: "Filter and EQ",
+        category: "Stereo",
         description: "Removes what sits in the middle of a stereo mix, usually the lead vocal, and keeps the bass.",
         params: vec![
             num("amount", "Amount", "%", 0.0, 100.0, 100.0, 1.0),

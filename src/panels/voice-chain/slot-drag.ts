@@ -125,6 +125,7 @@ export function startSlotDrag(e: PointerEvent, onDrop: (to: SlotSpot) => void, o
 
 /** The Add effect menu: built-in effects by family, then VST3 plug-ins by type and maker. */
 export function effectMenu(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): MenuItem[] {
+  catalog = catalog.filter((e) => !e.retired);
   const categories = [...new Set(catalog.map((e) => e.category))];
   const byId = new Set(catalog.map((e) => e.id));
   const installed = plugins.filter((p) => byId.has(p.effect));
