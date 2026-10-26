@@ -356,7 +356,9 @@ impl Processor for AmpModel {
         let frames = buf.len() / 2;
         self.mono.clear();
         self.mono.extend(
-            buf.chunks_exact(2)
+            buf.as_chunks::<2>()
+                .0
+                .iter()
                 .map(|f| (f[0] + f[1]) * 0.5 * self.input),
         );
         // Gate: opens fast above the threshold, closes slowly below it.

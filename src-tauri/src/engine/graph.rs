@@ -910,23 +910,30 @@ impl Graph {
                         for (o, v) in self
                             .master
                             .input
-                            .chunks_exact_mut(2)
-                            .zip(scratch.chunks_exact(2))
+                            .as_chunks_mut::<2>()
+                            .0
+                            .iter_mut()
+                            .zip(scratch.as_chunks::<2>().0.iter())
                         {
                             o[0] += v[0] * f[0][0] + v[1] * f[1][0];
                             o[1] += v[0] * f[0][1] + v[1] * f[1][1];
                         }
                         if make_bed {
                             let [gl, gr] = &p.bed;
-                            for (o, v) in self.bed.chunks_exact_mut(nb).zip(scratch.chunks_exact(2))
+                            for (o, v) in self
+                                .bed
+                                .chunks_exact_mut(nb)
+                                .zip(scratch.as_chunks::<2>().0.iter())
                             {
                                 for c in 0..nb {
                                     o[c] += v[0] * gl[c] + v[1] * gr[c];
                                 }
                             }
                             if let Some((c, g)) = p.lfe {
-                                for (o, v) in
-                                    self.bed.chunks_exact_mut(nb).zip(scratch.chunks_exact(2))
+                                for (o, v) in self
+                                    .bed
+                                    .chunks_exact_mut(nb)
+                                    .zip(scratch.as_chunks::<2>().0.iter())
                                 {
                                     o[c] += (v[0] + v[1]) * g;
                                 }
@@ -938,7 +945,7 @@ impl Graph {
                         {
                             let [da, ds] = dc;
                             let bed_n = if make_bed { nb } else { 0 };
-                            for (k, v) in scratch.chunks_exact(2).enumerate() {
+                            for (k, v) in scratch.as_chunks::<2>().0.iter().enumerate() {
                                 let mid = 0.5 * (v[0] + v[1]);
                                 let side = 0.5 * (v[0] - v[1]);
                                 let a = if fl.spreads { da.run(mid) } else { [0.0; 4] };

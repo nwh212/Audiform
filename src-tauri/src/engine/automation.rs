@@ -155,7 +155,7 @@ impl StripAuto {
         if !post {
             return;
         }
-        for (i, f) in buf.chunks_exact_mut(2).enumerate() {
+        for (i, f) in buf.as_chunks_mut::<2>().0.iter_mut().enumerate() {
             let v = self.vol.get(i).copied().unwrap_or(1.0);
             let [l, r] = if route == 0 {
                 self.pan_lr.get(i).copied().unwrap_or([1.0, 1.0])

@@ -183,7 +183,7 @@ impl Binaural {
     pub fn process(&mut self, bed: &[f32], out: &mut [f32]) {
         let n = self.channels;
         let mask = self.len - 1;
-        for (f, o) in out.chunks_exact_mut(2).enumerate() {
+        for (f, o) in out.as_chunks_mut::<2>().0.iter_mut().enumerate() {
             let frame = &bed[f * n..(f + 1) * n];
             let mut lr = [0f32; 2];
             for (c, &x) in frame.iter().enumerate() {
