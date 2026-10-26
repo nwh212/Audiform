@@ -762,7 +762,7 @@
    Clear dark glass, with each of the mark's colors given its own job:
    blue picks and selects, green turns things on, gold is the playhead
    and the clock, orange the values, violet the faders, pink the knob
-   pointers, red is recording, and the whole spectrum runs along the edges
+   pointers, teal green the transport, red is recording, and the whole spectrum runs along the edges
    and up the meters. */
 
 :root[data-theme="prism"] {
@@ -862,9 +862,9 @@
   background: var(--a-shine), var(--a-pick);
 }
 
-/* Transport: candy glass orbs, one color of the mark each, lit from above. */
+/* Transport: candy glass orbs in teal green, lit from above; record stays red. */
 :root[data-theme="prism"] .bar:has(> .transport) .transport .tool {
-  --orb: #3f8cff;
+  --orb: #00c8a8;
   border: 1px solid color-mix(in srgb, var(--orb) 40%, white);
   border-radius: 50%;
   background:
@@ -877,15 +877,7 @@
 :root[data-theme="prism"] .bar:has(> .transport) .transport .tool svg {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 10, 0.8));
 }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Stop"] { --orb: #3f8cff; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool.play { --orb: #3fbf5a; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Go to start"] { --orb: #2fbfb0; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Rewind"] { --orb: #8f5cff; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Fast forward"] { --orb: #e04ad0; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Go to end"] { --orb: #ff9a2f; }
 :root[data-theme="prism"] .bar:has(> .transport) .transport .tool.rec { --orb: #e2283a; color: #ffffff; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Loop playback"] { --orb: #e6b820; }
-:root[data-theme="prism"] .bar:has(> .transport) .transport .tool[aria-label="Skip selection"] { --orb: #36b8e6; }
 :root[data-theme="prism"] .bar:has(> .transport) .transport .tool:hover:not(:disabled) {
   background-color: transparent;
   box-shadow: 0 3px 8px rgba(0, 0, 10, 0.55), 0 0 16px color-mix(in srgb, var(--orb) 80%, transparent);
