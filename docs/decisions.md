@@ -1627,3 +1627,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-28: Ctrl+Alt shortcuts on Windows
 
 - **Fixed (likely cause, untested on Windows):** Ctrl+Alt+Backspace (Delete Track) did nothing on Windows. Windows treats Ctrl+Alt as the AltGr key, so the browser can report the key as what AltGr types (a control character for Backspace, a symbol for some letters on some layouts) and the chord never matched. Shortcuts now read the physical key when Ctrl+Alt is held and the reported key is not a plain letter, digit or named key. In the browser the shortcut already worked.
+
+## 2026-10-28: Waveforms of files with more than two channels
+
+- **Fixed:** a file with more than two channels (a 12-channel 3D Space mixdown, for one) showed empty waveform lanes in the Waveform editor and on clips. Its peak cache was written with every channel, but reading it back still allowed only one or two channels, so the cache was refused and nothing was drawn. Reading now allows up to 64, the same as writing.

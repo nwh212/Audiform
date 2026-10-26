@@ -317,7 +317,7 @@ fn read_header(path: &Path) -> Result<Header, PeakError> {
     let channels = u16::from_le_bytes([fixed[28], fixed[29]]);
     let length = u64_at(32);
     let level_count = u32_at(40) as usize;
-    if !(1..=8).contains(&level_count) || !(1..=2).contains(&channels) {
+    if !(1..=8).contains(&level_count) || !(1..=64).contains(&channels) {
         return Err(PeakError::Corrupt);
     }
     let mut levels = Vec::with_capacity(level_count);
@@ -470,6 +470,41 @@ mod tests {
         let s = ensure(dir.path(), &src, |_| true).unwrap();
         assert_eq!(s.channels, 1);
         assert!(read_level(dir.path(), &src, 0).is_ok());
+    }
+
+    #[test]
+    fn multichannel_cache_reads_back() {
+        // A 12-channel file: each channel at its own level, so a mix-up shows.
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("twelve.wav");
+        let spec = hound::WavSpec {
+            channels: 12,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&src, spec).unwrap();
+        for i in 0..4_800 {
+            for c in 0..12 {
+                let sign = if i % 2 == 0 { 1 } else { -1 };
+                w.write_sample((sign * 1_000 * (c + 1)) as i16).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+        let s = ensure(dir.path(), &src, |_| true).unwrap();
+        assert_eq!(s.channels, 12);
+        // Read again from the cache, not a fresh build.
+        assert_eq!(
+            read_header(&cache_path(dir.path(), &src))
+                .unwrap()
+                .summary
+                .channels,
+            12
+        );
+        let level = read_level(dir.path(), &src, 0).unwrap();
+        let max =
+            |c: usize| i16::from_le_bytes([level[(c * 2 + 1) * 2], level[(c * 2 + 1) * 2 + 1]]);
+        assert!(max(11) > max(0) * 10);
     }
 
     #[test]
