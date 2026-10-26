@@ -135,7 +135,7 @@ export class SessionFiles {
 
   /** Window title, with a star while there are unsaved changes. */
   title(): string {
-    return `${this.name}${this.unsaved ? " *" : ""} - Altered Audio Editor`;
+    return `${this.name}${this.unsaved ? " *" : ""} - Audiform`;
   }
 
   startAutosave(intervalMs = AUTOSAVE_MS): void {

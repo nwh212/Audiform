@@ -44,7 +44,7 @@ function setup(
 ) {
   let n = 0;
   const backend: LibraryBackend = {
-    defaultRoot: async () => "C:\\Users\\host\\Documents\\Altered Audio\\Libraries",
+    defaultRoot: async () => "C:\\Users\\host\\Documents\\Audiform\\Libraries",
     create: async (dir, name) => {
       const lib = emptyLib(name);
       disk.set(dir, lib);
@@ -70,7 +70,7 @@ describe("LibraryStore", () => {
   it("creates a library under the default folder and remembers it", async () => {
     const { store, prefs } = setup();
     const lib = await store.create("Network: Promos?");
-    expect(lib.dir).toBe("C:\\Users\\host\\Documents\\Altered Audio\\Libraries\\Network Promos");
+    expect(lib.dir).toBe("C:\\Users\\host\\Documents\\Audiform\\Libraries\\Network Promos");
     expect(store.current.active?.lib.name).toBe("Network: Promos?");
     expect(prefs().open).toEqual([lib.dir]);
   });

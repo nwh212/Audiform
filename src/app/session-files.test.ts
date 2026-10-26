@@ -101,9 +101,9 @@ describe("SessionFiles", () => {
 
   it("names the window after the file and marks unsaved changes", async () => {
     const { files, makeDirty } = setup();
-    expect(files.title()).toBe("Untitled Session - Altered Audio Editor");
+    expect(files.title()).toBe("Untitled Session - Audiform");
     await makeDirty();
-    expect(files.title()).toBe("Untitled Session * - Altered Audio Editor");
+    expect(files.title()).toBe("Untitled Session * - Audiform");
     expect(displayName("C:\\Shows\\Show 440.altaudio", null)).toBe("Show 440");
   });
 
@@ -114,7 +114,7 @@ describe("SessionFiles", () => {
     await makeDirty();
     expect(files.dirty).toBe(true);
     expect(files.unsaved).toBe(false);
-    expect(files.title()).toBe("Untitled Session - Altered Audio Editor");
+    expect(files.title()).toBe("Untitled Session - Audiform");
     expect(await files.autosaveNow()).toBe(false);
     expect(await files.newSession()).toBe(true);
     expect(calls).toEqual(["create"]);
