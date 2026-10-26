@@ -108,7 +108,8 @@
     trimToRange,
     type ClipBoard,
   } from "../panels/editor/clip-edit";
-  import { AUDIO_TYPES, type ClipChange, type MarkerDoc } from "../stores/session";
+  import { AUDIO_TYPES, tempoOf, type ClipChange, type MarkerDoc } from "../stores/session";
+  import { beatsToSeconds } from "../stores/tempo";
   import { propertiesOp, type SessionProperties } from "./session-properties";
   import { placeTake, punchStopAfter, recordPlan, sanitizeRecordOptions, type RecordOptions, type RecordPlan } from "./recording";
   import RecordOptionsDialog from "./RecordOptionsDialog.svelte";
@@ -957,11 +958,20 @@
       return r ? { range: [r.start, r.end], start: r.start } : null;
     }
     if (source === "clips") {
-      const found = findClips(doc, editor.current().selectedClips);
-      if (found.length === 0) return null;
-      const start = Math.min(...found.map((f) => f.clip.start));
-      const end = Math.max(...found.map((f) => f.clip.start + clipLength(f.clip, doc.media.find((m) => m.id === f.clip.media_id), doc.sample_rate)));
-      return { range: [start, end], clips: found.map((f) => f.clip.id), start };
+      const chosen = editor.current().selectedClips;
+      const found = findClips(doc, chosen);
+      const midi = doc.tracks.flatMap((t) => (t.midi_clips ?? []).filter((c) => chosen.has(c.id)));
+      if (found.length === 0 && midi.length === 0) return null;
+      // MIDI clips sit in beats; their span in session samples follows the tempo map.
+      const tempo = tempoOf(doc);
+      const at = (beats: number) => Math.round(beatsToSeconds(tempo, beats) * doc.sample_rate);
+      const spans = [
+        ...found.map((f) => [f.clip.start, f.clip.start + clipLength(f.clip, doc.media.find((m) => m.id === f.clip.media_id), doc.sample_rate)]),
+        ...midi.map((c) => [at(c.start), at(c.start + c.length)]),
+      ];
+      const start = Math.min(...spans.map((x) => x[0]!));
+      const end = Math.max(...spans.map((x) => x[1]!));
+      return { range: [start, end], clips: [...found.map((f) => f.clip.id), ...midi.map((c) => c.id)], start };
     }
     return { start: 0 };
   }
@@ -1359,23 +1369,35 @@
     const sel = timeSel();
     const extent = (list: { start: number; end: number }[]): [number, number] | null =>
       list.length ? [Math.min(...list.map((c) => c.start)), Math.max(...list.map((c) => c.end))] : null;
+    // MIDI clips sit in beats; their span in session samples follows the tempo map.
+    const tempo = tempoOf(doc);
+    const midiSpan = (c: { start: number; length: number }) => ({
+      start: Math.round(beatsToSeconds(tempo, c.start) * doc.sample_rate),
+      end: Math.round(beatsToSeconds(tempo, c.start + c.length) * doc.sample_rate),
+    });
     if (source === "selection") return sel ? { range: [sel.start, sel.end], name: `${doc.name} Bounce` } : null;
     if (source === "track") {
       const t = selectedTrackDoc();
       if (!t) return null;
       const spans = [
         ...t.clips.map((c) => ({ start: c.start, end: c.start + clipLength(c, doc.media.find((m) => m.id === c.media_id), doc.sample_rate) })),
-        ...(t.midi_clips ?? []).map((c) => ({ start: c.start, end: c.start + c.length })),
+        ...(t.midi_clips ?? []).map(midiSpan),
       ];
       const r = sel ? ([sel.start, sel.end] as [number, number]) : extent(spans);
       return r ? { range: r, track: t.id, name: `${t.name} Bounce`, ...(t.channels === "mono" || t.mono ? { mono: true } : {}) } : null;
     }
-    const found = findClips(doc, editor.current().selectedClips);
-    if (found.length === 0) return null;
-    const clips = found.map((f) => f.clip.id);
-    const name = found.length === 1 ? `${found[0]!.clip.name} Bounce` : `${doc.name} Clips Bounce`;
+    const chosen = editor.current().selectedClips;
+    const found = findClips(doc, chosen);
+    const midi = doc.tracks.flatMap((t) => (t.midi_clips ?? []).filter((c) => chosen.has(c.id)));
+    if (found.length === 0 && midi.length === 0) return null;
+    const clips = [...found.map((f) => f.clip.id), ...midi.map((c) => c.id)];
+    const names = [...found.map((f) => f.clip.name), ...midi.map((c) => c.name)];
+    const name = names.length === 1 ? `${names[0]} Bounce` : `${doc.name} Clips Bounce`;
     if (source === "clips-selection") return sel ? { range: [sel.start, sel.end], clips, name } : null;
-    const r = extent(found.map((f) => ({ start: f.clip.start, end: f.clip.start + clipLength(f.clip, doc.media.find((m) => m.id === f.clip.media_id), doc.sample_rate) })));
+    const r = extent([
+      ...found.map((f) => ({ start: f.clip.start, end: f.clip.start + clipLength(f.clip, doc.media.find((m) => m.id === f.clip.media_id), doc.sample_rate) })),
+      ...midi.map(midiSpan),
+    ]);
     return r ? { range: r, clips, name } : null;
   }
 

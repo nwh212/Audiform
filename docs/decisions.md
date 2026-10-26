@@ -1596,3 +1596,8 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Mixdowns and bounces use playback's own plug-ins when nothing is playing through them.** They are already loaded and hold the settings as heard, so the export starts at once and sounds the same. A fresh copy (with its warm-up) is started only for a plug-in that is busy playing or not running yet.
 - **A mixdown's request check no longer starts every plug-in.** Checking the request used to run a whole cancelled render, starting each plug-in and instrument once more before the real one.
 - **Mix Down to New File** now writes a 32-bit float WAV into a Mixdowns folder beside the session (saving the session first if it is new), adds it to the Files panel and opens it in the Waveform editor like any other file. It used to open as an untitled file in the app's working folder, which was not in the Files panel.
+
+## 2026-10-28: Bounce from the MIDI lane
+
+- **Right-click a MIDI lane:** Bounce Track to New Track; on a clip also Bounce Clip (or the selected clips) to New Track.
+- **Fixed:** a MIDI track's bounce measured its clips' span in beats as if they were samples, so a MIDI-only track bounced only a sliver. MIDI clips now count by the tempo map, and Bounce or Mix Down of selected clips includes selected MIDI clips.

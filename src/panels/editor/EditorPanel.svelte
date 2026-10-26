@@ -333,6 +333,15 @@
 
   function midiClipItems(track: TrackDoc, clip: MidiClipDoc | null, beat: number): ContextItem[] {
     const clips = track.midi_clips ?? [];
+    const bounceTrack: ContextItem = {
+      kind: "item",
+      label: "Bounce Track to New Track",
+      disabled: clips.length === 0,
+      run: () => {
+        editor.selectTrack(track.id);
+        run("multitrack.bounce.track");
+      },
+    };
     if (!clip) {
       return [
         {
@@ -344,6 +353,8 @@
             editor.selectClips([id], track.id);
           },
         },
+        { kind: "sep" },
+        bounceTrack,
       ];
     }
     const ids = new Set(clips.filter((c) => ed.selectedClips.has(c.id)).map((c) => c.id));
@@ -384,6 +395,16 @@
           editor.selectClips([], track.id);
         },
       },
+      { kind: "sep" },
+      {
+        kind: "item",
+        label: many ? `Bounce ${ids.size} Clips to New Track` : "Bounce Clip to New Track",
+        run: () => {
+          editor.selectClips([...ids], track.id);
+          run("multitrack.bounce.clips");
+        },
+      },
+      bounceTrack,
     ];
   }
   let renaming = $state<string | null>(null);
