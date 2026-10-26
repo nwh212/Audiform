@@ -1445,3 +1445,8 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Default in 3D Space sessions.** A clip of a file with more than two channels plays each channel straight from the speaker of the same name (L, R, C, LFE, Ls...), not folded and placed as one object. A channel whose speaker the layout lacks (heights in a 5.1 session, say) plays from where that speaker would stand; an LFE channel with no LFE speaker is left out, as in a fold-down. Source Channels has "Each channel from its own speaker" to turn this off (the grid then applies) or on for any clip, stereo included. Picking a preset in a 3D session turns it off.
 - **How.** Before playback or export, each such clip's channels play from hidden copies of its track (same fader, mute, solo, FX Chain, output and sends; no pan or room spot of their own), each pinned to one speaker, unit gain. The copies exist only while playing or exporting and never reach the session file. Their ids are stable, so live fader and chain changes reach them.
 - **Known limits.** The track's own meter does not show these channels yet, and stems by track leave them out.
+
+## 2026-10-26: New mark, icon and logo
+
+- **The project lead designed Audiform's mark:** a large glass wave arching over a smaller one, blue through violet and pink to gold and orange, with leaves. It is now the app icon at every size (Windows, macOS, Linux), the logo's mark in the README and the About dialog, and the source file in `brand/mark/`. The "Audiform" wordmark and its line below stay exactly as they were.
+- The previous mark (a wave inside the 3D Space rings) and its vector files are removed. The new mark is raster artwork, so the brand pack keeps full-size PNGs in place of SVGs.
