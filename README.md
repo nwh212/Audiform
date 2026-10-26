@@ -10,11 +10,11 @@
   Built on <a href="https://github.com/geekcastradio/altered-audio-editor">Altered Audio Editor</a> by Steve Phillips and The GeekCast Radio Network.
 </p>
 
-> **Audiform is the experimental flavor of Altered Audio Editor.** It shares the same foundation but heads in its own direction: 3D audio and surround, multichannel files and speaker rigs, MIDI and instruments, automation, tempo and plug-ins. New ideas land here first and change often, so expect rough edges. **If you want the steadier, more polished editor, use [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor).** It is likely to be the more stable of the two, especially for podcast work.
+> **Audiform is the experimental flavor of Altered Audio Editor.** It shares the same foundation but may head in its own direction. New ideas land here and change often, so expect rough edges. **If you want the steadier, more polished editor, use [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor).** It is likely to be the more stable of the two, especially for podcast work.
 
 ## Built on Altered Audio Editor
 
-Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor), created by **Steve Phillips** and **The GeekCast Radio Network, LLC** ([thegcrn.com](https://thegcrn.com/)). Almost everything you see here started with them: the two-editor design, the multitrack and Waveform editors, sessions and libraries, recording, the effect chain and its effects (Voice Chain there, FX Chain in Audiform), QuickPass, Batch Convert, Loudness Match, Music Fit, the podcast workflow, the privacy rules, and the care that went into all of it. Audiform exists because their work made a great foundation to build on.
+Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor), created by **Steve Phillips** and **The GeekCast Radio Network, LLC** ([thegcrn.com](https://thegcrn.com/)). The foundation of Audiform started with them: the two-editor design, the multitrack and Waveform editors, sessions and libraries, recording, the effect chain and its effects (Voice Chain there, FX Chain in Audiform), QuickPass, Batch Convert, Loudness Match, Music Fit, the podcast workflow, the privacy rules, and the care that went into all of it. Audiform exists because their work made a great foundation to build on.
 
 If Audiform is useful to you, please consider supporting the original project too:
 
@@ -22,7 +22,7 @@ If Audiform is useful to you, please consider supporting the original project to
 - Support the original author at [paypal.me/scp21](https://paypal.me/scp21).
 - Follow Altered Audio Editor at [github.com/geekcastradio/altered-audio-editor](https://github.com/geekcastradio/altered-audio-editor).
 
-Audiform is a different flavor, not a replacement: it moves faster, tries new directions and breaks things more often, while Altered Audio Editor stays the steadier choice. Everything in Audiform is offered back: Altered Audio Editor is welcome to take any of it (see [Contributing](#contributing)).
+Audiform is a different flavor and is developed through a different pipeline - it moves faster, tries new angles and breaks things more often, while Altered Audio Editor stays the steadier choice. Everything in Audiform is offered back: Altered Audio Editor is welcome to take any of it (see [Contributing](#contributing)).
 
 **Please report Audiform problems here, in [Audiform's issues](https://github.com/nwh212/audiform/issues), not to the Altered Audio Editor project.** Audiform is not made or endorsed by The GeekCast Radio Network.
 
