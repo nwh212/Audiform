@@ -264,7 +264,8 @@
       <text class="lab" x={PAD.l + plotW + 4} y={Y(d) + 3}>{d > 0 ? `+${d}` : d}</text>
     {/each}
     <text class="lab" x={PAD.l + plotW + 4} y={H - 5}>dB</text>
-    {#if curvePath}<path class="curve" d={curvePath} />{/if}
+    <clipPath id="eq-plot-{slot.id}"><rect x={PAD.l} y={PAD.t} width={plotW} height={plotH} /></clipPath>
+    {#if curvePath}<path class="curve" d={curvePath} clip-path="url(#eq-plot-{slot.id})" />{/if}
 
     {#each placed as p (p.n.name)}
       {#if p.edges && p.on}

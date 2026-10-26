@@ -951,3 +951,10 @@
 :root[data-theme="prism"] {
   --menu-bg: #1c2030;
 }
+
+/* Number boxes in the light glass themes: dark figures on a pale field, so values read at a glance. */
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .vf {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(70, 150, 200, 0.45);
+  color: var(--value);
+}

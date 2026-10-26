@@ -1565,3 +1565,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Stereo:** the phase change is worked out once (on the sum, or the difference where that is louder) and applied to both channels, so the image stays put.
 - **Same everywhere:** playback and export use the same method, so what you hear is what you export. It costs about 1.5% of one core per stretched clip.
 - Frame sizes follow the clip's stretch settings as before: voice about 43 ms, polyphonic about 85 ms, or the advanced window size. Pitch Shift uses short frames to keep its delay.
+
+## 2026-10-28: README for musicians, new screenshots in every theme
+
+- **The README now leads with music and immersive work** ("Why Audiform"): MIDI and instruments, immersive 3D mixing up to 7.1.4 with binaural monitoring, the mix engine, automation, tempo, safe VST3 hosting, the built-in sound tools, non-destructive edits and themes. The podcast features stay listed below.
+- **Restated request:** the project lead asked for the description to boast features a named commercial editor lacks, and to sell "Atmos". Per the naming rules, the README names no other product and no trademarked format; it describes the features themselves (immersive 3D object mixing, speaker layouts up to 7.1.4, binaural headphone monitoring).
+- **Screenshots:** a song session ("Night Drive"), each view in a different theme (multitrack in Prism, piano roll in Moonlight, EQ in Aqua, Mixer in Meadow, reverb in Dark, 3D Space in Prism), plus one image of the same session split across all five themes. The old podcast screenshots were removed.
+- **Fixed while shooting:** number boxes in the light Aqua and Meadow themes were pale blue on grey; they are now dark figures on a pale field. The Parametric EQ's curve no longer draws below the graph.

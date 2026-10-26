@@ -39,3 +39,9 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Used for playback too, not only for exports.** It is cheap enough, and playback and export stay identical (they always have been). If you would rather keep the old method live and the new one only for exports, that is a small switch.
 - **The old method is gone,** not kept as an option. It was better than the new one only in one corner (very short frames on a dry single voice). Comparison files are in `review/stretch/` (not committed): the original, the old 1.5x and the new 1.5x.
 - **Attack detection threshold** is my pick (a frame counts as an attack when its spectrum gains more than 30% and over 2.5 times its recent average). If drum hits still sound soft, it can go lower.
+
+## README and screenshots
+
+- **"Five themes" in the README** counts Dark, Prism, Moonlight, Aqua and Meadow (Sky Glass lives on its own branch).
+- **Screenshots come from a mocked session** in a browser (no real audio): the waveforms are drawn from made-up shapes. The script is in my scratch folder; say if you want it kept in the repo (`scripts/`) to redo them later.
+- **The banner image is still needed:** it never reached my disk. Commit it (for example to `brand/banner.png`) or attach it again and I will use it for the README header and the launch splash.
