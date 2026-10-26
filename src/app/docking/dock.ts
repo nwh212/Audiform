@@ -596,11 +596,19 @@ export class DockController {
     this.saveNow();
   }
 
-  /** Removes panels the app no longer has (a saved layout can still hold them). */
+  /**
+   * Removes panels the app no longer has (a saved layout can still hold
+   * them) and gives the rest their current names, since a saved layout
+   * also keeps the tab titles of the version that saved it.
+   */
   private dropRetired(): void {
     const api = this.api;
     if (!api) return;
-    for (const p of [...api.panels]) if (!panelDef(p.id)) api.removePanel(p);
+    for (const p of [...api.panels]) {
+      const def = panelDef(p.id);
+      if (!def) api.removePanel(p);
+      else if (p.id !== "editor" && p.title !== def.title) p.api.setTitle(def.title);
+    }
   }
 
   private buildSteps(steps: readonly LayoutStep[]): void {

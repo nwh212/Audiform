@@ -268,6 +268,7 @@ export const MENUS: readonly Menu[] = [
       sep,
       item("multitrack.speaker-balance", "Speaker Balance"),
       item("multitrack.space", "3D Space..."),
+      item("multitrack.space-toggle", "3D Space Session"),
       sub("Host Profile", [
         item("multitrack.profile.close-mic", "Close Mic"),
         item("multitrack.profile.standard-mic", "Standard Mic"),
@@ -288,8 +289,10 @@ export const MENUS: readonly Menu[] = [
         item("multitrack.mixdown.clips", "Selected Clips"),
       ]),
       sub("Bounce to New Track", [
+        item("multitrack.bounce.track", "Selected Track"),
         item("multitrack.bounce.selection", "Time Selection"),
-        item("multitrack.bounce.clips", "Selected Clips"),
+        item("multitrack.bounce.clips-selection", "Selected Clips in Time Selection"),
+        item("multitrack.bounce.clips", "Selected Clips Only"),
       ]),
       sep,
       item("multitrack.properties", "Session Properties..."),

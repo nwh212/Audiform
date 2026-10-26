@@ -744,11 +744,33 @@
     },
     "FadeShape": {
       "description": "Shape of a fade curve.",
-      "type": "string",
-      "enum": [
-        "linear",
-        "logarithmic",
-        "cosine"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "linear"
+          ]
+        },
+        {
+          "description": "Fast start: rises quickly, then eases in.",
+          "type": "string",
+          "const": "logarithmic"
+        },
+        {
+          "description": "S curve: gentle at both ends.",
+          "type": "string",
+          "const": "cosine"
+        },
+        {
+          "description": "Slow start: stays low, then rises late (a dip in the middle).",
+          "type": "string",
+          "const": "exponential"
+        },
+        {
+          "description": "Equal power: keeps the level steady across a crossfade.",
+          "type": "string",
+          "const": "equal_power"
+        }
       ]
     },
     "Marker": {

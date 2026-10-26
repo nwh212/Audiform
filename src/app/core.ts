@@ -677,6 +677,20 @@ export function exportMerge(folder: string, name: string, request: MixdownReques
   });
 }
 
+/**
+ * Bounce to New Track: renders part of the mix as it plays (a track with
+ * its processing, or the whole mix of a range or of some clips) to a new
+ * 32-bit float WAV in `folder`, named after `name` without overwriting
+ * anything.
+ */
+export function exportBounce(folder: string, name: string, request: MixdownRequest): Promise<MergeResult> {
+  return invoke<MergeResult>("export_bounce", {
+    folder,
+    name,
+    request: { range: request.range ?? null, clips: request.clips ?? null, bit_depth: null, track: request.track ?? null, realtime: request.realtime ?? false },
+  });
+}
+
 /** Make Unique Copy: copies source frames `from..to` of `source`, untouched, to a new WAV in `folder`. Returns its path. */
 export function exportRegionCopy(source: string, from: number, to: number, folder: string, name: string): Promise<string> {
   return invoke<string>("export_region_copy", { source, from, to, folder, name });

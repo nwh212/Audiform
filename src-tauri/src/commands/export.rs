@@ -243,6 +243,43 @@ pub async fn export_merge(
     .map_err(|e| e.to_string())?
 }
 
+/// Bounce to New Track: renders the requested part of the mix (with
+/// track, bus and Master processing, as it plays) to a new 32-bit float
+/// WAV in `folder` (created if needed) named after `name` without
+/// overwriting anything. Emits `export-progress` and stops on
+/// `export_cancel`.
+#[tauri::command]
+pub async fn export_bounce(
+    app: AppHandle,
+    open: State<'_, OpenSession>,
+    cancel: State<'_, ExportCancel>,
+    folder: PathBuf,
+    name: String,
+    mut request: MixdownRequest,
+) -> Result<MergeResult, String> {
+    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    let flag = cancel.0.clone();
+    flag.store(false, Ordering::Relaxed);
+    request.bit_depth = Some(32);
+    request.format = None;
+    spawn_blocking(move || {
+        std::fs::create_dir_all(&folder)
+            .map_err(|e| format!("Could not create {}: {e}", folder.display()))?;
+        let path = mixdown::unique_path(&folder, &name, "wav");
+        let mut last = 0u64;
+        let result = mixdown::mixdown(&session, &request, &path, &flag, |done, total| {
+            if done == total || done - last >= total / 100 {
+                last = done;
+                let _ = app.emit("export-progress", Progress { done, total });
+            }
+        })
+        .map_err(|e| e.to_string())?;
+        Ok(MergeResult { path, result })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Make Unique Copy: copies source frames `from..to` of `source`,
 /// untouched, to a new 32-bit float WAV in `folder` (created if needed)
 /// named after `name`. Returns the new file's path.

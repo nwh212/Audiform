@@ -9,7 +9,7 @@
  * view's sums.
  */
 
-import { DEFAULT_SPACE_POS, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
+import { DEFAULT_SPACE_POS, type SpaceDoc, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
 
 export interface SpeakerSpot {
   name: string;
@@ -162,4 +162,26 @@ export function snapSpot(x: number, y: number, speakers: readonly { x: number; y
 export function snapAngle(d: number): number {
   const g = Math.round(d / 15) * 15;
   return Math.abs(g - d) <= 4 ? wrapDeg(g) : d;
+}
+
+/**
+ * The layout and listening each session had before it was made stereo
+ * again, so turning 3D Space back on returns to them. Keyed by session id;
+ * only kept while the app runs (undo also brings them back).
+ */
+const lastSpace = new Map<string, SpaceDoc>();
+
+/** The space to set for turning 3D Space on or off in `doc`, and the edit's name. */
+export function spaceToggle(doc: { id: string; space?: SpaceDoc | null }, layout?: SpaceLayout): { space: SpaceDoc | null; label: string } {
+  if (doc.space) {
+    lastSpace.set(doc.id, doc.space);
+    return { space: null, label: "Turn Off 3D Space" };
+  }
+  const was = lastSpace.get(doc.id);
+  return { space: layout ? { layout, listen: was?.listen ?? "stereo" } : (was ?? { layout: "7.1.4", listen: "stereo" }), label: "Turn On 3D Space" };
+}
+
+/** The layout 3D Space comes back with in `doc` (the last one it had). */
+export function lastLayout(id: string): SpaceLayout | null {
+  return lastSpace.get(id)?.layout ?? null;
 }

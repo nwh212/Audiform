@@ -288,7 +288,10 @@
       else return;
     }
     effectWindowRequest.set(null);
-    openWindow(id);
+    // A plug-in opens in its own window, like a click on its slot.
+    const slot = [...chain.slots, ...(clip?.effects?.slots ?? []), ...(track?.effects?.slots ?? [])].find((x) => x.id === id);
+    if (slot) untrack(() => openSlot(slot));
+    else openWindow(id);
   });
   function dragWindow(e: PointerEvent) {
     if ((e.target as HTMLElement).closest("button")) return;
@@ -407,7 +410,7 @@
         if (!ni) return;
         const fresh = newSlot(ni, crypto.randomUUID());
         commit(`Replace with ${ni.name}`, replaceSlot(chain, s.id, fresh));
-        openWindow(fresh.id);
+        openSlot(fresh);
       }),
     );
     return items;

@@ -41,6 +41,7 @@
   import { peaks, session, transport } from "../stores/open-session";
   import PhaseWheelPanel from "../panels/phase/PhaseWheelPanel.svelte";
   import SpacePanel from "../panels/space/SpacePanel.svelte";
+  import { LAYOUT_NAMES, spaceToggle as spaceOnOff } from "../panels/space/space";
   import PropertiesPanel from "../panels/properties/PropertiesPanel.svelte";
   import LevelsPanel from "../panels/levels/LevelsPanel.svelte";
   import { PreviewMeter } from "../stores/preview-meter";
@@ -144,6 +145,7 @@
     exportMixdown,
     pluginEvents,
     pluginState,
+    exportBounce,
     exportMerge,
     exportRegionCopy,
     templateList,
@@ -941,7 +943,7 @@
   let exporting = $state<{ title: string; progress: number; floating?: boolean } | null>(null);
 
   type MixSource = "all" | "selection" | "clips";
-  type MixTarget = "file" | "files-panel" | "track";
+  type MixTarget = "file" | "files-panel";
 
   function mixRange(source: MixSource): { range?: [number, number]; clips?: string[]; start: number } | null {
     const doc = session.current;
@@ -1296,7 +1298,7 @@
   async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string) {
     const what = mixRange(source);
     if (!what || exporting) return;
-    exporting = { title: target === "track" ? "Bouncing to a new track" : "Exporting mixdown", progress: 0, floating: true };
+    exporting = { title: "Exporting mixdown", progress: 0, floating: true };
     let off: (() => void) | null = null;
     try {
       off = await listen<{ done: number; total: number }>("export-progress", (e) => {
@@ -1327,12 +1329,76 @@
         const imported = await mediaPool.importPaths([path], sessionHistory);
         mediaPool.setSelection(imported.ids);
         showNotice(`Mixed down to ${name} and added it to the Files panel.${chapterNote}${clipped}`);
-      } else if (target === "track") {
-        await placeFiles([path], null, what.start);
-        showNotice(`Bounced to ${name} on a new track.${clipped}`);
       } else {
         showNotice(`Exported ${name}.${chapterNote}${clipped}`);
       }
+    } catch (e) {
+      showError(e);
+    } finally {
+      off?.();
+      exporting = null;
+    }
+  }
+
+  type BounceSource = "selection" | "clips" | "track" | "clips-selection";
+
+  /** What a Bounce to New Track renders: its range, clips and track, and a name for the file. */
+  function bounceRange(source: BounceSource): { range: [number, number]; clips?: string[]; track?: string; name: string } | null {
+    const doc = session.current;
+    if (!doc) return null;
+    const sel = timeSel();
+    const extent = (list: { start: number; end: number }[]): [number, number] | null =>
+      list.length ? [Math.min(...list.map((c) => c.start)), Math.max(...list.map((c) => c.end))] : null;
+    if (source === "selection") return sel ? { range: [sel.start, sel.end], name: `${doc.name} Bounce` } : null;
+    if (source === "track") {
+      const t = selectedTrackDoc();
+      if (!t) return null;
+      const spans = [
+        ...t.clips.map((c) => ({ start: c.start, end: c.start + clipLength(c, doc.media.find((m) => m.id === c.media_id), doc.sample_rate) })),
+        ...(t.midi_clips ?? []).map((c) => ({ start: c.start, end: c.start + c.length })),
+      ];
+      const r = sel ? ([sel.start, sel.end] as [number, number]) : extent(spans);
+      return r ? { range: r, track: t.id, name: `${t.name} Bounce` } : null;
+    }
+    const found = findClips(doc, editor.current().selectedClips);
+    if (found.length === 0) return null;
+    const clips = found.map((f) => f.clip.id);
+    const name = found.length === 1 ? `${found[0]!.clip.name} Bounce` : `${doc.name} Clips Bounce`;
+    if (source === "clips-selection") return sel ? { range: [sel.start, sel.end], clips, name } : null;
+    const r = extent(found.map((f) => ({ start: f.clip.start, end: f.clip.start + clipLength(f.clip, doc.media.find((m) => m.id === f.clip.media_id), doc.sample_rate) })));
+    return r ? { range: r, clips, name } : null;
+  }
+
+  /**
+   * Bounce to New Track: renders the part asked for as it plays to a new
+   * file in the Bounced folder beside the session and places it on a new
+   * track at the same time. The original tracks stay as they are.
+   */
+  async function bounce(source: BounceSource) {
+    const what = bounceRange(source);
+    if (!what || exporting) return;
+    const folder = await folderBesideSession("Bounced", "Bounced audio is saved beside the session.");
+    if (!folder) return;
+    exporting = { title: "Bouncing to a new track", progress: 0, floating: true };
+    let off: (() => void) | null = null;
+    try {
+      off = await listen<{ done: number; total: number }>("export-progress", (e) => {
+        if (exporting) exporting = { ...exporting, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 };
+      });
+      await pluginSync.captureAll().catch(showError);
+      const r = await exportBounce(folder, fileSafe(what.name), {
+        range: what.range,
+        ...(what.clips ? { clips: what.clips } : {}),
+        ...(what.track ? { track: what.track } : {}),
+        ...(realtimeMix() ? { realtime: true } : {}),
+      });
+      if (r.cancelled) {
+        showNotice("Bounce cancelled.");
+        return;
+      }
+      await placeFiles([r.path], null, what.range[0]);
+      const clipped = r.peak > 1 ? ` It goes above 0 dBFS (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); it is kept as float, so nothing is lost.` : "";
+      showNotice(`Bounced to ${r.path.split(/[\\/]/).pop()} on a new track.${clipped}`);
     } catch (e) {
       showError(e);
     } finally {
@@ -3606,8 +3672,6 @@
           ["multitrack.mixdown.all", "all", "files-panel"],
           ["multitrack.mixdown.selection", "selection", "files-panel"],
           ["multitrack.mixdown.clips", "clips", "files-panel"],
-          ["multitrack.bounce.selection", "selection", "track"],
-          ["multitrack.bounce.clips", "clips", "track"],
         ] as const
       ).map(([id, source, target]) =>
         actions.register({
@@ -3620,6 +3684,21 @@
               : source === "selection"
                 ? "Drag across empty space or the ruler to select a time range."
                 : "Select clips first.",
+        }),
+      ),
+      ...(
+        [
+          ["multitrack.bounce.track", "track", "Select a track with clips first."],
+          ["multitrack.bounce.selection", "selection", "Drag across empty space or the ruler to select a time range."],
+          ["multitrack.bounce.clips-selection", "clips-selection", "Select clips and a time range first."],
+          ["multitrack.bounce.clips", "clips", "Select clips first."],
+        ] as const
+      ).map(([id, source, why]) =>
+        actions.register({
+          id,
+          run: () => bounce(source),
+          enabled: () => exporting === null && contentEnd() > 0 && bounceRange(source) !== null,
+          reason: () => (contentEnd() === 0 ? "The session has no clips yet." : why),
         }),
       ),
       ...Array.from({ length: WORKSPACE_SLOTS }, (_, i) =>
@@ -4360,6 +4439,20 @@
         run: () => {
           if (!openPanels.has("space")) dock.toggle("space");
         },
+      }),
+      actions.register({
+        id: "multitrack.space-toggle",
+        run: () => {
+          const d = session.current;
+          if (!d) return;
+          const t = spaceOnOff(d);
+          void session.edit(t.label, { op: "set_space", space: t.space }, sessionHistory).then(() => {
+            if (t.space) showNotice(`3D Space is on (${LAYOUT_NAMES[t.space.layout]}). Tracks play from their spots in the room.`);
+            else showNotice("3D Space is off: a stereo session again. Spots are kept for when you turn it back on.");
+          }, showError);
+        },
+        enabled: () => session.current !== null,
+        checked: () => !!session.current?.space,
       }),
     );
     for (const p of PANELS) {

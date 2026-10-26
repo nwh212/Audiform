@@ -1000,8 +1000,14 @@ impl Clip {
 pub enum FadeShape {
     #[default]
     Linear,
+    /// Fast start: rises quickly, then eases in.
     Logarithmic,
+    /// S curve: gentle at both ends.
     Cosine,
+    /// Slow start: stays low, then rises late (a dip in the middle).
+    Exponential,
+    /// Equal power: keeps the level steady across a crossfade.
+    EqualPower,
 }
 
 /// A clip fade. Length 0 means no fade.

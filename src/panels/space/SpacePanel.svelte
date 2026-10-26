@@ -20,7 +20,7 @@
   import { editor, type EditorState } from "../../stores/editor";
   import { SPACE_LAYOUTS, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
-  import { angleOf, fromView, LAYOUT_NAMES, sides, snapAngle, snapSpot, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
+  import { angleOf, fromView, lastLayout, LAYOUT_NAMES, sides, spaceToggle, snapAngle, snapSpot, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
   import { settings } from "../../stores/settings";
   import SpaceFader from "./SpaceFader.svelte";
 
@@ -58,6 +58,12 @@
     settings.set({ ...settings.current, spaceSnap: !snapOn });
   }
   let newLayout = $state<SpaceLayout>("7.1.4");
+  // Coming back to a session that had 3D Space: offer the layout it had.
+  $effect(() => {
+    const id = doc?.id;
+    const was = id ? lastLayout(id) : null;
+    if (was && !doc?.space) newLayout = was;
+  });
 
   interface Source {
     id: string;
@@ -265,10 +271,15 @@
           {#each SPACE_LAYOUTS as l (l)}<option value={l}>{LAYOUT_NAMES[l]}</option>{/each}
         </select>
       </label>
-      <button type="button" class="primary" onclick={() => setSpace({ layout: newLayout, listen: "stereo" }, "Make 3D Space Session")}>Make This a 3D Space Session</button>
+      <button type="button" class="primary" onclick={() => { if (doc) { const t = spaceToggle(doc, newLayout); setSpace(t.space, t.label); } }}>Turn On 3D Space</button>
+      <p class="hint">Turning it off again later makes the session stereo, with every track's pan as you left it; the spots in the room are kept too. So one session can hold a stereo mix and a surround mix, and you switch between them here or with Multitrack &gt; 3D Space Session.</p>
     </div>
   {:else}
     <div class="bar">
+      <button type="button" class="toggle on" aria-pressed="true" title="3D Space is on. Click to make this a stereo session again: tracks use their pan, and their spots in the room are kept for when you turn it back on. Undo also turns it back." onclick={() => { if (doc) { const t = spaceToggle(doc); setSpace(t.space, t.label); } }}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M8 1.5v4" stroke="currentColor" stroke-width="1.6" /></svg>
+        3D Space
+      </button>
       <label title="The speakers the session plays and exports in. Spots are kept in the room, so changing this never moves anything; any export can pick another layout too.">Layout
         <select value={space.layout} onchange={(e) => setSpace({ ...space, layout: e.currentTarget.value as SpaceLayout }, "Speaker Layout")}>
           {#each SPACE_LAYOUTS as l (l)}<option value={l}>{LAYOUT_NAMES[l]}</option>{/each}
@@ -289,7 +300,6 @@
       {#if onExport}
         <button type="button" title="Export the mix in any speaker layout (5.1, 7.1.2, 7.1.4 and so on, one channel per speaker), stereo, or headphones. Pick the layout under Speakers in the export window." onclick={onExport}>Export Mixdown...</button>
       {/if}
-      <button type="button" class="quiet" title="Make it an ordinary stereo session again. Spots are kept, so turning it back on puts everything where it was." onclick={() => setSpace(null, "Make Stereo Session")}>Stereo Session</button>
     </div>
     <div class="body">
       <div class="roombox" bind:clientWidth={boxW} bind:clientHeight={boxH}>

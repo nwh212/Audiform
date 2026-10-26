@@ -10,7 +10,7 @@
  */
 
 /** A fade curve, as the session stores it. */
-export type FadeShape = "linear" | "logarithmic" | "cosine";
+export type FadeShape = "linear" | "logarithmic" | "cosine" | "exponential" | "equal_power";
 export type WheelAnchor = "mouse" | "between" | "playhead";
 
 export interface AppColors {
@@ -210,7 +210,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     wheelZooms: bool(o.wheelZooms, d.wheelZooms),
     dropMany: o.dropMany === "tracks" ? "tracks" : "sequence",
     fadeShape:
-      o.fadeShape === "linear" || o.fadeShape === "logarithmic"
+      o.fadeShape === "linear" || o.fadeShape === "logarithmic" || o.fadeShape === "exponential" || o.fadeShape === "equal_power"
         ? o.fadeShape
         : "cosine",
     colors: {

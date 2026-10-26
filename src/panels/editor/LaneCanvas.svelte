@@ -59,6 +59,8 @@
     const u = Math.min(1, Math.max(0, t));
     if (shape === "logarithmic") return 1 - (1 - u) * (1 - u);
     if (shape === "cosine") return 0.5 - 0.5 * Math.cos(Math.PI * u);
+    if (shape === "exponential") return u * u;
+    if (shape === "equal_power") return Math.sin((Math.PI / 2) * u);
     return u;
   }
 

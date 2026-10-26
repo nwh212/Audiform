@@ -358,6 +358,10 @@ pub fn fade_curve(shape: FadeShape, t: f32) -> f32 {
         FadeShape::Logarithmic => 1.0 - (1.0 - t) * (1.0 - t),
         // S-curve: gentle at both ends.
         FadeShape::Cosine => 0.5 - 0.5 * (std::f32::consts::PI * t).cos(),
+        // Dips: quiet for longer, then rises late.
+        FadeShape::Exponential => t * t,
+        // Quarter sine: a crossfade of two of these keeps the power even.
+        FadeShape::EqualPower => (std::f32::consts::FRAC_PI_2 * t).sin(),
     }
 }
 

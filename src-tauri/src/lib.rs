@@ -161,6 +161,7 @@ pub fn run() {
             commands::batch::batch_convert,
             commands::batch::batch_cancel,
             commands::export::export_mixdown,
+            commands::export::export_bounce,
             commands::export::export_cancel,
             commands::export::loudness_check,
             commands::export::export_merge,

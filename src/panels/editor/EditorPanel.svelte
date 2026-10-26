@@ -294,7 +294,8 @@
 
   /** The instrument picker: by type, then by maker, as in the Add effect menu. */
   function openInstrumentMenu(e: MouseEvent, track: TrackDoc) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const el = e.currentTarget as HTMLElement;
+    const r = (el.closest(".instrument") ?? el).getBoundingClientRect();
     const current = track.instrument?.effect ?? "";
     const pick = (effect: string) => () => setInstrument(track, effect);
     const list = (ps: MenuPlugin[]): ContextItem[] => ps.map((p) => ({ kind: "item", label: p.name, checked: p.effect === current, run: pick(p.effect) }));
@@ -1526,6 +1527,15 @@
     window.addEventListener("pointerup", up, true);
   }
 
+  /** Fade shapes for a fade handle's menu, as the engine draws and plays them. */
+  const FADE_SHAPES = [
+    ["linear", "Linear (Straight Line)"],
+    ["logarithmic", "Logarithmic (Fast Start)"],
+    ["exponential", "Dip (Slow Start)"],
+    ["cosine", "S Curve"],
+    ["equal_power", "Equal Power (Even Crossfades)"],
+  ] as const;
+
   function onLaneMenu(e: MouseEvent, track: TrackDoc) {
     e.preventDefault();
     e.stopPropagation();
@@ -1551,6 +1561,23 @@
         items.push({ kind: "item", label: `Delete ${name} Point`, run: () => setPts(`Delete ${name} Point`, pts.filter((_, k) => k !== idx)) });
       }
       items.push({ kind: "item", label: `Reset ${name} Envelope`, disabled: pts.length === 0, run: () => setPts(`Reset ${name} Envelope`, []) }, { kind: "sep" });
+    }
+    if (z.kind === "fade-in" || z.kind === "fade-out") {
+      const which = z.kind === "fade-in" ? "fade_in" : "fade_out";
+      const word = z.kind === "fade-in" ? "Fade In" : "Fade Out";
+      // The clip under the pointer, and the other selected clips with it.
+      const ids = ed.selectedClips.has(z.clip.id) ? [...ed.selectedClips] : [z.clip.id];
+      const clips = (doc?.tracks ?? []).flatMap((t) => t.clips).filter((c) => ids.includes(c.id));
+      const current = z.clip[which].shape;
+      const setShape = (shape: string, label: string) =>
+        void session.edit(`${word} Shape: ${label}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], shape } })) }, runner).catch(onError);
+      for (const [shape, label] of FADE_SHAPES) items.push({ kind: "item", label, checked: current === shape, run: () => setShape(shape, label) });
+      items.push(
+        { kind: "sep" },
+        { kind: "item", label: `Remove ${word}`, disabled: clips.every((c) => c[which].length === 0), run: () => void session.edit(`Remove ${word}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], length: 0 } })) }, runner).catch(onError) },
+      );
+      menu = { x: e.clientX, y: e.clientY, items };
+      return;
     }
     if (ed.selectedClips.size > 0) {
       const act = (label: string, id: string): ContextItem => ({ kind: "item", label, shortcut: shortcutFor(id), disabled: !can(id), run: () => run(id) });
@@ -1698,9 +1725,9 @@
       ]),
       sub("Export Mixdown", [act("Entire Session...", "file.export.mixdown"), act("Time Selection...", "file.export.selection")]),
       sub("Bounce to New Track", [
-        off("Selected Track", "Not built yet."),
+        act("Selected Track", "multitrack.bounce.track"),
         act("Time Selection", "multitrack.bounce.selection"),
-        off("Selected Clips in Time Selection", "Not built yet."),
+        act("Selected Clips in Time Selection", "multitrack.bounce.clips-selection"),
         act("Selected Clips Only", "multitrack.bounce.clips"),
       ]),
       sep,
@@ -1772,6 +1799,7 @@
       { kind: "item", label: track.show_automation ? "Hide Automation Lanes" : "Show Automation Lanes", run: () => toggleLanes(track) },
       { kind: "item", label: "Track Color...", run: () => (colorFor = { kind: "track", id: track.id, current: track.color ?? null }) },
       { kind: "item", label: "Duplicate Track", run: () => { editor.selectTrack(track.id); run("multitrack.duplicate-track"); } },
+      { kind: "item", label: "Bounce Track to New Track", disabled: track.clips.length === 0 && (track.midi_clips ?? []).length === 0, run: () => { editor.selectTrack(track.id); run("multitrack.bounce.track"); } },
       { kind: "item", label: "Delete Track", run: () => { editor.selectTrack(track.id); run("multitrack.delete-track"); } },
       { kind: "sep" },
       { kind: "item", label: "Add Mono Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.mono"); } },
@@ -2406,17 +2434,15 @@
             {#if !track.collapsed && isMidi(track)}
               {@const inst = track.instrument ? instruments.find((x) => x.effect === track.instrument!.effect) : null}
               <div class="line">
-                <button
-                  type="button"
-                  class="instrument"
-                  aria-haspopup="menu"
-                  title={track.instrument && !inst ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes. Grouped by type and by maker."}
-                  onclick={(e) => openInstrumentMenu(e, track)}
-                >
-                  <span>{inst ? `${inst.name}${inst.vendor ? ` (${inst.vendor})` : ""}` : track.instrument ? "Missing instrument" : instruments.length ? "No instrument" : "No instruments found"}</span>
-                  <span class="chev" aria-hidden="true">▾</span>
-                </button>
-                <button type="button" class="ms" title="Open the instrument's window" aria-label="Open the instrument's window" disabled={!track.instrument || !inst} onclick={() => openInstrument(track)}>◳</button>
+<div class="instrument">
+                  <button
+                    type="button"
+                    class="inst-name"
+                    title={inst ? `Open ${inst.name}. The arrow changes the instrument.` : track.instrument ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes. Grouped by type and by maker."}
+                    onclick={(e) => (inst ? openInstrument(track) : openInstrumentMenu(e, track))}
+                  >{inst ? `${inst.name}${inst.vendor ? ` (${inst.vendor})` : ""}` : track.instrument ? "Missing instrument" : instruments.length ? "No instrument" : "No instruments found"}</button>
+                  <button type="button" class="chev" aria-haspopup="menu" title="Change the instrument" aria-label="Change the instrument" onclick={(e) => openInstrumentMenu(e, track)}>▾</button>
+                </div>
               </div>
             {/if}
             {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_INPUT && !isMidi(track)}
@@ -3019,28 +3045,43 @@
     margin-left: auto;
   }
 
-  button.instrument {
+  .instrument {
     display: flex;
     flex: 1;
-    gap: 4px;
-    align-items: center;
-    justify-content: space-between;
     min-width: 0;
-    padding: 0 4px;
-    text-align: left;
     height: 20px;
     border: 1px solid var(--border);
     border-radius: 2px;
     background: var(--surface-2);
+  }
+
+  .instrument button {
+    height: 100%;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: none;
     color: var(--text);
     font: inherit;
     font-size: var(--font-size-small);
   }
 
-  button.instrument span:first-child {
+  .instrument button:hover {
+    background: var(--surface-3, var(--surface-1));
+  }
+
+  .instrument .inst-name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .instrument .chev {
+    flex: none;
+    border-left: 1px solid var(--border);
   }
 
   .toolbar .rate {
