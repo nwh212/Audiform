@@ -2500,6 +2500,8 @@
           {#if track.show_automation && !track.collapsed}
             {@const lanes = shownLanes(track)}
             {#each lanes as lane, k (lane.id || "new")}
+              {@const choices = autoChoices(track, fxCatalog, !!doc?.space)}
+              {@const taken = (c: (typeof choices)[number]) => targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}
               <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{AUTO_H}px">
                 <div class="line">
                   <select
@@ -2509,8 +2511,16 @@
                     onchange={(e) => pickTarget(track, lane, e.currentTarget.value)}
                   >
                     {#if isOrphan(track, fxCatalog, lane.target)}<option value={targetKey(lane.target)}>Removed effect</option>{/if}
-                    {#each autoChoices(track, fxCatalog, !!doc?.space) as c (targetKey(c.target))}
-                      <option value={targetKey(c.target)} disabled={targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}>{c.label}</option>
+                    {#each choices.filter((c) => !c.group) as c (targetKey(c.target))}
+                      <option value={targetKey(c.target)} disabled={taken(c)}>{c.label}</option>
+                    {/each}
+                    <!-- Each effect (plug-ins too), with its controls under it. -->
+                    {#each [...new Set(choices.flatMap((c) => (c.group ? [c.group] : [])))] as g (g)}
+                      <optgroup label={g.slice(0, g.lastIndexOf("#"))}>
+                        {#each choices.filter((c) => c.group === g) as c (targetKey(c.target))}
+                          <option value={targetKey(c.target)} disabled={taken(c)}>{c.name}</option>
+                        {/each}
+                      </optgroup>
                     {/each}
                   </select>
                 </div>

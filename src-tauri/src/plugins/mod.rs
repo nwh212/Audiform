@@ -558,6 +558,13 @@ pub fn param_id(key: &str) -> Option<u32> {
 /// A plug-in as an effect, with its controls (normalized, 0 to 1).
 pub fn effect_info(found: &Found) -> EffectInfo {
     let i = &found.info;
+    // Controls the scan could not read come from a running copy, once there is one.
+    let live = if i.params.is_empty() {
+        instance::live_params(&format!("{PREFIX}{}", i.cid)).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let params = if i.params.is_empty() { &live } else { &i.params };
     EffectInfo {
         id: intern(&format!("{PREFIX}{}", i.cid)),
         name: intern(&i.name),
@@ -570,8 +577,7 @@ pub fn effect_info(found: &Found) -> EffectInfo {
                 i.vendor
             )
         }),
-        params: i
-            .params
+        params: params
             .iter()
             .map(|p| {
                 let mut info = crate::dsp::effects::num(

@@ -803,6 +803,21 @@ pub fn retain(slots: &HashSet<Id>) {
     }
 }
 
+/// The controls of a running copy of plug-in `effect`, for plug-ins whose
+/// scan could not read them (they are learned when it runs).
+pub fn live_params(effect: &str) -> Option<Vec<ParamInfo>> {
+    let hosts: Vec<Arc<Mutex<Host>>> = pool()
+        .lock()
+        .ok()?
+        .values()
+        .filter(|p| p.effect.eq_ignore_ascii_case(effect))
+        .map(|p| p.host.clone())
+        .collect();
+    hosts
+        .into_iter()
+        .find_map(|h| h.try_lock().ok().map(|h| h.params.clone()).filter(|p| !p.is_empty()))
+}
+
 /// Running plug-ins whose settings in the session changed (a preset, an
 /// undo) get the new settings, in the background. `before` holds each
 /// plug-in slot's settings before the change.
