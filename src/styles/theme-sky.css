@@ -389,3 +389,10 @@
   border-radius: 6px;
   background: var(--g-scroll-thumb) padding-box;
 }
+
+/* Glass panes stack as their own layers; the top bar (and its open menus)
+   must sit above them. */
+:root:is([data-theme="sky"], [data-theme="night"]) header.top {
+  position: relative;
+  z-index: 50;
+}

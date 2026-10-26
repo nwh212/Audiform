@@ -63,6 +63,7 @@
   import { KIND_COLORS, markerAt, markerCss } from "../markers/markers";
   import { quiet, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
   import { channelNames } from "../space/space";
+  import { appearanceTick } from "../../stores/appearance";
   import { defaultTrackColor, trackHeight, formatIn, maxSppFor, rulerTicks, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
 
   interface Props {
@@ -139,6 +140,8 @@
 
   let peakTick = $state(0);
   $effect(() => peaks.subscribe(() => peakTick++));
+  // The theme or colors changed: the ruler and overview draw again.
+  $effect(() => appearanceTick.subscribe(() => peakTick++));
 
   let tick = $state(0);
   $effect(() =>

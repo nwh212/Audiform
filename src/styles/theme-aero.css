@@ -672,3 +672,34 @@
 :root[data-theme="moonlight"] :is(.menubar, .strip) {
   background: var(--a-shine), var(--a-pane);
 }
+
+/* Glass panes stack as their own layers; the top bar (and its open menus)
+   must sit above them. */
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) header.top {
+  position: relative;
+  z-index: 50;
+}
+
+/* Open menus: frosted glass you can see through. The menu bar itself is
+   not blurred (a blurred bar would stop the menu inside it from blurring
+   what is behind), so the open menu frosts the panels under it. */
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .menubar {
+  backdrop-filter: none !important;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) .menubar {
+  background:
+    url("../assets/themes/droplets.png") repeat-x left center / auto 100%,
+    var(--a-shine),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(235, 248, 255, 0.55));
+}
+:root[data-theme="moonlight"] .menubar {
+  background: var(--a-shine), linear-gradient(135deg, rgba(30, 60, 105, 0.78), rgba(10, 24, 52, 0.7));
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar .dropdown, .context) {
+  background: var(--a-shine), linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(230, 246, 255, 0.48));
+  backdrop-filter: blur(22px) saturate(1.6) brightness(1.08);
+}
+:root[data-theme="moonlight"] :is(.menubar .dropdown, .context) {
+  background: var(--a-shine), linear-gradient(135deg, rgba(26, 54, 96, 0.68), rgba(8, 20, 44, 0.62));
+  backdrop-filter: blur(22px) saturate(1.4) brightness(0.8);
+}

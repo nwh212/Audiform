@@ -72,6 +72,7 @@
   import { HOST_PROFILES, profileById, profileOp } from "./host-profiles";
   import type { SettingsDraft } from "./settings/pages";
   import { colorVars, meterPercent, sanitizeSettings, settings, type AppSettings } from "../stores/settings";
+  import { appearanceChanged } from "../stores/appearance";
   import { setMeterSpeed, type TransportStore } from "../stores/transport";
   import GenerateDialog, { type GenerateMode, type GenerateValues } from "./GenerateDialog.svelte";
   import { naturalLength, stretchTo, unstretch } from "../panels/editor/stretch";
@@ -2357,8 +2358,9 @@
       loudness: { region: prefs.string(KEY_LOUD_REGION, DEFAULT_REGION), target: prefs.string(KEY_LOUD_TARGET, DEFAULT_TARGET) },
     };
   }
-  function applySettingsDraft(d: SettingsDraft) {
-    settingsDraft = null;
+  /** Saves the settings and puts them into effect; Apply keeps the dialog open, OK closes it. */
+  function applySettingsDraft(d: SettingsDraft, keepOpen = false) {
+    if (!keepOpen) settingsDraft = null;
     const autosaveChanged = d.app.autosave !== settings.current.autosave || d.app.autosaveMinutes !== settings.current.autosaveMinutes;
     settings.set(d.app);
     prefs.set(KEY_SETTINGS, settings.current);
@@ -2379,6 +2381,8 @@
     for (const [k, v] of Object.entries(colorVars(s.colors))) root.setProperty(k, v);
     root.setProperty("--meter-yellow", `${meterPercent(s.meterYellowDb)}%`);
     root.setProperty("--meter-red", `${meterPercent(s.meterRedDb)}%`);
+    // Canvas views read colors when they draw: have them draw again.
+    requestAnimationFrame(() => appearanceChanged());
     setCustomTarget({ lufs: s.customLufs, peak: s.customPeak });
     setMeterSpeed(s.meterSpeed);
     if (isTauri()) {
@@ -4568,7 +4572,7 @@
 {/if}
 
 {#if settingsDraft}
-  <SettingsDialog initial={settingsDraft} onApply={applySettingsDraft} onNotice={showNotice} onClose={() => (settingsDraft = null)} />
+  <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onClose={() => (settingsDraft = null)} />
 {/if}
 
 {#if recordOptionsOpen}

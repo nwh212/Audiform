@@ -15,6 +15,7 @@
   import { defaultTrackColor, trackHeight, peakRange, pickLevel, xOf, type Viewport, TRACK_GAP } from "./timeline";
   import { chipBox, chipLabel, fxLaneOf, pointsOf, rangeOf, restValue, valueToY, type EnvKind, type FxLane } from "./envelope";
   import { exactSamples, SAMPLE_VIEW } from "../../stores/exact-samples";
+  import { appearanceTick } from "../../stores/appearance";
 
   interface Props {
     track: TrackDoc;
@@ -115,6 +116,9 @@
   // Redraw when exact samples (for close zoom) arrive.
   let exactTick = $state(0);
   $effect(() => exactSamples.subscribe(() => exactTick++));
+  // Redraw when the theme or colors change.
+  let looks = $state(0);
+  $effect(() => appearanceTick.subscribe((v) => (looks = v)));
 
   // Waveform data for this lane's own files only, so a file that finishes
   // loading redraws the lanes that use it, not every lane in the session.
@@ -132,6 +136,7 @@
   $effect(() => {
     void peakKey;
     void exactTick;
+    void looks;
     void liveTake?.tick;
     const c = canvas;
     if (!c) return;

@@ -19,7 +19,8 @@
   interface Props {
     initial: SettingsDraft;
     page?: Page;
-    onApply: (d: SettingsDraft) => void;
+    /** Saves the settings; `keepOpen` (the Apply button) leaves the dialog open. */
+    onApply: (d: SettingsDraft, keepOpen?: boolean) => void;
     onNotice?: (m: string) => void;
     onClose: () => void;
   }
@@ -113,6 +114,10 @@
 
   function ok() {
     onApply(cleanDraft($state.snapshot(d) as SettingsDraft));
+  }
+  /** Puts the settings into effect now and keeps the dialog open, to try a theme or a color. */
+  function apply() {
+    onApply(cleanDraft($state.snapshot(d) as SettingsDraft), true);
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
@@ -438,6 +443,7 @@
     <footer>
       {#if resettable}<button type="button" class="left" onclick={resetPage}>Reset This Page</button>{/if}
       <button type="button" onclick={onClose}>Cancel</button>
+      <button type="button" onclick={apply} title="Put these settings into effect now and keep this window open">Apply</button>
       <button type="button" class="primary" onclick={ok}>OK</button>
     </footer>
   </div>

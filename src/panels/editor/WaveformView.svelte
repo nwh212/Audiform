@@ -23,6 +23,7 @@
   import { onDestroy } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
   import { allOn, toggleChannel, waveChannels } from "./wave-channels";
+  import { appearanceTick } from "../../stores/appearance";
   import { channelLabels } from "../properties/channel-mix";
   import { laneWidths } from "../time-info/time-info";
   import { timeDisplayItems } from "./time-menu";
@@ -81,6 +82,8 @@
   );
   let peakTick = $state(0);
   $effect(() => peaks.subscribe(() => peakTick++));
+  // The theme or colors changed: draw again.
+  $effect(() => appearanceTick.subscribe(() => peakTick++));
   /** The take being recorded into this file, drawn as it arrives. */
   let live = $state<LiveTakes | null>(null);
   $effect(() =>
