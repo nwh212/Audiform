@@ -1549,3 +1549,11 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Discrimination tab:** Crossover bleed, Phase and Amplitude discrimination, Amplitude bandwidth, Spectral decay. **Advanced:** FFT size.
 - **Its own window:** the stereo stage from above with the target lit (drag it to pick a pan), the Center and Side faders, the two tabs. Listed under Effects > Stereo with Phase Curve.
 - **The Center Remover is retired:** no longer offered, but sessions that use it still play it. The Remove Vocals preset now uses the Center Channel Extractor (Center off, 150 Hz to 12 kHz, so the bass stays).
+
+## 2026-10-28: Convolution Reverb
+
+- **Effects > Delay and Reverb > Convolution Reverb.** Plays the sound through an impulse response: any audio file Audiform reads (WAV, AIFF, FLAC, MP3, OGG, Opus, M4A) of a room, hall, plate or spring. Mono responses are used on both channels, stereo ones per channel, four-channel ones as true stereo. Responses are read at the session rate, cut to 12 seconds, trailing silence dropped, and leveled so Wet at 0 dB is about as loud as the sound going in.
+- **Controls:** Dry and Wet (their lowest is off), Pre-delay (to 250 ms), Length (shortens the response with a fade), Width (0 to 200%), Low cut and High cut on the reverb only. Everything but Length changes live.
+- **The slot names the file** (path and name) rather than holding its samples, so sessions stay small. A missing file plays dry, and the window says so. Loading and clearing are undoable.
+- **Delay:** the convolution works in blocks of 512 frames, reported as latency (the dry sound is held back to match).
+- The Amp Model's cabinet convolver moved to `dsp/convolve.rs`, shared by both.

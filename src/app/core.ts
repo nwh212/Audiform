@@ -572,6 +572,29 @@ export function ampLoadIr(path: string, data: string | null): Promise<string> {
   return invoke<string>("amp_load_ir", { path, data });
 }
 
+/** A Convolution Reverb response file, described for its window. */
+export interface ReverbIr {
+  /** The slot data that names it. */
+  data: string;
+  name: string;
+  path: string;
+  seconds: number;
+  rate: number;
+  channels: number;
+  /** Its level over time, 0 to 1 per point, for drawing. */
+  shape: number[];
+}
+
+/** Shows an Open dialog for an impulse response (any audio file); null on cancel. */
+export function reverbPick(): Promise<string | null> {
+  return invoke<string | null>("reverb_pick");
+}
+
+/** Reads an impulse response file and describes it, with the slot data naming it. */
+export function reverbLoad(path: string): Promise<ReverbIr> {
+  return invoke<ReverbIr>("reverb_load", { path });
+}
+
 /** What the metronome plays, as the core takes it. */
 export interface MetronomeCore {
   on: boolean;

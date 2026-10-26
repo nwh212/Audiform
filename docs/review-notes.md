@@ -25,3 +25,11 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Center and Side go from -48 dB to +12 dB**; the bottom of the fader is silence ("off").
 - **Remove Vocals preset** keeps the bass below about 150 Hz in the middle, as the old one did.
 - **Imported .sesx sessions:** the extractor from other editors' session files is not brought in yet (its saved settings format is unknown to me); it is skipped with the usual notice.
+
+## Convolution Reverb
+
+- **The session stores the response file's path, not the sound itself.** Sessions stay small (a 10 second stereo response would add several MB to every save and undo step), but moving a session to another computer needs the response file too, as with the session's audio. The other way (embedding, like the Amp Model's cabinet) is possible if you prefer portability.
+- **512-frame blocks** (about 11 ms at 48 kHz, made up for on playback and export). Smaller blocks would cost much more processing on long responses.
+- **Defaults:** Wet -10 dB, Dry 0 dB, no pre-delay, full length.
+- **No drag-and-drop of a file onto the window yet** (Load button only). The Files panel drags with its own pointer code, so this needs its own small piece of work.
+- **Fixed during testing:** the window could reload the file in a loop when the core reported the path differently from how it was saved (slash direction on Windows). It now loads once per path the slot names.

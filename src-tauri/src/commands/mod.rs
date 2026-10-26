@@ -25,6 +25,7 @@ pub mod plugins;
 pub mod preferences;
 pub mod quickpass;
 pub mod record;
+pub mod reverb;
 pub mod session;
 pub mod spectral;
 pub mod template;

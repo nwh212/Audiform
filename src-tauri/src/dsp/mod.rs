@@ -8,6 +8,7 @@ pub mod align;
 pub mod binaural;
 pub mod biquad;
 pub mod channels;
+pub mod convolve;
 pub mod diffuse;
 pub mod effects;
 pub mod elliptic;

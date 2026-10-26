@@ -2025,6 +2025,7 @@
     "notch",
     "pitch_shift",
     "center_extractor",
+    "convolution_reverb",
     "phase_curve",
   ];
   function fxTarget(): { target: EffectTarget; chain: EffectChainDoc | undefined; name: string; wave?: boolean } | null {

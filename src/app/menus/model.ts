@@ -415,10 +415,7 @@ export const MENUS: readonly Menu[] = [
         item("fx.add.sound_eraser", "Sound Eraser"),
       ]),
       sub("Delay and Reverb", [
-        item("fx.space", "Effects arrive in P5", {
-          pending: P5,
-          placeholder: true,
-        }),
+        item("fx.add.convolution_reverb", "Convolution Reverb"),
       ]),
       sub("Pitch and Time", [
         item("fx.add.pitch_shift", "Pitch Shift"),
