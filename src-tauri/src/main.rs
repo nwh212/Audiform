@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 // Hide the extra console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -11,5 +11,5 @@ fn main() {
     if let Some(code) = altered_plughost::main_with_args(&args) {
         std::process::exit(code);
     }
-    altered_audio_editor_lib::run()
+    audiform_lib::run()
 }

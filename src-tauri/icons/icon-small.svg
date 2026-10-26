@@ -1,1 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect x="64" y="64" width="896" height="896" rx="200" fill="#141416"/><g fill="#C0202A"><rect x="167" y="362" width="110" height="300" rx="55"/><rect x="327" y="212" width="110" height="600" rx="55"/><rect x="487" y="132" width="110" height="760" rx="55"/><rect x="647" y="252" width="110" height="520" rx="55"/><rect x="807" y="372" width="110" height="280" rx="55"/></g><g fill="#F0A020"><rect x="137" y="362" width="110" height="300" rx="55"/><rect x="297" y="212" width="110" height="600" rx="55"/><rect x="457" y="132" width="110" height="760" rx="55"/><rect x="617" y="252" width="110" height="520" rx="55"/><rect x="777" y="372" width="110" height="280" rx="55"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2027"/>
+      <stop offset="1" stop-color="#0d0f13"/>
+    </linearGradient>
+    <linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="200" y1="220" x2="824" y2="804">
+      <stop offset="0" stop-color="#3fd6c0"/>
+      <stop offset="0.55" stop-color="#4aa3ff"/>
+      <stop offset="1" stop-color="#9b6bff"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="6"/>
+
+  <g fill="url(#wave)">
+    <rect x="192" y="362" width="120" height="300" rx="60"/>
+    <rect x="332" y="232" width="120" height="560" rx="60"/>
+    <rect x="472" y="122" width="120" height="780" rx="60"/>
+    <rect x="612" y="212" width="120" height="600" rx="60"/>
+    <rect x="752" y="342" width="120" height="340" rx="60"/>
+  </g>
+</svg>

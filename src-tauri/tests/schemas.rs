@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! The published JSON Schemas in `/schemas` must match the Rust model.
 //!
@@ -14,11 +14,9 @@
 
 use std::path::PathBuf;
 
-use altered_audio_editor_lib::library::{Library, Template};
-use altered_audio_editor_lib::session::document::schema_json;
-use altered_audio_editor_lib::session::{
-    Document, HostProfile, Keymap, Preferences, Session, Workspace,
-};
+use audiform_lib::library::{Library, Template};
+use audiform_lib::session::document::schema_json;
+use audiform_lib::session::{Document, HostProfile, Keymap, Preferences, Session, Workspace};
 
 fn schemas_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

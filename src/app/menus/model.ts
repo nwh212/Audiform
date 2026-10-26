@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 /**
  * The menu bar as data: File, Edit, Multitrack, Clip, Effects, View,
@@ -524,20 +524,24 @@ export const MENUS: readonly Menu[] = [
       item("help.guide", "User Guide", { pending: LATER }),
       item("help.shortcuts", "Keyboard Shortcuts"),
       sep,
-      item("help.website", "The GCRN Website"),
-      item("help.plugins", "GCRN Plugins", {
-        pending: "The plugins page on thegcrn.com is not live yet.",
+      item("help.report", "Report a Problem..."),
+      item("help.update", "Check for Updates..."),
+      item("help.github", "Audiform Source Code on GitHub"),
+      item("help.discord", "Join the Community on Discord", {
+        pending: "Audiform has no community chat yet.",
       }),
       sep,
-      item("help.book", "Book: Altered Audio, Podcasting Demystified"),
-      item("help.support", "Support Altered Audio Editor..."),
+      sub("Based on Altered Audio Editor", [
+        item("help.original", "Altered Audio Editor on GitHub"),
+        item("help.website", "The GCRN Website"),
+        item("help.plugins", "GCRN Plugins", {
+          pending: "The plugins page on thegcrn.com is not live yet.",
+        }),
+        item("help.book", "Book: Altered Audio, Podcasting Demystified (Steve Phillips)"),
+        item("help.support", "Support the Original Author..."),
+      ]),
       sep,
-      item("help.discord", "Join the Community on Discord"),
-      item("help.update", "Check for Updates..."),
-      item("help.github", "Source Code on GitHub"),
-      item("help.report", "Report a Problem..."),
-      sep,
-      item("help.about", "About Altered Audio Editor"),
+      item("help.about", "About Audiform"),
     ],
   },
 ];

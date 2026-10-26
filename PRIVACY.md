@@ -1,6 +1,6 @@
 # Privacy
 
-Altered Audio Editor has no accounts, no sign-in, no telemetry, no analytics, no tracking and no ads. It works fully offline, and nobody has to do anything for you to use every feature.
+Audiform, like Altered Audio Editor it is based on, has no accounts, no sign-in, no telemetry, no analytics, no tracking and no ads. It works fully offline, and nobody has to do anything for you to use every feature.
 
 ## What the app does not do
 
@@ -17,7 +17,7 @@ Everything the app saves stays in folders on your own computer:
 
 ## The only time the app touches the web
 
-The Help menu has links (The GCRN website, the book, and an optional PayPal page to support the project). They open in your own web browser only when you pick them. The app itself only opens https links on a short allow list, kept in `src-tauri/src/commands/links.rs`.
+The Help menu has links (Audiform's GitHub page and problem reports, and, credited to the original project, the Altered Audio Editor page, The GCRN website, Steve Phillips's book and a PayPal page to support him). They open in your own web browser only when you pick them. The app itself only opens https links on a short allow list, kept in `src-tauri/src/commands/links.rs`.
 
 ## For contributors
 

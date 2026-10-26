@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! 4-bit IMA ADPCM in a WAV file: about a quarter the size of 16-bit
 //! PCM, lossy, and readable by nearly every player and phone system.

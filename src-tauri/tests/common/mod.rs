@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Sample documents with every field filled, built from fixed ids and
 //! dates so output is stable across runs.
@@ -9,11 +9,11 @@
 
 use std::collections::BTreeMap;
 
-use altered_audio_editor_lib::library::{
+use audiform_lib::library::{
     Collection, Library, LibraryItem, LibraryItemKind, LibraryScope, Template,
 };
-use altered_audio_editor_lib::session::host_profile::{GateSettings, HostProfile};
-use altered_audio_editor_lib::session::*;
+use audiform_lib::session::host_profile::{GateSettings, HostProfile};
+use audiform_lib::session::*;
 use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;
 

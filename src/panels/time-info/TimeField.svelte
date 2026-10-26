@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   One time in Time Info. Drag left or right on it to move it (one pixel
   is one pixel of the timeline; Ctrl for fine steps, Shift for coarse),

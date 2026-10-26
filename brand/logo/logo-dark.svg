@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520"><rect width="1440" height="520" fill="#0E0F11"/><g transform="translate(112 110) scale(0.29296875)"><rect x="64" y="64" width="896" height="896" rx="200" fill="#141416" stroke="#2C2D33" stroke-width="6"/><g fill="#C0202A"><rect x="200" y="442" width="40" height="140" rx="20"/><rect x="262" y="372" width="40" height="280" rx="20"/><rect x="324" y="302" width="40" height="420" rx="20"/><rect x="386" y="392" width="40" height="240" rx="20"/><rect x="448" y="252" width="40" height="520" rx="20"/><rect x="510" y="182" width="40" height="660" rx="20"/><rect x="572" y="262" width="40" height="500" rx="20"/><rect x="634" y="342" width="40" height="340" rx="20"/><rect x="696" y="222" width="40" height="580" rx="20"/><rect x="758" y="362" width="40" height="300" rx="20"/><rect x="820" y="432" width="40" height="160" rx="20"/></g><g fill="#F0A020"><rect x="182" y="442" width="40" height="140" rx="20"/><rect x="244" y="372" width="40" height="280" rx="20"/><rect x="306" y="302" width="40" height="420" rx="20"/><rect x="368" y="392" width="40" height="240" rx="20"/><rect x="430" y="252" width="40" height="520" rx="20"/><rect x="492" y="182" width="40" height="660" rx="20"/><rect x="554" y="262" width="40" height="500" rx="20"/><rect x="616" y="342" width="40" height="340" rx="20"/><rect x="678" y="222" width="40" height="580" rx="20"/><rect x="740" y="362" width="40" height="300" rx="20"/><rect x="802" y="432" width="40" height="160" rx="20"/></g><rect x="600" y="150" width="10" height="724" rx="5" fill="#F4EFE6"/><polygon points="578,128 632,128 605,166" fill="#F4EFE6"/></g><text x="476" y="233" font-family="Chakra Petch" font-weight="700" font-size="88" letter-spacing="2"><tspan fill="#F4EFE6">ALTERED</tspan><tspan fill="#F0A020"> AUDIO</tspan></text><text x="476" y="292" font-family="Chakra Petch" font-weight="500" font-size="34" letter-spacing="22" fill="#F4EFE6">EDITOR</text><text x="476" y="351" font-family="IBM Plex Sans" font-size="20" fill="#A7A39B">by The GCRN</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="520" viewBox="0 0 1440 520">
+  <rect width="1440" height="520" fill="#0E0F11"/>
+  <g transform="translate(90 80) scale(0.3515625)">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2027"/>
+      <stop offset="1" stop-color="#0d0f13"/>
+    </linearGradient>
+    <linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="200" y1="220" x2="824" y2="804">
+      <stop offset="0" stop-color="#3fd6c0"/>
+      <stop offset="0.55" stop-color="#4aa3ff"/>
+      <stop offset="1" stop-color="#9b6bff"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="6"/>
+  <g fill="none" stroke="url(#wave)">
+    <circle cx="512" cy="512" r="352" stroke-width="22" stroke-opacity="0.35"/>
+    <circle cx="512" cy="512" r="262" stroke-width="16" stroke-opacity="0.22"/>
+  </g>
+  <g fill="url(#wave)">
+    <rect x="292" y="432" width="64" height="160" rx="32"/>
+    <rect x="386" y="347" width="64" height="330" rx="32"/>
+    <rect x="480" y="262" width="64" height="500" rx="32"/>
+    <rect x="574" y="332" width="64" height="360" rx="32"/>
+    <rect x="668" y="422" width="64" height="180" rx="32"/>
+  </g>
+</g>
+  <text x="520" y="292" font-family="Inter Display, Inter, sans-serif" font-weight="600" font-size="178" letter-spacing="-4" fill="#F2F4F7">Audiform</text>
+  <text x="526" y="372" font-family="Inter, sans-serif" font-weight="400" font-size="40" fill="#8A93A3">multitrack audio editor</text>
+</svg>

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Edit > Settings: every app setting on one dialog, page by page. The
   whole dialog is one draft: OK applies it, Cancel or Escape drops it.

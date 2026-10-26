@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Phase Wheel: how two signals of what is playing line up, frequency by
   frequency. Each dot is one band of frequencies: its distance from the

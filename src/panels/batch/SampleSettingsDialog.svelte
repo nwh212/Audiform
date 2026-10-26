@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Sample Settings: what each converted file's audio becomes. Sample
   rate, channels (with how much of each side goes into a mono file) and

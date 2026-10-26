@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Editor panel: the multitrack view. In P1 it shows the session (tracks,
   clips, waveforms, ruler, playhead) and supports adding files, track

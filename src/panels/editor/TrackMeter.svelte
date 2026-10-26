@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A track's level meter: left and right bars (or one bar per speaker
   channel, for the master of a 3D Space session) on a -60 to 0 dB scale,

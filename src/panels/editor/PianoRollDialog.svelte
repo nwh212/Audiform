@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A MIDI clip's notes, on a piano roll. Click empty space to add a note
   one grid step long; drag a note's middle to move it, drag either end to

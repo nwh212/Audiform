@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Chapters written into the exported file itself, so podcast apps show
 //! them without a separate chapters file.
@@ -189,7 +189,7 @@ pub fn chapter_comments(chapters: &[Chapter]) -> Vec<String> {
 
 /// A VORBIS_COMMENT block body holding `items` ("KEY=value" lines).
 pub fn vorbis_block(items: &[String]) -> Vec<u8> {
-    let vendor = b"Altered Audio Editor";
+    let vendor = b"Audiform";
     let mut b = Vec::new();
     b.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
     b.extend_from_slice(vendor);

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Effects > Plug-in Manager: where VST3 plug-ins are looked for (the
   standard folders, which can be turned off, and the user's own), a scan,

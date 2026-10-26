@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Multitrack > Add Track > Add Tracks: several mono or stereo tracks at
   once, optionally named ("Guest" gives Guest, Guest 2, Guest 3), placed

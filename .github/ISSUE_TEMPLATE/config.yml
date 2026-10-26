@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions and discussion
-    url: https://github.com/geekcastradio/altered-audio-editor/discussions
+    url: https://github.com/nwh212/audiform/discussions
     about: Ask how to do something or talk about ideas.
   - name: Security problem
-    url: https://github.com/geekcastradio/altered-audio-editor/security/advisories/new
+    url: https://github.com/nwh212/audiform/security/advisories/new
     about: Report privately, not as a public issue.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Markers stored inside WAV files as cue points, the way most audio
 //! editors and broadcast tools keep them: a `cue ` chunk with each

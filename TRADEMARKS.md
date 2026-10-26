@@ -1,4 +1,14 @@
-# Name and logo
+# Names and logos
+
+## Audiform
+
+"Audiform" and its icon and logo (in `brand/`) are the names and artwork of this fork. The code is GPL; the name and artwork are not covered by it. Forks of Audiform are welcome under a different name and icon, and may say they are "based on Audiform".
+
+## Altered Audio Editor
+
+Audiform is based on Altered Audio Editor. Its trademark notice is kept below as published by The GeekCast Radio Network, LLC. Audiform follows it: it has its own name and icon, uses the Altered Audio Editor name only to say what it is based on, and does not suggest it is made or endorsed by them.
+
+### Name and logo (from Altered Audio Editor)
 
 "Altered Audio Editor" and its logo are trademarks of The GeekCast Radio Network, LLC. They are not licensed under the GPL.
 

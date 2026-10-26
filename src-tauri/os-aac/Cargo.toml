@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false
-description = "AAC writing for Altered Audio Editor through the operating system's own encoder."
+description = "AAC writing for Audiform through the operating system's own encoder."
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com"] }

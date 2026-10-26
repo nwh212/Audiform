@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A horizontal fader for the 3D Space panel, in the Mixer's fader style:
   a recessed slot with tick marks and a block cap with a center line.

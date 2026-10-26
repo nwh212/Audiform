@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Menu bar. Mouse: click a menu to open, hover to move between menus
   while one is open. Keyboard: Alt plus the underlined letter opens a

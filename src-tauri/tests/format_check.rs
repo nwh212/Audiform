@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Manual check: decodes every file in $FORMAT_DIR and reports length and peak.
 //! `FORMAT_DIR=/path cargo test --test format_check -- --ignored --nocapture`
 
-use altered_audio_editor_lib::codecs::{probe, AudioReader};
+use audiform_lib::codecs::{probe, AudioReader};
 
 #[test]
 #[ignore]

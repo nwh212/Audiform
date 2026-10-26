@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Opens Help menu web pages in the user's browser, only when the user
 //! picks one. The app makes no network requests of its own.
@@ -11,9 +11,10 @@
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-/// Hosts the app may open: the GCRN site, the store page for the
-/// project lead's book, Altered Audio: Podcasting Demystified, the
-/// support page, the project's GitHub page and its Discord invite.
+/// Hosts the app may open: GitHub (Audiform's own pages and the original
+/// project's), and the original project's links, credited in the Help
+/// menu: the GCRN site, the store page for Steve Phillips's book, Altered
+/// Audio: Podcasting Demystified, and the original author's support page.
 const ALLOWED_HOSTS: &[&str] = &[
     "thegcrn.com",
     "www.thegcrn.com",
@@ -60,7 +61,10 @@ mod tests {
         assert!(!is_allowed("http://paypal.me/scp21"));
         assert!(!is_allowed("https://paypal.me.evil.example/scp21"));
         assert!(is_allowed(
-            "https://github.com/geekcastradio/altered-audio-editor/issues/new/choose"
+            "https://github.com/nwh212/audiform/issues/new/choose"
+        ));
+        assert!(is_allowed(
+            "https://github.com/geekcastradio/altered-audio-editor"
         ));
         assert!(is_allowed("https://discord.gg/xTT5N65y"));
         assert!(!is_allowed("https://github.com.evil.example/"));

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   The hardware-style windows for the Opto Leveler and the Tube Preamp:
   big numbered dials for the main controls, a needle meter fed by the

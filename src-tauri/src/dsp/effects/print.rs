@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Noise Print Reducer and Sound Eraser. The Noise Print Reducer learns a noise from a stretch of audio picked
 //! by the person (a gap with only the hum, fan or hiss in it), then

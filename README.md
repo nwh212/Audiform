@@ -1,17 +1,30 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="brand/logo/logo-light.png">
-    <img src="brand/logo/logo-dark.png" alt="Altered Audio Editor" width="420">
+    <img src="brand/logo/logo-dark.png" alt="Audiform" width="420">
   </picture>
 </p>
 
 <p align="center">
-  A free, open-source multitrack audio editor for podcasters and voiceover, from The GeekCast Radio Network.
+  A free, open-source multitrack audio editor for podcasts, voiceover, music and immersive mixes.<br>
+  Built on <a href="https://github.com/geekcastradio/altered-audio-editor">Altered Audio Editor</a> by Steve Phillips and The GeekCast Radio Network.
 </p>
 
-It follows the editing workflow that experienced audio editors already know, with its own original design, then adds tools built for podcast production.
+## Built on Altered Audio Editor
 
-> Status: in active development (phase P5, effects). Editing, playback, recording, the Voice Chain effects, conversion and mixdown work today. Podcast mode tools (transcripts, publishing) are still to come. Pre-release: keep backups of your recordings.
+Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor), created by **Steve Phillips** and **The GeekCast Radio Network, LLC** ([thegcrn.com](https://thegcrn.com/)). Almost everything you see here started with them: the two-editor design, the multitrack and Waveform editors, sessions and libraries, recording, the Voice Chain and its effects, QuickPass, Batch Convert, Loudness Match, Music Fit, the podcast workflow, the privacy rules, and the care that went into all of it. Audiform exists because their work made a great foundation to build on.
+
+If Audiform is useful to you, please consider supporting the original project too:
+
+- Read Steve's book, [*Altered Audio: Podcasting Demystified*](https://www.barnesandnoble.com/w/altered-audio-steve-phillips/1147888459).
+- Support the original author at [paypal.me/scp21](https://paypal.me/scp21).
+- Follow Altered Audio Editor at [github.com/geekcastradio/altered-audio-editor](https://github.com/geekcastradio/altered-audio-editor).
+
+Audiform moves faster and tries new directions (3D audio, MIDI, automation). Everything in it is offered back: Altered Audio Editor is welcome to take any of it (see [Contributing](#contributing)).
+
+**Please report Audiform problems here, in [Audiform's issues](https://github.com/nwh212/audiform/issues), not to the Altered Audio Editor project.** Audiform is not made or endorsed by The GeekCast Radio Network.
+
+> Status: in active development. Pre-release: keep backups of your recordings.
 
 ![Multitrack editor with a four-track episode: themes, a host and a co-host with the Podcast Voice chain on the host track, a promo, fades, a volume envelope and chapter markers](docs/images/multitrack.png)
 
@@ -28,21 +41,34 @@ It follows the editing workflow that experienced audio editors already know, wit
 
 ## Download
 
-Windows 10 and 11 (64-bit). Get the latest build from the [Releases page](https://github.com/geekcastradio/altered-audio-editor/releases), then pick one file under Assets:
+Windows 10 and 11 (64-bit). Get the latest build from the [Releases page](https://github.com/nwh212/audiform/releases), then pick one file under Assets:
 
-- **`Altered-Audio-Editor-<version>-setup.exe`** is the installer. It adds a Start menu entry and an uninstaller, and works per user or for all users.
-- **`Altered-Audio-Editor-<version>-portable.zip`** needs no install. Unzip it anywhere, including a USB drive, and run the app.
+- **`Audiform-<version>-setup.exe`** is the installer. It adds a Start menu entry and an uninstaller, and works per user or for all users.
+- **`Audiform-<version>-portable.zip`** needs no install. Unzip it anywhere, including a USB drive, and run the app.
 - **`SHA256SUMS.txt`** lists a checksum for each file so you can confirm your download is intact.
 
 The app is not code signed yet, so Windows SmartScreen may say it does not recognize it. Choose More info, then Run anyway. Builds are made by GitHub Actions from the tagged source, so what you download matches what is in this repository.
 
 A few antivirus scanners may flag the installer with a low-confidence guess. That is common for new, unsigned installers and goes away as the file builds a reputation. To check your copy, compare its SHA-256 with `SHA256SUMS.txt` (in PowerShell: `Get-FileHash <file>`).
 
-**Linux and macOS (experimental).** Releases also carry a Linux AppImage and `.deb`, and a macOS `.dmg` for Apple silicon Macs. They are built from the same source but not tested by us yet, so reports are welcome. The macOS app is not notarized: the first time, right-click it and choose Open. AAC export works on Windows only for now.
+**Linux and macOS (experimental).** Releases also carry a Linux AppImage and `.deb`, and a macOS `.dmg` for Apple silicon Macs. They are built from the same source but not tested much yet, so reports are welcome. The macOS app is not notarized: the first time, right-click it and choose Open. AAC export works on Windows only for now.
 
 Early versions are pre-releases. Expect rough edges and keep backups of your recordings.
 
-## What it does today
+**Coming from Altered Audio Editor?** Audiform opens the same session, template, library and shortcut files, and the first time it starts it copies your Altered Audio Editor settings (preferences, shortcuts, workspaces, plug-in list). Both apps can be installed side by side.
+
+## What Audiform adds
+
+- **3D Space sessions:** place each track and bus in a room instead of panning it, hear it on stereo speakers or headphones (binaural), and export to any speaker layout (5.1, 7.1, 7.1.2, 7.1.4 and more) as a multichannel WAV, or to stereo. Per track: height (above and below ear level), size, spread, width, rotation, spatialize (opens a stereo sound into the surrounds and heights) and an LFE send. Levels and the Mixer show every speaker channel.
+- **Automation lanes:** volume, pan, any effect setting and every 3D Space setting over time, drawn under each track.
+- **MIDI:** MIDI tracks with VST3 instruments, a piano roll with easy zoom and scroll, notes in the track's color.
+- **Metronome and tempo:** a Metronome track, tempo and time signature changes, bars and beats on the ruler and snapping to them.
+- **Amp Model:** plays neural amp captures (`.nam`) with a gate, tone, level match and cabinet.
+- **New effects and editors:** Parametric EQ graph editor, Phase Curve, Shaped Noise Reducer, Opto Leveler, Tube Preamp.
+- **Plug-ins:** plug-ins from one maker can share a process so they can talk to each other, plug-ins get the song position, optional real-time mixdown, Effects > Plug-ins lists what you scanned.
+- **Workflow:** several sessions open at once, clip level handles, side-by-side drops of many files, and many smaller fixes.
+
+## What it does today (from Altered Audio Editor)
 
 - **Multitrack editing:** move, razor, slip and time-selection tools; trim, split, merge, loop and copy clips; fades and crossfades; clip volume and pan envelopes; markers; ripple delete.
 - **Waveform editor:** open any file on its own to cut, silence, amplify and fade it, try a Voice Chain on it as a live preview and apply it to the selection or the whole file (undoable), then save it in place as WAV, FLAC or MP3, or as a new file.
@@ -73,15 +99,17 @@ Early versions are pre-releases. Expect rough edges and keep backups of your rec
 - Update checks are off unless you turn them on.
 - Your audio never leaves your computer.
 
-## Support the project
+## Support the original project
 
-Altered Audio Editor is free. If it helps your show, you can support it at [paypal.me/scp21](https://paypal.me/scp21).
+Audiform is free. If it helps you, please support the people it is built on: [paypal.me/scp21](https://paypal.me/scp21) supports Steve Phillips, the author of Altered Audio Editor, and his book is [*Altered Audio: Podcasting Demystified*](https://www.barnesandnoble.com/w/altered-audio-steve-phillips/1147888459).
 
 ## Contributing
 
-Bug fixes and features are welcome through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+Bug fixes and features are welcome through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Thanks to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+**For Altered Audio Editor:** everything in Audiform is also offered to The GeekCast Radio Network, LLC under the terms of its [Contributor License Agreement](CLA.md), so any change here can be merged into Altered Audio Editor. Audiform stays a GitHub fork of it to make that easy. Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+Thanks to Steve Phillips and The GeekCast Radio Network for Altered Audio Editor, and to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 ## Build from source (Windows)
 
@@ -110,7 +138,7 @@ cargo test
 
 ## File formats
 
-Every file the app writes is versioned JSON with a `format` and `schema_version` header. Schemas live in [`/schemas`](schemas).
+Every file the app writes is versioned JSON with a `format` and `schema_version` header. Schemas live in [`/schemas`](schemas). Audiform keeps Altered Audio Editor's formats and ids, so files move freely between the two.
 
 | File | Format id | Extension |
 | --- | --- | --- |
@@ -124,16 +152,16 @@ Every file the app writes is versioned JSON with a `format` and `schema_version`
 ## Project docs
 
 - [CLAUDE.md](CLAUDE.md): scope, phase plan, architecture and clean-room rules.
+- [NOTICE.md](NOTICE.md): what Audiform is based on and how it was changed.
 - [docs/decisions.md](docs/decisions.md): architecture decisions log.
 - [docs/design-principles.md](docs/design-principles.md): what stays familiar, what is our own, and the no-AI-unless-you-turn-it-on rule.
 - [ATTRIBUTION.md](ATTRIBUTION.md): credits for any adapted third-party code.
 
 ## License
 
-Copyright (c) The GeekCast Radio Network, LLC.
+Copyright (c) The GeekCast Radio Network, LLC (Altered Audio Editor).
+Copyright (c) The Audiform contributors (changes since October 2026).
 
-Licensed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE).
+Licensed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
-"Altered Audio Editor" and its logo are trademarks of The GeekCast Radio Network, LLC and are not covered by the GPL. Forks are welcome under a different name; see [TRADEMARKS.md](TRADEMARKS.md).
-
-All icons and artwork are original. This project is independent and not affiliated with or endorsed by any other software company.
+"Altered Audio Editor" and its logo are trademarks of The GeekCast Radio Network, LLC, used here only to say what Audiform is based on, as their [trademark notice](TRADEMARKS.md) allows. Audiform has its own name and artwork. Audiform is independent and not affiliated with or endorsed by The GeekCast Radio Network or any other software company.

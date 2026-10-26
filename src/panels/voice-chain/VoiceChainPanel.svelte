@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Voice Chain: up to 16 effects in order on the selected clip or track.
   Pick a preset or add effects one by one, bypass or reorder them, and

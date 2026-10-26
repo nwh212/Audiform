@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Probes one small file per supported format. The files in
 //! tests/media are half-second 440 Hz tones made with ffmpeg.
 
 use std::path::PathBuf;
 
-use altered_audio_editor_lib::codecs::{probe, AudioInfo, ProbeError};
+use audiform_lib::codecs::{probe, AudioInfo, ProbeError};
 
 fn media(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -118,7 +118,7 @@ fn truncated_file_is_reported_not_crashed() {
 
 mod reader {
     use super::media;
-    use altered_audio_editor_lib::codecs::AudioReader;
+    use audiform_lib::codecs::AudioReader;
 
     fn read_all(r: &mut AudioReader) -> Vec<f32> {
         let mut out = Vec::new();
@@ -202,7 +202,7 @@ mod reader {
 }
 
 mod alignment {
-    use altered_audio_editor_lib::codecs::AudioReader;
+    use audiform_lib::codecs::AudioReader;
 
     /// A click at 0.1 s stays at 0.1 s after resampling to 48 kHz.
     #[test]

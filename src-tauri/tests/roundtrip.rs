@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Every type survives a trip to JSON and back unchanged, in memory
 //! and on disk. Header checks reject files this build cannot read.
@@ -9,10 +9,10 @@ mod common;
 
 use std::fmt::Debug;
 
-use altered_audio_editor_lib::library::{Library, Template};
-use altered_audio_editor_lib::session::document::{self, from_json, load, save, to_json};
-use altered_audio_editor_lib::session::validate::validate;
-use altered_audio_editor_lib::session::{Document, DocumentError, Session, Workspace};
+use audiform_lib::library::{Library, Template};
+use audiform_lib::session::document::{self, from_json, load, save, to_json};
+use audiform_lib::session::validate::validate;
+use audiform_lib::session::{Document, DocumentError, Session, Workspace};
 use pretty_assertions::assert_eq;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -150,7 +150,7 @@ fn rejects_newer_version() {
         matches!(err, DocumentError::TooNew { found: 99, .. }),
         "{err}"
     );
-    assert!(err.to_string().contains("Update Altered Audio Editor"));
+    assert!(err.to_string().contains("Update Audiform"));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   File > New Audio File: name, sample rate, channels and bit depth for
   an empty file in the Waveform editor. Enter confirms, Escape cancels.

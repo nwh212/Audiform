@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Loudness check (EBU R128 / ITU-R BS.1770): integrated loudness,
 //! loudness range and true peak of the mix, the numbers podcast

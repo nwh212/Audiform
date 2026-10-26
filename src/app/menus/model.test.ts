@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
 import { MENUS, commandList, menuActionIds, type MenuItem } from "./model";
@@ -77,7 +77,7 @@ describe("menu model", () => {
       "help.website",
       "fx.invert",
       "fx.reverse",
-      "help.discord",
+      "help.original",
       "help.update",
       "help.github",
       "help.report",

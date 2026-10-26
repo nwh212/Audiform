@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) The GeekCast Radio Network, LLC.
-# This file is part of Altered Audio Editor.
+# This file is part of Audiform, based on Altered Audio Editor.
 
 # Builds the Windows installer and a portable zip when a version tag is
 # pushed (git tag v0.1.0 && git push origin v0.1.0). It makes a DRAFT
@@ -64,10 +64,10 @@ jobs:
           $portable = Join-Path $env:RUNNER_TEMP "portable"
           New-Item -ItemType Directory -Force -Path $out, $portable | Out-Null
           $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-          Copy-Item $setup.FullName (Join-Path $out "Altered-Audio-Editor-$tag-setup.exe")
-          Copy-Item src-tauri/target/release/altered-audio-editor.exe (Join-Path $portable "Altered Audio Editor.exe")
+          Copy-Item $setup.FullName (Join-Path $out "Audiform-$tag-setup.exe")
+          Copy-Item src-tauri/target/release/audiform.exe (Join-Path $portable "Audiform.exe")
           Copy-Item LICENSE, README.md $portable
-          Compress-Archive -Path (Join-Path $portable "*") -DestinationPath (Join-Path $out "Altered-Audio-Editor-$tag-portable.zip")
+          Compress-Archive -Path (Join-Path $portable "*") -DestinationPath (Join-Path $out "Audiform-$tag-portable.zip")
           if ("${{ steps.asio.outcome }}" -ne "success") { "ASIO build failed; this installer has no ASIO." | Set-Content (Join-Path $out "NO-ASIO.txt") }
 
       - uses: actions/upload-artifact@v4
@@ -115,8 +115,8 @@ jobs:
           tag="${{ github.ref_name }}"
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
-          cp src-tauri/target/release/bundle/appimage/*.AppImage "$out/Altered-Audio-Editor-$tag-linux-x86_64.AppImage"
-          cp src-tauri/target/release/bundle/deb/*.deb "$out/Altered-Audio-Editor-$tag-linux-amd64.deb"
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "$out/Audiform-$tag-linux-x86_64.AppImage"
+          cp src-tauri/target/release/bundle/deb/*.deb "$out/Audiform-$tag-linux-amd64.deb"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -157,7 +157,7 @@ jobs:
           tag="${{ github.ref_name }}"
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
-          cp src-tauri/target/release/bundle/dmg/*.dmg "$out/Altered-Audio-Editor-$tag-macos-arm64.dmg"
+          cp src-tauri/target/release/bundle/dmg/*.dmg "$out/Audiform-$tag-macos-arm64.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -191,4 +191,4 @@ jobs:
           ls -la
           pre=""
           case "$tag" in v0.*) pre="--prerelease" ;; esac
-          gh release create "$tag" --draft $pre --title "Altered Audio Editor $tag" --generate-notes ./*
+          gh release create "$tag" --draft $pre --title "Audiform $tag" --generate-notes ./*

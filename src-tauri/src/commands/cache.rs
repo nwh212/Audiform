@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Settings > Media and Cache: where the app keeps its working files
 //! and how much room they take. Only the waveform drawings are cleared
@@ -54,7 +54,7 @@ const FOLDERS: [(&str, bool); 5] = [
 const FOLDER_SETTING: &str = "cache-folder.txt";
 
 /// Where working files go: the folder the user picked in Settings, else
-/// `Documents/Altered Audio Editor/Cache`, else the app's own cache folder
+/// `Documents/Audiform/Cache`, else the app's own cache folder
 /// when Documents can't be found. Missing folders fall back to the default.
 pub fn cache_root(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(cfg) = app.path().app_config_dir() {
@@ -66,7 +66,7 @@ pub fn cache_root(app: &AppHandle) -> Result<PathBuf, String> {
         }
     }
     match app.path().document_dir() {
-        Ok(docs) => Ok(docs.join("Altered Audio Editor").join("Cache")),
+        Ok(docs) => Ok(docs.join("Audiform").join("Cache")),
         Err(_) => app.path().app_cache_dir().map_err(|e| e.to_string()),
     }
 }

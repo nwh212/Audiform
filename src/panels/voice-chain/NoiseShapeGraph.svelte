@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   The Shaped Noise Reducer on a graph: the sound (filled), the learned
   noise (grey line) and the threshold (orange line). Frequencies under

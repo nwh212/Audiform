@@ -1,10 +1,10 @@
 {
-  "name": "altered-audio-editor",
+  "name": "audiform",
   "private": true,
   "version": "0.2.0",
-  "description": "Free, open-source multitrack audio editor for podcasters and voiceover, by The GCRN.",
+  "description": "Free, open-source multitrack audio editor. Based on Altered Audio Editor by The GCRN.",
   "license": "GPL-3.0-or-later",
-  "author": "The GeekCast Radio Network, LLC",
+  "author": "The Audiform contributors (based on Altered Audio Editor by The GeekCast Radio Network, LLC)",
   "type": "module",
   "scripts": {
     "bump": "node scripts/bump-version.mjs",

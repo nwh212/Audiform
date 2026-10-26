@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Imports every real `.sesx` in the repo's `samples/` folder (kept out
 //! of git) and prints what came across. Run on demand:
@@ -8,8 +8,8 @@
 
 use std::path::PathBuf;
 
-use altered_audio_editor_lib::session::validate::validate;
-use altered_audio_editor_lib::sesx::import;
+use audiform_lib::session::validate::validate;
+use audiform_lib::sesx::import;
 
 #[test]
 #[ignore = "needs real sessions in samples/"]

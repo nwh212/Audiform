@@ -1,6 +1,6 @@
 # Windows setup
 
-One-time setup to build and run Altered Audio Editor on Windows 10 or 11. Takes about 20 to 30 minutes, mostly downloads.
+One-time setup to build and run Audiform on Windows 10 or 11. Takes about 20 to 30 minutes, mostly downloads.
 
 Open **PowerShell** (Start menu, type "PowerShell"). Run each block, wait for it to finish, then move on.
 
@@ -62,12 +62,12 @@ winget install --id Git.Git
 ## 6. First run
 
 ```powershell
-cd $HOME\GCRN\altered-audio-editor
+cd $HOME\audiform
 npm install
 npm run tauri dev
 ```
 
-The first `tauri dev` compiles every Rust dependency. Expect 3 to 8 minutes. Later runs take seconds. A dark window titled "Altered Audio Editor" opens, and the status bar at the bottom shows the core version and "Session format v1". That means the frontend and the Rust core are talking.
+The first `tauri dev` compiles every Rust dependency. Expect 3 to 8 minutes. Later runs take seconds. A dark window titled "Audiform" opens, and the status bar at the bottom shows the core version and "Session format v1". That means the frontend and the Rust core are talking.
 
 Close the window or press Ctrl+C in PowerShell to stop.
 
@@ -96,10 +96,10 @@ git add .
 git commit -m "chore: P1 scaffold and data model"
 ```
 
-To push to GitHub, create an empty repo named `altered-audio-editor` on github.com (no README, no license, both are already here), then:
+To push to GitHub, create an empty repo named `audiform` on github.com (no README, no license, both are already here), then:
 
 ```powershell
-git remote add origin https://github.com/<your-account>/altered-audio-editor.git
+git remote add origin https://github.com/<your-account>/audiform.git
 git push -u origin main
 ```
 

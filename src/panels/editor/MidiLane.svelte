@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A MIDI track's lane: its clips over a bar and beat grid. Double-click
   empty space for a new one-bar clip; double-click a clip to edit its

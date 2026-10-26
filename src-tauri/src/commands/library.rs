@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Libraries panel commands. The interface edits a whole `Library`
 //! value and saves it back; files are copied in by `library_import`.
@@ -15,7 +15,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::library::store::{self, Skipped};
 use crate::library::{Library, LibraryItem};
 
-/// Where new libraries go by default: Documents/Altered Audio/Libraries.
+/// Where new libraries go by default: Documents/Audiform/Libraries.
 #[tauri::command]
 pub fn library_default_root(app: AppHandle) -> Result<PathBuf, String> {
     let docs = app
@@ -23,7 +23,7 @@ pub fn library_default_root(app: AppHandle) -> Result<PathBuf, String> {
         .document_dir()
         .or_else(|_| app.path().home_dir())
         .map_err(|e| e.to_string())?;
-    Ok(docs.join("Altered Audio").join("Libraries"))
+    Ok(docs.join("Audiform").join("Libraries"))
 }
 
 #[tauri::command]

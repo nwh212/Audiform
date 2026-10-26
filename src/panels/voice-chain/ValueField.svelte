@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A control's value in a number box. Click it to type a value (Enter
   sets it, Escape leaves it), or drag up or down on it to change it (Ctrl for

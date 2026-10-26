@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Altered Audio Editor needs your microphone or audio interface to record. Audio stays on this computer.</string>
+    <string>Audiform needs your microphone or audio interface to record. Audio stays on this computer.</string>
 </dict>
 </plist>

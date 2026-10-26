@@ -1,6 +1,6 @@
 # Design principles
 
-Written down so the intent is on record. Altered Audio Editor is its own product.
+Written down so the intent is on record. Altered Audio Editor, and Audiform after it, is its own product.
 
 ## Similar where it helps, ours everywhere else
 

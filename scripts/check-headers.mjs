@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
-// Fails if any source file is missing the GPLv3 copyright header.
+// Fails if any source file is missing the GPLv3 header: the license line
+// and a copyright line. Files from Altered Audio Editor keep The GeekCast
+// Radio Network's copyright; files new in Audiform name their own authors.
 // Run with: node scripts/check-headers.mjs
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -13,10 +15,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCAN = ["src", "src-tauri/src", "src-tauri/tests", "scripts"];
 const EXTENSIONS = new Set([".rs", ".ts", ".js", ".mjs", ".svelte", ".css"]);
 const SKIP_DIRS = new Set(["node_modules", "target", "gen", "fixtures", "dist"]);
-const REQUIRED = [
-  "SPDX-License-Identifier: GPL-3.0-or-later",
-  "Copyright (c) The GeekCast Radio Network, LLC.",
-];
+const REQUIRED = ["SPDX-License-Identifier: GPL-3.0-or-later", "Copyright (c) "];
 
 /**
  * @param {string} dir

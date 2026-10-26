@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! The open session, owned by the core. The interface sends edits as
 //! ops and gets back the new session plus the op that undoes the edit.
@@ -114,7 +114,7 @@ pub struct NewSessionOptions {
     pub folder: Option<PathBuf>,
 }
 
-/// Default folder for new sessions: Documents/Altered Audio/Sessions.
+/// Default folder for new sessions: Documents/Audiform/Sessions.
 #[tauri::command]
 pub fn session_default_folder(app: AppHandle) -> Result<PathBuf, String> {
     let paths = app.path();
@@ -122,7 +122,7 @@ pub fn session_default_folder(app: AppHandle) -> Result<PathBuf, String> {
         .document_dir()
         .or_else(|_| paths.home_dir().map(|h| h.join("Documents")))
         .map_err(|e| e.to_string())?;
-    Ok(docs.join("Altered Audio").join("Sessions"))
+    Ok(docs.join("Audiform").join("Sessions"))
 }
 
 /// The first "`base` N" (N from 1) with no session folder of that name in
@@ -508,7 +508,7 @@ pub async fn session_pick_save(app: AppHandle, name: String) -> Result<Option<Pa
             .file()
             .set_title("Save Session")
             .set_file_name(format!("{name}.{EXTENSION}"))
-            .add_filter("Altered Audio session", &[EXTENSION]);
+            .add_filter("Audiform session", &[EXTENSION]);
         if let Some(w) = parent.as_ref() {
             d = d.set_parent(w);
         }
@@ -530,7 +530,7 @@ pub async fn session_pick_open(app: AppHandle, sesx: bool) -> Result<Option<Path
                 .add_filter("Multitrack session (.sesx)", &["sesx"])
         } else {
             d.set_title("Open Session")
-                .add_filter("Altered Audio session", &[EXTENSION])
+                .add_filter("Audiform session", &[EXTENSION])
         };
         if let Some(w) = parent.as_ref() {
             d = d.set_parent(w);
@@ -555,7 +555,7 @@ pub async fn file_pick_open(app: AppHandle) -> Result<Vec<PathBuf>, String> {
             .file()
             .set_title("Open")
             .add_filter("Sessions and audio files", &all)
-            .add_filter("Altered Audio session", &[EXTENSION])
+            .add_filter("Audiform session", &[EXTENSION])
             .add_filter("Multitrack session (.sesx)", &["sesx"])
             .add_filter("Audio files", crate::codecs::SUPPORTED_EXTENSIONS);
         if let Some(w) = parent.as_ref() {

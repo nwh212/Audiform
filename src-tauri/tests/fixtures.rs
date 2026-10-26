@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Frozen sample files for every format version ever shipped.
 //!
@@ -21,12 +21,10 @@ mod common;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
-use altered_audio_editor_lib::library::{Library, Template};
-use altered_audio_editor_lib::session::document::{load, to_json};
-use altered_audio_editor_lib::session::validate::validate;
-use altered_audio_editor_lib::session::{
-    Document, HostProfile, Keymap, Preferences, Session, Workspace,
-};
+use audiform_lib::library::{Library, Template};
+use audiform_lib::session::document::{load, to_json};
+use audiform_lib::session::validate::validate;
+use audiform_lib::session::{Document, HostProfile, Keymap, Preferences, Session, Workspace};
 
 fn fixture_path(version: u32, name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

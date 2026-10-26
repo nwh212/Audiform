@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Phase Curve on a graph: frequency across (log scale, 10 Hz to 24 kHz),
   the phase turn up and down (±180° or ±360°, from the Range control).

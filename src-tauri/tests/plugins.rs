@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! VST3 plug-ins end to end: scan a real bundle with the editor's own
 //! executable as the host, mix through it in a Voice Chain, keep its
@@ -11,12 +11,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
 
-use altered_audio_editor_lib::export::mixdown::{render_mix, MixdownRequest};
-use altered_audio_editor_lib::plugins::{self, instance};
-use altered_audio_editor_lib::session::model::{
+use audiform_lib::export::mixdown::{render_mix, MixdownRequest};
+use audiform_lib::plugins::{self, instance};
+use audiform_lib::session::model::{
     new_id, ChannelLayout, EffectSlot, MediaRef, MidiClip, Note, Session, Tempo, Track,
 };
-use altered_audio_editor_lib::session::ops::{apply, ClipSpec, Op};
+use audiform_lib::session::ops::{apply, ClipSpec, Op};
 
 /// The id a scanned plug-in gets. The byte order of a class id differs
 /// between Windows and elsewhere, so the tests ask the registry by name
@@ -174,10 +174,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let dir = tempfile::tempdir().unwrap();
     let folder = dir.path().join("MyPlugins");
     bundle(&folder);
-    std::env::set_var(
-        "ALTERED_PLUGIN_HOST",
-        env!("CARGO_BIN_EXE_altered-audio-editor"),
-    );
+    std::env::set_var("ALTERED_PLUGIN_HOST", env!("CARGO_BIN_EXE_audiform"));
     plugins::load(dir.path());
 
     // The user's folder is searched; the plug-in is found and cached.
@@ -190,8 +187,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         plugins::snapshot().failed
     );
     assert!(dir.path().join("plugins.json").is_file());
-    let info =
-        altered_audio_editor_lib::dsp::effects::info(&effect_id()).expect("a plug-in is an effect");
+    let info = audiform_lib::dsp::effects::info(&effect_id()).expect("a plug-in is an effect");
     assert_eq!(info.name, "Altered Test Gain");
     assert_eq!(info.params[0].key, "p0");
     // The synth is an instrument: offered to MIDI tracks, not Voice Chains.
@@ -329,7 +325,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     // Playback of a session without buses runs each track on its own
     // (faders on the audio thread): the track's effects still apply.
     {
-        use altered_audio_editor_lib::engine::{graph, plan, render::Renderer};
+        use audiform_lib::engine::{graph, plan, render::Renderer};
         let mut m = graph::Mix::new(
             Renderer::new(plan::build(&s, 48_000), 0),
             graph::Graph::new(&s, 48_000, false),
@@ -351,10 +347,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     let y = mix_range(&s, 7_000, 8_000);
     assert_eq!((y[0] * 1_000.0).round() / 1_000.0, 0.25);
     // The session runs to the clip's end.
-    assert_eq!(
-        altered_audio_editor_lib::export::mixdown::session_end(&s),
-        30_000
-    );
+    assert_eq!(audiform_lib::export::mixdown::session_end(&s), 30_000);
     // A slower tempo moves the note: at 60 BPM it starts at 12,000.
     apply(
         &mut s,
@@ -385,7 +378,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
     // A note heard while editing: it sounds, lets go after the hold, and
     // the preview ends after a short tail.
     let make = instance::audition(&inst, 60, 1.0, 0.1).expect("starts");
-    let rate = altered_audio_editor_lib::engine::output::device_rate();
+    let rate = audiform_lib::engine::output::device_rate();
     let mut fill = make(2, rate).unwrap();
     let mut heard = Vec::new();
     let mut block = Vec::new();
@@ -425,10 +418,7 @@ fn a_real_reverb_rings_on_a_midi_track() {
     let dir = tempfile::tempdir().unwrap();
     let folder = dir.path().join("MyPlugins");
     bundle(&folder);
-    std::env::set_var(
-        "ALTERED_PLUGIN_HOST",
-        env!("CARGO_BIN_EXE_altered-audio-editor"),
-    );
+    std::env::set_var("ALTERED_PLUGIN_HOST", env!("CARGO_BIN_EXE_audiform"));
     plugins::load(dir.path());
     plugins::set_folder(&folder, true);
     plugins::set_folder(&rev, true);
@@ -494,7 +484,7 @@ fn a_real_reverb_rings_on_a_midi_track() {
     let wet = mix_range(&s, 0, 60_000);
     println!("export: dry tail {} wet tail {}", tail(&dry), tail(&wet));
     // Playback of a session without buses.
-    use altered_audio_editor_lib::engine::{graph, plan, render::Renderer};
+    use audiform_lib::engine::{graph, plan, render::Renderer};
     let mut m = graph::Mix::new(
         Renderer::new(plan::build(&s, 48_000), 0),
         graph::Graph::new(&s, 48_000, false),

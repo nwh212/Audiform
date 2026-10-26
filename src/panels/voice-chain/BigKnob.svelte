@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A large dial with a numbered scale, for the hardware-style effect
   windows. Drag up or down to turn it (Ctrl for fine steps, Shift for

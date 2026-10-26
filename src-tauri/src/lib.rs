@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
-//! Altered Audio Editor core.
+//! Audiform core (based on Altered Audio Editor).
 //!
 //! The interface never touches audio. It sends commands to this core
 //! and renders the state it gets back.
 
 pub mod browse;
+mod carry_over;
 pub mod codecs;
 pub mod commands;
 pub mod dsp;
@@ -34,6 +35,13 @@ pub fn run() {
         .manage(commands::wave::Playing::default())
         .setup(|app| {
             use tauri::Manager;
+            // Settings from Altered Audio Editor, the first time.
+            for dir in [app.path().app_config_dir(), app.path().app_data_dir()]
+                .into_iter()
+                .flatten()
+            {
+                carry_over::carry_over(&dir);
+            }
             if let Ok(dir) = app.path().app_config_dir() {
                 plugins::load(&dir);
             }
@@ -186,5 +194,5 @@ pub fn run() {
             commands::workspace::workspace_clear,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Altered Audio Editor");
+        .expect("error while running Audiform");
 }

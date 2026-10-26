@@ -55,41 +55,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "altered-audio-editor"
-version = "0.2.0"
-dependencies = [
- "altered-os-aac",
- "altered-plughost",
- "audioadapter-buffers",
- "chrono",
- "cpal",
- "ebur128",
- "flacenc",
- "hound",
- "mp3lame-encoder",
- "opus-decoder",
- "pathdiff",
- "pretty_assertions",
- "realfft",
- "roxmltree",
- "rtrb",
- "rubato",
- "schemars 1.2.2",
- "serde",
- "serde_json",
- "symphonia",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tempfile",
- "thiserror 2.0.21",
- "url",
- "uuid",
- "zip",
-]
-
-[[package]]
 name = "altered-os-aac"
 version = "0.1.0"
 dependencies = [
@@ -294,6 +259,41 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "audiform"
+version = "0.2.0"
+dependencies = [
+ "altered-os-aac",
+ "altered-plughost",
+ "audioadapter-buffers",
+ "chrono",
+ "cpal",
+ "ebur128",
+ "flacenc",
+ "hound",
+ "mp3lame-encoder",
+ "opus-decoder",
+ "pathdiff",
+ "pretty_assertions",
+ "realfft",
+ "roxmltree",
+ "rtrb",
+ "rubato",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tempfile",
+ "thiserror 2.0.21",
+ "url",
+ "uuid",
+ "zip",
+]
 
 [[package]]
 name = "audio-codec-algorithms"

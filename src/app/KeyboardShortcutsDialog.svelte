@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Edit > Keyboard Shortcuts. Lists every command with its shortcut and
   lets the user change, clear, or reset them. Changes save right away.

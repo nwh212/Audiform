@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Restoration effects: Noise Reducer, Hiss Reducer, Room Reducer,
 //! Click Repair, Clip Repair and DC Offset Fix. Original code built from

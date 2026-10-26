@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 //
 // Adapted from the gain example of the `vst3` crate
 // (https://github.com/coupler-rs/vst3-rs, MIT or Apache-2.0,

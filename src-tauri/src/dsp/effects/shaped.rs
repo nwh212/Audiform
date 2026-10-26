@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Shaped Noise Reducer. Learns a noise print from a selection, like the
 //! Noise Print Reducer, then works as a gate on every frequency: a bin

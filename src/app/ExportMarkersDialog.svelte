@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   File > Export > Markers and Chapters: writes the session's markers as
   a timestamp list, a CSV spreadsheet or podcast chapters JSON, with a

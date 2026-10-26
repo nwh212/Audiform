@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! The objects a VST3 host hands to a plug-in: the host itself, memory
 //! streams for saving settings, parameter change lists, the handler the
@@ -69,7 +69,7 @@ impl Class for HostApp {
 
 impl IHostApplicationTrait for HostApp {
     unsafe fn getName(&self, name: *mut String128) -> tresult {
-        copy_wstring("Altered Audio Editor", &mut *name);
+        copy_wstring("Audiform", &mut *name);
         kResultOk
     }
 

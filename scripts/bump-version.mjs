@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 /**
  * Bumps the app version in every file that carries it, so they never
@@ -64,8 +64,8 @@ write("src-tauri/Cargo.toml", toml2);
 
 // Cargo.lock: the app's own entry.
 const lock = read("src-tauri/Cargo.lock");
-const lock2 = lock.replace(/(name = "altered-audio-editor"\nversion = ")[^"]+(")/, `$1${next}$2`);
-if (lock2 === lock) throw new Error("src-tauri/Cargo.lock: altered-audio-editor entry not found");
+const lock2 = lock.replace(/(name = "audiform"\nversion = ")[^"]+(")/, `$1${next}$2`);
+if (lock2 === lock) throw new Error("src-tauri/Cargo.lock: audiform entry not found");
 write("src-tauri/Cargo.lock", lock2);
 
 console.log(`Version ${current} -> ${next}. Next: commit, push, then tag v${next} once CI is green.`);

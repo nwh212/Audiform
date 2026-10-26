@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   A question with a few buttons, such as Save / Don't Save / Cancel.
   Enter picks the primary button, Escape picks the last (cancel) one.

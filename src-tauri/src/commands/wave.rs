@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! The Waveform editor's file. It is held as a private one-track
 //! session whose clips are the edit list, so edits use the same ops,
@@ -582,7 +582,7 @@ pub async fn wave_save(
         .unwrap_or_default();
     let Some(kind) = FormatKind::from_extension(&ext) else {
         return Err(format!(
-            "Altered Audio Editor can open .{ext} files but can't write them. Use Save As and pick WAV, FLAC or MP3."
+            "Audiform can open .{ext} files but can't write them. Use Save As and pick WAV, FLAC or MP3."
         ));
     };
     let depth = bit_depth.unwrap_or(session.bit_depth);

@@ -1,12 +1,18 @@
-# Altered Audio Editor: project instructions
+# Audiform: project instructions
 
-Copyright (c) The GeekCast Radio Network, LLC. Licensed under GPLv3.
+Copyright (c) The GeekCast Radio Network, LLC (Altered Audio Editor) and the Audiform contributors. Licensed under GPLv3.
 
-Altered Audio Editor is a free, open-source audio editor built for podcasters and voiceover artists. It handles the full production workflow: multitrack editing, per-host voice processing, transcription, chapter export, and one-click publishing. Built by The GCRN, a podcast network producing independent audio content since 2009.
+Audiform is a free, open-source audio editor, a fork of Altered Audio Editor by Steve Phillips and The GeekCast Radio Network, LLC (The GCRN, a podcast network producing independent audio content since 2009). Altered Audio Editor was built for podcasters and voiceover artists: multitrack editing, per-host voice processing, transcription, chapter export, and one-click publishing. Audiform keeps all of that and adds music and immersive work: 3D Space sessions, MIDI, automation, tempo.
+
+**Fork rules (added for Audiform):**
+- The project lead is Broman (GitHub `nwh212`). Wherever this file says "project lead" or "maintainer", that is who decides for Audiform.
+- Give Altered Audio Editor and its authors full, generous credit (README, About, Help > Based on Altered Audio Editor, NOTICE.md). Keep every existing file's GCRN copyright line; new files name the Audiform contributors.
+- Never use the Altered Audio Editor name or logo as Audiform's own (see TRADEMARKS.md); only to say what Audiform is based on. Problem reports go to Audiform, not to the original project.
+- Stay easy to merge back: keep the file formats, ids and folder layout compatible, one feature per commit, decisions logged in `docs/decisions.md`. Everything here is offered to The GCRN under its CLA.
 
 This is not a clone of any commercial product. It is a purpose-built tool shaped by long podcast production experience. The editing model follows common professional audio workflows that any experienced editor will recognize. The design, naming, code, and podcast-specific features are original.
 
-It ships internally to The GCRN first, then free from thegcrn.com once battle-tested.
+Audiform ships from its own GitHub releases (github.com/nwh212/audiform).
 
 Source of truth for scope and phases: this file, with the reasons behind each choice in `docs/decisions.md`. There is no separate spec doc. Ask before deviating.
 
@@ -284,7 +290,7 @@ Zero logins, zero telemetry, zero tracking. The app is fully usable offline with
 - No network requests of any kind from the app or the core: no update checks, analytics, crash reporting or license checks.
 - No accounts or sign-in, ever.
 - The only web access is the Help menu opening pages in the user's browser when they pick a link, limited to the allow list in `src-tauri/src/commands/links.rs`.
-- A support link and the project lead's book, Altered Audio: Podcasting Demystified, live in the Help menu only. Never in the user's face, never a nag, never forced.
+- A support link for Steve Phillips (the original author) and his book, Altered Audio: Podcasting Demystified, live in the Help menu only, under Based on Altered Audio Editor. Never in the user's face, never a nag, never forced.
 - Updates (decided 2026-10-14, build after the first GitHub release): Help > Check for Updates, plus an optional weekly check that is OFF by default, set in Preferences and on the first-run screen as an unticked box. The check fetches one signed `latest.json` from GitHub Releases through the Tauri updater; no login, no API calls. A found update shows one line in the status bar, never a pop-up, never during playback or recording, never installs without a click. The privacy guard allows only the updater plugin and that one host.
 - Any future feature that needs the network (for example Podcast Manager sync) must be off by default, clearly labeled, and never required. See `PRIVACY.md`.
 

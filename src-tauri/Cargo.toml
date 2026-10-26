@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) The GeekCast Radio Network, LLC.
-# This file is part of Altered Audio Editor.
+# This file is part of Audiform, based on Altered Audio Editor.
 
 [package]
-name = "altered-audio-editor"
+name = "audiform"
 version = "0.2.0"
 description = "Free, open-source multitrack audio editor for podcasters and voiceover."
-authors = ["The GeekCast Radio Network, LLC"]
+authors = ["The Audiform contributors", "The GeekCast Radio Network, LLC (Altered Audio Editor)"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.90"
@@ -14,7 +14,7 @@ publish = false
 
 [lib]
 # The _lib suffix avoids a name clash with the binary on Windows.
-name = "altered_audio_editor_lib"
+name = "audiform_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

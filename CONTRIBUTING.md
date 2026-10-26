@@ -1,11 +1,11 @@
-# Contributing to Altered Audio Editor
+# Contributing to Audiform
 
 Thanks for helping. Bug fixes, small features, tests, translations of docs and hardware testing are all welcome. You do not need to be an expert, and you do not need to know Git well to start.
 
 ## Start here
 
 1. Open the [Roadmap](ROADMAP.md) or the Issues tab and look for the labels **good first issue** and **help wanted**.
-2. Comment on the issue ("I'd like to take this") so two people don't build the same thing. A maintainer will assign it to you.
+2. Comment on the issue ("I'd like to take this") so two people don't build the same thing.
 3. No code? Testing counts. Issues labeled **needs hardware testing** are for people with a specific interface, a Mac or Linux machine.
 
 ## How changes get in
@@ -15,7 +15,7 @@ Thanks for helping. Bug fixes, small features, tests, translations of docs and h
 3. Run the checks (the same ones CI runs): `npm run check`, `npm test`, `cargo fmt --check`, `cargo clippy`, `cargo test` from the README. They must pass.
 4. Open a pull request. The template has a checklist; fill it in and describe how you tested.
 
-The maintainers review every pull request. Nothing reaches `main` without a maintainer merging it. Bigger features: open an issue first so we can agree on the approach before you spend the time.
+Audiform is maintained by Broman ([nwh212](https://github.com/nwh212)), who reviews and merges pull requests. Bigger features: open an issue first so we can agree on the approach before you spend the time.
 
 ## Ground rules
 
@@ -24,17 +24,19 @@ The maintainers review every pull request. Nothing reaches `main` without a main
 - **Privacy stays absolute.** No network calls, telemetry, accounts or tracking. The CI privacy check enforces this.
 - **Every source file** starts with the GPL header used in the existing files.
 - **Plain UI text:** short sentences. Controls for features that don't exist yet show disabled with the reason.
-- **Keyboard shortcuts** are not added or changed without the maintainers' approval.
+- **Keyboard shortcuts** are not added or changed without the maintainer's approval.
 - **Audio code:** nothing in the audio callback may allocate, lock or wait. Ask in the issue if unsure.
 
-## Contributor agreement
+## Giving back to Altered Audio Editor
 
-Before your first pull request can be merged, you'll be asked to agree to the [Contributor License Agreement](CLA.md). In short: you keep the copyright on your work, your contribution is released under the project's license, and The GeekCast Radio Network, LLC may also license it under other terms so the project can stay maintained and sustainable. A bot will ask you once, in the pull request.
+Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor) by Steve Phillips and The GeekCast Radio Network, LLC, and it stays easy for them to take anything from Audiform. So that they can merge it, everything contributed to Audiform is also offered to The GeekCast Radio Network, LLC under the terms of Altered Audio Editor's [Contributor License Agreement](CLA.md). By opening a pull request here, you agree to that. In short: you keep the copyright on your work, it is released under GPL v3.0 or later, and The GeekCast Radio Network, LLC may use it in Altered Audio Editor under the terms of that agreement.
+
+To keep changes easy to carry over: one feature per commit, the same folder layout, and a line in `docs/decisions.md` for each choice.
 
 ## Reporting bugs
 
-Use the bug report form in Issues. Include your OS and version, the app version (Help > About), what you did, what you expected and what happened. Security problems go through [SECURITY.md](SECURITY.md), not public issues.
+Use the bug report form in [Audiform's Issues](https://github.com/nwh212/audiform/issues). Please report Audiform problems here, not to the Altered Audio Editor project. Include your OS and version, the app version (Help > About), what you did, what you expected and what happened. Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
 ## Name and logo
 
-The code is GPL. The name "Altered Audio Editor" and its logo are not; see [TRADEMARKS.md](TRADEMARKS.md). Forks are welcome under a different name.
+The code is GPL. Names and logos are not: "Altered Audio Editor" and its logo belong to The GeekCast Radio Network, LLC, and Audiform has its own. See [TRADEMARKS.md](TRADEMARKS.md). Forks of Audiform are welcome under a different name.

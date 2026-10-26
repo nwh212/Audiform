@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 use serde::Serialize;
 
@@ -57,7 +57,7 @@ mod tests {
     }
 }
 
-/// Sets the window title, for example "Ep 440 * - Altered Audio Editor".
+/// Sets the window title, for example "Ep 440 * - Audiform".
 #[tauri::command]
 pub fn app_set_title(app: tauri::AppHandle, title: String) -> Result<(), String> {
     use tauri::Manager;

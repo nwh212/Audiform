@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 /**
  * Typed wrappers around Tauri commands. Components call these,
@@ -720,7 +720,7 @@ export function templateDelete(path: string): Promise<void> {
   return invoke<void>("template_delete", { path });
 }
 
-/** Documents/Altered Audio/Sessions. */
+/** Documents/Audiform/Sessions. */
 export function sessionDefaultFolder(): Promise<string> {
   return invoke<string>("session_default_folder");
 }

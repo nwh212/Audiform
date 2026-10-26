@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   Mixer: one strip per track (pan, mute, solo, arm, fader, level meter),
   one per bus, and the master strip. Each track and bus strip picks its

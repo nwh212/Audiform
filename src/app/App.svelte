@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) The GeekCast Radio Network, LLC.
-  This file is part of Altered Audio Editor.
+  This file is part of Audiform, based on Altered Audio Editor.
 
   App shell: menu bar, docking layout, status bar.
 -->
@@ -1576,7 +1576,7 @@
     askRecover: (r: Recoverable) =>
       ask(
         "Recover unsaved work?",
-        `Altered Audio Editor did not close normally. "${r.note.original_path ? displayName(r.note.original_path, null) : r.note.name}" has unsaved work from ${new Date(r.note.saved_at).toLocaleString()}. Recover it?`,
+        `Audiform did not close normally. "${r.note.original_path ? displayName(r.note.original_path, null) : r.note.name}" has unsaved work from ${new Date(r.note.saved_at).toLocaleString()}. Recover it?`,
         [
           { label: "Recover", value: "yes", primary: true },
           { label: "Discard", value: "no" },
@@ -3182,7 +3182,7 @@
       actions.register({ id: "help.shortcuts", run: () => void (shortcutsOpen = true) }),
       actions.register({ id: "help.website", run: () => openLink(LINKS.website) }),
       actions.register({ id: "help.book", run: () => openLink(LINKS.book) }),
-      actions.register({ id: "help.discord", run: () => openLink(LINKS.discord) }),
+      actions.register({ id: "help.original", run: () => openLink(LINKS.original) }),
       actions.register({ id: "help.update", run: () => openLink(LINKS.releases) }),
       actions.register({ id: "help.github", run: () => openLink(LINKS.github) }),
       actions.register({ id: "help.report", run: () => openLink(LINKS.report) }),
@@ -4323,6 +4323,8 @@
     if (pluginsUrl) offs.push(actions.register({ id: "help.plugins", run: () => openLink(pluginsUrl) }));
     const supportUrl = LINKS.support;
     if (supportUrl) offs.push(actions.register({ id: "help.support", run: () => openLink(supportUrl) }));
+    const discordUrl = LINKS.discord;
+    if (discordUrl) offs.push(actions.register({ id: "help.discord", run: () => openLink(discordUrl) }));
     // Shows the 3D Space panel (without closing it when already open).
     offs.push(
       actions.register({

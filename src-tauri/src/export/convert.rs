@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) The GeekCast Radio Network, LLC.
-// This file is part of Altered Audio Editor.
+// This file is part of Audiform, based on Altered Audio Editor.
 
 //! Converting one audio file to another format: any file the app opens,
 //! to WAV, FLAC, MP3 or M4A. Used by Batch Convert and by Save As in the
