@@ -14,6 +14,7 @@ pub mod cache;
 pub mod devices;
 pub mod effects;
 pub mod export;
+pub mod firewall;
 pub mod generate;
 pub mod keymap;
 pub mod library;

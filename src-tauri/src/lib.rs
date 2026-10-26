@@ -96,6 +96,8 @@ pub fn run() {
             commands::amp::amp_pick,
             commands::amp::amp_load_model,
             commands::amp::amp_load_ir,
+            commands::firewall::firewall_status,
+            commands::firewall::firewall_block,
             commands::reverb::reverb_pick,
             commands::reverb::reverb_load,
             commands::plugins::plugins_registry,

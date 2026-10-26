@@ -123,7 +123,7 @@
   import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
   import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
-  import { pathsIgnoreCase } from "../lib/platform";
+  import { pathsIgnoreCase, PLATFORM } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { PLUGIN_SLOTS, RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
@@ -146,6 +146,8 @@
     exportMixdown,
     pluginEvents,
     pluginCloseWindow,
+    firewallStatus,
+    firewallBlock,
     pluginState,
     exportBounce,
     exportMerge,
@@ -2321,6 +2323,39 @@
     }
     return changes.length ? changes : null;
   }
+  /** The network-prompt offer was made once (or answered); it is not made again on its own. */
+  const KEY_FIREWALL_OFFERED = "firewall.offered";
+  /**
+   * Some plug-ins listen for connections, and Windows then asks whether
+   * Audiform may use public networks. A firewall rule blocking incoming
+   * connections for Audiform answers ahead of time. `quiet` is the
+   * one-time offer at startup: it says nothing when all is well.
+   */
+  async function offerFirewallRule(quiet: boolean) {
+    const s = await firewallStatus();
+    if (!s.supported) return;
+    if (s.covered) {
+      if (!quiet) showNotice("Windows already blocks incoming connections for Audiform, so plug-ins should not make it ask about networks.");
+      return;
+    }
+    prefs.set(KEY_FIREWALL_OFFERED, true);
+    const pick = await ask(
+      "Stop Network Prompts From Plug-ins",
+      "Some plug-ins listen for connections (licence checks, or plug-ins of one maker finding each other), and Windows then asks whether Audiform may use public networks. Audiform itself never uses the network.\n\nAudiform can tell Windows to block incoming connections for it, so the question never comes up. Plug-ins on this computer still reach each other. Windows asks for administrator permission once.",
+      [
+        { label: "Not Now", value: "no" },
+        { label: "Block and Stop Asking", value: "yes", primary: true },
+      ],
+    );
+    if (pick !== "yes") return;
+    try {
+      const after = await firewallBlock();
+      showNotice(after.covered ? "Done: Windows now blocks incoming connections for Audiform and will not ask again." : "The rule could not be confirmed. Try Effects > Stop Network Prompts From Plug-ins again.");
+    } catch (e) {
+      showError(e);
+    }
+  }
+
   /** Return to Start on Stop, kept between runs. */
   const KEY_RETURN_ON_STOP = "transport.return-on-stop";
   /** How far one nudge moves clips: five pixels at the current zoom. */
@@ -4154,6 +4189,7 @@
         },
         checked: () => transport.returnOnStop,
       }),
+      actions.register({ id: "fx.firewall", run: () => offerFirewallRule(false), visible: () => PLATFORM === "windows" }),
       actions.register({
         id: "fx.hide-windows",
         run: () => {
@@ -4587,6 +4623,11 @@
         // Editor settings (snapping, crossfades, time format) carry over between runs.
         restoreSettings(prefs.raw(KEY_EDITOR));
         transport.returnOnStop = prefs.raw(KEY_RETURN_ON_STOP) === true;
+        // Once, on Windows with plug-ins scanned: offer to stop the network prompts if nothing stops them yet.
+        if (PLATFORM === "windows" && prefs.raw(KEY_FIREWALL_OFFERED) !== true)
+          void pluginsRegistry()
+            .then((r) => (r.plugins.length ? offerFirewallRule(true) : undefined))
+            .catch(() => {});
         settings.set(sanitizeSettings(prefs.raw(KEY_SETTINGS)));
         applyAppSettings(settings.current, false);
         offs.push(startMetronome());

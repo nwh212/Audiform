@@ -85,6 +85,8 @@
     margin: 0;
     color: var(--text-dim);
     line-height: 1.45;
+    /* Blank lines in a message separate its paragraphs. */
+    white-space: pre-line;
   }
 
   footer {

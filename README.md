@@ -64,7 +64,7 @@ Windows 10 and 11 (64-bit). Get the latest build from the [Releases page](https:
 - **`Audiform-<version>-portable.zip`** needs no install. Unzip it anywhere, including a USB drive, and run the app.
 - **`SHA256SUMS.txt`** lists a checksum for each file so you can confirm your download is intact.
 
-The app is not code signed yet, so Windows SmartScreen may say it does not recognize it. Choose More info, then Run anyway. Builds are made by GitHub Actions from the tagged source, so what you download matches what is in this repository.
+The app is not code signed yet, so Windows SmartScreen may say it does not recognize it. Choose More info, then Run anyway. The installed app does not ask again. **Using the portable zip?** Right-click the zip, choose Properties, tick Unblock and press OK before unzipping; otherwise Windows marks every file inside as downloaded and warns each time you start the app. Builds are made by GitHub Actions from the tagged source, so what you download matches what is in this repository.
 
 A few antivirus scanners may flag the installer with a low-confidence guess. That is common for new, unsigned installers and goes away as the file builds a reputation. To check your copy, compare its SHA-256 with `SHA256SUMS.txt` (in PowerShell: `Get-FileHash <file>`).
 

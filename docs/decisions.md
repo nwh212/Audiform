@@ -1582,3 +1582,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-28: README header banner
 
 - The project lead's banner (the mark and the name in a glassy rainbow frame over a lake) is the README header, kept as `brand/banner.webp`. It replaces the logo there; the logo files stay for the About dialog and elsewhere.
+
+## 2026-10-28: Network prompts from plug-ins, checked and fixed from inside the app
+
+- **Why the prompt still came up:** the installer's firewall rule covers only an installed copy, and only if the administrator prompt was accepted. A portable copy, or a declined prompt, leaves no rule, so a plug-in that listens makes Windows ask.
+- **Effects > Stop Network Prompts From Plug-ins** (Windows) checks whether Windows blocks incoming connections for this exact `Audiform.exe` and, if not, adds the rule with one administrator prompt. A rule Windows made itself (after Cancel on its question) counts too. Audiform still never uses the network; the check only asks Windows about its own firewall.
+- **Offered once at startup** on Windows when plug-ins have been scanned and no rule covers the program. Not offered again on its own; the menu item stays.
+- **README:** the portable zip should be unblocked before unzipping, or Windows warns every time the app starts.

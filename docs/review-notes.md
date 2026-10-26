@@ -52,3 +52,8 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Nudge distance is five pixels at the current zoom** (fine when zoomed in, coarse when zoomed out). A fixed time or grid step is the other common choice. Nudge moves audio clips only, not MIDI clips.
 - **Pressing 9 (or 1) with no file open in the Waveform editor** opens the New Audio File dialog, which then takes the keys. That is how it was built; say if 9 should just switch to an empty Waveform editor instead.
 - **Shift+D toggles the Waveform editor's spectrum view;** in the multitrack view it only flips that setting, so nothing visible changes there.
+
+## Network prompts and the unsigned warning
+
+- **One-time startup offer** to add the firewall rule (Windows, with plug-ins scanned, when no rule covers Audiform). Answering either way stops the offer; the Effects menu item stays.
+- **MSI would not remove the "unsigned" warning:** an unsigned MSI gets the same SmartScreen warning. The fix is code signing (see the reply in chat for options). Until then: the installed app warns only once per download; the portable zip warns every start unless the zip is unblocked first (now in the README).

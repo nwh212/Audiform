@@ -216,6 +216,7 @@ describe("menu model", () => {
       "fx.add.center_extractor",
       "fx.add.convolution_reverb",
       "multitrack.return-on-stop",
+      "fx.firewall",
       "clip.nudge-left",
       "clip.nudge-right",
       "fx.hide-windows",

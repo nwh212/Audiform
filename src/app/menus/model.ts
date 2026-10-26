@@ -449,6 +449,7 @@ export const MENUS: readonly Menu[] = [
         }),
       ]),
       item("fx.plugin-manager", "Plug-in Manager..."),
+      item("fx.firewall", "Stop Network Prompts From Plug-ins..."),
     ],
   },
   {

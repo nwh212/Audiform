@@ -572,6 +572,24 @@ export function ampLoadIr(path: string, data: string | null): Promise<string> {
   return invoke<string>("amp_load_ir", { path, data });
 }
 
+/** Whether Windows blocks incoming connections for Audiform (so plug-ins never make it ask about networks). */
+export interface FirewallStatus {
+  /** False off Windows, where nothing asks. */
+  supported: boolean;
+  covered: boolean;
+  /** The program file the rule is for. */
+  program: string;
+}
+
+export function firewallStatus(): Promise<FirewallStatus> {
+  return invoke<FirewallStatus>("firewall_status");
+}
+
+/** Adds the rule (one administrator prompt) and returns the new status. */
+export function firewallBlock(): Promise<FirewallStatus> {
+  return invoke<FirewallStatus>("firewall_block");
+}
+
 /** A Convolution Reverb response file, described for its window. */
 export interface ReverbIr {
   /** The slot data that names it. */
