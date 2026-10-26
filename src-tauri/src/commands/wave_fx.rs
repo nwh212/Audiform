@@ -11,7 +11,7 @@
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, State};
 
-use super::spectral::{is_mono, render, snapshot, write_stretch, SpectralResult};
+use super::spectral::{by_pairs, render_n, snapshot, write_n, SpectralResult};
 use super::wave::OpenWave;
 use crate::dsp::effects::ChainProcessor;
 use crate::export::mixdown;
@@ -77,28 +77,20 @@ pub async fn wave_apply_chain(
         if end <= start {
             return Err("Select some audio first, or apply to the whole file.".into());
         }
-        let Some(mut c) = ChainProcessor::new(&chain, rate) else {
-            return Err(
-                "The Voice Chain is empty or bypassed, so there is nothing to apply.".into(),
-            );
-        };
+        let empty = || "The FX Chain is empty or bypassed, so there is nothing to apply.";
+        let latency = ChainProcessor::new(&chain, rate).ok_or(empty())?.latency();
         let warm = (f64::from(rate) * WARM_SECONDS) as usize;
-        let latency = c.latency();
         let from = start as i64 - warm as i64;
         let to = end as i64 + latency as i64;
-        let audio = render(&session, from, to);
+        let (audio, n) = render_n(&session, from, to);
         let frames = (end - start) as usize;
         let edge = (f64::from(rate) * EDGE_SECONDS) as usize;
-        let out = process_range(&mut c, &audio, warm, frames, edge);
-        let media = write_stretch(
-            &dir,
-            "voice-chain",
-            &out,
-            0,
-            frames,
-            rate,
-            is_mono(&session),
-        )?;
+        // A multichannel file goes through the chain a pair of channels at a time.
+        let out = by_pairs(&audio, n, |st| {
+            let mut c = ChainProcessor::new(&chain, rate).ok_or(empty())?;
+            Ok(process_range(&mut c, st, warm, frames, edge))
+        })?;
+        let media = write_n(&dir, "voice-chain", &out, n, 0, frames, rate)?;
         Ok(SpectralResult { media, start, end })
     })
     .await
@@ -149,31 +141,21 @@ pub async fn wave_stretch(
         if !(0.25..=4.0).contains(&ratio) {
             return Err("Stretch works from a quarter to four times the length.".into());
         }
-        let audio = render(&session, start as i64, end as i64);
-        let out = stretch_to(&audio, frames as usize, rate);
-        let media = write_stretch(
-            &dir,
-            "stretch",
-            &out,
-            0,
-            frames as usize,
-            rate,
-            is_mono(&session),
-        )?;
+        let (audio, n) = render_n(&session, start as i64, end as i64);
+        let out = by_pairs(&audio, n, |st| Ok(stretch_to(st, frames as usize, rate)))?;
+        let media = write_n(&dir, "stretch", &out, n, 0, frames as usize, rate)?;
         Ok(SpectralResult { media, start, end })
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Reverse (play backwards) or invert (flip polarity) interleaved stereo audio.
-fn reverse_or_invert(audio: &[f32], mode: &str) -> Result<Vec<f32>, String> {
+/// Reverse (play backwards) or invert (flip polarity) audio of `n` interleaved channels.
+fn reverse_or_invert(audio: &[f32], n: usize, mode: &str) -> Result<Vec<f32>, String> {
+    let n = n.max(1);
     match mode {
         "invert" => Ok(audio.iter().map(|v| -v).collect()),
-        "reverse" => Ok((0..audio.len() / 2)
-            .rev()
-            .flat_map(|i| [audio[i * 2], audio[i * 2 + 1]])
-            .collect()),
+        "reverse" => Ok(audio.chunks_exact(n).rev().flatten().copied().collect()),
         _ => Err("Unknown edit.".into()),
     }
 }
@@ -196,10 +178,10 @@ pub async fn wave_reverse_invert(
         if end <= start {
             return Err("Select some audio first, or use the whole file.".into());
         }
-        let audio = render(&session, start as i64, end as i64);
-        let out = reverse_or_invert(&audio, &mode)?;
+        let (audio, n) = render_n(&session, start as i64, end as i64);
+        let out = reverse_or_invert(&audio, n, &mode)?;
         let frames = (end - start) as usize;
-        let media = write_stretch(&dir, &mode, &out, 0, frames, rate, is_mono(&session))?;
+        let media = write_n(&dir, &mode, &out, n, 0, frames, rate)?;
         Ok(SpectralResult { media, start, end })
     })
     .await
@@ -207,25 +189,24 @@ pub async fn wave_reverse_invert(
 }
 
 /// Where one output channel of a one-channel edit comes from: the file
-/// before the edit or after it, and which of its channels (0 left, 1 right).
+/// before the edit or after it, and which of its channels (from 0).
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct ChannelSource {
     pub after: bool,
     pub channel: u8,
 }
 
-/// Interleaves two stereo renders channel by channel, as `take` says.
-pub fn merge_channels(before: &[f32], after: &[f32], take: &[ChannelSource; 2]) -> Vec<f32> {
-    let frames = before.len() / 2;
-    let mut out = Vec::with_capacity(frames * 2);
+/// Builds `take.len()` channels from two renders of `n` interleaved
+/// channels, each output channel as `take` says.
+pub fn merge_channels(before: &[f32], after: &[f32], n: usize, take: &[ChannelSource]) -> Vec<f32> {
+    let n = n.max(1);
+    let frames = before.len() / n;
+    let mut out = Vec::with_capacity(frames * take.len());
     for i in 0..frames {
         for t in take {
             let src = if t.after { after } else { before };
-            out.push(
-                src.get(i * 2 + usize::from(t.channel.min(1)))
-                    .copied()
-                    .unwrap_or(0.0),
-            );
+            let c = usize::from(t.channel).min(n - 1);
+            out.push(src.get(i * n + c).copied().unwrap_or(0.0));
         }
     }
     out
@@ -243,7 +224,7 @@ pub async fn wave_channel_edit(
     op: crate::session::ops::Op,
     start: u64,
     end: u64,
-    take: [ChannelSource; 2],
+    take: Vec<ChannelSource>,
 ) -> Result<SpectralResult, String> {
     let before = snapshot(&wave)?;
     let dir = crate::commands::cache::cache_root(&app)?.join("wave-fx");
@@ -254,19 +235,14 @@ pub async fn wave_channel_edit(
         }
         let mut after = before.clone();
         crate::session::ops::apply(&mut after, &op).map_err(|e| e.to_string())?;
-        let a = render(&before, start as i64, end as i64);
-        let b = render(&after, start as i64, end as i64);
-        let out = merge_channels(&a, &b, &take);
+        let (a, n) = render_n(&before, start as i64, end as i64);
+        let (b, _) = render_n(&after, start as i64, end as i64);
+        if take.len() != n {
+            return Err("The channel buttons don't match the file. Open it again.".into());
+        }
+        let out = merge_channels(&a, &b, n, &take);
         let frames = (end - start) as usize;
-        let media = write_stretch(
-            &dir,
-            "channel-edit",
-            &out,
-            0,
-            frames,
-            before.sample_rate,
-            false,
-        )?;
+        let media = write_n(&dir, "channel-edit", &out, n, 0, frames, before.sample_rate)?;
         Ok(SpectralResult { media, start, end })
     })
     .await
@@ -295,6 +271,23 @@ mod tests {
     }
 
     #[test]
+    fn multichannel_audio_runs_a_pair_at_a_time() {
+        // Three channels, two frames: pairs 1-2 and 3 (with silence beside it).
+        let audio = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let mut calls = 0;
+        let out = by_pairs(&audio, 3, |st| {
+            calls += 1;
+            Ok(st.iter().map(|v| v * 10.0).collect())
+        })
+        .unwrap();
+        assert_eq!(calls, 2, "a fresh run for each pair");
+        assert_eq!(out, vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
+        // Mono goes through both sides and back.
+        let mono = by_pairs(&[0.5, 0.25], 1, |st| Ok(st.to_vec())).unwrap();
+        assert_eq!(mono, vec![0.5, 0.25]);
+    }
+
+    #[test]
     fn merges_channels_from_before_and_after() {
         let before = vec![1.0f32, 2.0, 3.0, 4.0];
         let after = vec![10.0f32, 20.0, 30.0, 40.0];
@@ -309,7 +302,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            merge_channels(&before, &after, &left_edit),
+            merge_channels(&before, &after, 2, &left_edit),
             vec![10.0, 2.0, 30.0, 4.0]
         );
         // Left copied onto the right.
@@ -324,7 +317,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            merge_channels(&before, &after, &copy),
+            merge_channels(&before, &after, 2, &copy),
             vec![1.0, 10.0, 3.0, 30.0]
         );
     }
@@ -332,11 +325,11 @@ mod tests {
     #[test]
     fn reverse_and_invert() {
         let audio = vec![0.1f32, -0.1, 0.2, -0.2, 0.3, -0.3];
-        let r = reverse_or_invert(&audio, "reverse").unwrap();
+        let r = reverse_or_invert(&audio, 2, "reverse").unwrap();
         assert_eq!(r, vec![0.3, -0.3, 0.2, -0.2, 0.1, -0.1]);
-        let i = reverse_or_invert(&audio, "invert").unwrap();
+        let i = reverse_or_invert(&audio, 2, "invert").unwrap();
         assert_eq!(i, vec![-0.1, 0.1, -0.2, 0.2, -0.3, 0.3]);
-        assert!(reverse_or_invert(&audio, "x").is_err());
+        assert!(reverse_or_invert(&audio, 2, "x").is_err());
     }
 
     #[test]

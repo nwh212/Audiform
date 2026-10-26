@@ -22,7 +22,8 @@
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { onDestroy } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
-  import { BOTH, toggleChannel, waveChannels } from "./wave-channels";
+  import { allOn, toggleChannel, waveChannels } from "./wave-channels";
+  import { channelLabels } from "../properties/channel-mix";
   import { laneWidths } from "../time-info/time-info";
   import { timeDisplayItems } from "./time-menu";
   import { levelAt, pointsOf } from "./envelope";
@@ -50,13 +51,13 @@
     const w = width;
     laneWidths.update((l) => (l.waveform === w ? l : { ...l, waveform: w }));
   });
-  // Each file opens with both channels on.
+  // Each file opens with every channel on.
   let channelFile: string | null = null;
   $effect(() => {
-    const p = file?.path ?? null;
-    if (p !== channelFile) {
-      channelFile = p;
-      waveChannels.set(BOTH);
+    const key = `${file?.path ?? ""}:${channels}`;
+    if (key !== channelFile) {
+      channelFile = key;
+      waveChannels.set(allOn(channels));
     }
   });
 
@@ -118,7 +119,8 @@
   const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
   const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
   const selection = $derived(doc?.view.selection ?? null);
-  const channels = $derived(Math.max(1, Math.min(2, doc?.media[0]?.channels ?? 1)));
+  const channels = $derived(Math.max(1, Math.min(64, doc?.media[0]?.channels ?? 1)));
+  const chNames = $derived(channelLabels(channels));
   const clips = $derived((doc?.tracks[0]?.clips ?? []).slice().sort((a, b) => a.start - b.start));
 
   function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>, auto = false) {
@@ -481,7 +483,7 @@
         const a = 10 ** (db / 20) * ampZoom;
         if (a > 1.0001) continue;
         const y = mid - a * half;
-        if (Math.abs(y - lastY) < 11 || y < top + 5) continue;
+        if (Math.abs(y - lastY) < 11 || y < top + 5 || mid - y < 11) continue;
         lastY = y;
         g.fillText(db === 0 ? " 0" : String(db), w + 8, y);
         g.fillText(db === 0 ? " 0" : String(db), w + 8, mid + a * half);
@@ -729,7 +731,7 @@
   const fileName = $derived(file ? file.path.split(/[\\/]/).pop() : "");
   const info = $derived(
     doc && file
-      ? [`${(rate / 1000).toLocaleString("en-US")} kHz`, channels === 1 ? "Mono" : "Stereo", file.bitDepth ? `${file.bitDepth}-bit` : file.format]
+      ? [`${(rate / 1000).toLocaleString("en-US")} kHz`, channels === 1 ? "Mono" : channels === 2 ? "Stereo" : `${channels} channels`, file.bitDepth ? `${file.bitDepth}-bit` : file.format]
           .filter(Boolean)
           .join("  ")
       : "",
@@ -787,20 +789,24 @@
         </span>
         <span class="val">{level > 0 ? "+" : ""}{level.toFixed(1)} dB</span>
       </div>
-      {#if channels === 2}
-        {#each [0, 1] as const as ch (ch)}
-          {@const name = ch === 0 ? "left" : "right"}
-          {@const on = $waveChannels[name]}
-          {#if !on}<div class="chdim" style:top="{(ch * height) / 2}px" style:height="{height / 2}px" style:right="{SCALE_W}px"></div>{/if}
-          <button
-            type="button"
-            class="chbtn"
-            class:on
-            style:top="{(ch * height) / 2 + 4}px"
-            aria-pressed={on}
-            title={on ? `Switch the ${name} channel off: edits, effects, copy and paste then reach only the other channel (${ch === 0 ? "Up" : "Down"} picks this channel alone)` : `Switch the ${name} channel back on`}
-            onclick={() => waveChannels.update((c) => toggleChannel(c, name))}>{ch === 0 ? "L" : "R"}</button
-          >
+      {#if channels > 1}
+        {#each chNames as label, ch (ch)}
+          {@const name = channels === 2 ? (ch === 0 ? "left" : "right") : label}
+          {@const on = $waveChannels[ch] ?? true}
+          {#if !on}<div class="chdim" style:top="{(ch * height) / channels}px" style:height="{height / channels}px" style:right="{SCALE_W}px"></div>{/if}
+          {#if height / channels >= 14}
+            <button
+              type="button"
+              class="chbtn"
+              class:on
+              style:top="{(ch * height) / channels + (height / channels >= 24 ? 4 : 1)}px"
+              aria-pressed={on}
+              title={on
+                ? `Switch the ${name} channel off: edits, effects, copy and paste then reach only the channels still on${channels === 2 ? ` (${ch === 0 ? "Up" : "Down"} picks this channel alone)` : ""}`
+                : `Switch the ${name} channel back on`}
+              onclick={() => waveChannels.update((c) => toggleChannel(c, ch))}>{label}</button
+            >
+          {/if}
         {/each}
       {/if}
     </div>
@@ -955,9 +961,9 @@
   .chbtn {
     position: absolute;
     right: 2px;
-    width: 16px;
+    min-width: 16px;
     height: 16px;
-    padding: 0;
+    padding: 0 2px;
     border: 1px solid var(--border-strong);
     border-radius: 2px;
     background: var(--surface-1, #111);

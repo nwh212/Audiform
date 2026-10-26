@@ -15,7 +15,7 @@ use tauri::{AppHandle, State};
 use super::wave::OpenWave;
 use crate::dsp::spectral::{self, Action, Mask, FFT_SIZE};
 use crate::export::mixdown::{self, MixdownRequest};
-use crate::session::model::{new_id, ChannelLayout, MediaRef, Session};
+use crate::session::model::{new_id, ChannelLayout, ChannelMix, ChannelSend, MediaRef, Session};
 
 /// Longest stretch the view draws at once. Zoom in for longer files.
 pub const MAX_VIEW_SECONDS: u64 = 20 * 60;
@@ -63,38 +63,146 @@ pub(crate) fn snapshot(wave: &State<'_, OpenWave>) -> Result<Session, String> {
     ))
 }
 
-/// Writes `frames` of stereo `audio` from frame `skip` to a new float
-/// WAV in `dir` (mono files fold back to one channel). The media ref
-/// for the replace op.
-pub(crate) fn write_stretch(
+/// Channels in the open file: 1, 2, or more for a multichannel file (up to 64).
+pub(crate) fn file_channels(session: &Session) -> usize {
+    if is_mono(session) {
+        1
+    } else {
+        session
+            .media
+            .first()
+            .map_or(2, |m| usize::from(m.channels).clamp(2, 64))
+    }
+}
+
+/// The session with every clip playing only its file's channel `k`, on
+/// the left (silence for clips whose file has no such channel).
+fn isolate_channel(session: &Session, k: usize) -> Session {
+    let mut s = session.clone();
+    let counts: std::collections::HashMap<_, _> = s
+        .media
+        .iter()
+        .map(|m| (m.id, usize::from(m.channels)))
+        .collect();
+    for t in &mut s.tracks {
+        for c in &mut t.clips {
+            let n = counts.get(&c.media_id).copied().unwrap_or(2).max(1);
+            c.channel_mix = Some(ChannelMix {
+                sends: (0..n)
+                    .map(|j| ChannelSend {
+                        left: if j == k { 1.0 } else { 0.0 },
+                        right: 0.0,
+                    })
+                    .collect(),
+            });
+        }
+    }
+    s
+}
+
+/// Renders `from..to` in the file's own channels, interleaved: mono
+/// files as one channel, multichannel files one channel at a time.
+/// Returns the audio and its channel count.
+pub(crate) fn render_n(session: &Session, from: i64, to: i64) -> (Vec<f32>, usize) {
+    let n = file_channels(session);
+    match n {
+        1 => (
+            render(session, from, to)
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|f| (f[0] + f[1]) * 0.5)
+                .collect(),
+            1,
+        ),
+        2 => (render(session, from, to), 2),
+        _ => {
+            let parts: Vec<Vec<f32>> = (0..n)
+                .map(|k| render(&isolate_channel(session, k), from, to))
+                .collect();
+            let frames = parts[0].len() / 2;
+            let mut out = Vec::with_capacity(frames * n);
+            for i in 0..frames {
+                for p in &parts {
+                    out.push(p[i * 2]);
+                }
+            }
+            (out, n)
+        }
+    }
+}
+
+/// Runs a stereo process `f` over `n`-channel audio: mono through both
+/// sides and back, stereo as it is, more channels a pair at a time (1-2,
+/// 3-4...; an odd last channel with silence beside it). Each pair gets a
+/// fresh call. Every result must have the same length.
+pub(crate) fn by_pairs(
+    audio: &[f32],
+    n: usize,
+    mut f: impl FnMut(&[f32]) -> Result<Vec<f32>, String>,
+) -> Result<Vec<f32>, String> {
+    match n {
+        0 | 1 => {
+            let st: Vec<f32> = audio.iter().flat_map(|v| [*v, *v]).collect();
+            Ok(f(&st)?
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|p| (p[0] + p[1]) * 0.5)
+                .collect())
+        }
+        2 => f(audio),
+        _ => {
+            let frames = audio.len() / n;
+            let mut out: Vec<f32> = Vec::new();
+            let mut len = 0;
+            for p in 0..n.div_ceil(2) {
+                let (a, b) = (2 * p, 2 * p + 1);
+                let st: Vec<f32> = (0..frames)
+                    .flat_map(|i| [audio[i * n + a], if b < n { audio[i * n + b] } else { 0.0 }])
+                    .collect();
+                let r = f(&st)?;
+                if p == 0 {
+                    len = r.len() / 2;
+                    out = vec![0.0; len * n];
+                }
+                for (i, fr) in r.as_chunks::<2>().0.iter().take(len).enumerate() {
+                    out[i * n + a] = fr[0];
+                    if b < n {
+                        out[i * n + b] = fr[1];
+                    }
+                }
+            }
+            Ok(out)
+        }
+    }
+}
+
+/// Writes `frames` frames of `n`-channel interleaved `audio`, from frame
+/// `skip`, to a new float WAV in `dir`. The media ref for the replace op.
+pub(crate) fn write_n(
     dir: &std::path::Path,
     name: &str,
     audio: &[f32],
+    n: usize,
     skip: usize,
     frames: usize,
     rate: u32,
-    mono: bool,
 ) -> Result<MediaRef, String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let path = mixdown::unique_path(dir, name, "wav");
-    let channels: u16 = if mono { 1 } else { 2 };
+    let n = n.max(1);
     let spec = hound::WavSpec {
-        channels,
+        channels: n as u16,
         sample_rate: rate,
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
     let mut w = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
-    let all = audio.as_chunks::<2>().0;
-    let end = (skip + frames).min(all.len());
-    for f in &all[skip.min(end)..end] {
-        if mono {
-            w.write_sample((f[0] + f[1]) * 0.5)
-                .map_err(|e| e.to_string())?;
-        } else {
-            w.write_sample(f[0]).map_err(|e| e.to_string())?;
-            w.write_sample(f[1]).map_err(|e| e.to_string())?;
-        }
+    let all = audio.len() / n;
+    let end = (skip + frames).min(all);
+    for v in &audio[skip.min(end) * n..end * n] {
+        w.write_sample(*v).map_err(|e| e.to_string())?;
     }
     w.finalize().map_err(|e| e.to_string())?;
     Ok(MediaRef {
@@ -102,7 +210,7 @@ pub(crate) fn write_stretch(
         path,
         relative_path: None,
         sample_rate: rate,
-        channels,
+        channels: n as u16,
         length: (end - skip.min(end)) as u64,
     })
 }
@@ -214,7 +322,7 @@ pub async fn wave_spectral_edit(
         // Render one more frame each side so the stretch rebuilds fully.
         let from = a as i64 - n as i64;
         let to = b as i64 + n as i64;
-        let stereo = render(&session, from, to);
+        let (audio, n) = render_n(&session, from, to);
         let action = match mode {
             SpectralMode::Repair => Action::Repair,
             SpectralMode::Gain => {
@@ -227,51 +335,20 @@ pub async fn wave_spectral_edit(
             }
         };
         let origin = from as f64;
-        let mono = session
-            .tracks
-            .first()
-            .is_some_and(|t| t.channels == ChannelLayout::Mono)
-            || session.media.first().is_some_and(|m| m.channels == 1);
-        let frames = stereo.len() / 2;
-        let mut left: Vec<f32> = stereo.iter().step_by(2).copied().collect();
-        let mut right: Vec<f32> = stereo.iter().skip(1).step_by(2).copied().collect();
-        if mono {
-            for (l, r) in left.iter_mut().zip(&right) {
-                *l = (*l + r) * 0.5;
+        let frames = audio.len() / n;
+        let mut out = audio.clone();
+        for c in 0..n {
+            let mut ch: Vec<f32> = audio.iter().skip(c).step_by(n).copied().collect();
+            spectral::process_channel(&mut ch, rate, origin, &mask, action);
+            for (i, v) in ch.into_iter().enumerate().take(frames) {
+                out[i * n + c] = v;
             }
-            spectral::process_channel(&mut left, rate, origin, &mask, action);
-        } else {
-            spectral::process_channel(&mut left, rate, origin, &mask, action);
-            spectral::process_channel(&mut right, rate, origin, &mask, action);
         }
         let skip = (a as i64 - from) as usize;
         let keep = (b - a) as usize;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = mixdown::unique_path(&dir, "spectral-edit", "wav");
-        let channels: u16 = if mono { 1 } else { 2 };
-        let spec = hound::WavSpec {
-            channels,
-            sample_rate: rate,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        };
-        let mut w = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
-        for i in skip..(skip + keep).min(frames) {
-            w.write_sample(left[i]).map_err(|e| e.to_string())?;
-            if !mono {
-                w.write_sample(right[i]).map_err(|e| e.to_string())?;
-            }
-        }
-        w.finalize().map_err(|e| e.to_string())?;
+        let media = write_n(&dir, "spectral-edit", &out, n, skip, keep, rate)?;
         Ok(SpectralResult {
-            media: MediaRef {
-                id: new_id(),
-                path,
-                relative_path: None,
-                sample_rate: rate,
-                channels,
-                length: keep as u64,
-            },
+            media,
             start: a,
             end: a + keep as u64,
         })

@@ -1429,3 +1429,13 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Settings > Channel Routing** (until now a placeholder) picks the outputs: the stereo mix's Left and Right outputs (1 and 2 by default), and an output for each speaker name a layout uses. A speaker left at "Its place in the layout" plays on the output with its number in the layout's order (L 1, R 2, C 3, LFE 4, then surrounds and heights, the order of multichannel WAV files and most interfaces).
 - **Opening the device.** Playback opens the device in its default setting when that has enough outputs, otherwise in its widest setting at the same rate. File previews and input monitoring still play on outputs 1 and 2.
 - **Exports** are unchanged: a 3D session set to Speakers exports in its layout as before (or stereo when picked).
+
+## 2026-10-26: Multichannel files in the Waveform editor
+
+- **Every channel shown.** A 5.1, 7.1.4 or other multichannel file opens with one lane per channel, each named (L, R, C, LFE...) on its on/off button beside the level scale. The file info line says how many channels it has.
+- **Edits keep every channel.** Edits that render audio (FX Chain Apply, Stretch, Reverse, Invert, spectral Remove and Repair, edits limited to some channels) render the file one channel at a time and write the result back with all its channels. Before this, they and Save went through the stereo mix and would have written a multichannel file back as stereo. Effects run a pair of channels at a time (1-2, 3-4...), each pair through its own fresh copy of the chain, so stereo effects behave as they do on a stereo file.
+- **Some channels off.** The per-channel buttons work for any number of channels: switch any set off, and edits, effects, copy and paste reach only the channels still on. Up and Down still pick the left or right channel alone.
+- **Saving.** Multichannel files save as WAV with every channel, a few seconds at a time so long files never fill memory. FLAC and MP3 are refused for them, with a message, until those writers handle more than two channels.
+- **Playback** in the Waveform editor plays the standard fold-down (or each speaker on its own output in nothing but 3D Space sessions; the Waveform editor is not one).
+- **CI.** CI runs the newest stable Rust (1.99), whose clippy asks for `as_chunks` over fixed-size `chunks_exact`; changed throughout. CI had failed on every commit since the fork for that reason alone.
+- **README** now says plainly that Audiform is the experimental flavor and Altered Audio Editor the more stable one.

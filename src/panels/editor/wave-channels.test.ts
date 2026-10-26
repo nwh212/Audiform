@@ -3,30 +3,38 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { BOTH, editTake, oneChannel, pasteTake, soloChannel, toggleChannel } from "./wave-channels";
+import { allOn, BOTH, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, toggleChannel } from "./wave-channels";
 
-describe("one-channel editing", () => {
-  it("never switches both channels off", () => {
-    const left = toggleChannel(BOTH, "right");
-    expect(left).toEqual({ left: true, right: false });
-    expect(toggleChannel(left, "left")).toEqual({ left: false, right: true });
-    expect(toggleChannel(left, "right")).toEqual(BOTH);
-    expect(soloChannel(BOTH, "right")).toEqual({ left: false, right: true });
-    expect(soloChannel({ left: false, right: true }, "right")).toEqual(BOTH);
+describe("editing some channels", () => {
+  it("never switches every channel off", () => {
+    const left = toggleChannel(BOTH, 1);
+    expect(left).toEqual([true, false]);
+    expect(toggleChannel(left, 0)).toEqual([false, true]);
+    expect(toggleChannel(left, 1)).toEqual(BOTH);
+    expect(soloChannel(BOTH, 1)).toEqual([false, true]);
+    expect(soloChannel([false, true], 1)).toEqual(BOTH);
     expect(oneChannel(BOTH)).toBeNull();
+    // Six channels: switching off the last one on brings the rest back.
+    expect(toggleChannel(soloChannel(allOn(6), 2), 2)).toEqual([true, true, false, true, true, true]);
   });
 
-  it("edits only the channel that is on", () => {
+  it("edits only the channels that are on", () => {
     expect(editTake(BOTH)).toBeNull();
-    expect(editTake({ left: true, right: false })).toEqual([
+    expect(editTake([true, false])).toEqual([
       { after: true, channel: 0 },
       { after: false, channel: 1 },
     ]);
+    const surround = [false, false, true, true, false, false];
+    expect(someOff(surround)).toBe(true);
+    expect(oneChannel(surround)).toBeNull();
+    expect(editTake(surround)!.map((t) => t.after)).toEqual(surround);
+    expect(channelLabel(surround)).toBe(" (C, LFE)");
+    expect(channelLabel([true, false])).toBe(" (Left Channel)");
   });
 
   it("pastes the left channel onto the right", () => {
     // Copied with only the left on, pasted with only the right on.
-    expect(pasteTake({ left: false, right: true }, 0)).toEqual([
+    expect(pasteTake([false, true], 0)).toEqual([
       { after: false, channel: 0 },
       { after: true, channel: 0 },
     ]);

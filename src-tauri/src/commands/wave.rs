@@ -569,12 +569,8 @@ pub async fn wave_save(
     if playing.is(PlayingDoc::Wave) {
         transport.stop();
     }
-    let channels = session
-        .media
-        .first()
-        .map(|m| m.channels)
-        .unwrap_or(2)
-        .clamp(1, 2);
+    let all_channels = super::spectral::file_channels(&session);
+    let channels = all_channels.min(2) as u16;
     // The file's extension picks the format: WAV, FLAC or MP3.
     let ext = target
         .extension()
@@ -586,6 +582,11 @@ pub async fn wave_save(
         ));
     };
     let depth = bit_depth.unwrap_or(session.bit_depth);
+    if all_channels > 2 && kind != FormatKind::Wav {
+        return Err(format!(
+            "Files with {all_channels} channels save as WAV for now. Use Save As and pick WAV."
+        ));
+    }
     let request = MixdownRequest {
         clip_only: true,
         channels: Some(channels),
@@ -612,21 +613,22 @@ pub async fn wave_save(
             .unwrap_or_else(|| "audio".into());
         let tmp = dir.join(format!(".{stem}.saving.{}", kind.extension()));
         let mut last = 0u64;
-        let r = mixdown::mixdown(
-            &session,
-            &request,
-            &tmp,
-            &AtomicBool::new(false),
-            |done, total| {
-                if done == total || done - last >= total / 100 {
-                    last = done;
-                    let _ = app.emit("export-progress", Progress { done, total });
-                }
-            },
-        );
+        let mut progress = |done: u64, total: u64| {
+            if done == total || done - last >= total / 100 {
+                last = done;
+                let _ = app.emit("export-progress", Progress { done, total });
+            }
+        };
+        let r = if all_channels > 2 {
+            save_multichannel(&session, &tmp, depth, &mut progress)
+        } else {
+            mixdown::mixdown(&session, &request, &tmp, &AtomicBool::new(false), progress)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        };
         if let Err(e) = r {
             let _ = std::fs::remove_file(&tmp);
-            return Err(e.to_string());
+            return Err(e);
         }
         // WAV keeps the markers inside the file as cue points.
         if kind == FormatKind::Wav && !session.markers.is_empty() {
@@ -667,6 +669,51 @@ pub async fn wave_save(
     Ok(doc_of(w.as_ref().expect("just set")))
 }
 
+/// Writes a multichannel file's edit list to a WAV with every channel,
+/// a few seconds at a time, at `depth` bits (32 is float).
+fn save_multichannel(
+    session: &Session,
+    path: &Path,
+    depth: u16,
+    progress: &mut impl FnMut(u64, u64),
+) -> Result<(), String> {
+    let total = mixdown::session_end(session);
+    let n = super::spectral::file_channels(session);
+    let bits = if [16, 24, 32].contains(&depth) {
+        depth
+    } else {
+        32
+    };
+    let spec = hound::WavSpec {
+        channels: n as u16,
+        sample_rate: session.sample_rate,
+        bits_per_sample: bits,
+        sample_format: if bits == 32 {
+            hound::SampleFormat::Float
+        } else {
+            hound::SampleFormat::Int
+        },
+    };
+    let mut w = hound::WavWriter::create(path, spec).map_err(|e| e.to_string())?;
+    let step = u64::from(session.sample_rate) * 10;
+    let mut at = 0u64;
+    while at < total {
+        let to = (at + step).min(total);
+        let (audio, _) = super::spectral::render_n(session, at as i64, to as i64);
+        for v in audio {
+            let r = match bits {
+                16 => w.write_sample((v.clamp(-1.0, 1.0) * 32_767.0).round() as i16),
+                24 => w.write_sample((v.clamp(-1.0, 1.0) * 8_388_607.0).round() as i32),
+                _ => w.write_sample(v),
+            };
+            r.map_err(|e| e.to_string())?;
+        }
+        at = to;
+        progress(at, total);
+    }
+    w.finalize().map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,6 +741,42 @@ mod tests {
         assert_eq!(s.tracks[0].clips.len(), 1);
         assert_eq!(s.tracks[0].clips[0].source_out, 4_410);
         assert_eq!(s.media[0].channels, 1);
+    }
+
+    #[test]
+    fn a_surround_file_saves_every_channel() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.wav");
+        let spec = hound::WavSpec {
+            channels: 6,
+            sample_rate: 48_000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..4_800 {
+            for c in 0..6 {
+                w.write_sample(0.1 * (c + 1) as f32).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+        let s = session_for(&codecs::probe(&path).unwrap()).unwrap();
+        // Reversing a stretch keeps each channel its own.
+        let (audio, n) = super::super::spectral::render_n(&s, 100, 200);
+        assert_eq!(n, 6);
+        assert!((audio[6 * 50 + 4] - 0.5).abs() < 1e-5);
+        let out = dir.path().join("out.wav");
+        save_multichannel(&s, &out, 32, &mut |_, _| {}).unwrap();
+        let mut r = hound::WavReader::open(&out).unwrap();
+        assert_eq!(r.spec().channels, 6);
+        let v: Vec<f32> = r.samples::<f32>().map(Result::unwrap).collect();
+        assert_eq!(v.len(), 4_800 * 6);
+        for c in 0..6 {
+            assert!(
+                (v[600 + c] - 0.1 * (c + 1) as f32).abs() < 1e-5,
+                "channel {c}"
+            );
+        }
     }
 
     #[test]

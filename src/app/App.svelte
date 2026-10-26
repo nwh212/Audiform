@@ -119,7 +119,7 @@
   import { repointPlan, toCopy } from "./session-media";
   import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
-  import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
+  import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
   import { PLUGIN_SLOTS, RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
@@ -2044,8 +2044,8 @@
     await wave.edit(label, op, waveHistory);
     return true;
   }
-  /** Whether only one channel of a stereo file is on in the Waveform editor. */
-  const oneWaveChannel = () => (wave.current?.media[0]?.channels ?? 1) > 1 && oneChannel(get(waveChannels)) !== null;
+  /** Whether some channels of the Waveform editor's file are switched off. */
+  const oneWaveChannel = () => (wave.current?.media[0]?.channels ?? 1) > 1 && someOff(get(waveChannels));
 
   function waveSetSelection(sel: [number, number] | null, playhead?: number) {
     const d = wave.current;
@@ -2925,7 +2925,7 @@
       ...(["left", "right"] as const).map((ch) =>
         actions.register({
           id: `wave.channel-${ch}`,
-          run: () => waveChannels.update((c) => soloChannel(c, ch)),
+          run: () => waveChannels.update((c) => soloChannel(c, ch === "left" ? 0 : 1)),
           enabled: () => (wave.current?.media[0]?.channels ?? 1) > 1 && inWave(),
           reason: () => "Open a stereo file in the Waveform editor first.",
         }),
