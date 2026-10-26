@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="brand/logo/logo-light.png">
-    <img src="brand/logo/logo-dark.png" alt="Audiform" width="420">
-  </picture>
+  <img src="brand/banner.webp" alt="Audiform, multitrack audio editor: the colorful glass wave mark beside the name, framed by a glassy rainbow border over a sunlit lake" width="820">
 </p>
 
 <p align="center">

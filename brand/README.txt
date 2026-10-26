@@ -23,3 +23,6 @@ logo/
   logo-dark.png, logo-light.png  1440 x 520: the mark and the "Audiform" wordmark (Inter Display
                                  SemiBold) with "multitrack audio editor" below. For the README,
                                  the website and the About dialog.
+
+banner.webp       1665 x 944: the mark and the name in a glassy rainbow frame over a sunlit
+                  lake. Provided by the project lead. The README header.
