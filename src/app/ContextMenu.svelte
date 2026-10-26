@@ -95,7 +95,9 @@
   $effect(() => {
     void trail;
     queueMicrotask(() => {
-      const rows = menu?.querySelectorAll<HTMLElement>("button.active");
+      // The deepest open level holds the row the keys are moving.
+      const levels = [menu, ...subs].filter((m): m is HTMLElement => !!m);
+      const rows = levels[levels.length - 1]?.querySelectorAll<HTMLElement>("button.active");
       rows?.[rows.length - 1]?.scrollIntoView({ block: "nearest" });
     });
   });
@@ -136,8 +138,23 @@
     }
   }
 
+  /** Open submenus. They live at the end of the page, not inside their row (see fit). */
+  const subs = new Set<HTMLElement>();
+
+  /**
+   * Moves the menu to the end of the page. A theme's blurred glass on a
+   * panel makes that panel the frame a fixed menu is placed in and
+   * clipped by, so a menu opened inside it landed in the wrong spot, was
+   * cut off, and scrolled the panel when keys moved the highlight.
+   */
+  function toPage(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   function onOutside(e: PointerEvent) {
-    if (menu && !menu.contains(e.target as Node)) onClose();
+    const t = e.target as Node;
+    if (menu && !menu.contains(t) && ![...subs].some((s) => s.contains(t))) onClose();
   }
 
   /**
@@ -145,7 +162,9 @@
    * spill off the right, lifted when it would run off the bottom. A menu
    * taller than the window scrolls (see the max-height in the styles).
    * Submenus are placed against the window, not their parent, so a
-   * scrolling parent never cuts them off.
+   * scrolling parent never cuts them off. Each one then moves to the end
+   * of the page, for the same reason as the menu itself (see toPage): the
+   * menu's own blurred glass would clip it.
    */
   function fit(node: HTMLElement) {
     const row = node.parentElement?.getBoundingClientRect();
@@ -158,6 +177,14 @@
     const top = Math.max(2, Math.min(row.top - 4, h - 2 - height));
     node.style.left = `${left}px`;
     node.style.top = `${top}px`;
+    document.body.appendChild(node);
+    subs.add(node);
+    return {
+      destroy() {
+        subs.delete(node);
+        node.remove();
+      },
+    };
   }
 
   /** A menu level scrolled: its open submenu no longer sits beside its row, so close it. */
@@ -189,7 +216,7 @@
           <span class="arrow" aria-hidden="true">&#9656;</span>
         </button>
         {#if trail[depth] === i && trail.length > depth + 1}
-          <div class="context sub" role="menu" use:fit onscroll={() => scrolled(depth + 1)}>
+          <div class="context sub" role="menu" tabindex="-1" data-area-keep use:fit onkeydown={onKey} onscroll={() => scrolled(depth + 1)} oncontextmenu={(e) => e.preventDefault()}>
             {@render list(it.items, depth + 1)}
           </div>
         {/if}
@@ -219,6 +246,7 @@
   tabindex="-1"
   data-area-keep
   bind:this={menu}
+  use:toPage
   style:left="{left}px"
   style:top="{top}px"
   onkeydown={onKey}

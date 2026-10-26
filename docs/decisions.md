@@ -1619,3 +1619,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **Asked for as a theme "based on" a named early-80s sampling computer.** Restated as behavior and given our own name: an early studio computer look, with green monochrome screens (glowing text, faint scan lines, a soft tube vignette) set into a warm beige case. The menu bar, tool strip, tab gaps and status bar are the case; the transport buttons are raised beige keys; the time readout is a small lit display. No logos, model names or copied screens.
 - **Everything is in one style sheet** (`src/styles/theme-phosphor.css`) on top of the dark theme's tokens; canvases already read their colors from the tokens, so lanes, rulers and meters follow. Settings > Appearance > Theme > Phosphor.
+
+## 2026-10-28: Right-click menus in the glass themes
+
+- **Fixed:** in Meadow, Aqua, Moonlight and Prism, right-click menus were cut off and their submenus did not open where they should. The blurred glass on panels and menus makes them the frame a fixed menu is placed in and clipped by. Menus and submenus now move to the end of the page while open, so they sit against the window in every theme. The highlighted-row scroll no longer scrolls the panel under the menu.
