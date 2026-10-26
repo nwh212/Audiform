@@ -1,0 +1,341 @@
+/*
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Sky Glass: an optional light theme (Settings > Appearance > Theme).
+  A bright sky behind frosted glass panels, glossy rounded controls with
+  a shine across their top half, aqua highlights, and clip colors taken
+  from the Audiform mark. Only applies when the root element carries
+  data-theme="sky"; the Dark theme is untouched.
+*/
+
+:root[data-theme="sky"] {
+  color-scheme: light;
+
+  /* Surfaces: frosted glass over the sky. */
+  --surface-0: #e4f3fc;
+  --surface-1: #f3faff;
+  --surface-2: #ffffff;
+  --surface-3: #dcf0fc;
+  --border: #b4d9ee;
+  --border-strong: #8cc3e2;
+
+  --text: #0e2c42;
+  --text-dim: #3c637d;
+  --text-faint: #7896ab;
+
+  --accent: #0f9be6;
+  --accent-dim: #73c6f2;
+  --playhead: #ff7a00;
+  --value: #006fc0;
+  --gutter: transparent;
+  --danger: #e2283a;
+
+  --lane-a: #f6fcff;
+  --lane-b: #ebf7fe;
+  --lane-selected: #cbecfd;
+  --track-gap: #a9d6ef;
+  --header-a: #eef8ff;
+  --header-b: #e2f3fe;
+
+  /* Clip colors from the mark: blue, violet, pink, orange, gold, leaf, aqua. */
+  --clip-1: #2fa35a;
+  --clip-2: #2d74e0;
+  --clip-3: #8148d8;
+  --clip-4: #ee7a1c;
+  --clip-5: #d9a514;
+  --clip-6: #dc3fae;
+  --clip-7: #14a7c4;
+  --clip-body-alpha: 0.42;
+  --clip-wave-tone: -0.35;
+  --clip-gloss: 1;
+
+  --font-ui: "Segoe UI", "Frutiger", "Myriad Pro", "Source Sans 3", system-ui, sans-serif;
+
+  --selected-text: #063b63;
+
+  /* Shared glass and gloss. */
+  --sky-gloss: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.35) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.25));
+  --sky-glow: 0 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(10, 70, 120, 0.25);
+}
+
+/* The sky: blue overhead fading to a pale horizon, with soft light and bubbles. */
+:root[data-theme="sky"] body {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.75) 0 2.5%, rgba(255, 255, 255, 0) 3%),
+    radial-gradient(circle at 86% 26%, rgba(255, 255, 255, 0.55) 0 1.5%, rgba(255, 255, 255, 0) 2%),
+    radial-gradient(circle at 70% 84%, rgba(255, 255, 255, 0.45) 0 3%, rgba(255, 255, 255, 0) 3.6%),
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 55%),
+    radial-gradient(ellipse at 20% 110%, rgba(120, 220, 120, 0.55), rgba(120, 220, 120, 0) 45%),
+    radial-gradient(ellipse at 85% 115%, rgba(80, 200, 160, 0.45), rgba(80, 200, 160, 0) 45%),
+    linear-gradient(#38aeea 0%, #7fd0f6 38%, #c6ecfb 70%, #e9f9ef 100%);
+  background-attachment: fixed;
+}
+
+/* Panels: rounded frosted glass with a soft shadow, the sky between them. */
+:root[data-theme="sky"] .dockview-theme-altaudio {
+  background: transparent;
+  --dv-floating-box-shadow: 0 12px 32px rgba(10, 70, 120, 0.35);
+  --dv-drag-over-background-color: rgba(15, 155, 230, 0.18);
+}
+:root[data-theme="sky"] .dockview-theme-altaudio .dv-groupview {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  background-clip: padding-box;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
+    0 4px 14px rgba(10, 70, 120, 0.22);
+  backdrop-filter: blur(6px);
+}
+:root[data-theme="sky"] .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.9), rgba(205, 236, 252, 0.9));
+  border-bottom: 1px solid var(--border);
+}
+:root[data-theme="sky"] .dockview-theme-altaudio .dv-tab.dv-active-tab {
+  background-image: var(--sky-gloss);
+  border-radius: 6px 6px 0 0;
+}
+
+/* Glossy controls: a shine over each control's own color, so on, off and
+   accent states still read. Menu rows, flat tool buttons and list rows
+   get their own treatment below. */
+:root[data-theme="sky"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+  background-image: var(--sky-gloss);
+  border-radius: 5px;
+  box-shadow: var(--sky-glow);
+}
+:root[data-theme="sky"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+    0 0 6px rgba(15, 155, 230, 0.55);
+}
+:root[data-theme="sky"] :is(button):not(.row, .top, .context button, .grab, .fold):active:not(:disabled) {
+  background-image: linear-gradient(rgba(0, 60, 110, 0.14), rgba(255, 255, 255, 0.25));
+}
+:root[data-theme="sky"] input[type="text"],
+:root[data-theme="sky"] input[type="number"],
+:root[data-theme="sky"] input[type="search"],
+:root[data-theme="sky"] input:not([type]),
+:root[data-theme="sky"] textarea {
+  border-radius: 5px;
+  box-shadow: 0 1px 2px rgba(10, 70, 120, 0.2) inset;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+:root[data-theme="sky"] input[type="checkbox"],
+:root[data-theme="sky"] input[type="radio"],
+:root[data-theme="sky"] input[type="range"] {
+  accent-color: #10a0e8;
+}
+
+/* Aqua highlight for anything "active" or picked: a glossy blue bubble. */
+:root[data-theme="sky"] {
+  --sky-aqua: linear-gradient(#8fdcff, #36aef0 50%, #1592de 51%, #4fc0f6);
+}
+
+/* Menu bar: a glossy strip; open menus are frosted glass. */
+:root[data-theme="sky"] .menubar {
+  background: linear-gradient(#ffffff, #e3f4fd 55%, #cfeafb);
+  border-bottom: 1px solid #9fd0ec;
+}
+:root[data-theme="sky"] .menubar .top {
+  border-radius: 5px;
+}
+:root[data-theme="sky"] .menubar .top:hover,
+:root[data-theme="sky"] .menubar .top.open {
+  background: var(--sky-aqua);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 60, 110, 0.4);
+}
+:root[data-theme="sky"] .menubar .dropdown,
+:root[data-theme="sky"] .context {
+  border: 1px solid rgba(120, 190, 230, 0.9);
+  border-radius: 8px;
+  background: rgba(246, 252, 255, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(10, 70, 120, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+:root[data-theme="sky"] .menubar .row {
+  border-radius: 4px;
+}
+:root[data-theme="sky"] .menubar .row.active,
+:root[data-theme="sky"] .context button.active {
+  background: var(--sky-aqua);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 60, 110, 0.35);
+}
+:root[data-theme="sky"] .context button {
+  border-radius: 4px;
+}
+:root[data-theme="sky"] .menubar .row.disabled.active {
+  background: rgba(150, 200, 230, 0.35);
+  color: var(--text-dim);
+  text-shadow: none;
+}
+
+/* Tool strip and every toolbar: glossy strips; flat tools become glass
+   bubbles when pointed at or on. */
+:root[data-theme="sky"] .strip,
+:root[data-theme="sky"] .editor .toolbar,
+:root[data-theme="sky"] .bar:has(> .transport),
+:root[data-theme="sky"] footer.status {
+  background: linear-gradient(#ffffff, #e6f5fd 50%, #d5eefb 51%, #e9f7fe);
+  border-color: #a8d6ee;
+}
+:root[data-theme="sky"] .tool,
+:root[data-theme="sky"] .view {
+  border-radius: 6px;
+}
+:root[data-theme="sky"] .tool:hover:not(:disabled),
+:root[data-theme="sky"] .view:hover:not(:disabled) {
+  border-color: #8ccbee;
+  background: var(--sky-gloss), rgba(200, 235, 252, 0.6);
+}
+:root[data-theme="sky"] .tool.on:not(.rec),
+:root[data-theme="sky"] .view.on {
+  border-color: #1a8fd6;
+  background: var(--sky-aqua);
+  color: #fff;
+  box-shadow: 0 0 6px rgba(15, 155, 230, 0.5);
+}
+:root[data-theme="sky"] .modes {
+  border-radius: 7px;
+  overflow: hidden;
+  border-color: #8cc3e2;
+}
+:root[data-theme="sky"] .modes button {
+  border-radius: 0;
+  box-shadow: none;
+}
+:root[data-theme="sky"] .modes button.on {
+  background: var(--sky-aqua);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Transport: round glass orbs, and the clock as a glass display. */
+:root[data-theme="sky"] .bar:has(> .transport) .transport .tool {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #8cc3e2;
+  border-radius: 50%;
+  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #c9ecfd, #eaf7ff 70%);
+  box-shadow: 0 1px 3px rgba(10, 70, 120, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+:root[data-theme="sky"] .bar:has(> .transport) .transport .tool.play.on {
+  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #8be08f, #3fb35a 70%);
+  color: #fff;
+}
+:root[data-theme="sky"] .bar:has(> .transport) .transport .tool.rec.on {
+  background: var(--sky-gloss), radial-gradient(circle at 50% 80%, #ff9a9a, #e2283a 70%);
+  color: #fff;
+}
+:root[data-theme="sky"] .bar .clock {
+  padding: 1px 10px;
+  border: 1px solid #8cc3e2;
+  border-radius: 8px;
+  background: linear-gradient(#e8fbff, #bfe8fb);
+  box-shadow: 0 1px 3px rgba(10, 70, 120, 0.25) inset, 0 0 0 1px rgba(255, 255, 255, 0.7);
+  color: #05507f;
+  text-shadow: 0 0 6px rgba(80, 200, 255, 0.6);
+}
+
+/* Track headers and lanes: glassy rows; the selected track glows aqua. */
+:root[data-theme="sky"] .header {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 45%);
+}
+:root[data-theme="sky"] .header.selected {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 50%);
+  box-shadow: 0 0 0 1px #7cc8f0 inset;
+}
+:root[data-theme="sky"] .header .ms {
+  border-color: #8cc3e2;
+  border-radius: 5px;
+}
+:root[data-theme="sky"] .header .ms.on {
+  background-color: #1592de;
+}
+:root[data-theme="sky"] .header .auto {
+  border-color: #8cc3e2;
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Lists (files, libraries, markers, history, playlist, batch): hover and
+   picked rows as aqua glass. */
+:root[data-theme="sky"] :is(tr, li, .item, .file):hover {
+  background-color: rgba(150, 215, 248, 0.25);
+}
+:root[data-theme="sky"] :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 50%);
+  background-color: #bfe6fb;
+}
+
+/* Dialogs: frosted glass windows with a glossy title area, over a soft
+   blue wash instead of black. */
+:root[data-theme="sky"] .backdrop {
+  background: rgba(40, 110, 160, 0.25);
+  backdrop-filter: blur(2px);
+}
+:root[data-theme="sky"] .dialog,
+:root[data-theme="sky"] [role="dialog"] {
+  border: 1px solid rgba(120, 190, 230, 0.95);
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70px),
+    rgba(240, 249, 255, 0.95);
+  box-shadow: 0 18px 44px rgba(10, 70, 120, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+  backdrop-filter: blur(12px);
+}
+
+/* Scrollbars: aqua pills. */
+:root[data-theme="sky"] ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+:root[data-theme="sky"] ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+}
+:root[data-theme="sky"] ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, #8fd6fa, #3fb0ec 50%, #7fcdf6) padding-box;
+}
+
+/* The app's shell lets the sky through: the top bar, the main area and the
+   docking grid have no fill of their own. */
+:root[data-theme="sky"] header.top,
+:root[data-theme="sky"] main.body,
+:root[data-theme="sky"] .dv-dockview,
+:root[data-theme="sky"] .dv-grid-view,
+:root[data-theme="sky"] .dv-split-view-container,
+:root[data-theme="sky"] .dv-view-container,
+:root[data-theme="sky"] .dv-view {
+  background: transparent !important;
+}
+:root[data-theme="sky"] header.top {
+  border-bottom: 0;
+}
+:root[data-theme="sky"] .menubar {
+  margin: 4px 6px 0;
+  border: 1px solid #9fd0ec;
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(10, 70, 120, 0.18);
+}
+:root[data-theme="sky"] .strip {
+  margin: 4px 6px;
+  border: 1px solid #9fd0ec;
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(10, 70, 120, 0.18);
+}
+:root[data-theme="sky"] footer.status {
+  margin: 0 6px 4px;
+  border: 1px solid #9fd0ec;
+  border-radius: 9px;
+}
+:root[data-theme="sky"] .auto-pick {
+  background-color: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}

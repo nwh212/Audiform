@@ -9,6 +9,7 @@ import "@fontsource/source-sans-3/latin-400.css";
 import "@fontsource/source-sans-3/latin-600.css";
 import "./styles/tokens.css";
 import "./styles/dock-theme.css";
+import "./styles/theme-sky.css";
 import App from "./app/App.svelte";
 import { installNativeMenuBlock } from "./app/native-menu";
 

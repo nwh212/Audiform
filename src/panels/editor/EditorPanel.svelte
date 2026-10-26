@@ -3283,7 +3283,7 @@
   }
 
   .header.selected .name {
-    color: #fff;
+    color: var(--selected-text, #fff);
     font-weight: 600;
   }
 

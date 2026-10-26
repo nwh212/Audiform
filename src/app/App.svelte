@@ -2372,6 +2372,8 @@
   }
   /** Puts settings that live outside the interface's own reads into effect. */
   function applyAppSettings(s: AppSettings, autosave: boolean) {
+    if (s.theme === "sky") document.documentElement.dataset.theme = "sky";
+    else delete document.documentElement.dataset.theme;
     const root = document.documentElement.style;
     for (const k of ["--wave", "--playhead", "--accent", "--lane-selected"]) root.removeProperty(k);
     for (const [k, v] of Object.entries(colorVars(s.colors))) root.setProperty(k, v);

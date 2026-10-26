@@ -91,7 +91,7 @@
     g.stroke();
   }
 
-  /** Mixes a color toward white by `amount` (0 to 1). Unknown formats come back unchanged. */
+  /** Mixes a color toward white by `amount` (0 to 1), or toward black when negative. Unknown formats come back unchanged. */
   function lighten(c: string, amount: number): string {
     const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c.trim());
     let r: number, gr: number, b: number;
@@ -103,7 +103,7 @@
       if (!n) return c;
       [r, gr, b] = [Number(n[1]), Number(n[2]), Number(n[3])];
     }
-    const mix = (v: number) => Math.round(v + (255 - v) * amount);
+    const mix = (v: number) => Math.round(amount >= 0 ? v + (255 - v) * amount : v * (1 + amount));
     return `rgb(${mix(r)}, ${mix(gr)}, ${mix(b)})`;
   }
 
@@ -168,6 +168,11 @@
           levels: [lw.wave.levelFor((view.spp * lw.rate) / sessionRate)],
         } as unknown as PeakEntry)
       : null;
+    // Theme: how strongly a clip's color fills its body, whether it shines,
+    // and whether its waveform is drawn lighter (dark theme) or deeper.
+    const bodyAlpha = Number(css("--clip-body-alpha")) || 0.2;
+    const waveTone = Number(css("--clip-wave-tone")) || 0.55;
+    const gloss = css("--clip-gloss") === "1";
     for (const clip of liveClip ? [...track.clips, liveClip] : track.clips) {
       const m = clip === liveClip ? liveMedia! : media.get(clip.media_id);
       const len = clipLength(clip, m, sessionRate);
@@ -182,8 +187,17 @@
       // Body and title bar.
       g.globalAlpha = clip.muted ? 0.35 : 1;
       g.fillStyle = color;
-      g.globalAlpha *= 0.2;
+      g.globalAlpha *= bodyAlpha;
       g.fillRect(left, 1, right - left, lh - 2);
+      if (gloss) {
+        // Sky Glass: a shine across the top half of the clip.
+        const sh = g.createLinearGradient(0, 1, 0, lh / 2);
+        sh.addColorStop(0, "rgba(255, 255, 255, 0.55)");
+        sh.addColorStop(1, "rgba(255, 255, 255, 0)");
+        g.globalAlpha = clip.muted ? 0.35 : 1;
+        g.fillStyle = sh;
+        g.fillRect(left, 1, right - left, lh / 2);
+      }
       g.globalAlpha = clip.muted ? 0.35 : 1;
       g.fillStyle = color;
       g.fillRect(left, 1, right - left, titleH);
@@ -235,7 +249,7 @@
         // The waveform grows and shrinks with the clip's level.
         const clipLevel = Math.pow(10, (clip.gain_db ?? 0) / 20);
         if (exact) {
-          const tone = lighten(color, 0.55);
+          const tone = lighten(color, waveTone);
           g.strokeStyle = tone;
           g.fillStyle = tone;
           g.lineWidth = 1.25;
@@ -275,7 +289,7 @@
           g.globalAlpha = 1;
         } else if (level) {
           // Much lighter than the clip body so the waveform stands out.
-          g.fillStyle = lighten(color, 0.55);
+          g.fillStyle = lighten(color, waveTone);
           g.globalAlpha = clip.muted ? 0.35 : 1;
           const laneH = body.height / ch;
           // A looped clip wraps back to the start of its region.

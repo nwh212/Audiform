@@ -182,7 +182,14 @@
               <button type="button" disabled={!d.app.colors[r.key]} onclick={() => (d.app.colors[r.key] = "")}>Theme</button>
             {/each}
           </div>
-          <label class="off"><select disabled><option>Dark</option></select> Theme <span class="why">One dark theme for now; a light theme is planned.</span></label>
+          <label class="row">
+            Theme
+            <select value={d.app.theme} onchange={(e) => (d.app.theme = e.currentTarget.value === "sky" ? "sky" : "dark")}>
+              <option value="dark">Dark</option>
+              <option value="sky">Sky Glass (light, glossy)</option>
+            </select>
+          </label>
+          <p class="note">Sky Glass is an experiment: a bright sky behind frosted glass panels and glossy controls. Your colors above still apply on top of either theme.</p>
         {:else if page === "Audio Devices"}
           <label class="row">
             Play through

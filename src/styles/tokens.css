@@ -51,6 +51,11 @@
   --clip-5: #b8a23f;
   --clip-6: #b84f6e;
   --clip-7: #3fa3b8;
+  /* How clips draw: body tint strength, waveform tone (above 0 lighter
+     than the clip color, below 0 deeper), and a shine (1) or none. */
+  --clip-body-alpha: 0.2;
+  --clip-wave-tone: 0.55;
+  --clip-gloss: 0;
 
   /* Type and density */
   --font-ui:
