@@ -60,6 +60,7 @@
   } from "./chain";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import ResponseGraph from "./ResponseGraph.svelte";
+  import BandEqPanel from "./BandEqPanel.svelte";
   import EqGraph from "./EqGraph.svelte";
   import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
   import EffectControls from "./EffectControls.svelte";
@@ -547,7 +548,8 @@
   // or the master has no audio of its own to learn from yet.
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
-  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
+  const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -788,6 +790,9 @@
           <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if GRAPHED.has(winSlot.effect)}
           <ResponseGraph slot={winSlot} info={winInfo} onPoint={(pf, f, pg, g, done) => dragPoint(winSlot, pf, f, pg, g, done)} />
+        {/if}
+        {#if BAND_EQS.includes(winSlot.effect)}
+          <BandEqPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {/if}
         {#if winInfo.sidechain && onTrackTab && doc && keyOwner}
           <label class="param" title="Sidechain: let another track's or bus's sound drive this effect, for example to duck music under a voice. It listens before that track's fader.">
@@ -1115,6 +1120,12 @@
     /* The Parametric EQ's band table needs a column per band. */
     &:has(:global(.eqwin)) {
       width: min(780px, 96vw);
+    }
+    /* A Band EQ fits its row of sliders. */
+    &:has(:global(.beq)) {
+      width: auto;
+      min-width: 380px;
+      max-width: 96vw;
     }
     &:has(:global(.ns)) {
       width: 660px;

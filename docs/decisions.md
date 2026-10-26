@@ -1530,3 +1530,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **No point count control.** Click the curve or empty space to add a point (up to eight), drag to move it, right-click (or double-click) to remove it; two always stay. The count is still saved with the effect, set by the graph.
 - **Graph:** the same frequency ruler as the EQ windows (20 Hz to 20 kHz) and a degree scale on the right in tenths of the range (20° steps at 180°, 40° at 360°).
 - **Controls under the graph:** Spline Curves and Reset beside the hint, then Frequency Scale (Linear or Logarithmic, a view choice remembered between windows), Range (180° or 360°), Channel and FFT Size.
+
+## 2026-10-28: Band EQ windows, a row of sliders
+
+- **One tall slider per band** (10, 20 or 30), lowest on the left, with its level above (click to type one) and its frequency below; a dB scale on the left and Output on the right. Drag (Ctrl fine, Shift coarse), wheel, arrow keys, or double-click for 0 dB.
+- **Alt+drag across the sliders draws a shape**, one undoable step. **Flat** puts every band back to 0 dB in one step.
+- The response graph stays above the sliders, so the combined curve is still in view.
