@@ -1405,3 +1405,11 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **Record is Shift+Space.** Approved by the Audiform project lead; added to the shortcut table in CLAUDE.md. It starts recording the armed tracks, and stops when recording.
 - **The playhead kept pulling the view back.** An older rule from before Follow Playhead was still in the Editor: whenever the playhead went off screen while playing, it moved the view back to it, whatever you had done and even with Follow Playhead off. It is removed; Follow Playhead alone pages the view now, and lets go when you move the view yourself (it picks up again when you leave the view alone with the playhead in it, when playback starts, or when the playhead is moved).
+
+## 2026-10-26: Voice Chain panel: owner color, any row's chain, empty slots, mono icon
+
+- **Whose chain it is.** The panel's top area and its tab underline take the color of whose chain it shows: the track's (or clip's), a bus's (its color, or the bus purple), or the app accent for the master.
+- **Bus, MIDI and master chains.** Picking a row now always shows that row's chain: picking a bus, the master, or a track without a clip switches the panel to Track Effects, and picking another row closes an open effect window (which used to hold the panel on its chain, so clicks on other rows did nothing).
+- **Empty slots** are drawn as empty dashed boxes, so the 16 slots read as a rack with room in it; later empty slots say "+ Add effect" on hover.
+- **Mono buttons** (track and bus Mono, the master's mono check) show an icon of two channels joining into one, instead of "MO" or "MONO".
+- **Name.** A request to rename the panel to a name another audio editor uses for its effects panel was set aside: the naming rule keeps other products' panel names out of the app. The project lead is choosing a name of our own.

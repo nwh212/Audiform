@@ -9,6 +9,7 @@
   undoable; a fader or send drag is one undo step.
 -->
 <script lang="ts">
+  import MonoIcon from "../../app/MonoIcon.svelte";
   import { trackOp } from "./solo";
   import { busOp, isRouted, MASTER_ID } from "./routing";
   import SendList from "./SendList.svelte";
@@ -222,7 +223,7 @@
         <div class="buttons">
           <button type="button" class:on={t.muted} class="m" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
           <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo"} aria-pressed={t.solo} onclick={() => setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track")}>S</button>
-          <button type="button" class:on={t.mono} class="mo" title="Mono: folds this strip's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={t.mono} onclick={() => setStrip(t, { mono: !t.mono }, t.mono ? "Track Stereo" : "Track Mono")}>MO</button>
+          <button type="button" class:on={t.mono} class="mo" title="Mono: folds this strip's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={t.mono} onclick={() => setStrip(t, { mono: !t.mono }, t.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
           {#if t.kind === "track"}
             <button type="button" class:on={t.record_armed} class="r" title="Arm for recording" aria-pressed={t.record_armed} onclick={() => setStrip(t, { record_armed: !t.record_armed }, "Arm Track")}>R</button>
           {/if}
@@ -266,7 +267,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="strip master" class:selected={selected === MASTER_ID} onclick={() => editor.selectTrack(MASTER_ID)} title="Click to show the master's Voice Chain">
     <div class="name">Master</div>
-    <button type="button" class="check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}>MONO</button>
+    <button type="button" class="check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}><MonoIcon /></button>
     <div class="body">
       <div class="scale" aria-hidden="true">
         {#each SCALE as s (s)}<span style:bottom="{dbToFader(s) * 100}%">{s > 0 ? `+${s}` : s}</span>{/each}

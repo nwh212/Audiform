@@ -8,6 +8,7 @@
   management and zoom. Playback arrives in P2, clip editing in P3.
 -->
 <script lang="ts">
+  import MonoIcon from "../../app/MonoIcon.svelte";
   import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import { trackOp } from "../mixer/solo";
   import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
@@ -2347,7 +2348,7 @@
                 <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
               </button>
               {/if}
-              <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}>MO</button>
+              <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
             </div>
             {#if !track.collapsed && headerView === "fx" && doc}
               <HeaderFx
@@ -2550,7 +2551,7 @@
               <div class="line">
                 <Dial value={b.volume_db} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={(v) => setBus(b, { volume_db: v }, "Bus Volume")} />
                 <Dial value={b.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setBus(b, { pan: v }, "Bus Pan")} />
-                <button type="button" class="ms mono" class:on={!!b.mono} title="Mono: folds this bus's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!b.mono} onclick={() => setBus(b, { mono: !b.mono }, b.mono ? "Bus Stereo" : "Bus Mono")}>MONO</button>
+                <button type="button" class="ms mono" class:on={!!b.mono} title="Mono: folds this bus's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!b.mono} onclick={() => setBus(b, { mono: !b.mono }, b.mono ? "Bus Stereo" : "Bus Mono")}><MonoIcon /></button>
               </div>
               {#if busHeight(b) >= ROW_OUTPUT - 8 && doc}
                 <div class="line">
@@ -2606,7 +2607,7 @@
             </div>
             <div class="line">
               <Dial value={doc.master?.volume_db ?? 0} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={setMasterVolume} />
-              <button type="button" class="ms mono check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}>MONO</button>
+              <button type="button" class="ms mono check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}><MonoIcon /></button>
             </div>
             {#if doc.space && channelNames(doc.space.layout).length > 2}
               {@const names = channelNames(doc.space.layout)}

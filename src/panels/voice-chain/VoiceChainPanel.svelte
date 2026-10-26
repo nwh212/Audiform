@@ -15,6 +15,7 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
   import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
@@ -24,6 +25,7 @@
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
   import { keyChoices, MASTER_ID } from "../mixer/routing";
+  import { defaultTrackColor } from "../editor/timeline";
   import type { EffectChainDoc, EffectSlotDoc, EffectTarget, SessionDoc, SessionStore } from "../../stores/session";
   import {
     addsOne,
@@ -181,6 +183,25 @@
     void oneClip;
     if (!hold) pickedTrack = null;
   });
+  // Picking another row closes an open effect window, so the panel shows the new row's chain.
+  $effect(() => {
+    const id = selTrack;
+    const h = untrack(() => hold);
+    if (h && id && id !== h.owner) {
+      winOpen = false;
+      hold = null;
+    }
+  });
+  // Picking a row (a track header, a MIDI track, a bus or the master) shows
+  // its chain on Track Effects: a bus or the master has no clips, and a row
+  // picked without a clip means its own chain.
+  $effect(() => {
+    const id = selTrack;
+    const c = oneClip;
+    if (hold || !id || untrack(() => tab) !== "clip") return;
+    const isRow = id === MASTER_ID || !!untrack(() => doc?.buses?.some((b) => b.id === id)) || c === null;
+    if (isRow) untrack(() => setTab("track"));
+  });
   const track = $derived(
     (hold ? doc?.tracks.find((t) => t.id === hold!.owner) : undefined) ??
       doc?.tracks.find((t) => t.id === pickedTrack) ??
@@ -207,6 +228,17 @@
     if (onMaster) return { kind: "master" };
     if (bus) return { kind: "bus", id: bus.id };
     return track ? { kind: "track", id: track.id } : null;
+  });
+  /** The color of whose chain this is (the track's, bus's or clip's), shown along the panel. */
+  const cssColor = (c: string) => (c.startsWith("--") ? `var(${c})` : c);
+  const accent = $derived.by(() => {
+    if (inWave) return "var(--accent)";
+    if (onMaster) return "var(--accent)";
+    if (bus) return bus.color ? cssColor(bus.color) : "var(--clip-3)";
+    const t = tab === "clip" ? (clipTrack ?? track) : track;
+    if (tab === "clip" && clip?.color) return cssColor(clip.color);
+    if (!t || !doc) return "var(--accent)";
+    return cssColor(t.color ?? defaultTrackColor(doc.tracks.indexOf(t)));
   });
   /** Whose chain the sidechain choices are for: a track, bus or the master. */
   const keyOwner = $derived(onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null));
@@ -547,7 +579,7 @@
 
 </script>
 
-<section class="vc" aria-label="Voice Chain">
+<section class="vc" aria-label="Voice Chain" style:--rack={accent}>
   <div class="tabs" role="tablist" hidden={inWave}>
     <button type="button" role="tab" aria-selected={tab === "clip"} class:on={tab === "clip"} onclick={() => setTab("clip")}>Clip Effects</button>
     <button type="button" role="tab" aria-selected={tab === "track"} class:on={tab === "track"} onclick={() => setTab("track")}>Track Effects</button>
@@ -891,7 +923,7 @@
   }
   .tabs button.on {
     color: var(--text);
-    border-bottom-color: var(--accent);
+    border-bottom-color: var(--rack, var(--accent));
   }
   .top {
     display: grid;
@@ -899,6 +931,9 @@
     gap: 4px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--border);
+    /* The chain's owner color along the top, so you can see whose effects these are. */
+    box-shadow: inset 3px 0 0 var(--rack, var(--accent));
+    background: color-mix(in srgb, var(--surface-1) 92%, var(--rack, var(--accent)) 8%);
   }
   .line {
     display: flex;
@@ -963,6 +998,7 @@
     padding: 0 8px;
   }
   .slots li.sel {
+    box-shadow: inset 2px 0 0 var(--rack, var(--accent));
     background: var(--surface-2);
   }
   .slots li.bypassed .name {
@@ -1018,13 +1054,24 @@
     color: var(--text-dim);
     text-align: left;
   }
-  /* Later empty slots: quiet until hovered, so the list stays calm. */
+  /* Empty slots show as an empty box; later ones say nothing until hovered, so the list stays calm. */
+  .add {
+    height: 18px;
+    border: 1px dashed color-mix(in srgb, var(--border-strong) 80%, transparent);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--surface-0) 60%, transparent);
+  }
+  .add:hover,
+  .add:focus-visible {
+    border-color: var(--rack, var(--accent));
+    border-style: solid;
+  }
   .add.quiet {
-    opacity: 0;
+    color: transparent;
   }
   li:hover .add.quiet,
   .add.quiet:focus-visible {
-    opacity: 0.7;
+    color: var(--text-dim);
   }
   .mini {
     min-width: 20px;
