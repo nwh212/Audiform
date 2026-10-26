@@ -718,3 +718,35 @@
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
   cursor: url("../assets/themes/cursor.svg") 4 3, default;
 }
+
+/* Moonlight transport: clear glass orbs, with the icon floating inside.
+   Play and record light the inside of their orb. */
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool {
+  border: 0;
+  border-radius: 50%;
+  background: url("../assets/themes/orb.png") center / contain no-repeat;
+  box-shadow: 0 3px 10px rgba(0, 0, 20, 0.45);
+  color: #ffffff;
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 20, 60, 0.9));
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool:hover:not(:disabled) {
+  background-color: rgba(120, 200, 255, 0.18);
+  box-shadow: 0 0 10px rgba(140, 210, 255, 0.55), 0 3px 10px rgba(0, 0, 20, 0.45);
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.play.on {
+  background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(110, 255, 140, 0.55), rgba(110, 255, 140, 0.08) 70%);
+  box-shadow: 0 0 12px rgba(110, 255, 140, 0.7);
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.rec.on {
+  background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(255, 90, 100, 0.6), rgba(255, 90, 100, 0.1) 70%);
+  box-shadow: 0 0 12px rgba(255, 90, 100, 0.75);
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.on:not(.play, .rec) {
+  background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(120, 210, 255, 0.5), rgba(120, 210, 255, 0.08) 70%);
+  box-shadow: 0 0 12px rgba(120, 210, 255, 0.7);
+}
+:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.rec {
+  color: #ff5a6a;
+}
