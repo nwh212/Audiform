@@ -24,7 +24,8 @@
   import { onDestroy } from "svelte";
   import { scopePhase, scopePhaseAt, type ScopeSignal } from "../../app/core";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
-  import { hexToRgb, PHASE_HIGH, PHASE_LOW, ramp } from "../../app/colors";
+  import { hexToRgb, PHASE_HIGH, PHASE_LOW, ramp, themeColor } from "../../app/colors";
+  import { appearanceTick } from "../../stores/appearance";
   import { PHASE_RATES, PHASE_SIZES, settings, type PhaseWheelPrefs } from "../../stores/settings";
   import type { TransportState, TransportStore } from "../../stores/transport";
 
@@ -60,10 +61,15 @@
     const c = settings.current;
     settings.set({ ...c, phaseWheel: { ...c.phaseWheel, ...change } });
   }
+  let looks = $state(0);
+  $effect(() => appearanceTick.subscribe((v) => (looks = v)));
+  /** The theme's own low and high colors, or the built-in ones. */
+  const themeLow = $derived((void looks, themeColor("--phase-low") || PHASE_LOW));
+  const themeHigh = $derived((void looks, themeColor("--phase-high") || PHASE_HIGH));
   /** 64 colors from the low end to the high end, so drawing never works one out per dot. */
   const palette = $derived.by(() => {
-    const low = hexToRgb(appColors.phaseLow || PHASE_LOW)!;
-    const high = hexToRgb(appColors.phaseHigh || PHASE_HIGH)!;
+    const low = hexToRgb(appColors.phaseLow || themeLow) ?? hexToRgb(PHASE_LOW)!;
+    const high = hexToRgb(appColors.phaseHigh || themeHigh) ?? hexToRgb(PHASE_HIGH)!;
     return Array.from({ length: 64 }, (_, i) => ramp(low, high, i / 63).map(Math.round) as [number, number, number]);
   });
   const legend = $derived(`linear-gradient(to right, ${palette.filter((_, i) => i % 8 === 0 || i === 63).map(([r, g, b]) => `rgb(${r} ${g} ${b})`).join(", ")})`);
@@ -307,8 +313,8 @@
     highLabel="High notes (20 kHz)"
     low={appColors.phaseLow}
     high={appColors.phaseHigh}
-    lowDefault={PHASE_LOW}
-    highDefault={PHASE_HIGH}
+    lowDefault={themeLow}
+    highDefault={themeHigh}
     onChange={setColors}
     onClose={() => (colorPop = null)}
   />

@@ -34,7 +34,7 @@
   import DockShell from "./docking/DockShell.svelte";
   import { ActionRegistry } from "./actions";
   import { MENUS } from "./menus/model";
-  import { watchGlassCursor } from "./glass-cursor";
+  import { watchThemeCursor } from "./theme-cursor";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
   import AboutDialog from "./AboutDialog.svelte";
@@ -196,6 +196,7 @@
     sessionExportSesx,
     waveStretch,
     waveReverseInvert,
+    waveSetChannelsOff,
   } from "./core";
   import { isTauri } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -2535,11 +2536,12 @@
     prefs.set(KEY_LOUD_TARGET, d.loudness.target);
     applyAppSettings(settings.current, autosaveChanged);
   }
-  // Aero themes: anything whose own style asks for the hand or the plain
-  // arrow gets the glass arrow too (theme-aero.css styles the mark).
+  // Aero themes and Phosphor: anything whose own style asks for the hand
+  // or the plain arrow gets the theme's arrow too (the theme style sheets
+  // style the mark).
   function markAeroCursor(e: MouseEvent) {
     const root = document.documentElement;
-    if (root.dataset.theme !== "meadow" && root.dataset.theme !== "aqua" && root.dataset.theme !== "moonlight" && root.dataset.theme !== "prism") return;
+    if (!["meadow", "aqua", "moonlight", "prism", "phosphor"].includes(root.dataset.theme ?? "")) return;
     for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
       if (el.dataset.aeroCursor !== undefined) return;
       const c = getComputedStyle(el).cursor;
@@ -2552,10 +2554,15 @@
   }
   onMount(() => {
     document.addEventListener("mouseover", markAeroCursor, true);
-    const stopGlass = watchGlassCursor();
+    // Switched-off channels in the Waveform editor are silent in playback too.
+    const stopChannels = waveChannels.subscribe((c) => {
+      if (isTauri()) void waveSetChannelsOff(c.map((on) => !on)).catch(showError);
+    });
+    const stopPointers = watchThemeCursor();
     return () => {
       document.removeEventListener("mouseover", markAeroCursor, true);
-      stopGlass();
+      stopPointers();
+      stopChannels();
     };
   });
 

@@ -14,6 +14,7 @@
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
+  import { themeColor } from "../colors";
   import { cleanDraft, LATER_PAGES, PAGES, sizeText, type Page, type SettingsDraft } from "./pages";
 
   interface Props {
@@ -94,15 +95,16 @@
     }
   }
 
-  const COLOR_ROWS: { key: keyof AppColors; label: string; theme: string }[] = [
+  /** `theme` is the dark theme's color; `cssVar`, where set, names the other themes' own. */
+  const COLOR_ROWS: { key: keyof AppColors; label: string; theme: string; cssVar?: string }[] = [
     { key: "wave", label: "Waveform (Waveform editor)", theme: "#53c28b" },
     { key: "playhead", label: "Playhead", theme: "#f2c14e" },
     { key: "accent", label: "Accent (focus and selection)", theme: "#3fa9f5" },
     { key: "laneSelected", label: "Selected track lane", theme: "#34343b" },
-    { key: "spectrumLow", label: "Spectrogram, quiet", theme: "#2a1a8a" },
-    { key: "spectrumHigh", label: "Spectrogram, loud", theme: "#ffe066" },
-    { key: "phaseLow", label: "Phase Wheel, low notes", theme: "#ff2a2a" },
-    { key: "phaseHigh", label: "Phase Wheel, high notes", theme: "#e02aff" },
+    { key: "spectrumLow", label: "Spectrogram, quiet", theme: "#2a1a8a", cssVar: "--spectrum-low" },
+    { key: "spectrumHigh", label: "Spectrogram, loud", theme: "#ffe066", cssVar: "--spectrum-high" },
+    { key: "phaseLow", label: "Phase Wheel, low notes", theme: "#ff2a2a", cssVar: "--phase-low" },
+    { key: "phaseHigh", label: "Phase Wheel, high notes", theme: "#e02aff", cssVar: "--phase-high" },
   ];
   const CACHE_NOTES: Record<string, string> = {
     peaks: "Waveform drawings",
@@ -183,7 +185,7 @@
           <div class="colors">
             {#each COLOR_ROWS as r (r.key)}
               <span>{r.label}</span>
-              <input type="color" value={d.app.colors[r.key] || r.theme} oninput={(e) => (d.app.colors[r.key] = e.currentTarget.value)} aria-label={r.label} />
+              <input type="color" value={d.app.colors[r.key] || (r.cssVar && themeColor(r.cssVar)) || r.theme} oninput={(e) => (d.app.colors[r.key] = e.currentTarget.value)} aria-label={r.label} />
               <button type="button" disabled={!d.app.colors[r.key]} onclick={() => (d.app.colors[r.key] = "")}>Theme</button>
             {/each}
           </div>

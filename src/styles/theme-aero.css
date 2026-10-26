@@ -70,6 +70,33 @@
   --a-go: linear-gradient(#a8f08a, #45bf3c 52%, #2fa52f);
 }
 
+/* Each scene's own spectrogram (quiet to loud) and Phase Wheel (low to
+   high notes) colors; colors picked in Settings still win. */
+:root[data-theme="meadow"] {
+  --spectrum-low: #1f5c2a;
+  --spectrum-high: #d8f6ff;
+  --phase-low: #2fae4a;
+  --phase-high: #1f86e0;
+}
+:root[data-theme="aqua"] {
+  --spectrum-low: #0a5a6e;
+  --spectrum-high: #e6f6ff;
+  --phase-low: #10b8c8;
+  --phase-high: #7a4fd8;
+}
+:root[data-theme="moonlight"] {
+  --spectrum-low: #12305a;
+  --spectrum-high: #f2f0ff;
+  --phase-low: #4fd8ff;
+  --phase-high: #c8a0ff;
+}
+:root[data-theme="prism"] {
+  --spectrum-low: #3a2ad8;
+  --spectrum-high: #ffd84a;
+  --phase-low: #ff3a3a;
+  --phase-high: #b04aff;
+}
+
 :root[data-theme="meadow"] body {
   background: #6fbff0 url("../assets/themes/meadow-photo.webp") center / cover no-repeat fixed;
 }
@@ -713,10 +740,10 @@
 
 
 /* A glowing blue glass arrow for the pointer, over everything you click
-   too. Text and resize pointers get glass versions too (src/app/glass-cursor.ts);
-   drag pointers keep their usual shapes. Elements
-   whose own style asks for the hand or the plain arrow are marked by the
-   app (data-aero-cursor) so they get the glass arrow as well. */
+   too. Text, resize and grab pointers get glass versions as well
+   (src/app/theme-cursor.ts). Elements whose own style asks for the hand
+   or the plain arrow are marked by the app (data-aero-cursor) so they
+   get the glass arrow too. */
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]),
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) body,
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {

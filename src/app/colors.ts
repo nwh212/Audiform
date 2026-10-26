@@ -62,6 +62,16 @@ export function ramp(low: Rgb, high: Rgb, t: number): Rgb {
   return hslToRgb(h0 + (h1 - h0) * u, s0 + (s1 - s0) * u, l0 + (l1 - l0) * u);
 }
 
+/**
+ * A theme's own color for a role, from a CSS variable on the page root
+ * (--spectrum-low, --spectrum-high, --phase-low, --phase-high), or "" when
+ * the theme has none and the built-in colors below apply.
+ */
+export function themeColor(name: string): string {
+  if (typeof document === "undefined") return "";
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 /** Defaults: the Phase Wheel runs red (low notes) to magenta (high). */
 export const PHASE_LOW = "#ff2a2a";
 export const PHASE_HIGH = "#e02aff";

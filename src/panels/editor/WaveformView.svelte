@@ -11,7 +11,7 @@
 <script lang="ts">
   import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
-  import { SPECTRUM_HIGH, SPECTRUM_LOW } from "../../app/colors";
+  import { SPECTRUM_HIGH, SPECTRUM_LOW, themeColor } from "../../app/colors";
   import { KIND_COLORS } from "../markers/markers";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
@@ -860,8 +860,8 @@
     highLabel="Loud"
     low={appColors.spectrumLow}
     high={appColors.spectrumHigh}
-    lowDefault={SPECTRUM_LOW}
-    highDefault={SPECTRUM_HIGH}
+    lowDefault={themeColor("--spectrum-low") || SPECTRUM_LOW}
+    highDefault={themeColor("--spectrum-high") || SPECTRUM_HIGH}
     onChange={setSpectrumColors}
     onClose={() => (colorPop = null)}
   />

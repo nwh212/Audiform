@@ -1631,3 +1631,11 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-28: Waveforms of files with more than two channels
 
 - **Fixed:** a file with more than two channels (a 12-channel 3D Space mixdown, for one) showed empty waveform lanes in the Waveform editor and on clips. Its peak cache was written with every channel, but reading it back still allowed only one or two channels, so the cache was refused and nothing was drawn. Reading now allows up to 64, the same as writing.
+
+## 2026-10-28: Spectrum per channel, theme colors, theme hands and Phosphor pointers, silent switched-off channels
+
+- **The spectrum shows each channel in its own band** for files with more than one channel, top to bottom like the waveform's channels, each labelled on the frequency scale. Frequency zoom, the scale and the selection tools work inside a band; a selection drawn in one band shows in every band, since spectral edits already reach every channel switched on.
+- **Spectrogram and Phase Wheel colors follow the theme.** Each scene theme and Phosphor has its own pair (CSS variables `--spectrum-low/high` and `--phase-low/high`); the dark theme keeps the built-in ones; colors picked in Settings or the right-click menus still win, and the pickers' Default buttons go back to the theme's.
+- **Grab hands for the themes:** the open and closed hand shown when dragging a panel or window by its title are glass in the scene themes. Phosphor gets its own set of square-pixel green pointers (arrow, I-beam, resize arrows, hands), in the look of early screen pointers. `src/app/theme-cursor.ts` (was glass-cursor.ts) holds one pointer set per theme.
+- **Switching a channel off in the Waveform editor also silences it in playback.** The channels still on play as before (a stereo file with Left off plays Right on the right only). The file is not changed; the switch only affects what edits reach and what you hear.
+- **Keyboard Shortcuts dialog:** a key press it cannot read as a shortcut is now shown (its key and physical key names), so a shortcut that does nothing on one machine can be diagnosed.

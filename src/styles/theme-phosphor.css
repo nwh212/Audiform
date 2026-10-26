@@ -66,11 +66,30 @@
   --p-ink: #3a3020;
   --p-ink-dim: #6b5d42;
   --p-glow: 0 0 3px rgba(80, 255, 130, 0.55);
+
+  /* Spectrogram and Phase Wheel in phosphor greens. */
+  --spectrum-low: #062e12;
+  --spectrum-high: #ccffe6;
+  --phase-low: #2fae4a;
+  --phase-high: #b6ffe0;
 }
 
 :root[data-theme="phosphor"] body {
   background: var(--p-case);
   text-shadow: var(--p-glow);
+}
+
+/* A square-pixel green arrow for the pointer, over everything you click
+   too; text, resize and grab pointers come from src/app/theme-cursor.ts.
+   Elements whose own style asks for the hand or the plain arrow are
+   marked by the app (data-aero-cursor) so they get the arrow as well. */
+:root[data-theme="phosphor"],
+:root[data-theme="phosphor"] body,
+:root[data-theme="phosphor"] :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
+  cursor: url("../assets/themes/phosphor-arrow.svg") 2 2, default;
+}
+:root[data-theme="phosphor"] [data-aero-cursor] {
+  cursor: url("../assets/themes/phosphor-arrow.svg") 2 2, default !important;
 }
 
 /* Faint scan lines and a soft tube vignette over the whole window, never in the way of the mouse. */

@@ -3,42 +3,70 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * Glass pointers for the scene themes: the text and time-selection
- * I-beam and the resize double arrows drawn in the same glowing blue
- * glass as the themes' arrow. Many of these pointers are chosen by code
- * as the mouse moves (lane edges, track and panel resizing), so a style
- * sheet cannot catch them all: this watches the element under the
- * pointer, reads the pointer it asks for, and swaps in the glass one,
+ * Theme pointers: the scene themes draw the text and time-selection
+ * I-beam, the resize double arrows and the grab hands in the same glowing
+ * blue glass as their arrow; Phosphor draws them as square green pixels.
+ * Many of these pointers are chosen by code as the mouse moves (lane
+ * edges, track and panel resizing, dragging a window by its title), so a
+ * style sheet cannot catch them all: this watches the element under the
+ * pointer, reads the pointer it asks for, and swaps in the theme's own,
  * keeping the standard shape as the fallback.
  */
 
-import textUrl from "../assets/themes/cursor-text.svg";
-import ewUrl from "../assets/themes/cursor-ew.svg";
-import nsUrl from "../assets/themes/cursor-ns.svg";
-import nwseUrl from "../assets/themes/cursor-nwse.svg";
-import neswUrl from "../assets/themes/cursor-nesw.svg";
+import glassText from "../assets/themes/cursor-text.svg";
+import glassEw from "../assets/themes/cursor-ew.svg";
+import glassNs from "../assets/themes/cursor-ns.svg";
+import glassNwse from "../assets/themes/cursor-nwse.svg";
+import glassNesw from "../assets/themes/cursor-nesw.svg";
+import glassGrab from "../assets/themes/cursor-grab.svg";
+import glassGrabbing from "../assets/themes/cursor-grabbing.svg";
+import pxText from "../assets/themes/phosphor-text.svg";
+import pxEw from "../assets/themes/phosphor-ew.svg";
+import pxNs from "../assets/themes/phosphor-ns.svg";
+import pxNwse from "../assets/themes/phosphor-nwse.svg";
+import pxNesw from "../assets/themes/phosphor-nesw.svg";
+import pxGrab from "../assets/themes/phosphor-grab.svg";
+import pxGrabbing from "../assets/themes/phosphor-grabbing.svg";
 
-/** Themes that use the glass pointers. */
-const GLASS_THEMES = new Set(["meadow", "aqua", "moonlight", "prism"]);
+/** One theme's pictures for each kind of pointer, with the hot spot (the middle of the art). */
+interface PointerSet {
+  text: string;
+  ew: string;
+  ns: string;
+  nwse: string;
+  nesw: string;
+  grab: string;
+  grabbing: string;
+  /** Hot spot, x and y in pixels. */
+  hot: number;
+}
 
-/** Each standard pointer, by the glass one that replaces it (its picture and its hot spot, 21 px art). */
-const GLASS: Record<string, string> = {
-  text: `url("${textUrl}") 10 10`,
-  "vertical-text": `url("${textUrl}") 10 10`,
-  "ew-resize": `url("${ewUrl}") 10 10`,
-  "col-resize": `url("${ewUrl}") 10 10`,
-  "e-resize": `url("${ewUrl}") 10 10`,
-  "w-resize": `url("${ewUrl}") 10 10`,
-  "ns-resize": `url("${nsUrl}") 10 10`,
-  "row-resize": `url("${nsUrl}") 10 10`,
-  "n-resize": `url("${nsUrl}") 10 10`,
-  "s-resize": `url("${nsUrl}") 10 10`,
-  "nwse-resize": `url("${nwseUrl}") 10 10`,
-  "nw-resize": `url("${nwseUrl}") 10 10`,
-  "se-resize": `url("${nwseUrl}") 10 10`,
-  "nesw-resize": `url("${neswUrl}") 10 10`,
-  "ne-resize": `url("${neswUrl}") 10 10`,
-  "sw-resize": `url("${neswUrl}") 10 10`,
+const GLASS: PointerSet = { text: glassText, ew: glassEw, ns: glassNs, nwse: glassNwse, nesw: glassNesw, grab: glassGrab, grabbing: glassGrabbing, hot: 10 };
+const PHOSPHOR: PointerSet = { text: pxText, ew: pxEw, ns: pxNs, nwse: pxNwse, nesw: pxNesw, grab: pxGrab, grabbing: pxGrabbing, hot: 16 };
+
+/** Themes with their own pointers. */
+const SETS: Record<string, PointerSet> = { meadow: GLASS, aqua: GLASS, moonlight: GLASS, prism: GLASS, phosphor: PHOSPHOR };
+
+/** Which picture stands in for each standard pointer. */
+const KIND: Record<string, keyof Omit<PointerSet, "hot">> = {
+  text: "text",
+  "vertical-text": "text",
+  "ew-resize": "ew",
+  "col-resize": "ew",
+  "e-resize": "ew",
+  "w-resize": "ew",
+  "ns-resize": "ns",
+  "row-resize": "ns",
+  "n-resize": "ns",
+  "s-resize": "ns",
+  "nwse-resize": "nwse",
+  "nw-resize": "nwse",
+  "se-resize": "nwse",
+  "nesw-resize": "nesw",
+  "ne-resize": "nesw",
+  "sw-resize": "nesw",
+  grab: "grab",
+  grabbing: "grabbing",
 };
 
 /** The standard pointer a cursor value asks for: its last, fallback keyword. */
@@ -47,15 +75,16 @@ export function keywordOf(cursor: string): string {
   return (parts[parts.length - 1] ?? "").trim();
 }
 
-/** The cursor value to use instead, or null to leave it as it is. */
-export function glassFor(cursor: string): string | null {
+/** The cursor value to use instead in `theme`, or null to leave it as it is. */
+export function themedFor(cursor: string, theme: string): string | null {
+  const set = SETS[theme];
   const kw = keywordOf(cursor);
-  const glass = GLASS[kw];
-  return glass ? `${glass}, ${kw}` : null;
+  const kind = KIND[kw];
+  return set && kind ? `url("${set[kind]}") ${set.hot} ${set.hot}, ${kw}` : null;
 }
 
 /** Starts watching. Returns a function that stops and puts everything back. */
-export function watchGlassCursor(): () => void {
+export function watchThemeCursor(): () => void {
   let pending: Element | null = null;
   let frame = 0;
   /** What each element had inline before a swap (code may set pointers inline). */
@@ -80,7 +109,8 @@ export function watchGlassCursor(): () => void {
     const el = pending;
     pending = null;
     if (!(el instanceof HTMLElement)) return;
-    if (!GLASS_THEMES.has(document.documentElement.dataset.theme ?? "")) {
+    const theme = document.documentElement.dataset.theme ?? "";
+    if (!SETS[theme]) {
       for (const t of [...touched]) restore(t);
       return;
     }
@@ -89,7 +119,7 @@ export function watchGlassCursor(): () => void {
     const inline = el.style.getPropertyValue("cursor");
     if (ours.get(el) !== inline) original.set(el, { value: inline, priority: el.style.getPropertyPriority("cursor") });
     else putBack(el);
-    const swap = glassFor(getComputedStyle(el).cursor);
+    const swap = themedFor(getComputedStyle(el).cursor, theme);
     if (swap) {
       el.style.setProperty("cursor", swap, "important");
       ours.set(el, el.style.getPropertyValue("cursor"));
