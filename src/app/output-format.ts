@@ -46,8 +46,6 @@ export function formatAvailable(kind: FormatKind, platform: string): boolean {
 
 export const AAC_BITRATES = [96, 128, 160, 192] as const;
 /** Rates the system AAC encoder takes. */
-export const AAC_RATES = [44_100, 48_000] as const;
-
 export const OUTPUT_RATES = [8_000, 11_025, 16_000, 22_050, 32_000, 44_100, 48_000, 88_200, 96_000] as const;
 export const MP3_BITRATES = [32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] as const;
 /** Highest rate an MP3 carries. */

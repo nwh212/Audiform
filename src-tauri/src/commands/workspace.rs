@@ -16,24 +16,6 @@ fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_config_dir().map_err(|e| e.to_string())
 }
 
-/// Returns the saved layout, or null when none has been saved.
-#[tauri::command]
-pub fn workspace_load(app: AppHandle) -> Result<Option<Value>, String> {
-    workspace::load_user_layout(&config_dir(&app)?).map_err(|e| e.to_string())
-}
-
-/// Saves the current layout.
-#[tauri::command]
-pub fn workspace_save(app: AppHandle, layout: Value) -> Result<(), String> {
-    workspace::save_user_layout(&config_dir(&app)?, layout).map_err(|e| e.to_string())
-}
-
-/// Forgets the saved layout.
-#[tauri::command]
-pub fn workspace_clear(app: AppHandle) -> Result<(), String> {
-    workspace::clear_user_layout(&config_dir(&app)?).map_err(|e| e.to_string())
-}
-
 /// Saved named workspaces, without their layouts.
 #[tauri::command]
 pub fn workspace_list(app: AppHandle) -> Result<Vec<workspace::WorkspaceInfo>, String> {

@@ -274,12 +274,6 @@ pub fn wave_forget(parked: State<'_, ParkedWaves>, path: PathBuf) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn wave_get(wave: State<'_, OpenWave>) -> Result<Option<WaveDoc>, String> {
-    let w = wave.0.lock().map_err(|e| e.to_string())?;
-    Ok(w.as_ref().map(doc_of))
-}
-
-#[tauri::command]
 pub fn wave_close(
     wave: State<'_, OpenWave>,
     transport: State<'_, Transport>,

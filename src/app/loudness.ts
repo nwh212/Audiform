@@ -83,8 +83,6 @@ export function targetsFor(regionId: string = DEFAULT_REGION, custom: CustomLoud
   ];
 }
 
-export const TARGETS: readonly LoudnessTarget[] = targetsFor(DEFAULT_REGION);
-
 export const DEFAULT_TARGET = "podcast-stereo";
 
 export function targetById(id: string, regionId: string = DEFAULT_REGION): LoudnessTarget {

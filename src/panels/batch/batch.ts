@@ -91,21 +91,6 @@ export const EMPTY_TAGS: TagFields = { title: "", artist: "", album: "", year: "
 
 export const DEFAULT_TEMPLATE = "{name}";
 
-export const DEFAULT_BATCH: BatchSettings = {
-  format: { ...DEFAULT_FORMAT },
-  naming: "affix",
-  prefix: "",
-  suffix: "",
-  template: DEFAULT_TEMPLATE,
-  process: null,
-  level: { ...DEFAULT_LEVEL },
-  folder: null,
-  overwrite: false,
-  removeDone: false,
-  copyTags: true,
-  tags: { ...EMPTY_TAGS },
-};
-
 export const batchRows = writable<BatchRow[]>([]);
 
 export function sanitizeBatch(raw: unknown): BatchSettings {

@@ -180,7 +180,6 @@ pub fn run() {
             commands::export::export_merge,
             commands::export::export_region_copy,
             commands::wave::wave_open,
-            commands::wave::wave_get,
             commands::wave::wave_close,
             commands::wave::wave_park,
             commands::wave::wave_resume,
@@ -205,9 +204,6 @@ pub fn run() {
             commands::session::session_import_sesx,
             commands::session::session_export_sesx,
             commands::app::app_set_title,
-            commands::workspace::workspace_load,
-            commands::workspace::workspace_save,
-            commands::workspace::workspace_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Audiform");

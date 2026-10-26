@@ -107,11 +107,6 @@ export function sides(p: SpacePosDoc): [[number, number], [number, number]] {
 }
 
 /** The rotation (degrees) that puts a pair's right side toward (x, y) from its spot. */
-export function rotationToward(p: SpacePosDoc, x: number, y: number): number {
-  const deg = (Math.atan2(-(y - p.y), x - p.x) * 180) / Math.PI;
-  return Math.round(deg);
-}
-
 /** Every channel of a layout in file order, the low-frequency one included (as the core's `speakers`). */
 export function channelNames(layout: SpaceLayout): string[] {
   const base = ["L", "R", "C", "LFE"];
