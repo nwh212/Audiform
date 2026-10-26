@@ -89,12 +89,31 @@ export interface KeyEventLike {
   altKey: boolean;
   shiftKey: boolean;
   metaKey: boolean;
+  /** The physical key (KeyT, Backspace), used when `key` does not name one. */
+  code?: string;
+}
+
+/** The key a physical key code names, for the keys shortcuts use. */
+function keyFromCode(code: string | undefined): string | null {
+  if (!code) return null;
+  const letter = /^Key([A-Z])$/.exec(code);
+  if (letter) return letter[1]!;
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(code);
+  if (digit) return digit[1]!;
+  return canonicalKey(code);
 }
 
 /** Builds the chord for a key event, or null for a lone modifier key. */
 export function chordFromEvent(e: KeyEventLike): string | null {
   if (MODIFIER_KEYS.has(e.key)) return null;
-  const key = canonicalKey(e.key);
+  let key = canonicalKey(e.key);
+  // On Windows, Ctrl+Alt counts as the AltGr key: the key then reads as
+  // what AltGr types (a control character for Backspace, or a symbol on
+  // some layouts), so the chord fell through. Read the physical key then.
+  const c = e.key.length === 1 ? e.key.charCodeAt(0) : -1;
+  const control = c >= 0 && (c < 0x20 || c === 0x7f);
+  const altGr = e.ctrlKey && e.altKey && e.key.length === 1 && !/^[a-z0-9]$/i.test(e.key);
+  if (!key || control || altGr) key = keyFromCode(e.code) ?? (control ? null : key);
   if (!key) return null;
   const mods: string[] = [];
   if (e.ctrlKey || e.metaKey) mods.push("Ctrl");

@@ -117,6 +117,15 @@ describe("chords", () => {
     expect(chordFromEvent(key("-", { ctrl: true }))).toBe("Ctrl+-");
     expect(chordFromEvent(key("Control", { ctrl: true }))).toBeNull();
   });
+
+  it("reads the physical key when Ctrl+Alt types something else (AltGr on Windows)", () => {
+    const ev = (k: string, code: string) => ({ key: k, code, ctrlKey: true, altKey: true, shiftKey: false, metaKey: false });
+    expect(chordFromEvent(ev("\x7f", "Backspace"))).toBe("Ctrl+Alt+Backspace");
+    expect(chordFromEvent(ev("\b", "Backspace"))).toBe("Ctrl+Alt+Backspace");
+    expect(chordFromEvent(ev("Backspace", "Backspace"))).toBe("Ctrl+Alt+Backspace");
+    expect(chordFromEvent(ev("ŧ", "KeyT"))).toBe("Ctrl+Alt+T");
+    expect(chordFromEvent(ev("ArrowLeft", "ArrowLeft"))).toBe("Ctrl+Alt+ArrowLeft");
+  });
 });
 
 describe("shipped keymap", () => {

@@ -1623,3 +1623,7 @@ Several requests compared behavior to another editor; per the guardrails they ar
 ## 2026-10-28: Right-click menus in the glass themes
 
 - **Fixed:** in Meadow, Aqua, Moonlight and Prism, right-click menus were cut off and their submenus did not open where they should. The blurred glass on panels and menus makes them the frame a fixed menu is placed in and clipped by. Menus and submenus now move to the end of the page while open, so they sit against the window in every theme. The highlighted-row scroll no longer scrolls the panel under the menu.
+
+## 2026-10-28: Ctrl+Alt shortcuts on Windows
+
+- **Fixed (likely cause, untested on Windows):** Ctrl+Alt+Backspace (Delete Track) did nothing on Windows. Windows treats Ctrl+Alt as the AltGr key, so the browser can report the key as what AltGr types (a control character for Backspace, a symbol for some letters on some layouts) and the chord never matched. Shortcuts now read the physical key when Ctrl+Alt is held and the reported key is not a plain letter, digit or named key. In the browser the shortcut already worked.
