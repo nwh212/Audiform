@@ -46,8 +46,8 @@ export interface AppSettings {
   outputPair: [number, number];
   /** 3D Space sessions heard on speakers: each speaker's device output (from 0) by name. Missing speakers play on the output at their place in the layout. */
   speakerOutputs: Record<string, number>;
-  /** Look of the app: the built-in dark theme, or a glass theme: Sky Glass (light) or Night Glass (dark). */
-  theme: "dark" | "sky" | "night" | "meadow" | "aqua" | "moonlight";
+  /** Look of the app: the built-in dark theme, or an Aero theme (clear glass over a scene): Meadow, Aqua or Moonlight. */
+  theme: "dark" | "meadow" | "aqua" | "moonlight";
   /** Scene themes: a picture of your own behind the glass, in place of the theme's scene. Null uses the theme's. */
   themePicture: string | null;
   /** How lively the level meters are. */
@@ -238,7 +238,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     ),
     driver: o.driver === "asio" ? "asio" : "system",
     themePicture: typeof o.themePicture === "string" && o.themePicture.trim() ? o.themePicture : null,
-    theme: o.theme === "sky" || o.theme === "night" || o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" ? o.theme : "dark",
+    // Sky Glass and Night Glass (tried out, then dropped) become Meadow and Moonlight Aero.
+    theme: o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" ? o.theme : o.theme === "sky" ? "meadow" : o.theme === "night" ? "moonlight" : "dark",
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"
         ? o.meterSpeed

@@ -195,7 +195,7 @@
       g.globalAlpha *= bodyAlpha;
       g.fillRect(left, 1, right - left, lh - 2);
       if (gloss) {
-        // Sky Glass: a shine across the top half of the clip.
+        // Aero themes: a shine across the top half of the clip.
         const sh = g.createLinearGradient(0, 1, 0, lh / 2);
         sh.addColorStop(0, "rgba(255, 255, 255, 0.55)");
         sh.addColorStop(1, "rgba(255, 255, 255, 0)");

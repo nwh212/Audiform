@@ -189,13 +189,11 @@
           </div>
           <label class="row">
             Theme
-            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "sky" || v === "night" || v === "meadow" || v === "aqua" || v === "moonlight" ? v : "dark"; }}>
+            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" ? v : "dark"; }}>
               <option value="dark">Dark</option>
-              <option value="sky">Sky Glass (light, glossy)</option>
-              <option value="night">Night Glass (dark, glossy)</option>
-              <option value="meadow">Meadow (clear glass over sky and hills)</option>
-              <option value="aqua">Aqua (clear glass over sunlit water)</option>
-              <option value="moonlight">Moonlight (smoky glass over the meadow at night)</option>
+              <option value="meadow">Meadow Aero</option>
+              <option value="aqua">Aqua Aero</option>
+              <option value="moonlight">Moonlight Aero</option>
             </select>
           </label>
           <label class="row">
@@ -203,8 +201,8 @@
             <button type="button" onclick={async () => { const p = await themePickBackground().catch(() => null); if (p) d.app.themePicture = p; }}>Choose...</button>
             <button type="button" disabled={!d.app.themePicture} onclick={() => (d.app.themePicture = null)}>Use the theme's</button>
           </label>
-          <p class="note">{d.app.themePicture ? `Using ${d.app.themePicture.split(/[\\/]/).pop()}.` : "Using the theme's own scene."} For Meadow, Aqua and Moonlight: any photo of yours shows behind the glass. It is read from where it is and never copied or sent anywhere.</p>
-          <p class="note">The glass themes are an experiment: a sky (bright, or a night sky) behind glass panels and glossy controls, in the colors of the Audiform mark. Your colors above still apply on top of either theme.</p>
+          <p class="note">{d.app.themePicture ? `Using ${d.app.themePicture.split(/[\\/]/).pop()}.` : "Using the theme's own scene."} For the Aero themes: any photo of yours shows behind the glass. It is read from where it is and never copied or sent anywhere.</p>
+          <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Apply tries one while this window stays open. Your colors above still apply on top of either theme.</p>
         {:else if page === "Audio Devices"}
           <label class="row">
             Play through

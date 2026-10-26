@@ -2373,6 +2373,26 @@
     prefs.set(KEY_LOUD_TARGET, d.loudness.target);
     applyAppSettings(settings.current, autosaveChanged);
   }
+  // Aero themes: anything whose own style asks for the hand or the plain
+  // arrow gets the glass arrow too (theme-aero.css styles the mark).
+  function markAeroCursor(e: MouseEvent) {
+    const root = document.documentElement;
+    if (root.dataset.theme !== "meadow" && root.dataset.theme !== "aqua" && root.dataset.theme !== "moonlight") return;
+    for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
+      if (el.dataset.aeroCursor !== undefined) return;
+      const c = getComputedStyle(el).cursor;
+      if (c === "pointer" || c === "default") {
+        el.dataset.aeroCursor = "";
+        return;
+      }
+      if (c !== "auto") return;
+    }
+  }
+  onMount(() => {
+    document.addEventListener("mouseover", markAeroCursor, true);
+    return () => document.removeEventListener("mouseover", markAeroCursor, true);
+  });
+
   /** Scene themes: your own picture behind the glass, or the theme's scene. */
   let scenePicture: { path: string; url: string } | null = null;
   async function showScenePicture(path: string | null) {

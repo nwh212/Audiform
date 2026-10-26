@@ -3,13 +3,13 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  Scene themes (Settings > Appearance > Theme): the app floats as clear
-  frosted glass over a bright natural scene.
-  - Meadow (data-theme="meadow"): blue sky and clouds over green hills,
+  Aero themes (Settings > Appearance > Theme): the app floats as clear
+  frosted glass over a natural scene.
+  - Meadow Aero (data-theme="meadow"): blue sky and clouds over green hills,
     a sun flare and bubbles.
-  - Aqua (data-theme="aqua"): sunlit water with light rays and rising
+  - Aqua Aero (data-theme="aqua"): sunlit water with light rays and rising
     bubbles.
-  - Moonlight (data-theme="moonlight"): the meadow at night, under stars
+  - Moonlight Aero (data-theme="moonlight"): the meadow at night, under stars
     and a full moon, with glowing bubbles and fireflies; smoky glass.
   The scenes are the theme's own artwork in src/assets/themes.
 */
@@ -712,11 +712,16 @@
 }
 
 /* A glowing blue glass arrow for the pointer, over everything you click
-   too. Text, resize and drag pointers keep their usual shapes. */
+   too. Text, resize and drag pointers keep their usual shapes. Elements
+   whose own style asks for the hand or the plain arrow are marked by the
+   app (data-aero-cursor) so they get the glass arrow as well. */
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]),
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) body,
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
-  cursor: url("../assets/themes/cursor.svg") 4 3, default;
+  cursor: url("../assets/themes/cursor.svg") 3 2, default;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) [data-aero-cursor] {
+  cursor: url("../assets/themes/cursor.svg") 3 2, default !important;
 }
 
 /* Moonlight transport: clear glass orbs, with the icon floating inside.
