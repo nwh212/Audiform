@@ -37,6 +37,8 @@
     search?.focus();
   });
   let capturing = $state<string | null>(null);
+  /** A key press that could not be read as a shortcut, shown so it can be reported. */
+  let unread = $state<string | null>(null);
   let pending = $state<{ id: string; chord: string; owner: string } | null>(null);
   let notice = $state<string | null>(null);
 
@@ -65,6 +67,7 @@
     pending = null;
     notice = null;
     capturing = id;
+    unread = null;
   }
 
   function apply(id: string, chord: string) {
@@ -91,7 +94,12 @@
       return;
     }
     const chord = chordFromEvent(e);
-    if (!chord) return;
+    if (!chord) {
+      const lone = ["Control", "Alt", "Shift", "Meta", "AltGraph", "OS"].includes(e.key);
+      if (!lone) unread = `key ${JSON.stringify(e.key)}, code ${e.code || "none"}${e.ctrlKey ? ", Ctrl" : ""}${e.altKey ? ", Alt" : ""}${e.shiftKey ? ", Shift" : ""}`;
+      return;
+    }
+    unread = null;
     const owner = keymap.actionFor(chord);
     if (owner && owner !== capturing) {
       pending = { id: capturing, chord, owner };
@@ -166,7 +174,7 @@
           </span>
           <span class="keys" role="cell">
             {#if capturing === cmd.id}
-              <span class="hint">Press keys. Esc cancels.</span>
+              <span class="hint">{unread ? `Could not read that press (${unread}). Try again, or Esc to cancel.` : "Press keys. Esc cancels."}</span>
             {:else if keys.length === 0}
               <span class="none">None</span>
             {:else}
