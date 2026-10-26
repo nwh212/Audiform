@@ -876,6 +876,14 @@ pub struct Clip {
     /// left and right. None uses the default for the file's channels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mix: Option<ChannelMix>,
+    /// Plays backwards, from a reversed copy in the cache (the file stays
+    /// as it is). Its `source_in` and `source_out` then count from the
+    /// file's end, as positions in that copy.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reversed: bool,
+    /// Plays with its polarity flipped.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inverted: bool,
 }
 
 /// A clip's Source Channels: one entry per channel of its file, in file order.

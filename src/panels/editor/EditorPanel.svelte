@@ -24,7 +24,7 @@
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
   import { duplicateClips, newClip, replaceClip, transferClips } from "./midi";
-  import { effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
+  import { clipReversePrepare, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
   import HeaderFx from "./HeaderFx.svelte";
   import { rowTarget } from "../voice-chain/slot-drag";
   import { pluginMenuGroups, type MenuPlugin } from "../voice-chain/chain";
@@ -1535,6 +1535,33 @@
     window.addEventListener("pointerup", up, true);
   }
 
+  /** Reverse and Invert for the selected clips: toggles that leave the files alone. */
+  function clipFlipItems(): ContextItem[] {
+    const found = (doc?.tracks ?? []).flatMap((t) => t.clips).filter((c) => ed.selectedClips.has(c.id));
+    if (!found.length) return [];
+    const allRev = found.every((c) => c.reversed);
+    const allInv = found.every((c) => c.inverted);
+    const reverse = async () => {
+      const on = !allRev;
+      if (on) {
+        const paths = [...new Set(found.map((c) => doc?.media.find((m) => m.id === c.media_id)?.path).filter((p): p is string => !!p))];
+        await Promise.all(paths.map((p) => clipReversePrepare(p)));
+      }
+      // The region flips with it: positions count from the file's end while reversed.
+      const flip = (c: ClipDoc) => {
+        const len = doc?.media.find((m) => m.id === c.media_id)?.length ?? c.source_out;
+        return { source_in: Math.max(0, len - c.source_out), source_out: Math.max(0, len - c.source_in) };
+      };
+      await session.edit(on ? "Reverse Clip" : "Play Clip Forwards", { op: "set_clips", changes: found.filter((c) => !!c.reversed !== on).map((c) => ({ id: c.id, reversed: on, ...flip(c) })) }, runner);
+    };
+    return [
+      { kind: "sep" },
+      { kind: "item", label: "Reverse", checked: allRev, run: () => void reverse().catch(onError) },
+      { kind: "item", label: "Invert Polarity", checked: allInv, run: () => void session.edit(allInv ? "Polarity Back" : "Invert Polarity", { op: "set_clips", changes: found.map((c) => ({ id: c.id, inverted: !allInv })) }, runner).catch(onError) },
+      { kind: "sep" },
+    ];
+  }
+
   /** Fade shapes for a fade handle's menu: straight or curved, each bent by dragging the handle up or down. */
   const FADE_SHAPES = [
     ["linear", "Straight"],
@@ -1598,6 +1625,7 @@
         act(actions.isChecked("clip.lock") ? "Unlock Position" : "Lock Position", "clip.lock"),
         act("Clip Gain...", "clip.gain"),
         act("Clip Color...", "clip.color"),
+        ...clipFlipItems(),
         act("Group Clips", "clip.group"),
         act("Ungroup Clips", "clip.ungroup"),
         {

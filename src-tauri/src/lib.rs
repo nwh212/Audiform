@@ -45,6 +45,10 @@ pub fn run() {
             if let Ok(dir) = app.path().app_config_dir() {
                 plugins::load(&dir);
             }
+            // Reversed clips read reversed copies kept with the other working files.
+            if let Ok(root) = commands::cache::cache_root(app.handle()) {
+                engine::reverse::set_dir(root.join("Reversed"));
+            }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -168,6 +172,7 @@ pub fn run() {
             commands::batch::batch_cancel,
             commands::export::export_mixdown,
             commands::export::export_bounce,
+            commands::export::clip_reverse_prepare,
             commands::export::export_cancel,
             commands::export::loudness_check,
             commands::export::export_merge,

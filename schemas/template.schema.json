@@ -280,6 +280,10 @@
           "type": "string",
           "format": "uuid"
         },
+        "inverted": {
+          "description": "Plays with its polarity flipped.",
+          "type": "boolean"
+        },
         "locked": {
           "description": "Locked in time: the clip cannot be moved.",
           "type": "boolean"
@@ -305,6 +309,10 @@
         },
         "name": {
           "type": "string"
+        },
+        "reversed": {
+          "description": "Plays backwards, from a reversed copy in the cache (the file stays\nas it is). Its `source_in` and `source_out` then count from the\nfile's end, as positions in that copy.",
+          "type": "boolean"
         },
         "source_in": {
           "description": "First source sample played, at the source file's rate.",

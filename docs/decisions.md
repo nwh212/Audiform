@@ -1518,3 +1518,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Five bands** (were three), plus the low and high shelves, the high-pass and low-pass, and an **overall gain** (-80 to +40 dB, the slider left of the graph). Every band and shelf has its own on switch (the Band row). New EQs start with the bands spread across the range (50, 200, 800, 3,200 and 12,800 Hz); EQs already in sessions keep their settings.
 - **Graph:** a frequency ruler with a line at every step of each decade and labels where they fit (Hz, 30, 40 ... 100, 200 ... 1k ... 10k, 20k), and the gain scale on the right. **Range** shows 30 dB (plus and minus 15) or 96 dB (plus and minus 48).
 - **A column per band** under the graph: Frequency, Gain (Slope for the high-pass and low-pass), width, and its switch. **Constant: Q or Width** shows the width as Q or in octaves; both drag and type like every other value.
+
+## 2026-10-28: Reverse and Invert Polarity on clips
+
+- **Right-click a clip: Reverse and Invert Polarity**, each a checkmark that turns on and off, for every selected clip, undoable. Neither changes the file.
+- **Reverse** plays the clip backwards from a reversed copy of its file, made once in the working files folder (Settings > Cache and Files; a "Reversed" folder) and reused after that. While reversed, the clip's region counts from the file's end, so trimming, splitting and moving work as they look. A session opened where the copy is missing makes it again when it plays. The waveform is drawn back to front.
+- **Invert Polarity** flips the clip's waveform upside down (drawn that way too).

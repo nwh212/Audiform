@@ -357,3 +357,12 @@ pub async fn export_embed_chapters(
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// Makes the reversed copy a reversed clip of `path` plays from (once; it
+/// is kept in the working files folder). The file itself is not changed.
+#[tauri::command]
+pub async fn clip_reverse_prepare(path: PathBuf) -> Result<(), String> {
+    spawn_blocking(move || crate::engine::reverse::prepare(&path).map(|_| ()))
+        .await
+        .map_err(|e| e.to_string())?
+}

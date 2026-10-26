@@ -528,6 +528,8 @@ mod tests {
             stretch: None,
             audio_type: None,
             channel_mix: None,
+            reversed: false,
+            inverted: false,
         });
         s.media.push(m);
         s.tracks.push(t);

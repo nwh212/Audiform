@@ -62,6 +62,8 @@ impl ClipSpec {
             stretch: None,
             audio_type: None,
             channel_mix: None,
+            reversed: false,
+            inverted: false,
         }
     }
 }
@@ -226,6 +228,12 @@ pub struct ClipChange {
     /// Goes back to the default Source Channels for the file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_channel_mix: Option<bool>,
+    /// Plays the clip backwards, or forwards again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reversed: Option<bool>,
+    /// Flips the clip's polarity, or back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inverted: Option<bool>,
     /// Where the clip sits in its track's stacking order after the change:
     /// 0 is the bottom; past the end puts it on top. Later clips play over
     /// earlier ones where they overlap.
@@ -1368,6 +1376,12 @@ fn set_clip(s: &mut Session, ch: &ClipChange) -> Result<ClipChange, OpError> {
             Some(old) => inv.channel_mix = Some(old),
             None => inv.clear_channel_mix = Some(true),
         }
+    }
+    if let Some(v) = ch.reversed {
+        inv.reversed = Some(std::mem::replace(&mut c.reversed, v));
+    }
+    if let Some(v) = ch.inverted {
+        inv.inverted = Some(std::mem::replace(&mut c.inverted, v));
     }
     if let Some(points) = &ch.volume {
         inv.volume = Some(set_points(c, EnvelopeTarget::Volume, points));

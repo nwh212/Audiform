@@ -507,20 +507,31 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                         return None;
                     }
                     let fade = |l: u64| convert(l, session.sample_rate, out_rate).min(len);
+                    // Made here if it is missing (a session from another computer),
+                    // since its region only makes sense in the reversed copy.
+                    let rev = if c.reversed {
+                        crate::engine::reverse::cached(&m.path)
+                            .or_else(|| crate::engine::reverse::prepare(&m.path).ok())
+                    } else {
+                        None
+                    };
                     Some(ClipPlan {
                         id: c.id,
                         mix: crate::dsp::channels::effective(
                             c.channel_mix.as_ref(),
                             usize::from(m.channels),
                         ),
-                        path: m.path.clone(),
+                        // Reversed: its file's reversed copy, from the mirrored spot.
+                        path: rev.clone().unwrap_or_else(|| m.path.clone()),
                         start: convert(c.start, session.sample_rate, out_rate),
                         len,
+                        // A reversed clip's region is kept in the reversed copy's terms.
                         source_start: c.source_in as f64 / f64::from(src_rate),
                         gain: if c.muted {
                             0.0
                         } else {
-                            10f64.powf(c.gain_db.clamp(-96.0, 24.0) / 20.0) as f32
+                            let g = 10f64.powf(c.gain_db.clamp(-96.0, 24.0) / 20.0) as f32;
+                            if c.inverted { -g } else { g }
                         },
                         fade_in: fade(c.fade_in.length),
                         fade_out: fade(c.fade_out.length),
@@ -613,6 +624,8 @@ fn envelope_hash(c: &Clip) -> u64 {
         h ^= v;
         h = h.wrapping_mul(0x100_0000_01b3);
     };
+    // Reversed or inverted changes what plays too.
+    mix(u64::from(c.reversed) | u64::from(c.inverted) << 1);
     // A stretch changes what plays where, so it is part of the shape too.
     if let Some(st) = c.stretch {
         mix(0x5354_5243);

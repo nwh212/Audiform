@@ -115,6 +115,8 @@ pub fn clip() -> Clip {
         stretch: None,
         audio_type: None,
         channel_mix: None,
+        reversed: false,
+        inverted: false,
     }
 }
 

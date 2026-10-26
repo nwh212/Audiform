@@ -18,6 +18,7 @@ pub mod plan;
 pub mod preview;
 pub mod record;
 pub mod render;
+pub mod reverse;
 pub mod scope;
 pub mod speaker_feed;
 pub mod transport;

@@ -283,6 +283,11 @@ export async function mediaFrames(path: string, start: number, count: number): P
 }
 
 /** Plays one note through a MIDI track's instrument (velocity 0 to 1). False when nothing played: the session is playing, or no instrument. */
+/** Makes the reversed copy a reversed clip of `path` plays from (once). */
+export function clipReversePrepare(path: string): Promise<void> {
+  return invoke<void>("clip_reverse_prepare", { path });
+}
+
 export function midiAudition(trackId: string, pitch: number, velocity: number, seconds: number, channel = 0): Promise<boolean> {
   return invoke<boolean>("midi_audition", { trackId, pitch, velocity, seconds, channel });
 }

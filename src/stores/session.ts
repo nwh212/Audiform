@@ -138,6 +138,10 @@ export interface ClipDoc {
   audio_type?: AudioType | null;
   /** Source Channels: how much of each of the file's channels goes left and right. Missing uses the default. */
   channel_mix?: ChannelMixDoc | null;
+  /** Plays backwards (from a reversed copy; the file is unchanged). */
+  reversed?: boolean;
+  /** Plays with its polarity flipped. */
+  inverted?: boolean;
   effects?: EffectChainDoc;
   [key: string]: unknown;
 }
@@ -436,6 +440,8 @@ export interface ClipChange {
   channel_mix?: ChannelMixDoc;
   /** Back to the default Source Channels for the file. */
   clear_channel_mix?: boolean;
+  reversed?: boolean;
+  inverted?: boolean;
   /** Place in the track's stacking order after the change: 0 is the bottom; past the end is the top. */
   layer?: number;
 }
