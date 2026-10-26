@@ -57,7 +57,9 @@ pub fn phase_curve_info() -> EffectInfo {
             MAX_POINTS as f64,
             2.0,
             1.0,
-        ),
+        )
+        // Set by adding and removing points on the graph, not as a control.
+        .hidden(),
         toggle("spline", "Spline", true),
         choice("range", "Range", &["±180°", "±360°"], 0),
         choice(

@@ -1524,3 +1524,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Right-click a clip: Reverse and Invert Polarity**, each a checkmark that turns on and off, for every selected clip, undoable. Neither changes the file.
 - **Reverse** plays the clip backwards from a reversed copy of its file, made once in the working files folder (Settings > Cache and Files; a "Reversed" folder) and reused after that. While reversed, the clip's region counts from the file's end, so trimming, splitting and moving work as they look. A session opened where the copy is missing makes it again when it plays. The waveform is drawn back to front.
 - **Invert Polarity** flips the clip's waveform upside down (drawn that way too).
+
+## 2026-10-28: Phase Curve window, laid out as the project lead asked
+
+- **No point count control.** Click the curve or empty space to add a point (up to eight), drag to move it, right-click (or double-click) to remove it; two always stay. The count is still saved with the effect, set by the graph.
+- **Graph:** the same frequency ruler as the EQ windows (20 Hz to 20 kHz) and a degree scale on the right in tenths of the range (20° steps at 180°, 40° at 360°).
+- **Controls under the graph:** Spline Curves and Reset beside the hint, then Frequency Scale (Linear or Logarithmic, a view choice remembered between windows), Range (180° or 360°), Channel and FFT Size.
