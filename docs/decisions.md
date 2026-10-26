@@ -1512,3 +1512,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Two fade shapes**, as the project lead asked: Straight and Curve (smooth at both ends). New fades start Straight (Settings > General can make them start as Curve).
 - **Skew, -100 to 100:** drag a fade's handle up or down to bend it (up rises sooner, down later); across still sets its length. A tip shows the length, shape and skew while dragging. The handle's right-click menu has Straight, Curve, the skew, Reset Skew and Remove Fade. Saved in the fade's `curve` (-1 to 1), heard in playback and exports.
 - Fades made with the other shapes earlier keep sounding as they did.
+
+## 2026-10-28: Parametric EQ window, laid out as the project lead asked
+
+- **Five bands** (were three), plus the low and high shelves, the high-pass and low-pass, and an **overall gain** (-80 to +40 dB, the slider left of the graph). Every band and shelf has its own on switch (the Band row). New EQs start with the bands spread across the range (50, 200, 800, 3,200 and 12,800 Hz); EQs already in sessions keep their settings.
+- **Graph:** a frequency ruler with a line at every step of each decade and labels where they fit (Hz, 30, 40 ... 100, 200 ... 1k ... 10k, 20k), and the gain scale on the right. **Range** shows 30 dB (plus and minus 15) or 96 dB (plus and minus 48).
+- **A column per band** under the graph: Frequency, Gain (Slope for the high-pass and low-pass), width, and its switch. **Constant: Q or Width** shows the width as Q or in octaves; both drag and type like every other value.

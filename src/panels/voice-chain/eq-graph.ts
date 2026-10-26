@@ -13,7 +13,7 @@ import { paramValue } from "./chain";
 
 /** One node: a filter or band, with the controls it moves. */
 export interface EqNode {
-  /** Short label drawn on the node: HP, L, 1, 2, 3, H, LP. */
+  /** Short label drawn on the node: HP, L, 1 to 5, H, LP. */
   label: string;
   /** The band's name, as its controls are grouped. */
   name: string;
@@ -30,6 +30,8 @@ const LABELS: Record<string, string> = {
   "Band 1": "1",
   "Band 2": "2",
   "Band 3": "3",
+  "Band 4": "4",
+  "Band 5": "5",
   "High shelf": "H",
   "Low-pass": "LP",
 };

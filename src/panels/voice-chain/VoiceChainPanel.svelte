@@ -547,7 +547,7 @@
   // or the master has no audio of its own to learn from yet.
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
-  const OWN_CONTROLS = new Set(["altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -1109,9 +1109,12 @@
     z-index: 900;
     width: 380px;
     /* Graph editors (the Parametric EQ) get room to work in. */
-    &:has(:global(.eq)),
     &:has(:global(.pc)) {
       width: 560px;
+    }
+    /* The Parametric EQ's band table needs a column per band. */
+    &:has(:global(.eqwin)) {
+      width: min(780px, 96vw);
     }
     &:has(:global(.ns)) {
       width: 660px;

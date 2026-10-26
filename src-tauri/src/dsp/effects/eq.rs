@@ -9,78 +9,58 @@ use crate::dsp::biquad::{butterworth_qs, Coeffs, Shape, StereoBiquad};
 
 const SLOPES: &[&str] = &["12 dB/oct", "24 dB/oct", "48 dB/oct"];
 
+/// The peaking bands: key prefix, default frequency.
+const BANDS: [(&str, f64); 5] = [
+    ("b1", 50.0),
+    ("b2", 200.0),
+    ("b3", 800.0),
+    ("b4", 3_200.0),
+    ("b5", 12_800.0),
+];
+/// Each band's group and keys: on, frequency, gain, width.
+const BAND_KEYS: [[&str; 5]; 5] = [
+    ["Band 1", "b1_on", "b1_freq", "b1_gain", "b1_q"],
+    ["Band 2", "b2_on", "b2_freq", "b2_gain", "b2_q"],
+    ["Band 3", "b3_on", "b3_freq", "b3_gain", "b3_q"],
+    ["Band 4", "b4_on", "b4_freq", "b4_gain", "b4_q"],
+    ["Band 5", "b5_on", "b5_freq", "b5_gain", "b5_q"],
+];
+
 pub fn parametric_info() -> EffectInfo {
-    let band = |n: &'static str, f: f64| {
-        [
-            num(
-                match n {
-                    "1" => "b1_freq",
-                    "2" => "b2_freq",
-                    _ => "b3_freq",
-                },
-                "Frequency",
-                "Hz",
-                20.0,
-                20_000.0,
-                f,
-                1.0,
-            )
-            .log(),
-            num(
-                match n {
-                    "1" => "b1_gain",
-                    "2" => "b2_gain",
-                    _ => "b3_gain",
-                },
-                "Gain",
-                "dB",
-                -24.0,
-                24.0,
-                0.0,
-                0.1,
-            ),
-            num(
-                match n {
-                    "1" => "b1_q",
-                    "2" => "b2_q",
-                    _ => "b3_q",
-                },
-                "Width (Q)",
-                "",
-                0.1,
-                12.0,
-                1.0,
-                0.01,
-            )
-            .log(),
-        ]
-    };
     let mut params = vec![
+        num("gain", "Gain", "dB", -80.0, 40.0, 0.0, 0.1),
         toggle("hp_on", "On", false).group("High-pass"),
-        num("hp_freq", "Frequency", "Hz", 10.0, 2_000.0, 80.0, 1.0)
+        num("hp_freq", "Frequency", "Hz", 10.0, 2_000.0, 40.0, 1.0)
             .log()
             .group("High-pass"),
         choice("hp_slope", "Slope", SLOPES, 1).group("High-pass"),
-        num("ls_freq", "Frequency", "Hz", 20.0, 2_000.0, 120.0, 1.0)
+        toggle("ls_on", "On", true).group("Low shelf"),
+        num("ls_freq", "Frequency", "Hz", 20.0, 2_000.0, 40.0, 1.0)
             .log()
             .group("Low shelf"),
         num("ls_gain", "Gain", "dB", -24.0, 24.0, 0.0, 0.1).group("Low shelf"),
     ];
-    for (n, f, g) in [
-        ("1", 250.0, "Band 1"),
-        ("2", 1_000.0, "Band 2"),
-        ("3", 4_000.0, "Band 3"),
-    ] {
-        params.extend(band(n, f).map(|p| p.group(g)));
+    for ([g, on, freq, gain, q], (_, f)) in BAND_KEYS.into_iter().zip(BANDS) {
+        params.extend([
+            toggle(on, "On", true).group(g),
+            num(freq, "Frequency", "Hz", 20.0, 20_000.0, f, 1.0)
+                .log()
+                .group(g),
+            num(gain, "Gain", "dB", -24.0, 24.0, 0.0, 0.1).group(g),
+            num(q, "Width (Q)", "", 0.1, 100.0, 2.0, 0.01)
+                .log()
+                .group(g),
+        ]);
     }
     params.extend([
+        toggle("hs_on", "On", true).group("High shelf"),
         num(
             "hs_freq",
             "Frequency",
             "Hz",
             1_000.0,
             20_000.0,
-            8_000.0,
+            18_000.0,
             1.0,
         )
         .log()
@@ -105,7 +85,7 @@ pub fn parametric_info() -> EffectInfo {
         name: "Parametric EQ",
         category: "Filter and EQ",
         description:
-            "High-pass and low-pass filters, two shelves and three bands to shape the tone.",
+            "High-pass and low-pass filters, two shelves and five bands to shape the tone, and an overall gain.",
         params,
     }
 }
@@ -129,9 +109,10 @@ pub fn hum_info() -> EffectInfo {
     }
 }
 
-/// Up to 17 filters in series. Bands at 0 dB are left out.
+/// Up to 19 filters in series, then the overall gain. Bands at 0 dB are left out.
 pub struct ParametricEq {
     filters: Vec<StereoBiquad>,
+    gain: f32,
 }
 
 impl ParametricEq {
@@ -144,7 +125,9 @@ impl ParametricEq {
             }
         }
         let gain = |k: &str| p.get(k).abs() > 1e-3;
-        if gain("ls_gain") {
+        // Band switches are on unless turned off (older settings have none).
+        let on = |k: &str| p.get(k) >= 0.5;
+        if on("ls_on") && gain("ls_gain") {
             c.push(Coeffs::new(
                 Shape::LowShelf,
                 rate,
@@ -153,9 +136,9 @@ impl ParametricEq {
                 p.get("ls_gain"),
             ));
         }
-        for b in ["b1", "b2", "b3"] {
+        for (b, _) in BANDS {
             let g = format!("{b}_gain");
-            if gain(&g) {
+            if on(&format!("{b}_on")) && gain(&g) {
                 c.push(Coeffs::new(
                     Shape::Peak,
                     rate,
@@ -165,7 +148,7 @@ impl ParametricEq {
                 ));
             }
         }
-        if gain("hs_gain") {
+        if on("hs_on") && gain("hs_gain") {
             c.push(Coeffs::new(
                 Shape::HighShelf,
                 rate,
@@ -181,6 +164,7 @@ impl ParametricEq {
         }
         Self {
             filters: c.into_iter().map(StereoBiquad::new).collect(),
+            gain: 10f64.powf(p.get("gain").clamp(-80.0, 40.0) / 20.0) as f32,
         }
     }
 }
@@ -189,6 +173,11 @@ impl Processor for ParametricEq {
     fn process(&mut self, buf: &mut [f32]) {
         for f in &mut self.filters {
             f.process(buf);
+        }
+        if self.gain != 1.0 {
+            for s in buf.iter_mut() {
+                *s *= self.gain;
+            }
         }
     }
     fn reset(&mut self) {
@@ -257,7 +246,9 @@ mod tests {
     fn eq_bands_and_filters() {
         let eq = "altaudio.parametric_eq";
         assert!(level(eq, &[], 1000.0).abs() < 0.05, "flat by default");
-        assert!((level(eq, &[("b2_gain", 6.0)], 1000.0) - 6.0).abs() < 0.3);
+        assert!((level(eq, &[("b2_gain", 6.0), ("b2_freq", 1000.0)], 1000.0) - 6.0).abs() < 0.3);
+        assert!(level(eq, &[("b2_gain", 6.0), ("b2_freq", 1000.0), ("b2_on", 0.0)], 1000.0).abs() < 0.05, "a band switched off");
+        assert!((level(eq, &[("gain", -6.0)], 1000.0) + 6.0).abs() < 0.05, "overall gain");
         assert!(
             level(
                 eq,

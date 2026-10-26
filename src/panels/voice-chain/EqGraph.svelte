@@ -10,15 +10,20 @@
   one, or turn the mouse wheel over the node, to make the band narrower
   or wider. Double-click the high-pass or low-pass node to switch it on
   or off. Behind the curve, the spectrum of what is playing (or, when
-  stopped, of the audio at the playhead). Every drag is one undoable
-  step, the same as moving the sliders below.
+  stopped, of the audio at the playhead). The slider on the left is the
+  overall gain. Below the graph, a column per band: frequency, gain (or
+  slope for the high-pass and low-pass), width as Q or in octaves, and
+  the band's on switch. Range shows 30 dB or 96 dB on the graph. Every
+  drag is one undoable step.
 -->
 <script lang="ts">
   import { effectResponse, scopeSpectrum, type EffectInfo, type EffectParamInfo } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
   import { paramValue } from "./chain";
-  import { freqAt, xOf } from "./graph";
-  import { eqNodes, formatHz, nodeOn, qFromEdge, widthEdges, type EqNode } from "./eq-graph";
+  import { freqAt, freqTicks, xOf } from "./graph";
+  import { eqNodes, formatHz, nodeOn, octavesOf, qFromEdge, qOf, widthEdges, type EqNode } from "./eq-graph";
+  import ValueField from "./ValueField.svelte";
+  import VSlider from "./VSlider.svelte";
 
   interface Props {
     slot: EffectSlotDoc;
@@ -36,13 +41,31 @@
   const { slot, info, playing, playhead, wave, onParams }: Props = $props();
 
   let w = $state(460);
-  const H = 230;
-  const PAD = { l: 6, r: 34, t: 8, b: 18 };
+  const H = 250;
+  const PAD = { l: 6, r: 34, t: 10, b: 18 };
   const plotW = $derived(Math.max(60, w - PAD.l - PAD.r));
   const plotH = H - PAD.t - PAD.b;
+  // Range: 30 dB (plus and minus 15) or 96 dB (plus and minus 48), and Q or width in octaves.
+  const KEY_VIEW = "audiform.eq.view";
+  const saved = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(KEY_VIEW) ?? "{}") as { range?: number; width?: boolean };
+    } catch {
+      return {};
+    }
+  })();
+  let range = $state(saved.range === 96 ? 96 : 30);
+  let byWidth = $state(saved.width === true);
+  $effect(() => {
+    try {
+      localStorage.setItem(KEY_VIEW, JSON.stringify({ range, width: byWidth }));
+    } catch {
+      /* Not kept; fine. */
+    }
+  });
   /** The gain the graph shows, top and bottom (dB). */
-  const TOP = 24;
-  const BOTTOM = -24;
+  const TOP = $derived(range / 2);
+  const BOTTOM = $derived(-range / 2);
   /** The spectrum's range, top and bottom (dBFS). */
   const S_TOP = 0;
   const S_BOTTOM = -96;
@@ -202,8 +225,14 @@
     if (n.on) onParams([[n.on, on ? 0 : 1]], `${n.name} ${on ? "Off" : "On"}`, true);
   }
 
-  const gridHz = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000, 20_000];
-  const gridDb = [24, 12, 0, -12, -24];
+  const ticks = $derived(freqTicks(plotW));
+  const gridDb = $derived(range === 30 ? [15, 10, 5, 0, -5, -10, -15] : [48, 36, 24, 12, 0, -12, -24, -36, -48]);
+  const master = $derived(info.params.find((p) => p.key === "gain") ?? null);
+  /** The table's columns, low to high. */
+  const columns = $derived(placed);
+  /** Width in octaves as its own control, so it can be dragged and typed like Q. */
+  const octaveParam = (q: EffectParamInfo): EffectParamInfo => ({ ...q, key: `${q.key}_oct`, name: "Width", unit: "oct", min: 0.02, max: 5, default: octavesOf(q.default), step: 0.01, log: true });
+  const slopeOf = (n: EqNode) => info.params.find((p) => p.group === n.name && p.choices) ?? null;
   const tip = $derived.by(() => {
     const p = placed.find((x) => x.n.name === (active ?? hover));
     if (!p) return null;
@@ -215,13 +244,20 @@
   });
 </script>
 
+<div class="eqwin">
+<div class="top">
+  {#if master}
+    <div class="master">
+      <VSlider param={master} value={paramValue(slot, master)} height={H - 70} oninput={(v) => onParams([[master, v]], "Gain", false)} oncommit={(v) => onParams([[master, v]], "Gain", true)} />
+    </div>
+  {/if}
 <div class="eq" bind:clientWidth={w}>
   <svg bind:this={svg} width={w} height={H} role="img" aria-label="{info.name}: response over the sound">
     <rect class="bg" x={PAD.l} y={PAD.t} width={plotW} height={plotH} />
     {#if spectrumPath}<path class="spectrum" d={spectrumPath} />{/if}
-    {#each gridHz as f (f)}
-      <line class="grid" class:major={f === 100 || f === 1000 || f === 10_000} x1={X(f)} x2={X(f)} y1={PAD.t} y2={PAD.t + plotH} />
-      <text class="lab" x={X(f)} y={H - 5} text-anchor="middle">{f >= 1000 ? `${f / 1000}k` : f}</text>
+    {#each ticks as t (t.f)}
+      <line class="grid" class:major={t.major} x1={X(t.f)} x2={X(t.f)} y1={PAD.t} y2={PAD.t + plotH} />
+      {#if t.label}<text class="lab" class:strong={t.major} x={X(t.f)} y={H - 5} text-anchor={t.f === 20 ? "start" : t.f === 20_000 ? "end" : "middle"}>{t.label}</text>{/if}
     {/each}
     {#each gridDb as d (d)}
       <line class="grid" class:zero={d === 0} x1={PAD.l} x2={PAD.l + plotW} y1={Y(d)} y2={Y(d)} />
@@ -267,15 +303,153 @@
     {/each}
   </svg>
   {#if tip}<div class="tip" style:left="{tip.x}px" style:top="{tip.y}px">{tip.text}</div>{/if}
-  <p class="hint">Drag a node to move its band. Drag the small handles either side of a band, or use the mouse wheel over its node, to change its width (Q). Double-click HP or LP to switch them on or off.</p>
+</div>
+</div>
+
+<!-- A column per band: frequency, gain (or slope), width, and its switch. -->
+<div class="table" style:--cols={columns.length}>
+  <span class="rowhead">Frequency</span>
+  {#each columns as c (c.n.name)}
+    <div class="cell" class:dim={!c.on}><ValueField param={c.n.freq} value={c.f} oninput={(v) => onParams([[c.n.freq, v]], `${c.n.name} Frequency`, false)} oncommit={(v) => onParams([[c.n.freq, v]], `${c.n.name} Frequency`, true)} /></div>
+  {/each}
+  <span class="rowhead">Gain</span>
+  {#each columns as c (c.n.name)}
+    {@const slope = c.n.gain ? null : slopeOf(c.n)}
+    <div class="cell" class:dim={!c.on}>
+      {#if c.n.gain}
+        <ValueField param={c.n.gain} value={c.g} oninput={(v) => onParams([[c.n.gain!, v]], `${c.n.name} Gain`, false)} oncommit={(v) => onParams([[c.n.gain!, v]], `${c.n.name} Gain`, true)} />
+      {:else if slope}
+        <select aria-label="{c.n.name} slope" title="Slope, per octave" value={String(paramValue(slot, slope))} onchange={(e) => onParams([[slope, Number(e.currentTarget.value)]], `${c.n.name} Slope`, true)}>
+          {#each slope.choices ?? [] as label, k (k)}<option value={String(k)}>{label.replace(" dB/oct", " dB")}</option>{/each}
+        </select>
+      {/if}
+    </div>
+  {/each}
+  <span class="rowhead">{byWidth ? "Width" : "Q"}</span>
+  {#each columns as c (c.n.name)}
+    <div class="cell" class:dim={!c.on}>
+      {#if c.n.q && c.q !== null}
+        {#if byWidth}
+          {@const op = octaveParam(c.n.q)}
+          <ValueField param={op} value={octavesOf(c.q)} oninput={(v) => onParams([[c.n.q!, qOf(v)]], `${c.n.name} Width`, false)} oncommit={(v) => onParams([[c.n.q!, qOf(v)]], `${c.n.name} Width`, true)} />
+        {:else}
+          <ValueField param={c.n.q} value={c.q} oninput={(v) => onParams([[c.n.q!, v]], `${c.n.name} Width`, false)} oncommit={(v) => onParams([[c.n.q!, v]], `${c.n.name} Width`, true)} />
+        {/if}
+      {/if}
+    </div>
+  {/each}
+  <span class="rowhead">Band</span>
+  {#each columns as c (c.n.name)}
+    <div class="cell">
+      <button type="button" class="band" class:on={c.on} aria-pressed={c.on} disabled={!c.n.on} title="{c.n.name}: {c.on ? 'on' : 'off'}" onclick={() => toggle(c.n, c.on)}>{c.n.label}</button>
+    </div>
+  {/each}
+</div>
+<div class="opts">
+  <span class="olabel">Constant:</span>
+  <label><input type="radio" name="eq-width-{slot.id}" checked={!byWidth} onchange={() => (byWidth = false)} /> Q</label>
+  <label><input type="radio" name="eq-width-{slot.id}" checked={byWidth} onchange={() => (byWidth = true)} /> Width</label>
+  <span class="sep"></span>
+  <span class="olabel">Range:</span>
+  <label><input type="radio" name="eq-range-{slot.id}" checked={range === 30} onchange={() => (range = 30)} /> 30 dB</label>
+  <label><input type="radio" name="eq-range-{slot.id}" checked={range === 96} onchange={() => (range = 96)} /> 96 dB</label>
+</div>
 </div>
 
 <style>
+  .eqwin {
+    display: grid;
+    gap: 8px;
+  }
+  .top {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .master {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 64px;
+  }
+  .rowhead,
+  .olabel {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+  }
   .eq {
     position: relative;
-    width: 100%;
-    margin-bottom: 6px;
+    flex: 1;
+    min-width: 0;
     user-select: none;
+  }
+  .table {
+    display: grid;
+    grid-template-columns: 74px repeat(var(--cols), minmax(0, 1fr));
+    gap: 4px 2px;
+    align-items: center;
+  }
+  .rowhead {
+    text-align: right;
+    padding-right: 6px;
+  }
+  .cell {
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cell.dim {
+    opacity: 0.45;
+  }
+  .cell :global(.vf),
+  .cell select {
+    width: 100%;
+    min-width: 0;
+  }
+  .band {
+    min-width: 30px;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-0);
+    color: var(--text-dim);
+    font: inherit;
+    font-weight: 600;
+  }
+  .band.on {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
+    justify-content: center;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-size: var(--font-size-small);
+  }
+  .opts label {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .sep {
+    width: 1px;
+    height: 14px;
+    background: var(--border-strong);
+  }
+  select {
+    background: var(--surface-0);
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    color: var(--text);
+    font: inherit;
+    padding: 1px 4px;
   }
   svg {
     display: block;
@@ -301,6 +475,10 @@
   .lab {
     fill: var(--text-faint);
     font-size: 9px;
+  }
+  .lab.strong {
+    fill: var(--text-dim);
+    font-weight: 600;
   }
   .curve {
     fill: none;
@@ -353,10 +531,5 @@
     font-size: var(--font-size-small);
     white-space: nowrap;
     pointer-events: none;
-  }
-  .hint {
-    margin: 2px 0 0;
-    color: var(--text-faint);
-    font-size: var(--font-size-small);
   }
 </style>

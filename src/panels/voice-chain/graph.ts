@@ -65,3 +65,33 @@ export function handles(info: EffectInfo): { name: string; freq: EffectParamInfo
   }
   return out;
 }
+
+/** A line on a frequency graph: every 1 to 9 step of each decade, labeled where there is room. */
+export interface FreqTick {
+  f: number;
+  /** Its label ("Hz" at the left end, "1k" and so on), or null when it is a line only. */
+  label: string | null;
+  /** 100 Hz, 1 kHz and 10 kHz: drawn stronger. */
+  major: boolean;
+}
+
+/** The frequency ruler's lines and labels for a graph `width` pixels wide (20 Hz to 20 kHz). */
+export function freqTicks(width: number): FreqTick[] {
+  const out: FreqTick[] = [];
+  let lastX = -Infinity;
+  for (const decade of [10, 100, 1000, 10_000]) {
+    for (let k = 1; k <= 9; k++) {
+      const f = decade * k;
+      if (f < GRAPH_LOW || f > GRAPH_HIGH) continue;
+      const x = xOf(f) * width;
+      const major = k === 1 && decade >= 100;
+      const text = f === GRAPH_LOW ? "Hz" : f >= 1000 ? `${f / 1000}k` : String(f);
+      // Labels need room; the round ones always get theirs.
+      const room = major || f === GRAPH_LOW || f === GRAPH_HIGH ? 0 : 20 + text.length * 2;
+      const label = x - lastX >= room && x <= width - 14 + (f === GRAPH_HIGH ? 14 : 0) ? text : null;
+      if (label) lastX = x;
+      out.push({ f, label, major });
+    }
+  }
+  return out;
+}
