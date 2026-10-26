@@ -25,6 +25,28 @@ pub trait EditorWindow {
     fn raise(&mut self);
 }
 
+/// Runs the window messages waiting for this thread, window or not.
+/// Many plug-ins finish loading through them (timers, sounds loaded in
+/// the background, work handed to the message thread), so an instrument
+/// with its window closed would otherwise stay silent until it was
+/// opened. Only Windows has such a queue here.
+#[cfg(windows)]
+pub fn pump_messages() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
+    };
+    unsafe {
+        let mut msg: MSG = std::mem::zeroed();
+        while PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn pump_messages() {}
+
 #[cfg(not(windows))]
 pub fn open(
     _controller: &ComPtr<IEditController>,

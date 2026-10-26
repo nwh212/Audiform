@@ -273,6 +273,10 @@ struct Loaded {
 fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
     let mut loaded: HashMap<u32, Loaded> = HashMap::new();
     loop {
+        // Plug-ins get their messages even with no window open.
+        if !loaded.is_empty() {
+            editor::pump_messages();
+        }
         let mut windows = false;
         for (id, l) in loaded.iter_mut() {
             if let Some(w) = l.window.as_mut() {
@@ -312,7 +316,14 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                 }
             }
         }
-        let wait = if windows { 10 } else { 50 };
+        // Short waits while plug-ins are loaded, so their timers keep their pace.
+        let wait = if windows {
+            10
+        } else if !loaded.is_empty() {
+            15
+        } else {
+            50
+        };
         let cmd = match rx.recv_timeout(Duration::from_millis(wait)) {
             Ok(c) => c,
             Err(RecvTimeoutError::Timeout) => continue,

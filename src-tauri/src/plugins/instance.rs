@@ -677,7 +677,11 @@ fn slot_params(slot: &EffectSlot) -> Vec<(u32, f64)> {
 pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
     let found = find(&slot.effect)?;
     let fresh = FRESH.with(|c| c.get());
-    if !fresh {
+    if fresh {
+        if let Some(h) = borrowable(slot, rate) {
+            return Some(h);
+        }
+    } else {
         // One start per slot: if it is already starting (in the background,
         // see `warm`), wait for that one instead of starting a second.
         let deadline = std::time::Instant::now() + LOAD_TIMEOUT;
@@ -731,6 +735,28 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         }
     }
     Some(host)
+}
+
+/// A mixdown may use playback's host for a slot when nothing is playing
+/// through it: it is already loaded (an instrument's sounds and all) and
+/// holds the settings as heard, so the export sounds the same and starts
+/// at once. Only the pool holds it then; playback holds a second handle
+/// while it plays.
+fn borrowable(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
+    let p = pool().lock().ok()?;
+    let e = p.get(&slot.id)?;
+    (e.effect == slot.effect
+        && e.rate == rate
+        && e.wide == wide_of(slot)
+        && Arc::strong_count(&e.host) == 1)
+        .then(|| e.host.clone())
+}
+
+/// True when `host` is playback's own (borrowed by a mixdown), not a fresh copy.
+fn is_pooled(slot: Id, host: &Arc<Mutex<Host>>) -> bool {
+    pool()
+        .lock()
+        .is_ok_and(|p| p.get(&slot).is_some_and(|e| Arc::ptr_eq(&e.host, host)))
 }
 
 /// Slots whose playback host is being started right now.
@@ -1005,7 +1031,9 @@ impl Instrument {
     /// tempo, with every note let go.
     pub fn start(slot: &EffectSlot, rate: u32, tempo: &Tempo) -> Instrument {
         let host = host_for(slot, rate);
-        let fresh = FRESH.with(|c| c.get());
+        // A copy just started for a mixdown needs to load; playback's own is ready.
+        let fresh =
+            FRESH.with(|c| c.get()) && host.as_ref().is_some_and(|h| !is_pooled(slot.id, h));
         let (latency, pending) = match host.as_ref().and_then(|h| h.lock().ok()) {
             Some(mut h) => {
                 h.reset();

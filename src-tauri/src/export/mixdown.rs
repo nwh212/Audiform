@@ -172,13 +172,16 @@ pub fn render_mix(
     crate::plugins::instance::fresh(|| render_mix_inner(session, req, cancel, progress, sink))
 }
 
-fn render_mix_inner(
-    session: &Session,
-    req: &MixdownRequest,
-    cancel: &AtomicBool,
-    mut progress: impl FnMut(u64, u64),
-    mut sink: impl FnMut(&[f32]) -> Result<(), MixdownError>,
-) -> Result<Rendered, MixdownError> {
+/// The session as the request renders it, with the span and the speaker
+/// count. Cheap: nothing is started, so it also serves to check a request.
+struct Prepared {
+    s: Session,
+    bed: usize,
+    start: u64,
+    end: u64,
+}
+
+fn prepare(session: &Session, req: &MixdownRequest) -> Result<Prepared, MixdownError> {
     let full_end = session_end(session);
     let mut s = session.clone();
     if let Some(id) = req.track {
@@ -235,7 +238,6 @@ fn render_mix_inner(
             0
         }
     };
-    let rate = s.sample_rate;
     let (start, end) = match req.range {
         Some((a, b)) => (a.min(b), a.max(b)),
         None if req.track.is_some() => (0, full_end),
@@ -248,6 +250,18 @@ fn render_mix_inner(
     {
         return Err(MixdownError::Empty);
     }
+    Ok(Prepared { s, bed, start, end })
+}
+
+fn render_mix_inner(
+    session: &Session,
+    req: &MixdownRequest,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(u64, u64),
+    mut sink: impl FnMut(&[f32]) -> Result<(), MixdownError>,
+) -> Result<Rendered, MixdownError> {
+    let Prepared { s, bed, start, end } = prepare(session, req)?;
+    let rate = s.sample_rate;
     let total = end - start;
 
     let master = plan::master_gain(&s);
@@ -339,10 +353,9 @@ pub fn mixdown(
         .resolve(session.sample_rate, 2, session.bit_depth)
         .map_err(|e| MixdownError::Write(e.to_string()))?;
     let enc_err = |e: EncodeError| MixdownError::Write(e.to_string());
-    // Check the request before creating a file, so a bad one leaves nothing behind.
-    if render_mix(session, req, &AtomicBool::new(true), |_, _| {}, |_| Ok(())).is_err() {
-        return Err(MixdownError::Empty);
-    }
+    // Check the request before creating a file, so a bad one leaves nothing
+    // behind. Without rendering: that would start every plug-in twice.
+    prepare(session, req)?;
     if let Some((SpaceOut::Bed(layout), _)) = space_out(session, req) {
         return mixdown_bed(session, req, path, cancel, progress, layout, fmt.bits);
     }

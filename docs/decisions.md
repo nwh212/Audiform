@@ -1589,3 +1589,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Effects > Stop Network Prompts From Plug-ins** (Windows) checks whether Windows blocks incoming connections for this exact `Audiform.exe` and, if not, adds the rule with one administrator prompt. A rule Windows made itself (after Cancel on its question) counts too. Audiform still never uses the network; the check only asks Windows about its own firewall.
 - **Offered once at startup** on Windows when plug-ins have been scanned and no rule covers the program. Not offered again on its own; the menu item stays.
 - **README:** the portable zip should be unblocked before unzipping, or Windows warns every time the app starts.
+
+## 2026-10-28: Instruments that stayed silent, slow and silent MIDI mixdowns, Mix Down to New File
+
+- **Plug-ins now get their window messages with no window open.** The plug-in host ran the Windows message queue only while a plug-in window was open. Many plug-ins finish loading through those messages (timers, sounds loaded in the background), so an instrument stayed silent until its window was opened. The host now runs the queue every pass while plug-ins are loaded.
+- **Mixdowns and bounces use playback's own plug-ins when nothing is playing through them.** They are already loaded and hold the settings as heard, so the export starts at once and sounds the same. A fresh copy (with its warm-up) is started only for a plug-in that is busy playing or not running yet.
+- **A mixdown's request check no longer starts every plug-in.** Checking the request used to run a whole cancelled render, starting each plug-in and instrument once more before the real one.
+- **Mix Down to New File** now writes a 32-bit float WAV into a Mixdowns folder beside the session (saving the session first if it is new), adds it to the Files panel and opens it in the Waveform editor like any other file. It used to open as an untitled file in the app's working folder, which was not in the Files panel.

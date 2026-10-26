@@ -152,6 +152,7 @@ impl Host {
             rate: 48_000.0,
             state,
             params,
+            main: None,
         })
     }
 }
@@ -408,6 +409,7 @@ fn one_process_runs_several_plugins_each_on_its_own() {
             rate: 48_000.0,
             state: None,
             params: vec![(0, gain)],
+            main: None,
         };
         write_frame(&mut h.stdin, CONTROL, &serde_json::to_vec(&load).unwrap()).unwrap();
         let (from, kind, body) = next(&mut h);
