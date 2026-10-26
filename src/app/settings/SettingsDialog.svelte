@@ -337,7 +337,7 @@
           <div class="row">
             <button type="button" disabled={busy} onclick={() => void chooseCacheFolder(false)}>Change Folder...</button>
             <button type="button" disabled={busy} onclick={() => void chooseCacheFolder(true)}>Use Default</button>
-            <span class="why">The default is Documents\Altered Audio Editor\Cache. If Documents syncs to a cloud service, pick a local folder instead.</span>
+            <span class="why">The default is Documents\Audiform\Cache. If Documents syncs to a cloud service, pick a local folder instead.</span>
           </div>
         {:else if page === "Markers"}
           <label class="off"><input type="checkbox" disabled checked /> Marker changes can be undone <span class="why">Always on.</span></label>
@@ -429,7 +429,7 @@
           </fieldset>
           <p class="note">Podcast targets follow published podcast guidance (stereo -16 LUFS, mono -19 LUFS, true peak at or below -1 dBTP). Broadcast targets follow the region.</p>
         {:else if page === "Privacy"}
-          <p class="note">Altered Audio Editor never goes online by itself. No account, no sign-in, no tracking, no usage data, no crash reports, no update checks. Everything stays on this computer.</p>
+          <p class="note">Audiform never goes online by itself. No account, no sign-in, no tracking, no usage data, no crash reports, no update checks. Everything stays on this computer.</p>
           <p class="note">The only web pages it opens are the ones you pick in the Help menu, in your own browser.</p>
           <label class="off"><input type="checkbox" disabled /> Check for updates once a week <span class="why">Arrives after the first public release, and stays off unless you turn it on.</span></label>
         {/if}
