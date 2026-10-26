@@ -2442,7 +2442,7 @@
   // arrow gets the glass arrow too (theme-aero.css styles the mark).
   function markAeroCursor(e: MouseEvent) {
     const root = document.documentElement;
-    if (root.dataset.theme !== "meadow" && root.dataset.theme !== "aqua" && root.dataset.theme !== "moonlight") return;
+    if (root.dataset.theme !== "meadow" && root.dataset.theme !== "aqua" && root.dataset.theme !== "moonlight" && root.dataset.theme !== "prism") return;
     for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
       if (el.dataset.aeroCursor !== undefined) return;
       const c = getComputedStyle(el).cursor;

@@ -191,11 +191,12 @@
           </div>
           <label class="row">
             Theme
-            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" ? v : "dark"; }}>
+            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" || v === "prism" ? v : "dark"; }}>
               <option value="dark">Dark</option>
               <option value="meadow">Meadow Aero</option>
               <option value="aqua">Aqua Aero</option>
               <option value="moonlight">Moonlight Aero</option>
+              <option value="prism">Prism</option>
             </select>
           </label>
           <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Apply tries one while this window stays open. Your colors above still apply on top of either theme.</p>

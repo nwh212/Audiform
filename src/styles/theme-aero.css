@@ -12,10 +12,13 @@
   - Moonlight Aero (data-theme="moonlight"): a moonlit field under a sky full
     of stars, graded to the theme's navy and teal (photo: see ATTRIBUTION.md);
     smoky glass.
+  - Prism (data-theme="prism"): after Audiform's mark. Moonlight's dark
+    glass, tinted violet, over glowing rainbow ribbons; candy-glass
+    transport orbs in the mark's colors, rainbow meters and edges.
   Scenes and pointer art live in src/assets/themes.
 */
 
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) {
   color-scheme: light;
 
   /* Glass: white at partial strength, so the scene shows through. */
@@ -73,20 +76,23 @@
 :root[data-theme="moonlight"] body {
   background: #0a1838 url("../assets/themes/moonlight.webp") center / cover no-repeat fixed;
 }
+:root[data-theme="prism"] body {
+  background: #0d0822 url("../assets/themes/prism.webp") center / cover no-repeat fixed;
+}
 :root[data-theme="aqua"] body {
   background: #1a7fc0 url("../assets/themes/aqua.webp") center / cover no-repeat fixed;
 }
 
 /* The shell is clear, so the scene fills the window. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(header.top, main.body, .dv-dockview, .dv-grid-view, .dv-split-view-container, .dv-view-container, .dv-view) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(header.top, main.body, .dv-dockview, .dv-grid-view, .dv-split-view-container, .dv-view-container, .dv-view) {
   background: transparent !important;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) header.top {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) header.top {
   border-bottom: 0;
 }
 
 /* Panels: clear frosted glass with a bright edge and soft rounded corners. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio {
   --dv-group-view-background-color: var(--a-glass);
   --dv-tabs-and-actions-container-background-color: transparent;
   --dv-activegroup-visiblepanel-tab-background-color: var(--a-glass-strong);
@@ -96,7 +102,7 @@
   --dv-tab-divider-color: transparent;
   --dv-floating-box-shadow: 0 14px 36px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio .dv-groupview {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview {
   border: 4px solid transparent;
   border-radius: 16px;
   overflow: hidden;
@@ -104,15 +110,15 @@
   backdrop-filter: blur(18px) saturate(1.3);
   box-shadow: 0 0 0 1px var(--a-edge) inset, 0 6px 20px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio .dv-tabs-and-actions-container {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-tabs-and-actions-container {
   border-bottom: 1px solid rgba(255, 255, 255, 0.6);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio .dv-tab {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-tab {
   border-radius: 10px 10px 0 0;
 }
 
 /* Bars float as glass pills. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.menubar, .strip, footer.status) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.menubar, .strip, footer.status) {
   margin: 5px 8px 0;
   border: 1px solid var(--a-edge);
   border-radius: 14px;
@@ -120,59 +126,59 @@
   backdrop-filter: blur(16px) saturate(1.3);
   box-shadow: 0 4px 14px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .strip {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .strip {
   margin-bottom: 5px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) footer.status {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) footer.status {
   margin: 0 8px 5px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.editor .toolbar, .bar:has(> .transport)) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.editor .toolbar, .bar:has(> .transport)) {
   background: var(--a-shine), rgba(255, 255, 255, 0.35);
   border-color: rgba(255, 255, 255, 0.6);
 }
 
 /* Controls: clear glass with a light shine; the picked one turns aqua. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
   border-radius: 8px;
   border-color: rgba(70, 150, 200, 0.45);
   background-image: var(--a-shine);
   box-shadow: 0 1px 3px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev):hover:not(:disabled) {
   box-shadow: 0 0 0 2px rgba(120, 220, 255, 0.55), 0 2px 6px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea) {
   border-radius: 8px;
   background-color: rgba(255, 255, 255, 0.85);
   border-color: rgba(70, 150, 200, 0.4);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
   accent-color: #19aee6;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.tool, .view) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.tool, .view) {
   border-radius: 9px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.tool, .view):hover:not(:disabled) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.tool, .view):hover:not(:disabled) {
   border-color: var(--a-edge);
   background: var(--a-shine), rgba(255, 255, 255, 0.55);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.tool.on:not(.rec, .play), .view.on, .modes button.on, .header .ms.on:not(.solo, .rec)) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.tool.on:not(.rec, .play), .view.on, .modes button.on, .header .ms.on:not(.solo, .rec)) {
   border-color: #0f97d2;
   background: var(--a-pick);
   color: #fff;
   box-shadow: 0 0 8px rgba(40, 190, 255, 0.6);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .modes {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .modes {
   border-radius: 10px;
   overflow: hidden;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .modes button {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .modes button {
   border-radius: 0;
   box-shadow: none;
 }
 
 /* Transport: clear glass orbs; play turns leaf green, record red. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool {
   width: 30px;
   height: 30px;
   border: 1px solid var(--a-edge);
@@ -180,15 +186,15 @@
   background: var(--a-shine), rgba(255, 255, 255, 0.55);
   box-shadow: 0 2px 6px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool.play.on {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.play.on {
   background: var(--a-shine), var(--a-go);
   color: #fff;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool.rec.on {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.rec.on {
   background: var(--a-shine), linear-gradient(#ff9a9a, #e2283a);
   color: #fff;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar .clock {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar .clock {
   padding: 1px 12px;
   border: 1px solid var(--a-edge);
   border-radius: 12px;
@@ -197,50 +203,50 @@
 }
 
 /* Menus: glass; the row under the pointer is aqua. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .menubar .top {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .menubar .top {
   border-radius: 8px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.menubar .top:hover, .menubar .top.open, .menubar .row.active, .context button.active) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.menubar .top:hover, .menubar .top.open, .menubar .row.active, .context button.active) {
   background: var(--a-pick);
   color: #fff;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.menubar .dropdown, .context) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.menubar .dropdown, .context) {
   border: 1px solid var(--a-edge);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(18px) saturate(1.3);
   box-shadow: 0 12px 30px var(--a-shadow);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.menubar .row, .context button) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.menubar .row, .context button) {
   border-radius: 6px;
 }
 
 /* Track headers: the selected one glows aqua. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .header.selected {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .header.selected {
   box-shadow: 0 0 0 1px rgba(25, 174, 230, 0.8) inset, 0 0 14px rgba(25, 174, 230, 0.3) inset;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .header .ms {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .header .ms {
   border-radius: 6px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.header .auto, .auto-pick) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.header .auto, .auto-pick) {
   background-color: rgba(255, 255, 255, 0.8);
   color: var(--text);
 }
 
 /* Lists. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(tr, li, .item, .file):hover {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(tr, li, .item, .file):hover {
   background-color: rgba(255, 255, 255, 0.45);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
   background-color: rgba(150, 225, 255, 0.6);
 }
 
 /* Dialogs: a pane of glass over the softly blurred scene. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .backdrop {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .backdrop {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(3px);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.dialog, [role="dialog"]) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.dialog, [role="dialog"]) {
   border: 1px solid var(--a-edge);
   border-radius: 18px;
   background: var(--a-shine), rgba(255, 255, 255, 0.72);
@@ -249,14 +255,14 @@
 }
 
 /* Scrollbars: thin clear pills. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) ::-webkit-scrollbar {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) ::-webkit-scrollbar-track {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) ::-webkit-scrollbar-track {
   background: transparent;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) ::-webkit-scrollbar-thumb {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.85) padding-box;
@@ -265,13 +271,13 @@
 
 /* Meters: the cover over the unlit part must stay solid, or the color
    scale shows through the glass. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.levels, .meter) .cover {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.levels, .meter) .cover {
   background: #e6f3f9;
 }
 
 /* ---------- Leaning in: thinner glass, real edges, soft meters ---------- */
 
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) {
   /* Thin glass: the scene stays visible, the blur keeps text readable. */
   --surface-0: rgba(255, 255, 255, 0.16);
   --surface-1: rgba(255, 255, 255, 0.2);
@@ -299,18 +305,18 @@
 }
 
 /* Text sits on glass: a soft light halo keeps it crisp over any part of the scene. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio {
   text-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
 }
 
 /* Panes: tinted glass with rims, inner glow, and a curved sheen across the top. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio .dv-groupview {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview {
   position: relative;
   background: var(--a-pane);
   backdrop-filter: blur(26px) saturate(1.5) brightness(1.06);
   box-shadow: var(--a-rim), 0 12px 32px rgba(0, 50, 90, 0.28);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dockview-theme-altaudio .dv-groupview::after {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview::after {
   content: "";
   position: absolute;
   top: 0;
@@ -324,7 +330,7 @@
 }
 
 /* Bars: glass pills with rims, and water droplets resting on them. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.menubar, .strip, footer.status) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.menubar, .strip, footer.status) {
   background:
     url("../assets/themes/droplets.png") repeat-x left center / auto 100%,
     var(--a-shine),
@@ -333,12 +339,12 @@
   box-shadow: var(--a-rim), 0 6px 18px rgba(0, 50, 90, 0.25);
   text-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) footer.status {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) footer.status {
   background: var(--a-shine), var(--a-pane);
 }
 
 /* Buttons: clear glass beads with a bright cap of light and a darker lower lip. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
   background-color: rgba(255, 255, 255, 0.45);
   background-image:
     radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
@@ -348,7 +354,7 @@
 }
 
 /* Transport orbs: real bubbles, clear with a bright highlight and a tinted base. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool {
   background:
     radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.95) 0 14%, rgba(255, 255, 255, 0) 32%),
     radial-gradient(circle at 50% 95%, rgba(120, 215, 255, 0.55), rgba(255, 255, 255, 0) 60%),
@@ -356,40 +362,40 @@
   border-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 0 0 1px rgba(60, 140, 190, 0.3), 0 3px 8px rgba(0, 50, 90, 0.25), 0 0 10px rgba(255, 255, 255, 0.5) inset;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool.play.on {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.play.on {
   background:
     radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.95) 0 14%, rgba(255, 255, 255, 0) 32%),
     radial-gradient(circle at 50% 80%, #b6f59a, #3fbf3a 75%);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bar:has(> .transport) .transport .tool.rec.on {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.rec.on {
   background:
     radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.95) 0 14%, rgba(255, 255, 255, 0) 32%),
     radial-gradient(circle at 50% 80%, #ffb0b0, #e2283a 75%);
 }
 
 /* Meters: rounded glass tubes, lit with a soft green to gold to coral blend. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .levels .bar {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .levels .bar {
   height: 12px;
   border-radius: 7px;
   background: linear-gradient(to right, #3fd67a, #5fe06a 45%, #b8e64a calc(var(--meter-yellow, 80%) - 6%), #ffd23f var(--meter-yellow, 80%), #ff9a3d calc(var(--meter-red, 95%) - 2%), #ff4f6a);
   box-shadow: 0 1px 3px rgba(0, 50, 90, 0.35) inset, 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.meter .bar, .mbar) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.meter .bar, .mbar) {
   border-radius: 4px;
   background: linear-gradient(to top, #3fd67a, #5fe06a 45%, #b8e64a calc(var(--meter-yellow, 80%) - 6%), #ffd23f var(--meter-yellow, 80%), #ff9a3d calc(var(--meter-red, 95%) - 2%), #ff4f6a);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .mbar {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .mbar {
   background: linear-gradient(to top, #3fd67a, #5fe06a 30%, #b8e64a 47%, #ffd23f 53%, #ff9a3d 74%, #ff4f6a);
 }
 /* The unlit part: frosted, not see-through. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.levels, .meter) .cover,
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .mcover {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.levels, .meter) .cover,
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .mcover {
   z-index: 1;
   background: linear-gradient(rgba(244, 251, 255, 0.97), rgba(214, 236, 247, 0.97));
 }
 /* A glass sheen over the whole tube, lit and unlit alike. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .levels .bar::after {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .levels .bar::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -398,7 +404,7 @@
   background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.15) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.3));
   pointer-events: none;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.meter .bar, .mbar)::after {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.meter .bar, .mbar)::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -407,29 +413,29 @@
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.25));
   pointer-events: none;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.levels .peak, .meter .peak, .mpeak) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.levels .peak, .meter .peak, .mpeak) {
   z-index: 3;
   background: #ffffff;
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 2px rgba(0, 80, 130, 0.6);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.levels .over, .meter .over) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.levels .over, .meter .over) {
   border-radius: 50%;
   border-color: rgba(255, 255, 255, 0.9);
   background: radial-gradient(circle at 35% 30%, #fff, rgba(255, 255, 255, 0.4) 60%);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .meter .bars {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .meter .bars {
   border-radius: 6px;
   border-color: rgba(255, 255, 255, 0.8);
   background: rgba(255, 255, 255, 0.3);
 }
 
 /* Faders: glass caps on a sunken glass slot. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .fader .slot,
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .track .slot {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .fader .slot,
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .track .slot {
   border-radius: 3px;
   background: linear-gradient(90deg, rgba(0, 60, 100, 0.25), rgba(255, 255, 255, 0.6));
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.fader .cap, .track .cap) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.fader .cap, .track .cap) {
   border-color: rgba(255, 255, 255, 0.95);
   border-radius: 6px;
   background:
@@ -437,7 +443,7 @@
     linear-gradient(#e9f8ff, #9fdcf6);
   box-shadow: 0 0 0 1px rgba(40, 130, 180, 0.4), 0 2px 5px rgba(0, 50, 90, 0.3);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .strip {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .strip {
   background: var(--a-pane);
   border-color: rgba(255, 255, 255, 0.6);
   border-radius: 10px;
@@ -445,37 +451,37 @@
 }
 
 /* Knobs: glass orbs. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .knob .body {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .knob .body {
   fill: url(#glass-orb);
   stroke: rgba(255, 255, 255, 0.95);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bk .skirt {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bk .skirt {
   fill: url(#glass-skirt);
   stroke: rgba(255, 255, 255, 0.95);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bk .cap {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bk .cap {
   fill: url(#glass-orb);
   stroke: rgba(40, 130, 180, 0.4);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bk .grip {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bk .grip {
   stroke: rgba(40, 110, 160, 0.4);
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .bk .pointer {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .bk .pointer {
   stroke: #0f8fd0;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .dial .knob circle:first-child {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dial .knob circle:first-child {
   fill: url(#glass-orb);
 }
 
 /* Dialogs and menus: thicker frosted glass with the same rims and sheen. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(.dialog, [role="dialog"], .menubar .dropdown, .context) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(.dialog, [role="dialog"], .menubar .dropdown, .context) {
   background: var(--a-shine), linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(235, 248, 255, 0.62));
   backdrop-filter: blur(28px) saturate(1.5);
   box-shadow: var(--a-rim), 0 18px 44px rgba(0, 50, 90, 0.32);
 }
 
 /* Bubbles drift in the scene, above it but under the app. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) body::before {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) body::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -488,7 +494,7 @@
 
 /* ---------- Moonlight: the same glass at night ---------- */
 
-:root[data-theme="moonlight"] {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) {
   color-scheme: dark;
 
   --surface-0: rgba(8, 20, 44, 0.28);
@@ -541,22 +547,22 @@
 }
 
 /* Text on smoky glass: a soft dark halo instead of a light one. */
-:root[data-theme="moonlight"] .dockview-theme-altaudio,
-:root[data-theme="moonlight"] :is(.menubar, .strip, footer.status) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.menubar, .strip, footer.status) {
   text-shadow: 0 0 6px rgba(0, 10, 30, 0.9);
 }
-:root[data-theme="moonlight"] .dockview-theme-altaudio .dv-groupview {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview {
   backdrop-filter: blur(26px) saturate(1.4) brightness(0.85);
 }
-:root[data-theme="moonlight"] .dockview-theme-altaudio .dv-groupview::after {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview::after {
   background: linear-gradient(rgba(190, 235, 255, 0.16), rgba(190, 235, 255, 0));
 }
-:root[data-theme="moonlight"] .dockview-theme-altaudio {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio {
   --dv-inactivegroup-visiblepanel-tab-background-color: rgba(30, 60, 100, 0.45);
 }
 
 /* Controls: dark glass beads with a moonlit cap. */
-:root[data-theme="moonlight"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
   background-color: rgba(20, 46, 86, 0.6);
   background-image:
     radial-gradient(ellipse 80% 55% at 50% 0%, rgba(190, 235, 255, 0.45), rgba(190, 235, 255, 0) 70%),
@@ -564,23 +570,23 @@
   border-color: rgba(150, 210, 255, 0.45);
   box-shadow: 0 0 0 1px rgba(0, 10, 30, 0.5), 0 2px 5px rgba(0, 0, 12, 0.4);
 }
-:root[data-theme="moonlight"] :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, .header .auto, .auto-pick) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, .header .auto, .auto-pick) {
   background-color: rgba(6, 16, 36, 0.7);
   border-color: rgba(150, 210, 255, 0.35);
   color: var(--text);
 }
-:root[data-theme="moonlight"] :is(.tool, .view):hover:not(:disabled) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.tool, .view):hover:not(:disabled) {
   background: var(--a-shine), rgba(60, 130, 200, 0.3);
 }
-:root[data-theme="moonlight"] :is(tr, li, .item, .file):hover {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(tr, li, .item, .file):hover {
   background-color: rgba(80, 170, 255, 0.14);
 }
-:root[data-theme="moonlight"] :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
   background-color: rgba(60, 150, 230, 0.35);
 }
 
 /* Transport: dark bubbles lit from above; play and record glow. */
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool {
   background:
     radial-gradient(circle at 35% 25%, rgba(220, 245, 255, 0.85) 0 12%, rgba(255, 255, 255, 0) 30%),
     radial-gradient(circle at 50% 95%, rgba(60, 190, 255, 0.45), rgba(255, 255, 255, 0) 60%),
@@ -588,95 +594,95 @@
   border-color: rgba(170, 225, 255, 0.6);
   box-shadow: 0 0 0 1px rgba(0, 10, 30, 0.5), 0 3px 8px rgba(0, 0, 12, 0.5), 0 0 10px rgba(80, 190, 255, 0.25) inset;
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.play.on {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.play.on {
   box-shadow: 0 0 12px rgba(120, 255, 120, 0.6);
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.rec.on {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.rec.on {
   box-shadow: 0 0 12px rgba(255, 90, 100, 0.7);
 }
-:root[data-theme="moonlight"] .bar .clock {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar .clock {
   background: var(--a-shine), rgba(4, 14, 34, 0.7);
   color: #9fe8ff;
   text-shadow: 0 0 8px rgba(80, 200, 255, 0.9);
 }
 
 /* Meters glow in the dark: the unlit part is smoky glass. */
-:root[data-theme="moonlight"] :is(.levels, .meter) .cover,
-:root[data-theme="moonlight"] .mcover {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.levels, .meter) .cover,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .mcover {
   background: linear-gradient(rgba(14, 32, 62, 0.97), rgba(6, 16, 36, 0.97));
 }
-:root[data-theme="moonlight"] .levels .bar,
-:root[data-theme="moonlight"] :is(.meter .bar, .mbar) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .levels .bar,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.meter .bar, .mbar) {
   box-shadow: 0 0 8px rgba(80, 255, 160, 0.35), 0 0 0 1px rgba(170, 225, 255, 0.35);
 }
-:root[data-theme="moonlight"] .levels .bar::after {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .levels .bar::after {
   background: linear-gradient(rgba(220, 245, 255, 0.45), rgba(255, 255, 255, 0.05) 48%, rgba(255, 255, 255, 0) 52%, rgba(255, 255, 255, 0.1));
 }
-:root[data-theme="moonlight"] :is(.meter .bar, .mbar)::after {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.meter .bar, .mbar)::after {
   background: linear-gradient(90deg, rgba(220, 245, 255, 0.45), rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.1));
 }
-:root[data-theme="moonlight"] .meter .bars {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .meter .bars {
   border-color: rgba(170, 225, 255, 0.35);
   background: rgba(4, 12, 30, 0.6);
 }
-:root[data-theme="moonlight"] :is(.levels .over, .meter .over) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.levels .over, .meter .over) {
   border-color: rgba(170, 225, 255, 0.5);
   background: radial-gradient(circle at 35% 30%, rgba(220, 245, 255, 0.6), rgba(20, 50, 90, 0.6) 60%);
 }
 
 /* Faders and knobs: dark glass, lit from above. */
-:root[data-theme="moonlight"] :is(.fader .cap, .track .cap) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.fader .cap, .track .cap) {
   border-color: rgba(190, 235, 255, 0.7);
   background:
     radial-gradient(ellipse 90% 60% at 50% 0%, rgba(220, 245, 255, 0.8), rgba(255, 255, 255, 0) 70%),
     linear-gradient(#2c5a88, #12304f);
 }
-:root[data-theme="moonlight"] .fader .slot,
-:root[data-theme="moonlight"] .track .slot {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .fader .slot,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .track .slot {
   background: linear-gradient(90deg, rgba(0, 0, 10, 0.6), rgba(120, 200, 255, 0.25));
 }
-:root[data-theme="moonlight"] .knob .body,
-:root[data-theme="moonlight"] .bk .cap,
-:root[data-theme="moonlight"] .dial .knob circle:first-child {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .knob .body,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bk .cap,
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .dial .knob circle:first-child {
   fill: url(#glass-orb-night);
 }
-:root[data-theme="moonlight"] .bk .skirt {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bk .skirt {
   fill: url(#glass-skirt-night);
   stroke: rgba(170, 225, 255, 0.5);
 }
-:root[data-theme="moonlight"] .bk .pointer {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bk .pointer {
   stroke: #5fe0ff;
 }
 
 /* Menus and dialogs: thick smoky glass. */
-:root[data-theme="moonlight"] :is(.dialog, [role="dialog"], .menubar .dropdown, .context) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.dialog, [role="dialog"], .menubar .dropdown, .context) {
   background: var(--a-shine), linear-gradient(135deg, rgba(22, 48, 88, 0.88), rgba(8, 20, 44, 0.86));
 }
-:root[data-theme="moonlight"] .backdrop {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .backdrop {
   background: rgba(0, 4, 16, 0.35);
 }
-:root[data-theme="moonlight"] ::-webkit-scrollbar-thumb {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) ::-webkit-scrollbar-thumb {
   background: rgba(150, 210, 255, 0.4) padding-box;
   box-shadow: none;
 }
-:root[data-theme="moonlight"] body::before {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) body::before {
   background:
     radial-gradient(circle at 6% 92%, rgba(200, 255, 170, 0.6) 0 0.25%, rgba(200, 255, 170, 0) 0.6%),
     radial-gradient(circle at 97% 60%, rgba(200, 255, 170, 0.5) 0 0.2%, rgba(200, 255, 170, 0) 0.5%),
     radial-gradient(circle at 52% 98%, rgba(200, 255, 170, 0.5) 0 0.25%, rgba(200, 255, 170, 0) 0.55%);
 }
-:root[data-theme="moonlight"] :is(.editor .toolbar, .bar:has(> .transport)) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.editor .toolbar, .bar:has(> .transport)) {
   background: var(--a-shine), rgba(14, 34, 66, 0.45);
   border-color: rgba(150, 210, 255, 0.25);
 }
 /* Droplets read as noise on dark glass: night has none. */
-:root[data-theme="moonlight"] :is(.menubar, .strip) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.menubar, .strip) {
   background: var(--a-shine), var(--a-pane);
 }
 
 /* Glass panes stack as their own layers; the top bar (and its open menus)
    must sit above them. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) header.top {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) header.top {
   position: relative;
   z-index: 50;
 }
@@ -684,7 +690,7 @@
 /* Open menus: frosted glass you can see through. The menu bar itself is
    not blurred (a blurred bar would stop the menu inside it from blurring
    what is behind), so the open menu frosts the panels under it. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) .menubar {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .menubar {
   backdrop-filter: none !important;
 }
 :root:is([data-theme="meadow"], [data-theme="aqua"]) .menubar {
@@ -693,14 +699,14 @@
     var(--a-shine),
     linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(235, 248, 255, 0.55));
 }
-:root[data-theme="moonlight"] .menubar {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .menubar {
   background: var(--a-shine), linear-gradient(135deg, rgba(30, 60, 105, 0.78), rgba(10, 24, 52, 0.7));
 }
 :root:is([data-theme="meadow"], [data-theme="aqua"]) :is(.menubar .dropdown, .context) {
   background: var(--a-shine), linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(230, 246, 255, 0.48));
   backdrop-filter: blur(22px) saturate(1.6) brightness(1.08);
 }
-:root[data-theme="moonlight"] :is(.menubar .dropdown, .context) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) :is(.menubar .dropdown, .context) {
   background: var(--a-shine), linear-gradient(135deg, rgba(26, 54, 96, 0.68), rgba(8, 20, 44, 0.62));
   backdrop-filter: blur(22px) saturate(1.4) brightness(0.8);
 }
@@ -710,43 +716,208 @@
    too. Text, resize and drag pointers keep their usual shapes. Elements
    whose own style asks for the hand or the plain arrow are marked by the
    app (data-aero-cursor) so they get the glass arrow as well. */
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]),
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) body,
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]),
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) body,
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
   cursor: url("../assets/themes/cursor.svg") 3 2, default;
 }
-:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"]) [data-aero-cursor] {
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) [data-aero-cursor] {
   cursor: url("../assets/themes/cursor.svg") 3 2, default !important;
 }
 
 /* Moonlight transport: clear glass orbs, with the icon floating inside.
    Play and record light the inside of their orb. */
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool {
   border: 0;
   border-radius: 50%;
   background: url("../assets/themes/orb.png") center / contain no-repeat;
   box-shadow: 0 3px 10px rgba(0, 0, 20, 0.45);
   color: #ffffff;
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool svg {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool svg {
   filter: drop-shadow(0 1px 2px rgba(0, 20, 60, 0.9));
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool:hover:not(:disabled) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool:hover:not(:disabled) {
   background-color: rgba(120, 200, 255, 0.18);
   box-shadow: 0 0 10px rgba(140, 210, 255, 0.55), 0 3px 10px rgba(0, 0, 20, 0.45);
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.play.on {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.play.on {
   background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(110, 255, 140, 0.55), rgba(110, 255, 140, 0.08) 70%);
   box-shadow: 0 0 12px rgba(110, 255, 140, 0.7);
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.rec.on {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.rec.on {
   background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(255, 90, 100, 0.6), rgba(255, 90, 100, 0.1) 70%);
   box-shadow: 0 0 12px rgba(255, 90, 100, 0.75);
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.on:not(.play, .rec) {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.on:not(.play, .rec) {
   background: url("../assets/themes/orb.png") center / contain no-repeat, radial-gradient(circle at 50% 65%, rgba(120, 210, 255, 0.5), rgba(120, 210, 255, 0.08) 70%);
   box-shadow: 0 0 12px rgba(120, 210, 255, 0.7);
 }
-:root[data-theme="moonlight"] .bar:has(> .transport) .transport .tool.rec {
+:root:is([data-theme="moonlight"], [data-theme="prism"]) .bar:has(> .transport) .transport .tool.rec {
   color: #ff5a6a;
+}
+
+
+/* ---------- Prism: after the mark ---------- */
+
+:root[data-theme="prism"] {
+  --accent: #d05cff;
+  --accent-dim: #8a4fd8;
+  --playhead: #ffc83a;
+  --value: #ff9ae6;
+  --selected-text: #ffffff;
+  --clip-1: #3f8cff;
+  --clip-2: #8f5cff;
+  --clip-3: #e04ad0;
+  --clip-4: #ff4f7a;
+  --clip-5: #ff9a2f;
+  --clip-6: #ffd23f;
+  --clip-7: #4fd67a;
+  /* The mark's colors, end to end. */
+  --prism: linear-gradient(90deg, #3f8cff, #8f5cff 20%, #e04ad0 40%, #ff4f7a 60%, #ff9a2f 80%, #ffd23f);
+  --a-pick: linear-gradient(#e7a0ff, #b04ef0 52%, #8a2fd8);
+  --a-pane: linear-gradient(135deg, rgba(120, 70, 200, 0.34), rgba(40, 20, 80, 0.5) 40%, rgba(30, 12, 60, 0.55) 65%, rgba(160, 60, 160, 0.3));
+}
+
+/* Glass tinted violet, with a thin rainbow along the top of each pane. */
+:root[data-theme="prism"] .dockview-theme-altaudio .dv-groupview {
+  box-shadow: var(--a-rim), 0 12px 32px rgba(10, 0, 30, 0.5), 0 0 24px rgba(180, 80, 255, 0.12);
+}
+:root[data-theme="prism"] .dockview-theme-altaudio .dv-groupview::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--prism);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 4;
+}
+:root[data-theme="prism"] :is(.dialog, [role="dialog"], .menubar .dropdown, .context) {
+  background: var(--a-shine), linear-gradient(135deg, rgba(70, 30, 120, 0.9), rgba(24, 10, 52, 0.88));
+  border-image: var(--prism) 1;
+}
+:root[data-theme="prism"] :is(.menubar .dropdown, .context) {
+  background: var(--a-shine), linear-gradient(135deg, rgba(70, 30, 120, 0.7), rgba(24, 10, 52, 0.64));
+}
+:root[data-theme="prism"] .menubar {
+  background: var(--a-shine), linear-gradient(135deg, rgba(70, 34, 120, 0.78), rgba(22, 10, 50, 0.72));
+}
+:root[data-theme="prism"] header.top {
+  border-bottom: 2px solid;
+  border-image: var(--prism) 1;
+}
+:root[data-theme="prism"] :is(.editor .toolbar, .bar:has(> .transport)) {
+  background: var(--a-shine), rgba(40, 18, 80, 0.5);
+  border-color: rgba(220, 150, 255, 0.25);
+}
+:root[data-theme="prism"] :is(button, select):not(.row, .top, .tool, .context button, .view, .clock, .grab, .fold, .chev) {
+  background-color: rgba(60, 26, 110, 0.6);
+  background-image:
+    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255, 210, 255, 0.4), rgba(255, 210, 255, 0) 70%),
+    linear-gradient(rgba(0, 0, 0, 0) 60%, rgba(220, 90, 255, 0.2));
+  border-color: rgba(220, 150, 255, 0.45);
+}
+:root[data-theme="prism"] :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, .header .auto, .auto-pick) {
+  background-color: rgba(18, 8, 40, 0.72);
+  border-color: rgba(220, 150, 255, 0.35);
+}
+:root[data-theme="prism"] :is(.tool, .view):hover:not(:disabled) {
+  background: var(--a-shine), rgba(170, 80, 230, 0.3);
+}
+:root[data-theme="prism"] :is(tr, li, .item, .file):hover {
+  background-color: rgba(200, 100, 255, 0.14);
+}
+:root[data-theme="prism"] :is(tr, li, .item, .file):is(.sel, .selected, .on, .active) {
+  background-color: rgba(170, 70, 230, 0.38);
+}
+:root[data-theme="prism"] :is(.tool.on:not(.rec, .play), .view.on, .modes button.on, .header .ms.on:not(.solo, .rec)) {
+  background: var(--a-shine), var(--a-pick);
+}
+
+/* Transport: candy glass orbs, one color of the mark each, lit from above. */
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool {
+  --orb: #8f5cff;
+  border: 1px solid color-mix(in srgb, var(--orb) 40%, white);
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 60% 38% at 50% 18%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 85%, color-mix(in srgb, var(--orb) 55%, white), rgba(255, 255, 255, 0) 55%),
+    radial-gradient(circle at 50% 55%, var(--orb), color-mix(in srgb, var(--orb) 55%, black) 100%);
+  box-shadow: 0 3px 8px rgba(10, 0, 30, 0.55), 0 0 10px color-mix(in srgb, var(--orb) 45%, transparent);
+  color: #ffffff;
+}
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool svg {
+  filter: drop-shadow(0 1px 2px rgba(20, 0, 40, 0.8));
+}
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 1) { --orb: #3f8cff; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 2) { --orb: #8f5cff; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 3) { --orb: #c24ae8; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 4) { --orb: #e04ad0; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 5) { --orb: #ff4f7a; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 6) { --orb: #ff9a2f; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:nth-child(7n + 7) { --orb: #e6b820; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool.play { --orb: #3fbf5a; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool.rec { --orb: #e2283a; color: #ffffff; }
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:hover:not(:disabled) {
+  background-color: transparent;
+  box-shadow: 0 3px 8px rgba(10, 0, 30, 0.55), 0 0 16px color-mix(in srgb, var(--orb) 80%, transparent);
+  filter: brightness(1.12);
+}
+:root[data-theme="prism"] .bar:has(> .transport) .transport .tool:is(.on, .play.on, .rec.on) {
+  background:
+    radial-gradient(ellipse 60% 38% at 50% 18%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 70%, color-mix(in srgb, var(--orb) 40%, white), var(--orb) 75%);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--orb) 90%, transparent), 0 0 4px #ffffff inset;
+}
+:root[data-theme="prism"] .bar .clock {
+  background: var(--a-shine), rgba(20, 8, 44, 0.75);
+  color: #ffd9ff;
+  text-shadow: 0 0 8px rgba(230, 110, 255, 0.95);
+}
+
+/* Meters: the mark's colors, blue at the bottom to orange and red at the top. */
+:root[data-theme="prism"] .levels .bar {
+  background: linear-gradient(to right, #3f8cff, #8f5cff 40%, #e04ad0 calc(var(--meter-yellow, 80%) - 8%), #ff9a2f var(--meter-yellow, 80%), #ff6a3a calc(var(--meter-red, 95%) - 2%), #ff2a4a);
+  box-shadow: 0 0 10px rgba(200, 90, 255, 0.4), 0 0 0 1px rgba(230, 170, 255, 0.4);
+}
+:root[data-theme="prism"] :is(.meter .bar, .mbar) {
+  background: linear-gradient(to top, #3f8cff, #8f5cff 40%, #e04ad0 calc(var(--meter-yellow, 80%) - 8%), #ff9a2f var(--meter-yellow, 80%), #ff6a3a calc(var(--meter-red, 95%) - 2%), #ff2a4a);
+  box-shadow: 0 0 8px rgba(200, 90, 255, 0.35), 0 0 0 1px rgba(230, 170, 255, 0.35);
+}
+:root[data-theme="prism"] :is(.levels, .meter) .cover,
+:root[data-theme="prism"] .mcover {
+  background: linear-gradient(rgba(30, 12, 62, 0.97), rgba(14, 6, 34, 0.97));
+}
+:root[data-theme="prism"] .meter .bars {
+  border-color: rgba(230, 170, 255, 0.35);
+  background: rgba(14, 6, 34, 0.6);
+}
+
+/* Faders and knobs: candy glass, with a pink pointer. */
+:root[data-theme="prism"] :is(.fader .cap, .track .cap) {
+  border-color: rgba(255, 200, 255, 0.75);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 235, 255, 0.85), rgba(255, 255, 255, 0) 70%),
+    linear-gradient(#b04ef0, #5a1f9a);
+}
+:root[data-theme="prism"] :is(.fader .slot, .track .slot) {
+  background: linear-gradient(90deg, rgba(10, 0, 20, 0.6), rgba(220, 120, 255, 0.3));
+}
+:root[data-theme="prism"] .bk .pointer {
+  stroke: #ff7ae0;
+}
+:root[data-theme="prism"] .bk .skirt {
+  stroke: rgba(230, 170, 255, 0.5);
+}
+:root[data-theme="prism"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(#8f5cff, #e04ad0) padding-box;
+  box-shadow: none;
+}
+:root[data-theme="prism"] .backdrop {
+  background: rgba(8, 0, 20, 0.4);
+}
+/* The fireflies are Moonlight's; Prism's sparkles are in its backdrop. */
+:root[data-theme="prism"] body::before {
+  background: none;
 }

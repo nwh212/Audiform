@@ -22,7 +22,7 @@ Code ported or adapted from other projects is credited here. Each entry lists th
 | Source Sans 3 (regular, semibold; Latin) | npm package `@fontsource/source-sans-3` | SIL Open Font License 1.1 | Interface font, bundled into the app build. The license travels with the package. |
 | `src/assets/themes/meadow-photo.webp` | "BlueSkyWhiteCloudsGrassland.jpg" by Raysonho @ Open Grid Scheduler / Grid Engine, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:BlueSkyWhiteCloudsGrassland.jpg) | CC0 1.0 (public domain dedication) | Meadow Aero theme background; resized and color-adjusted (greener grass, deeper sky). |
 | `src/assets/themes/moonlight.webp` | "Night sky with moon and stars over cotton field in Batesville, Texas" by the U.S. Department of Agriculture, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Night_sky_with_moon_and_stars_over_cotton_field_in_Batesville,_Texas.jpg) | Public domain (work of the U.S. federal government) | Moonlight Aero theme background; resized, color-graded to the theme's navy and teal, horizon lights removed. |
-| `src/assets/themes/aqua.webp`, `droplets.png`, `orb.png`, `cursor.svg` | Made for Audiform | GPL-3.0-or-later, like the app | Aqua Aero scene, water droplets, glass orb transport buttons and the glass pointer. |
+| `src/assets/themes/aqua.webp`, `prism.webp`, `droplets.png`, `orb.png`, `cursor.svg` | Made for Audiform | GPL-3.0-or-later, like the app | Aqua Aero scene, the Prism backdrop, water droplets, glass orb transport buttons and the glass pointer. |
 
 ## Libraries with notable licenses
 
