@@ -20,12 +20,10 @@
 //! frequency range chosen takes part. The frames overlap by 75%; their
 //! length is the FFT size, reported as latency.
 
-use std::sync::Arc;
-
 use realfft::num_complex::Complex32;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 
 use super::{choice, num, EffectInfo, Params, Processor};
+use crate::dsp::stft::Frames;
 
 pub const ID: &str = "altaudio.center_extractor";
 
@@ -142,18 +140,14 @@ fn within(x: f32, tol: f32, span: f32) -> f32 {
 }
 
 pub struct CenterExtractor {
+    frames: Frames,
+    x: Extract,
+}
+
+/// The per-frame work: which share of each frequency is the target, and
+/// the Center and Side levels applied to it.
+struct Extract {
     n: usize,
-    hop: usize,
-    win: Vec<f32>,
-    fwd: Arc<dyn RealToComplex<f32>>,
-    inv: Arc<dyn ComplexToReal<f32>>,
-    input: [Vec<f32>; 2],
-    acc: [Vec<f32>; 2],
-    out: [Vec<f32>; 2],
-    pos: usize,
-    frame: Vec<f32>,
-    spec: [Vec<Complex32>; 2],
-    scratch: Vec<Complex32>,
     rate: f32,
     /// Per bin: last frame's share of target sound (0 to 1).
     mask: Vec<f32>,
@@ -176,33 +170,9 @@ pub struct CenterExtractor {
 impl CenterExtractor {
     pub fn new(p: &Params, rate: u32) -> Self {
         let n = FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)];
-        let hop = n / 4;
         let bins = n / 2 + 1;
-        let mut planner = RealFftPlanner::<f32>::new();
-        let fwd = planner.plan_fft_forward(n);
-        let inv = planner.plan_fft_inverse(n);
-        let scratch_len = fwd.get_scratch_len().max(inv.get_scratch_len());
-        // Square-root Hann on both sides: a Hann window in all, which
-        // adds up to 2 at 75% overlap.
-        let win = (0..n)
-            .map(|i| (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / n as f32).cos()).sqrt())
-            .collect();
-        let mut s = Self {
+        let mut x = Extract {
             n,
-            hop,
-            win,
-            fwd,
-            inv,
-            input: [vec![0.0; n], vec![0.0; n]],
-            acc: [vec![0.0; n], vec![0.0; n]],
-            out: [vec![0.0; hop], vec![0.0; hop]],
-            pos: 0,
-            frame: vec![0.0; n],
-            spec: [
-                vec![Complex32::default(); bins],
-                vec![Complex32::default(); bins],
-            ],
-            scratch: vec![Complex32::default(); scratch_len],
             rate: rate.max(1) as f32,
             mask: vec![0.0; bins],
             mags: [vec![0.0; bins], vec![0.0; bins]],
@@ -217,10 +187,15 @@ impl CenterExtractor {
             center: 1.0,
             side: 1.0,
         };
-        s.set_params(p);
-        s
+        x.set_params(p);
+        Self {
+            frames: Frames::new(n),
+            x,
+        }
     }
+}
 
+impl Extract {
     fn set_params(&mut self, p: &Params) {
         self.target = target(p);
         self.phase_tol = p.get("phase_disc").to_radians() as f32;
@@ -242,23 +217,11 @@ impl CenterExtractor {
         }
     }
 
-    fn frame(&mut self) {
-        let n = self.n;
-        let hop = self.hop;
+    // Several per-bin arrays move together, so plain indexes read clearest.
+    #[allow(clippy::needless_range_loop)]
+    fn apply(&mut self, spec: &mut [Vec<Complex32>; 2]) {
         for c in 0..2 {
-            for (o, (x, w)) in self
-                .frame
-                .iter_mut()
-                .zip(self.input[c].iter().zip(&self.win))
-            {
-                *o = x * w;
-            }
-            let _ = self.fwd.process_with_scratch(
-                &mut self.frame,
-                &mut self.spec[c],
-                &mut self.scratch,
-            );
-            for (m, s) in self.mags[c].iter_mut().zip(&self.spec[c]) {
+            for (m, s) in self.mags[c].iter_mut().zip(&spec[c]) {
                 *m = s.norm();
             }
             // Amplitude bandwidth: each level averaged with its neighbours.
@@ -278,12 +241,12 @@ impl CenterExtractor {
         }
 
         let t = self.target;
-        let bin_hz = self.rate / n as f32;
+        let bin_hz = self.rate / self.n as f32;
         let floor = 1e-9;
         for k in 0..self.mask.len() {
             let mut m = 0.0;
             if self.reach[k] > 0.0 {
-                let (l, r) = (self.spec[0][k], self.spec[1][k]);
+                let (l, r) = (spec[0][k], spec[1][k]);
                 let ratio =
                     20.0 * ((self.smooth[1][k] + floor) / (self.smooth[0][k] + floor)).log10();
                 let amp = within(
@@ -310,67 +273,36 @@ impl CenterExtractor {
             self.mask[k] = m;
         }
 
-        let scale = 1.0 / (n as f32 * 2.0);
         let (gc, gs) = (self.center, self.side);
-        for c in 0..2 {
-            for (s, m) in self.spec[c].iter_mut().zip(&self.mask) {
+        for ch in spec.iter_mut() {
+            for (s, m) in ch.iter_mut().zip(&self.mask) {
                 *s *= gs + m * (gc - gs);
             }
-            let last = self.spec[c].len() - 1;
-            self.spec[c][0].im = 0.0;
-            self.spec[c][last].im = 0.0;
-            let _ = self.inv.process_with_scratch(
-                &mut self.spec[c],
-                &mut self.frame,
-                &mut self.scratch,
-            );
-            for ((a, x), w) in self.acc[c].iter_mut().zip(&self.frame).zip(&self.win) {
-                *a += x * w * scale;
-            }
-            self.out[c].copy_from_slice(&self.acc[c][..hop]);
-            self.acc[c].copy_within(hop.., 0);
-            self.acc[c][n - hop..].fill(0.0);
-            self.input[c].copy_within(hop.., 0);
         }
     }
 }
 
 impl Processor for CenterExtractor {
     fn process(&mut self, buf: &mut [f32]) {
-        let start = self.n - self.hop;
-        for f in buf.as_chunks_mut::<2>().0 {
-            for (c, v) in f.iter_mut().enumerate() {
-                self.input[c][start + self.pos] = *v;
-                *v = self.out[c][self.pos];
-            }
-            self.pos += 1;
-            if self.pos == self.hop {
-                self.pos = 0;
-                self.frame();
-            }
-        }
+        let x = &mut self.x;
+        self.frames.process(buf, |spec| x.apply(spec));
     }
 
     fn latency(&self) -> usize {
-        self.n
+        self.frames.latency()
     }
 
     fn reset(&mut self) {
-        for c in 0..2 {
-            self.input[c].fill(0.0);
-            self.acc[c].fill(0.0);
-            self.out[c].fill(0.0);
-        }
-        self.mask.fill(0.0);
-        self.pos = 0;
+        self.frames.reset();
+        self.x.mask.fill(0.0);
     }
 
     /// Everything but the FFT size can change while it plays.
     fn update(&mut self, p: &Params) -> bool {
-        if FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)] != self.n {
+        if FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)] != self.frames.size() {
             return false;
         }
-        self.set_params(p);
+        self.x.set_params(p);
         true
     }
 }

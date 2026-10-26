@@ -20,12 +20,10 @@
 //! curve more finely in the low frequencies. The frame's delay is
 //! reported as latency.
 
-use std::sync::Arc;
-
 use realfft::num_complex::Complex32;
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 
 use super::{choice, num, toggle, EffectInfo, ParamInfo, Params, Processor};
+use crate::dsp::stft::Frames;
 
 /// Most points the curve takes.
 pub const MAX_POINTS: usize = 8;
@@ -158,18 +156,7 @@ pub fn curve_at(pts: &[(f64, f64)], spline: bool, hz: f64) -> f64 {
 }
 
 pub struct PhaseCurve {
-    n: usize,
-    hop: usize,
-    win: Vec<f32>,
-    fwd: Arc<dyn RealToComplex<f32>>,
-    inv: Arc<dyn ComplexToReal<f32>>,
-    input: [Vec<f32>; 2],
-    acc: [Vec<f32>; 2],
-    out: [Vec<f32>; 2],
-    pos: usize,
-    frame: Vec<f32>,
-    spec: Vec<Complex32>,
-    scratch: Vec<Complex32>,
+    frames: Frames,
     rate: f64,
     /// Per bin: the turn to apply (e^(i angle)).
     turns: Vec<Complex32>,
@@ -180,27 +167,8 @@ pub struct PhaseCurve {
 impl PhaseCurve {
     pub fn new(p: &Params, rate: u32) -> Self {
         let n = FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)];
-        let hop = n / 4;
-        let mut planner = RealFftPlanner::<f32>::new();
-        let fwd = planner.plan_fft_forward(n);
-        let inv = planner.plan_fft_inverse(n);
-        let scratch_len = fwd.get_scratch_len().max(inv.get_scratch_len());
-        let win = (0..n)
-            .map(|i| (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / n as f32).cos()).sqrt())
-            .collect();
         let mut s = Self {
-            n,
-            hop,
-            win,
-            fwd,
-            inv,
-            input: [vec![0.0; n], vec![0.0; n]],
-            acc: [vec![0.0; n], vec![0.0; n]],
-            out: [vec![0.0; hop], vec![0.0; hop]],
-            pos: 0,
-            frame: vec![0.0; n],
-            spec: vec![Complex32::default(); n / 2 + 1],
-            scratch: vec![Complex32::default(); scratch_len],
+            frames: Frames::new(n),
             rate: f64::from(rate.max(1)),
             turns: vec![Complex32::new(1.0, 0.0); n / 2 + 1],
             rotate: [true, true],
@@ -212,7 +180,7 @@ impl PhaseCurve {
     fn set_params(&mut self, p: &Params) {
         let pts = points(p);
         let spline = p.on("spline");
-        let bin_hz = self.rate / self.n as f64;
+        let bin_hz = self.rate / self.frames.size() as f64;
         for (k, t) in self.turns.iter_mut().enumerate() {
             let a = curve_at(&pts, spline, k as f64 * bin_hz).to_radians() as f32;
             *t = Complex32::new(a.cos(), a.sin());
@@ -223,80 +191,39 @@ impl PhaseCurve {
             _ => [true, true],
         };
     }
-
-    fn frame(&mut self) {
-        let n = self.n;
-        let hop = self.hop;
-        let scale = 1.0 / (n as f32 * 2.0);
-        for c in 0..2 {
-            for (o, (x, w)) in self
-                .frame
-                .iter_mut()
-                .zip(self.input[c].iter().zip(&self.win))
-            {
-                *o = x * w;
-            }
-            let _ =
-                self.fwd
-                    .process_with_scratch(&mut self.frame, &mut self.spec, &mut self.scratch);
-            let last = self.spec.len() - 1;
-            if self.rotate[c] {
-                for (s, t) in self.spec[1..last].iter_mut().zip(&self.turns[1..last]) {
-                    *s *= *t;
-                }
-                // DC and Nyquist are real: they can only scale.
-                self.spec[0] *= self.turns[0].re;
-                self.spec[last] *= self.turns[last].re;
-            }
-            self.spec[0].im = 0.0;
-            self.spec[last].im = 0.0;
-            let _ =
-                self.inv
-                    .process_with_scratch(&mut self.spec, &mut self.frame, &mut self.scratch);
-            for ((a, x), w) in self.acc[c].iter_mut().zip(&self.frame).zip(&self.win) {
-                *a += x * w * scale;
-            }
-            self.out[c].copy_from_slice(&self.acc[c][..hop]);
-            self.acc[c].copy_within(hop.., 0);
-            self.acc[c][n - hop..].fill(0.0);
-            self.input[c].copy_within(hop.., 0);
-        }
-    }
 }
 
 impl Processor for PhaseCurve {
     fn process(&mut self, buf: &mut [f32]) {
-        let start = self.n - self.hop;
-        for f in buf.as_chunks_mut::<2>().0 {
-            for (c, v) in f.iter_mut().enumerate() {
-                self.input[c][start + self.pos] = *v;
-                *v = self.out[c][self.pos];
+        let (turns, rotate) = (&self.turns, self.rotate);
+        self.frames.process(buf, |spec| {
+            for (ch, on) in spec.iter_mut().zip(rotate) {
+                if !on {
+                    continue;
+                }
+                let last = ch.len() - 1;
+                for (s, t) in ch[1..last].iter_mut().zip(&turns[1..last]) {
+                    *s *= *t;
+                }
+                // DC and Nyquist are real: they can only scale.
+                ch[0] *= turns[0].re;
+                ch[last] *= turns[last].re;
             }
-            self.pos += 1;
-            if self.pos == self.hop {
-                self.pos = 0;
-                self.frame();
-            }
-        }
+        });
     }
 
     fn latency(&self) -> usize {
-        self.n
+        self.frames.latency()
     }
 
     fn reset(&mut self) {
-        for c in 0..2 {
-            self.input[c].fill(0.0);
-            self.acc[c].fill(0.0);
-            self.out[c].fill(0.0);
-        }
-        self.pos = 0;
+        self.frames.reset();
     }
 
     /// The points, spline, range and channel can change while it plays
     /// (automation); a new FFT size needs a rebuild.
     fn update(&mut self, p: &Params) -> bool {
-        if FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)] != self.n {
+        if FFT_SIZES[p.index("fft").min(FFT_SIZES.len() - 1)] != self.frames.size() {
             return false;
         }
         self.set_params(p);
