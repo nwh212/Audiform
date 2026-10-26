@@ -1506,3 +1506,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Bouncing a track** (MIDI tracks included, with the track's own effects) puts the new track right below it, named after it. A mono track bounces to a mono file; others to stereo.
 - **Instruments in mixdowns.** An export starts its own copy of each instrument so playback is never disturbed. Instruments that load their sounds in the background were still loading when the render began, and came out silent. A copy started for an export now runs on silence for about two and a half seconds first, at about the pace of playback.
 - **Drop-down lists** (effect presets, routing, and every other list) open in the theme's own colors instead of the system's gray.
+
+## 2026-10-28: Fades: straight or curve, bent by dragging
+
+- **Two fade shapes**, as the project lead asked: Straight and Curve (smooth at both ends). New fades start Straight (Settings > General can make them start as Curve).
+- **Skew, -100 to 100:** drag a fade's handle up or down to bend it (up rises sooner, down later); across still sets its length. A tip shows the length, shape and skew while dragging. The handle's right-click menu has Straight, Curve, the skew, Reset Skew and Remove Fade. Saved in the fade's `curve` (-1 to 1), heard in playback and exports.
+- Fades made with the other shapes earlier keep sounding as they did.

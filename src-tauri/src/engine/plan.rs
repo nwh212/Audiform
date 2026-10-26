@@ -40,8 +40,8 @@ pub struct ClipPlan {
     /// Fade lengths in output frames.
     pub fade_in: u64,
     pub fade_out: u64,
-    pub fade_in_shape: FadeShape,
-    pub fade_out_shape: FadeShape,
+    pub fade_in_shape: FadeLook,
+    pub fade_out_shape: FadeLook,
     /// Volume envelope: (frame from the clip start, level in dB), sorted.
     /// Empty means no envelope.
     pub volume: Vec<(u64, f32)>,
@@ -79,9 +79,9 @@ pub struct Cover {
     pub from: u64,
     pub to: u64,
     pub fade_in: u64,
-    pub fade_in_shape: FadeShape,
+    pub fade_in_shape: FadeLook,
     pub fade_out: u64,
-    pub fade_out_shape: FadeShape,
+    pub fade_out_shape: FadeLook,
     /// This clip fades out across the top clip's fade in (or in across
     /// its fade out): a crossfade, where both play through their own fades.
     pub crossfade_in: bool,
@@ -207,8 +207,8 @@ impl ClipPlan {
             gain: 1.0,
             fade_in: 0,
             fade_out: 0,
-            fade_in_shape: FadeShape::Linear,
-            fade_out_shape: FadeShape::Linear,
+            fade_in_shape: (FadeShape::Linear, 0.0),
+            fade_out_shape: (FadeShape::Linear, 0.0),
             volume: Vec::new(),
             pan: Vec::new(),
             loop_len: 0,
@@ -349,9 +349,15 @@ fn envelope_points(
         .unwrap_or_default()
 }
 
-/// Fade gain for `t` from 0 (silent) to 1 (full).
-pub fn fade_curve(shape: FadeShape, t: f32) -> f32 {
+/// A fade's shape and its bend, -1 to 1 (0 is the plain shape).
+pub type FadeLook = (FadeShape, f32);
+
+/// Fade gain for `t` from 0 (silent) to 1 (full). The bend skews the
+/// shape: above 0 it rises sooner (bulging up), below 0 later (dipping).
+pub fn fade_curve((shape, bend): FadeLook, t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
+    let bend = if bend.is_finite() { bend.clamp(-1.0, 1.0) } else { 0.0 };
+    let t = if bend == 0.0 { t } else { t.powf(4f32.powf(-bend)) };
     match shape {
         FadeShape::Linear => t,
         // Rises fast, then eases in: sounds even to the ear on speech.
@@ -518,8 +524,8 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                         },
                         fade_in: fade(c.fade_in.length),
                         fade_out: fade(c.fade_out.length),
-                        fade_in_shape: c.fade_in.shape,
-                        fade_out_shape: c.fade_out.shape,
+                        fade_in_shape: (c.fade_in.shape, c.fade_in.curve as f32),
+                        fade_out_shape: (c.fade_out.shape, c.fade_out.curve as f32),
                         volume: envelope_points(
                             c,
                             &EnvelopeTarget::Volume,

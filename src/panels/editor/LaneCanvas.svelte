@@ -55,8 +55,9 @@
   }
 
   /** Fade gain for t from 0 to 1. Matches the playback engine. */
-  function fadeGain(shape: FadeDoc["shape"], t: number): number {
-    const u = Math.min(1, Math.max(0, t));
+  function fadeGain(shape: FadeDoc["shape"], t: number, bend = 0): number {
+    const b = Math.max(-1, Math.min(1, bend || 0));
+    const u = Math.pow(Math.min(1, Math.max(0, t)), b === 0 ? 1 : Math.pow(4, -b));
     if (shape === "logarithmic") return 1 - (1 - u) * (1 - u);
     if (shape === "cosine") return 0.5 - 0.5 * Math.cos(Math.PI * u);
     if (shape === "exponential") return u * u;
@@ -74,7 +75,7 @@
     for (let i = 0; i <= steps; i++) {
       const x = from + ((to - from) * i) / steps;
       const t = i / steps;
-      const gain = fadeGain(fade.shape, rising ? t : 1 - t);
+      const gain = fadeGain(fade.shape, rising ? t : 1 - t, fade.curve);
       g.lineTo(x, bottom - gain * height);
     }
     g.lineTo(to, top);
@@ -85,7 +86,7 @@
     for (let i = 0; i <= steps; i++) {
       const x = from + ((to - from) * i) / steps;
       const t = i / steps;
-      const y = bottom - fadeGain(fade.shape, rising ? t : 1 - t) * height;
+      const y = bottom - fadeGain(fade.shape, rising ? t : 1 - t, fade.curve) * height;
       if (i === 0) g.moveTo(x, y);
       else g.lineTo(x, y);
     }

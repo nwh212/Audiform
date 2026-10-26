@@ -10,7 +10,7 @@ describe("app settings", () => {
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     const s = sanitizeSettings({ zoomStep: 500, fadeShape: "wobbly", colors: { wave: "#ABCDEF", accent: "red" }, output: "  ", autosaveMinutes: 0, meterYellowDb: -10, meterRedDb: -20 });
     expect(s.zoomStep).toBe(100);
-    expect(s.fadeShape).toBe("cosine");
+    expect(s.fadeShape).toBe("linear");
     expect(s.colors).toEqual({ wave: "#abcdef", playhead: "", accent: "", laneSelected: "", spectrumLow: "", spectrumHigh: "", phaseLow: "", phaseHigh: "" });
     expect(s.output).toBeNull();
     expect(s.autosaveMinutes).toBe(1);

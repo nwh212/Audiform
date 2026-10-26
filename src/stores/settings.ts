@@ -151,7 +151,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   zoomStep: 25,
   wheelAnchor: "between",
   wheelZooms: true,
-  fadeShape: "cosine",
+  fadeShape: "linear",
   dropMany: "sequence",
   colors: { ...NO_COLORS },
   output: null,
@@ -210,9 +210,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     wheelZooms: bool(o.wheelZooms, d.wheelZooms),
     dropMany: o.dropMany === "tracks" ? "tracks" : "sequence",
     fadeShape:
-      o.fadeShape === "linear" || o.fadeShape === "logarithmic" || o.fadeShape === "exponential" || o.fadeShape === "equal_power"
-        ? o.fadeShape
-        : "cosine",
+      o.fadeShape === "cosine" ? "cosine" : "linear",
     colors: {
       wave: color(c.wave),
       playhead: color(c.playhead),

@@ -172,11 +172,9 @@
           </fieldset>
           <fieldset>
             <legend>New fades start as</legend>
-            <label><input type="radio" bind:group={d.app.fadeShape} value="cosine" /> S curve (smooth at both ends)</label>
-            <label><input type="radio" bind:group={d.app.fadeShape} value="linear" /> Straight line</label>
-            <label><input type="radio" bind:group={d.app.fadeShape} value="logarithmic" /> Logarithmic (fast start)</label>
-            <label><input type="radio" bind:group={d.app.fadeShape} value="exponential" /> Dip (slow start)</label>
-            <label><input type="radio" bind:group={d.app.fadeShape} value="equal_power" /> Equal power (even level through crossfades)</label>
+            <label><input type="radio" bind:group={d.app.fadeShape} value="linear" /> Straight</label>
+            <label><input type="radio" bind:group={d.app.fadeShape} value="cosine" /> Curve (smooth at both ends)</label>
+            <p class="hint">Drag a fade's handle up or down to bend it (skew, -100 to 100).</p>
           </fieldset>
           <p class="note">The Space bar plays, and stops when playing or recording.</p>
           <label class="off" title="Warnings with a 'don't ask again' box arrive with the first such warning."><input type="checkbox" disabled /> Show warnings I turned off again <span class="why">No warnings can be turned off yet.</span></label>

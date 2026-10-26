@@ -87,10 +87,10 @@ describe("trimClip", () => {
 });
 
 describe("fadeClip", () => {
-  it("never lets the fades overlap and defaults new fades to an S-curve", () => {
+  it("never lets the fades overlap and defaults new fades to straight", () => {
     const c = { ...clip("a", 0), fade_out: { length: 40_000, shape: "linear" as const, curve: 0 } };
     const doc = session([track("A", [c])]);
-    expect(fadeClip(doc, c, "in", 20_000)).toEqual({ id: "a", fade_in: { length: 8_000, shape: "cosine", curve: 0 } });
+    expect(fadeClip(doc, c, "in", 20_000)).toEqual({ id: "a", fade_in: { length: 8_000, shape: "linear", curve: 0 } });
   });
 });
 
@@ -247,8 +247,8 @@ describe("withCrossfades", () => {
     const doc = session([track("A", [clip("a", 0), clip("b", 100_000)])]);
     const r = withCrossfades(doc, [{ id: "b", start: 40_000 }]);
     expect(r).toEqual([
-      { id: "b", start: 40_000, fade_in: { length: 8_000, shape: "cosine", curve: 0 } },
-      { id: "a", fade_out: { length: 8_000, shape: "cosine", curve: 0 } },
+      { id: "b", start: 40_000, fade_in: { length: 8_000, shape: "linear", curve: 0 } },
+      { id: "a", fade_out: { length: 8_000, shape: "linear", curve: 0 } },
     ]);
   });
 
