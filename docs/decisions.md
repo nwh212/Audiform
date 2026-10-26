@@ -1439,3 +1439,9 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Playback** in the Waveform editor plays the standard fold-down (or each speaker on its own output in nothing but 3D Space sessions; the Waveform editor is not one).
 - **CI.** CI runs the newest stable Rust (1.99), whose clippy asks for `as_chunks` over fixed-size `chunks_exact`; changed throughout. CI had failed on every commit since the fork for that reason alone.
 - **README** now says plainly that Audiform is the experimental flavor and Altered Audio Editor the more stable one.
+
+## 2026-10-26: Multichannel clips play each channel from its speaker in 3D Space
+
+- **Default in 3D Space sessions.** A clip of a file with more than two channels plays each channel straight from the speaker of the same name (L, R, C, LFE, Ls...), not folded and placed as one object. A channel whose speaker the layout lacks (heights in a 5.1 session, say) plays from where that speaker would stand; an LFE channel with no LFE speaker is left out, as in a fold-down. Source Channels has "Each channel from its own speaker" to turn this off (the grid then applies) or on for any clip, stereo included. Picking a preset in a 3D session turns it off.
+- **How.** Before playback or export, each such clip's channels play from hidden copies of its track (same fader, mute, solo, FX Chain, output and sends; no pan or room spot of their own), each pinned to one speaker, unit gain. The copies exist only while playing or exporting and never reach the session file. Their ids are stable, so live fader and chain changes reach them.
+- **Known limits.** The track's own meter does not show these channels yet, and stems by track leave them out.

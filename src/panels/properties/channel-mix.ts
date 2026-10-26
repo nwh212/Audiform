@@ -51,7 +51,12 @@ export function defaultMix(n: number): ChannelMixDoc {
 /** The mix a clip plays with now: its own, filled out to `n` channels, or the default. */
 export function mixOf(own: ChannelMixDoc | null | undefined, n: number): ChannelMixDoc {
   if (!own) return defaultMix(n);
-  return { sends: Array.from({ length: n }, (_, k) => own.sends[k] ?? { left: 0, right: 0 }) };
+  return { sends: Array.from({ length: n }, (_, k) => own.sends[k] ?? { left: 0, right: 0 }), ...(own.to_speakers ? { to_speakers: true } : {}) };
+}
+
+/** 3D Space sessions: whether a clip of an `n`-channel file plays each channel from its own speaker (the default above two channels). */
+export function toSpeakers(own: ChannelMixDoc | null | undefined, n: number): boolean {
+  return own ? !!own.to_speakers : n > 2;
 }
 
 export interface MixPreset {

@@ -19,6 +19,7 @@ pub mod preview;
 pub mod record;
 pub mod render;
 pub mod scope;
+pub mod speaker_feed;
 pub mod transport;
 
 pub use preview::{PreviewPlayer, PreviewStatus};

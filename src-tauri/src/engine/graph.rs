@@ -83,6 +83,39 @@ impl Place {
         Some(Arc::new(Place::at(layout, &pos, stereo)))
     }
 
+    /// Straight into speaker `c` of `layout` alone (for one channel of a
+    /// multichannel clip, on a mono strip), folded to stereo by where the
+    /// speaker stands; the low-frequency channel is left out of the fold.
+    pub fn speaker(layout: crate::session::model::SpaceLayout, c: usize) -> Place {
+        let sp = crate::dsp::space::speakers(layout);
+        let mut g = vec![0f32; sp.len()];
+        if let Some(v) = g.get_mut(c) {
+            // A mono strip carries its sound on both sides: half from each.
+            *v = 0.5;
+        }
+        let pos = crate::session::model::SpacePos {
+            x: sp
+                .get(c)
+                .and_then(|s| s.at)
+                .map_or(0.0, |a| f64::from(a[0])),
+            ..Default::default()
+        };
+        let fold = if sp.get(c).is_some_and(|s| s.at.is_some()) {
+            crate::dsp::space::fold_gains(&pos, false)
+        } else {
+            [[0.0; 2]; 2]
+        };
+        Place {
+            bed: [g.clone(), g],
+            fold,
+            lfe: None,
+            field: None,
+            layout,
+            pos,
+            stereo: false,
+        }
+    }
+
     /// The gains for a spot in `layout`.
     pub fn at(
         layout: crate::session::model::SpaceLayout,
@@ -252,7 +285,10 @@ pub fn levels(s: &Session) -> Levels {
                 };
                 let stereo = t.channels != crate::session::model::ChannelLayout::Mono && !t.mono;
                 let place = (t.output == crate::session::model::Output::Master)
-                    .then(|| Place::new(s, t.space.as_ref(), stereo))
+                    .then(|| match (t.speaker, s.space) {
+                        (Some(c), Some(sp)) => Some(Arc::new(Place::speaker(sp.layout, c))),
+                        _ => Place::new(s, t.space.as_ref(), stereo),
+                    })
                     .flatten();
                 node(h, sign, vol, pan, &t.sends, t.mono, place)
             })

@@ -546,6 +546,12 @@ pub struct Track {
     pub midi_clips: Vec<MidiClip>,
     /// Track automation lanes.
     pub envelopes: Vec<Envelope>,
+    /// Playback only, never saved: set on the hidden copies of a track
+    /// that play one channel of a multichannel clip straight into one
+    /// speaker of the 3D Space layout (its index). See `engine::speaker_feed`.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub speaker: Option<usize>,
 }
 
 impl Track {
@@ -580,6 +586,7 @@ impl Track {
             instrument: None,
             midi_clips: Vec::new(),
             envelopes: Vec::new(),
+            speaker: None,
         }
     }
 
@@ -858,6 +865,10 @@ pub struct Clip {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ChannelMix {
     pub sends: Vec<ChannelSend>,
+    /// 3D Space sessions: each channel plays straight from its own speaker
+    /// (by its name: L, R, C, LFE, Ls...) instead of through `sends`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub to_speakers: bool,
 }
 
 /// How much of one source channel goes to each side, from -1 to 1

@@ -194,6 +194,7 @@ fn mix_before(session: &crate::session::model::Session, position: u64, n: usize)
     let rate = session.sample_rate.max(1);
     let start = position.saturating_sub(n as u64);
     let master = plan::master_gain(session);
+    let session = &*crate::engine::speaker_feed::expanded(session);
     let mut mix = graph::Mix::new(
         Renderer::new(plan::build(session, rate), start),
         graph::Graph::new(session, rate, true),

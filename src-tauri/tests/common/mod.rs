@@ -154,6 +154,7 @@ pub fn track() -> Track {
         instrument: None,
         midi_clips: Vec::new(),
         envelopes: vec![envelope()],
+        speaker: None,
     }
 }
 

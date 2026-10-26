@@ -269,6 +269,10 @@
           "items": {
             "$ref": "#/$defs/ChannelSend"
           }
+        },
+        "to_speakers": {
+          "description": "3D Space sessions: each channel plays straight from its own speaker\n(by its name: L, R, C, LFE, Ls...) instead of through `sends`.",
+          "type": "boolean"
         }
       },
       "required": [

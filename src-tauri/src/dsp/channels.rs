@@ -65,7 +65,10 @@ pub fn default_mix(n: usize) -> ChannelMix {
             ChannelSend { left, right }
         })
         .collect();
-    ChannelMix { sends }
+    ChannelMix {
+        sends,
+        to_speakers: false,
+    }
 }
 
 /// What playback uses for a clip of an `n`-channel file: the clip's own
@@ -152,6 +155,7 @@ mod tests {
                     right: 0.5,
                 },
             ],
+            to_speakers: false,
         };
         let g = effective(Some(&mix), 3).unwrap();
         let mut out = Vec::new();

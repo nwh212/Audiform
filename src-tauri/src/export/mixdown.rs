@@ -251,6 +251,8 @@ fn render_mix_inner(
     let total = end - start;
 
     let master = plan::master_gain(&s);
+    // 3D Space: multichannel clips' channels on their speakers.
+    let s = crate::engine::speaker_feed::expanded(&s);
     let renderer = Renderer::new(plan::build(&s, rate), start);
     let mut graph = Graph::new(&s, rate, true);
     graph.set_want_bed(bed > 0);
@@ -513,6 +515,70 @@ mod tests {
             let r = hound::WavReader::open(&p).unwrap();
             assert_eq!(r.spec().channels, ch);
         }
+    }
+
+    #[test]
+    fn a_surround_file_plays_each_channel_from_its_speaker() {
+        use crate::session::model::{Space, SpaceLayout, SpaceListen, Track};
+        let dir = tempfile::tempdir().unwrap();
+        // Six channels, each its own steady level.
+        let path = dir.path().join("film.wav");
+        let spec = hound::WavSpec {
+            channels: 6,
+            sample_rate: 48_000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..48_000 {
+            for c in 0..6 {
+                w.write_sample(0.1 * (c + 1) as f32).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+        let mut s = Session::new("t", 48_000);
+        s.space = Some(Space {
+            layout: SpaceLayout::Surround51,
+            listen: SpaceListen::Stereo,
+        });
+        let m = new_id();
+        s.media.push(MediaRef {
+            id: m,
+            path,
+            relative_path: None,
+            sample_rate: 48_000,
+            channels: 6,
+            length: 48_000,
+        });
+        let mut t = Track::new("Film", ChannelLayout::Stereo);
+        t.clips.push(
+            crate::session::ops::ClipSpec {
+                id: new_id(),
+                name: "film".into(),
+                media_id: m,
+                start: 0,
+                source_in: 0,
+                source_out: 48_000,
+            }
+            .build(),
+        );
+        s.tracks.push(t);
+        let out = dir.path().join("bed.wav");
+        let req = MixdownRequest {
+            bit_depth: Some(32),
+            ..MixdownRequest::default()
+        };
+        mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
+        let r = hound::WavReader::open(&out).unwrap();
+        assert_eq!(r.spec().channels, 6);
+        let x: Vec<f32> = r.into_samples::<f32>().map(Result::unwrap).collect();
+        let at = |ch: usize| (x[20_000 * 6 + ch] * 1_000.0).round() / 1_000.0;
+        // Each speaker holds its own channel and nothing else (the steady
+        // LFE level is kept out by the subwoofer's 20 Hz high pass).
+        assert_eq!(
+            (at(0), at(1), at(2), at(3), at(4), at(5)),
+            (0.1, 0.2, 0.3, 0.0, 0.5, 0.6)
+        );
     }
 
     fn session_with(dir: &Path) -> (Session, Id, Id) {

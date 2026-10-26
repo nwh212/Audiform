@@ -19,7 +19,7 @@
   import { formatIn } from "../editor/timeline";
   import { naturalLength } from "../editor/stretch";
   import { changeFor, settingsOf, varispeedSemitones, type StretchSettings } from "./clip-props";
-  import { channelLabels, mixOf, presetFor, presets } from "./channel-mix";
+  import { channelLabels, mixOf, presetFor, presets, toSpeakers } from "./channel-mix";
   import type { ChannelMixDoc } from "../../stores/session";
 
   interface Props {
@@ -78,6 +78,9 @@
   const quick = $derived(presets(chans));
   const current = $derived(mix ? presetFor(mix, chans) : null);
   const custom = $derived(picked.some((p) => p.clip.channel_mix));
+  // 3D Space sessions: each channel from its own speaker (the default for files of more than two channels).
+  const in3d = $derived(!!doc?.space);
+  const speakers = $derived(in3d && first !== null && chans > 1 && toSpeakers(first.clip.channel_mix, chans));
 
   function setMix(next: ChannelMixDoc | null, label = "Source Channels") {
     const changes: ClipChange[] = picked.map(({ clip }) => (next ? { id: clip.id, channel_mix: next } : { id: clip.id, clear_channel_mix: true }));
@@ -182,14 +185,20 @@
       <p class="note">The selected clips' files have different channels. Select clips of one kind to set their Source Channels.</p>
     {:else}
       <p class="note">{chans} channel{chans === 1 ? "" : "s"}. How much of each goes to the track's left and right. Negative flips polarity.</p>
-      <div class="grid">
+      {#if in3d && chans > 1}
+        <label class="check" title="Each channel plays straight from the speaker of the same name (L, R, C, LFE, Ls...), with the track's fader, mute and FX Chain. A channel whose speaker the layout lacks plays from where it would stand.">
+          <input type="checkbox" checked={speakers} onchange={(e) => mix && setMix({ sends: mix.sends, to_speakers: e.currentTarget.checked }, e.currentTarget.checked ? "Source Channels: Each From Its Speaker" : "Source Channels: Mix To Left and Right")} />
+          Each channel from its own speaker
+        </label>
+      {/if}
+      <div class="grid" class:dim={speakers}>
         <label for="pp-mixp">Preset</label>
-        <select id="pp-mixp" value={current ?? ""} onchange={(e) => { const p = quick.find((x) => x.id === e.currentTarget.value); if (p) setMix(p.id === "default" ? null : p.mix, `Source Channels: ${p.label}`); }}>
+        <select id="pp-mixp" value={current ?? ""} onchange={(e) => { const p = quick.find((x) => x.id === e.currentTarget.value); if (p) setMix(p.id === "default" && !in3d ? null : p.mix, `Source Channels: ${p.label}`); }}>
           {#if !current}<option value="" disabled>Custom</option>{/if}
           {#each quick as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
         </select>
       </div>
-      <table class="mixer">
+      <table class="mixer" class:dim={speakers}>
         <thead><tr><th>Channel</th><th>Left</th><th>Right</th><th></th></tr></thead>
         <tbody>
           {#each mix.sends as s, k (k)}
@@ -319,6 +328,9 @@
   button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .dim {
+    opacity: 0.4;
   }
   .mixer {
     border-collapse: collapse;

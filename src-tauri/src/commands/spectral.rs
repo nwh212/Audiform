@@ -94,6 +94,7 @@ fn isolate_channel(session: &Session, k: usize) -> Session {
                         right: 0.0,
                     })
                     .collect(),
+                to_speakers: false,
             });
         }
     }

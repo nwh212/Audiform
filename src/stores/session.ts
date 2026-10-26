@@ -133,6 +133,8 @@ export interface ClipDoc {
 /** One entry per channel of the file, in file order. Amounts run -1 to 1 (negative flips polarity). */
 export interface ChannelMixDoc {
   sends: { left: number; right: number }[];
+  /** 3D Space sessions: each channel plays straight from its own speaker instead of through `sends`. */
+  to_speakers?: boolean;
 }
 
 export type AudioType = "dialogue" | "music" | "sfx" | "ambience";

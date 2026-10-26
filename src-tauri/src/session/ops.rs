@@ -41,7 +41,7 @@ pub struct ClipSpec {
 }
 
 impl ClipSpec {
-    fn build(&self) -> Clip {
+    pub fn build(&self) -> Clip {
         Clip {
             id: self.id,
             name: self.name.clone(),

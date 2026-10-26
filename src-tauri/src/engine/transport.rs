@@ -328,7 +328,8 @@ impl Transport {
         if let Some(mut r) = cur.take() {
             r.stop();
         }
-        *cur = Some(start(session.clone(), from, jump)?);
+        let session = super::speaker_feed::expanded(session).into_owned();
+        *cur = Some(start(session, from, jump)?);
         Ok(())
     }
 
@@ -408,6 +409,8 @@ impl Transport {
     /// at once, edited chains swap in; changes that move audio, or a
     /// chain's look-ahead, restart from the same spot.
     pub fn sync(&self, session: &Session) -> Result<(), String> {
+        // As it plays: multichannel clips' channels on their speakers.
+        let session = &*super::speaker_feed::expanded(session);
         let mut cur = self.current.lock().map_err(|e| e.to_string())?;
         let Some(r) = cur.as_mut() else {
             return Ok(());
