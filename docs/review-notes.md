@@ -33,3 +33,9 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Defaults:** Wet -10 dB, Dry 0 dB, no pre-delay, full length.
 - **No drag-and-drop of a file onto the window yet** (Load button only). The Files panel drags with its own pointer code, so this needs its own small piece of work.
 - **Fixed during testing:** the window could reload the file in a loop when the core reported the path differently from how it was saved (slash direction on Windows). It now loads once per path the slot names.
+
+## Time stretch
+
+- **Used for playback too, not only for exports.** It is cheap enough, and playback and export stay identical (they always have been). If you would rather keep the old method live and the new one only for exports, that is a small switch.
+- **The old method is gone,** not kept as an option. It was better than the new one only in one corner (very short frames on a dry single voice). Comparison files are in `review/stretch/` (not committed): the original, the old 1.5x and the new 1.5x.
+- **Attack detection threshold** is my pick (a frame counts as an attack when its spectrum gains more than 30% and over 2.5 times its recent average). If drum hits still sound soft, it can go lower.

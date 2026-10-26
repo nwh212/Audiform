@@ -110,7 +110,8 @@ impl Processor for PitchShift {
         self.latency
     }
     fn reset(&mut self) {
-        self.st = (self.latency > 0).then(|| Stretcher::new(self.factor, self.rate));
+        // Short frames keep the delay small enough for the latency above.
+        self.st = (self.latency > 0).then(|| Stretcher::with_frame(self.factor, self.rate, 0.015));
         self.stretched.clear();
         self.pos = 0.0;
         self.out.clear();

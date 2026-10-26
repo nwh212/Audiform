@@ -1557,3 +1557,11 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **The slot names the file** (path and name) rather than holding its samples, so sessions stay small. A missing file plays dry, and the window says so. Loading and clearing are undoable.
 - **Delay:** the convolution works in blocks of 512 frames, reported as latency (the dry sound is held back to match).
 - The Amp Model's cabinet convolver moved to `dsp/convolve.rs`, shared by both.
+
+## 2026-10-28: A better-sounding time stretch
+
+- **New method:** a phase vocoder with phase locking replaces the slice-and-join method, for playback, export, bounce, the Waveform editor's Stretch and Pitch Shift. Each frame's spectrum keeps its levels; only the peaks get their phase worked out and the frequencies around each follow it, which keeps chords and voices clear rather than warbly or "phasey".
+- **Attacks:** a frame with a sudden rise in energy takes its phases from the input, so drums and consonants stay sharp.
+- **Stereo:** the phase change is worked out once (on the sum, or the difference where that is louder) and applied to both channels, so the image stays put.
+- **Same everywhere:** playback and export use the same method, so what you hear is what you export. It costs about 1.5% of one core per stretched clip.
+- Frame sizes follow the clip's stretch settings as before: voice about 43 ms, polyphonic about 85 ms, or the advanced window size. Pitch Shift uses short frames to keep its delay.
