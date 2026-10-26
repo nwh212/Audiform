@@ -14,7 +14,7 @@
 <script lang="ts">
   import { dragGain, gainText } from "./clip-gain";
   import type { MidiClipDoc, TempoDoc, TrackDoc } from "../../stores/session";
-  import { beatsToSamples, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted } from "./midi";
+  import { beatsToSamples, CHANNEL_COLORS, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted } from "./midi";
   import { gridLines, xOf, type Viewport } from "./timeline";
 
   interface Props {
@@ -181,6 +181,8 @@
         w: Math.max(0.4, (Math.min(n.length, c.length - n.start) / c.length) * 100),
         y: (1 - (n.pitch - low + 1) / span) * 100,
         h: 100 / span,
+        // A note on another MIDI channel shows in that channel's color.
+        color: n.channel ? CHANNEL_COLORS[n.channel] : undefined,
       }));
   }
 </script>
@@ -217,7 +219,7 @@
         {#if height > 30}
           <svg class="notes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {#each noteBoxes(c) as b, k (k)}
-              <rect x={b.x} y={b.y} width={b.w} height={b.h} />
+              <rect x={b.x} y={b.y} width={b.w} height={b.h} style:--clip-color={b.color} />
             {/each}
           </svg>
         {/if}

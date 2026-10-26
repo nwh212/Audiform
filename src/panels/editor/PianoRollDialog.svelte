@@ -649,12 +649,6 @@
           onchange={(e) => (clip = { ...clip, notes: setVelocity(clip.notes, picked, Number(e.currentTarget.value) || 100) })}
         />
       </label>
-      <label title="The MIDI channel new notes go on, and the picked notes' channel. Each channel has its own color. Instruments with several parts (a split keyboard, an organ's upper and lower manuals) play each channel with its own part.">
-        Channel
-        <select value={channel} onchange={(e) => pickChannel(Number(e.currentTarget.value))} style:color={CHANNEL_COLORS[channel] || "inherit"}>
-          {#each CHANNEL_COLORS as c, k (k)}<option value={k} style:color={c || "inherit"}>● {k + 1}</option>{/each}
-        </select>
-      </label>
       <button type="button" class:on={toolsOpen} aria-expanded={toolsOpen} title="Set, scale or randomize velocity and pan, and Humanize timing. Acts on the picked notes, or every note when none are picked." onclick={() => (toolsOpen = !toolsOpen)}>Tools ▾</button>
       <label title="What the lane under the roll shows and sets">
         Lane
@@ -678,6 +672,21 @@
       <button type="button" disabled={!hasCopy} title="Paste at the last spot clicked (Ctrl+V)" onclick={paste}>Paste</button>
       <button type="button" disabled={!picked.size} title="Delete the picked notes (Delete)" onclick={deletePicked}>Delete</button>
     </header>
+    <div class="chans" role="radiogroup" aria-label="MIDI channel" title="The MIDI channel (and color) new notes go on; clicking one with notes picked moves them to it. Instruments with several parts (a split keyboard, an organ's upper and lower manuals) play each channel with its own part.">
+      <span class="chans-label">Channel</span>
+      {#each CHANNEL_COLORS as c, k (k)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={channel === k}
+          class="chan"
+          class:on={channel === k}
+          style:--chan={c || "var(--note)"}
+          title="Channel {k + 1}"
+          onclick={() => pickChannel(k)}
+        >{k + 1}</button>
+      {/each}
+    </div>
     {#if toolsOpen}
       <div class="tools">
         <span class="hint">{picked.size ? `${picked.size} picked ${picked.size === 1 ? "note" : "notes"}` : "Every note (none picked)"}:</span>
@@ -878,6 +887,32 @@
   }
   button.on {
     border-color: var(--accent);
+  }
+  .chans {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    align-items: center;
+  }
+  .chans-label {
+    margin-right: 4px;
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+  }
+  .chan {
+    width: 26px;
+    height: 20px;
+    padding: 0;
+    /* Its own color in every theme (themes restyle plain buttons). */
+    border: 1px solid color-mix(in srgb, var(--chan) 60%, black) !important;
+    background: linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 55%), var(--chan) !important;
+    color: #ffffff;
+    font-size: 10px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  }
+  .chan.on {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
   }
   .tools {
     display: flex;
