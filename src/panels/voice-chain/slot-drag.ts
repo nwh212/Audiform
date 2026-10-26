@@ -123,30 +123,44 @@ export function startSlotDrag(e: PointerEvent, onDrop: (to: SlotSpot) => void, o
   window.addEventListener("pointerup", up, true);
 }
 
-/** The Add effect menu: built-in effects by family, then VST3 plug-ins by type and maker. */
+/** Why VST (version 2) plug-ins are not offered. */
+export const NO_VST2 = "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.";
+
+/**
+ * The VST3 plug-ins found by a scan, as menu rows: by type, then by
+ * maker, each list alphabetical. Empty when none were found.
+ */
+export function vst3Items(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): MenuItem[] {
+  const byId = new Set(catalog.map((e) => e.id));
+  const installed = plugins.filter((p) => byId.has(p.effect));
+  if (!installed.length) return [];
+  const list = (ps: MenuPlugin[]): MenuItem[] => ps.map((p) => ({ kind: "item", label: p.name, run: () => pick(p.effect) }));
+  const { types, makers } = pluginMenuGroups(installed);
+  return [...types.map(([t, ps]): MenuItem => ({ kind: "sub", label: t, items: list(ps) })), { kind: "sep" }, ...makers.map(([m, ps]): MenuItem => ({ kind: "sub", label: m, items: list(ps) }))];
+}
+
+/** The Add effect menu: built-in effects by family (alphabetical within each), then VST3 plug-ins by type and maker. */
 export function effectMenu(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): MenuItem[] {
   catalog = catalog.filter((e) => !e.retired);
   const categories = [...new Set(catalog.map((e) => e.category))];
-  const byId = new Set(catalog.map((e) => e.id));
-  const installed = plugins.filter((p) => byId.has(p.effect));
-  const list = (ps: MenuPlugin[]): MenuItem[] => ps.map((p) => ({ kind: "item", label: p.name, run: () => pick(p.effect) }));
-  let vst: MenuItem;
-  if (!installed.length) {
-    vst = { kind: "item", label: "VST3", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} };
-  } else {
-    const { types, makers } = pluginMenuGroups(installed);
-    vst = {
-      kind: "sub",
-      label: "VST3",
-      items: [...types.map(([t, ps]): MenuItem => ({ kind: "sub", label: t, items: list(ps) })), { kind: "sep" }, ...makers.map(([m, ps]): MenuItem => ({ kind: "sub", label: m, items: list(ps) }))],
-    };
-  }
+  const vstRows = vst3Items(catalog, plugins, pick);
+  const vst: MenuItem = vstRows.length
+    ? { kind: "sub", label: "VST3", items: vstRows }
+    : { kind: "item", label: "VST3", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} };
+  const byName = (a: EffectInfo, b: EffectInfo) => a.name.localeCompare(b.name, undefined, { numeric: true });
   return [
     ...categories
       .filter((c) => !catalog.some((e) => e.category === c && e.plugin))
-      .map((c): MenuItem => ({ kind: "sub", label: c, items: catalog.filter((e) => e.category === c).map((e): MenuItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })) })),
+      .map((c): MenuItem => ({
+        kind: "sub",
+        label: c,
+        items: catalog
+          .filter((e) => e.category === c)
+          .sort(byName)
+          .map((e): MenuItem => ({ kind: "item", label: e.name, run: () => pick(e.id) })),
+      })),
     { kind: "sep" },
-    { kind: "item", label: "VST", disabled: true, reason: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.", run: () => {} },
+    { kind: "item", label: "VST", disabled: true, reason: NO_VST2, run: () => {} },
     vst,
   ];
 }

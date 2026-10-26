@@ -4,7 +4,8 @@
   This file is part of Audiform, based on Altered Audio Editor.
 
   Right-click menu. Opens at the pointer, stays on screen, closes on
-  Escape, outside click, or after an item runs.
+  Escape, outside click, or after an item runs. Typing letters jumps to
+  the first row in the open list that starts with them.
 -->
 <script lang="ts" module>
   export type ContextItem =
@@ -14,6 +15,8 @@
 </script>
 
 <script lang="ts">
+  import { isTypingKey, typeahead } from "./typeahead";
+
   interface Props {
     x: number;
     y: number;
@@ -86,10 +89,30 @@
     trail = [...trail.slice(0, depth), index, first];
   }
 
+  const jump = typeahead();
+
+  // The highlighted row stays in view when keys move it down a long list.
+  $effect(() => {
+    void trail;
+    queueMicrotask(() => {
+      const rows = menu?.querySelectorAll<HTMLElement>("button.active");
+      rows?.[rows.length - 1]?.scrollIntoView({ block: "nearest" });
+    });
+  });
+
   function onKey(e: KeyboardEvent) {
     e.stopPropagation();
     const depth = trail.length === 0 ? 0 : trail.length - 1;
     const here = levelItems(depth)[trail[depth] ?? -1];
+    if (isTypingKey(e)) {
+      const list = levelItems(depth);
+      const to = jump.next(e.key, list.map((it) => (usable(it) && it.kind !== "sep" ? it.label : null)), trail[depth] ?? -1);
+      if (to !== null) {
+        e.preventDefault();
+        trail = [...trail.slice(0, depth), to];
+      }
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       if (trail.length > 1) trail = trail.slice(0, -1);

@@ -5,10 +5,21 @@
 
   Menu bar. Mouse: click a menu to open, hover to move between menus
   while one is open. Keyboard: Alt plus the underlined letter opens a
-  menu; arrows move; Enter runs; Escape closes.
+  menu; arrows move; Enter runs; Escape closes. Typing letters jumps to
+  the first item in the open list that starts with them. A popup entry
+  (the scanned plug-ins) opens a list the app builds at that moment, as
+  a menu beside it that nests as deep as it needs.
 -->
+<script lang="ts" module>
+  import type { ContextItem } from "../ContextMenu.svelte";
+  /** What a popup entry shows: its rows, or why it is unavailable. */
+  export type PopupList = { items: readonly ContextItem[]; reason?: string | undefined };
+</script>
+
 <script lang="ts">
   import type { ActionRegistry } from "../actions";
+  import ContextMenu from "../ContextMenu.svelte";
+  import { isTypingKey, typeahead } from "../typeahead";
   import type { Menu, MenuItem } from "./model";
 
   interface Props {
@@ -17,9 +28,14 @@
     /** Shortcut text shown beside an item, from the keymap. */
     shortcutFor: (id: string) => string | undefined;
     onError: (e: unknown) => void;
+    /** Builds each popup entry's list by id, when it opens. */
+    popups?: Record<string, () => PopupList>;
   }
 
-  const { menus, actions, shortcutFor, onError }: Props = $props();
+  const { menus, actions, shortcutFor, onError, popups = {} }: Props = $props();
+  /** The popup list open beside its entry, if any. */
+  let popupOpen = $state<{ id: string; x: number; y: number; items: readonly ContextItem[] } | null>(null);
+  const jump = typeahead();
 
   let openMenu = $state<number | null>(null);
   let active = $state(-1);
@@ -42,6 +58,10 @@
     void tick;
     if (it.kind === "item") return actions.isEnabled(it.id);
     if (it.kind === "submenu") return it.items.some(enabled);
+    if (it.kind === "popup") {
+      const p = popups[it.id]?.();
+      return !!p && p.items.length > 0 && !p.reason;
+    }
     return false;
   }
 
@@ -62,6 +82,7 @@
 
   function tooltip(it: Row): string | undefined {
     if (it.kind === "item" && !enabled(it)) return actions.reason(it.id) ?? it.pending ?? "Not built yet.";
+    if (it.kind === "popup" && !enabled(it)) return popups[it.id]?.().reason ?? "Nothing to show yet.";
     return undefined;
   }
 
@@ -98,7 +119,15 @@
     active = focusFirst ? step(shown(menus[i]?.items ?? []), -1, 1) : -1;
   }
 
+  /** Opens a popup entry's list beside its row. */
+  function openPopup(it: Extract<MenuItem, { kind: "popup" }>, rowEl: Element | null) {
+    if (!enabled(it) || !rowEl) return;
+    const r = rowEl.getBoundingClientRect();
+    popupOpen = { id: it.id, x: r.right, y: r.top - 4, items: popups[it.id]?.().items ?? [] };
+  }
+
   function close() {
+    popupOpen = null;
     openMenu = null;
     openSub = null;
     active = -1;
@@ -107,6 +136,10 @@
 
   function activate(it: MenuItem | undefined, index: number, inSub: boolean) {
     if (!it || it.kind === "sep") return;
+    if (it.kind === "popup") {
+      openPopup(it, root.querySelector(`[data-popup="${it.id}"]`));
+      return;
+    }
     if (it.kind === "submenu") {
       if (!inSub) {
         openSub = index;
@@ -139,6 +172,17 @@
     if (openMenu === null) return;
     const items = currentItems();
     const sub = subItems();
+    if (isTypingKey(e)) {
+      const list = openSub !== null ? sub : items;
+      const labels = list.map((it) => (it.kind === "sep" || !enabled(it) ? null : label(it)));
+      const to = jump.next(e.key, labels, openSub !== null ? subActive : active);
+      if (to !== null) {
+        e.preventDefault();
+        if (openSub !== null) subActive = to;
+        else active = to;
+      }
+      return;
+    }
 
     switch (e.key) {
       case "Escape":
@@ -157,7 +201,8 @@
       case "ArrowRight": {
         e.preventDefault();
         const it = items[active];
-        if (openSub === null && it?.kind === "submenu") activate(it, active, false);
+        if (openSub === null && (it?.kind === "submenu" || it?.kind === "popup")) activate(it, active, false);
+        else if (openSub !== null && sub[subActive]?.kind === "popup") activate(sub[subActive], subActive, true);
         else open((openMenu + 1) % menus.length, true);
         break;
       }
@@ -206,9 +251,11 @@
       role={isChecked === undefined ? "menuitem" : "menuitemcheckbox"}
       aria-checked={isChecked}
       aria-disabled={!on}
-      aria-haspopup={it.kind === "submenu" ? "menu" : undefined}
+      aria-haspopup={it.kind === "submenu" || it.kind === "popup" ? "menu" : undefined}
+      data-popup={it.kind === "popup" ? it.id : undefined}
       title={tooltip(it)}
-      onpointerenter={() => {
+      onpointerenter={(e) => {
+        if (popupOpen && !(it.kind === "popup" && popupOpen.id === it.id)) popupOpen = null;
         if (inSub) subActive = index;
         else {
           active = index;
@@ -217,14 +264,15 @@
             subActive = -1;
           } else openSub = null;
         }
+        if (it.kind === "popup") openPopup(it, e.currentTarget);
       }}
-      onclick={() => activate(it, index, inSub)}
+      onclick={(e) => (it.kind === "popup" ? openPopup(it, e.currentTarget) : activate(it, index, inSub))}
     >
       <span class="check">{isChecked ? "✓" : ""}</span>
       <span class="label">{label(it)}</span>
       <span class="shortcut">{it.kind === "item" ? (shortcut(it.id) ?? "") : ""}</span>
       <span class="arrow">
-        {#if it.kind === "submenu"}
+        {#if it.kind === "submenu" || it.kind === "popup"}
           <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M2 1l4 3-4 3" /></svg>
         {/if}
       </span>
@@ -264,6 +312,10 @@
       {/if}
     </div>
   {/each}
+  {#if popupOpen}
+    <!-- Inside the bar, so a click in it does not count as a click outside. -->
+    <ContextMenu x={popupOpen.x} y={popupOpen.y} items={popupOpen.items} onClose={close} />
+  {/if}
 </nav>
 
 <style>

@@ -20,6 +20,8 @@ export type MenuItem =
       placeholder?: boolean;
     }
   | { kind: "submenu"; label: string; items: MenuItem[] }
+  /** A list the app builds when it opens (scanned plug-ins), nested as deep as it needs. */
+  | { kind: "popup"; id: string; label: string }
   | { kind: "sep" };
 
 export interface Menu {
@@ -45,6 +47,7 @@ const sub = (label: string, items: MenuItem[]): MenuItem => ({
   items,
 });
 const sep: MenuItem = { kind: "sep" };
+const popup = (id: string, label: string): MenuItem => ({ kind: "popup", id, label });
 
 const P2 = "Arrives with playback (P2).";
 const P3 = "Arrives with editing (P3).";
@@ -52,9 +55,6 @@ const P5 = "Arrives with effects (P5).";
 const NEXT_FX = "Arrives in the next effects batch.";
 const P7 = "Arrives with podcast publishing (P7).";
 const LATER = "Not built yet.";
-
-/** Effects > Plug-ins slots, one per scanned effect plug-in. Unused slots are hidden. */
-export const PLUGIN_SLOTS = 120;
 
 /** Open Recent slots. Unused slots are hidden. */
 export const RECENT_SLOTS = 10;
@@ -437,17 +437,10 @@ export const MENUS: readonly Menu[] = [
         }),
       ]),
       sep,
-      sub("Plug-ins", [
-        ...Array.from({ length: PLUGIN_SLOTS }, (_, i) =>
-          item(`fx.plugins.${i + 1}`, `Plug-in ${i + 1}`, {
-            placeholder: true,
-          }),
-        ),
-        item("fx.plugins.none", "No plug-ins scanned", {
-          pending: "Scan for plug-ins in Effects > Plug-in Manager. Effect plug-ins it finds appear here.",
-          placeholder: true,
-        }),
-      ]),
+      item("fx.vst", "VST", {
+        pending: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.",
+      }),
+      popup("fx.vst3", "VST3"),
       item("fx.plugin-manager", "Plug-in Manager..."),
       item("fx.firewall", "Stop Network Prompts From Plug-ins..."),
     ],

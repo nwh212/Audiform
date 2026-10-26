@@ -298,7 +298,6 @@ describe("menu model", () => {
           built.has(it.id) ||
           it.id.startsWith("window.panel.") ||
           it.id.startsWith("file.recent.") ||
-          it.id.startsWith("fx.plugins.") ||
           it.id.startsWith("window.workspace.")
         )
           continue;

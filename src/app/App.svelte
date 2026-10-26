@@ -34,7 +34,8 @@
   import DockShell from "./docking/DockShell.svelte";
   import { ActionRegistry } from "./actions";
   import { MENUS } from "./menus/model";
-  import MenuBar from "./menus/MenuBar.svelte";
+  import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
+  import type { ContextItem } from "./ContextMenu.svelte";
   import AboutDialog from "./AboutDialog.svelte";
   import HistoryPanel from "../panels/history/HistoryPanel.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
@@ -126,7 +127,7 @@
   import { channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels, type ChannelTake } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase, PLATFORM } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
-  import { PLUGIN_SLOTS, RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
+  import { RECENT_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
   import {
     sessionAutosave,
     sessionClearAutosave,
@@ -200,7 +201,8 @@
   import type { EffectChainDoc, EffectTarget, MediaRefDoc, SessionDoc } from "../stores/session";
   import PendingPanel from "../panels/PendingPanel.svelte";
   import VoiceChainPanel from "../panels/voice-chain/VoiceChainPanel.svelte";
-  import { addSlot, chainOf, newSlot } from "../panels/voice-chain/chain";
+  import { addSlot, chainOf, newSlot, type MenuPlugin } from "../panels/voice-chain/chain";
+  import { vst3Items } from "../panels/voice-chain/slot-drag";
   import { effectWindowRequest, HIDE_EFFECT_WINDOWS } from "../panels/voice-chain/effect-window";
   import { setFxCatalog } from "../panels/editor/envelope";
   import type { Finding } from "../panels/quickpass/quickpass";
@@ -2079,7 +2081,14 @@
   }
   let fxCatalog: EffectInfo[] | null = null;
   /** Effect plug-ins for Effects > Plug-ins (instruments are picked on MIDI tracks). */
-  let menuPlugins: { effect: string; name: string; vendor: string }[] = [];
+  let menuPlugins: MenuPlugin[] = [];
+  /** Effects > VST3: the scanned effect plug-ins, by type and by maker, as in the Audio FX Add list. */
+  function vst3Popup(): PopupList {
+    const items = vst3Items(fxCatalog ?? [], menuPlugins, (id) => void addEffectFromMenu(id)) as ContextItem[];
+    if (!items.length) return { items, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager." };
+    if (!fxTarget()) return { items: [], reason: inWave() ? "Open a file in the Waveform editor first." : "Select a track or one clip first." };
+    return { items };
+  }
 
   async function addEffectFromMenu(effect: string) {
     const at = fxTarget();
@@ -3891,30 +3900,6 @@
         enabled: () => (markerDoc()?.markers.length ?? 0) > 0,
         reason: () => "Add markers first (Edit > Markers).",
       }),
-      // Effects > Plug-ins: every scanned effect plug-in, by maker then name.
-      ...Array.from({ length: PLUGIN_SLOTS }, (_, i) =>
-        actions.register({
-          id: `fx.plugins.${i + 1}`,
-          run: () => {
-            const p = menuPlugins[i];
-            if (p) return addEffectFromMenu(p.effect);
-          },
-          visible: () => menuPlugins[i] !== undefined,
-          label: () => {
-            const p = menuPlugins[i];
-            return p ? (p.vendor ? `${p.name} (${p.vendor})` : p.name) : null;
-          },
-          enabled: () => fxTarget() !== null,
-          reason: () => (inWave() ? "Open a file in the Waveform editor first." : "Select a track or one clip first."),
-        }),
-      ),
-      actions.register({
-        id: "fx.plugins.none",
-        run: () => {},
-        enabled: () => false,
-        visible: () => menuPlugins.length === 0,
-        reason: () => "Scan for plug-ins in Effects > Plug-in Manager. Effect plug-ins it finds appear here.",
-      }),
       ...FX_MENU.map((short) =>
         actions.register({
           id: `fx.add.${short}`,
@@ -4595,8 +4580,7 @@
         .then((r) => {
           menuPlugins = r.plugins
             .filter((p) => !p.instrument)
-            .map((p) => ({ effect: p.effect, name: p.name, vendor: p.vendor }))
-            .sort((a, b) => a.vendor.localeCompare(b.vendor) || a.name.localeCompare(b.name));
+            .map((p) => ({ effect: p.effect, name: p.name, vendor: p.vendor, kind: p.kind }));
           actions.invalidate();
         })
         .catch(() => {});
@@ -4737,7 +4721,7 @@
 
 <div class="shell">
   <header class="top">
-    <MenuBar menus={MENUS} {actions} {shortcutFor} onError={showError} />
+    <MenuBar menus={MENUS} {actions} {shortcutFor} onError={showError} popups={{ "fx.vst3": vst3Popup }} />
   </header>
   <ToolStrip {actions} {shortcutFor} />
 

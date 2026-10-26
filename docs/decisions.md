@@ -1601,3 +1601,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **Right-click a MIDI lane:** Bounce Track to New Track; on a clip also Bounce Clip (or the selected clips) to New Track.
 - **Fixed:** a MIDI track's bounce measured its clips' span in beats as if they were samples, so a MIDI-only track bounced only a sliver. MIDI clips now count by the tempo map, and Bounce or Mix Down of selected clips includes selected MIDI clips.
+
+## 2026-10-28: Effects > VST3, alphabetical lists, type to jump
+
+- **Effects menu:** the flat Plug-ins list is replaced by **VST** (disabled, with the reason) and **VST3**, which opens the same list as the Audio FX Add menu: plug-ins by type, then by maker, every list alphabetical. Both are built by one function, so they always match.
+- **Built-in effects** are alphabetical within each family in the Audio FX Add menu.
+- **The menu bar nests deeper:** a menu entry can now open a list built when it opens, as a menu beside it with any number of levels.
+- **Type to jump:** in any open menu (the menu bar, right-click menus, the Add effect list), typing letters moves to the first item that starts with them. Quick letters build a longer prefix; the same letter again moves to the next item starting with it.
