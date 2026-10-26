@@ -28,7 +28,6 @@ pub mod record;
 pub mod session;
 pub mod spectral;
 pub mod template;
-pub mod theme;
 pub mod transport;
 pub mod wave;
 pub mod wave_fx;

@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, type CacheInfo } from "../core";
-  import { audioDriver, audioInputs, audioOutputs, outputChannels, themePickBackground, type AudioDriver, type AudioInput } from "../core";
+  import { audioDriver, audioInputs, audioOutputs, outputChannels, type AudioDriver, type AudioInput } from "../core";
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
@@ -196,12 +196,6 @@
               <option value="moonlight">Moonlight Aero</option>
             </select>
           </label>
-          <label class="row">
-            Background picture
-            <button type="button" onclick={async () => { const p = await themePickBackground().catch(() => null); if (p) d.app.themePicture = p; }}>Choose...</button>
-            <button type="button" disabled={!d.app.themePicture} onclick={() => (d.app.themePicture = null)}>Use the theme's</button>
-          </label>
-          <p class="note">{d.app.themePicture ? `Using ${d.app.themePicture.split(/[\\/]/).pop()}.` : "Using the theme's own scene."} For the Aero themes: any photo of yours shows behind the glass. It is read from where it is and never copied or sent anywhere.</p>
           <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Apply tries one while this window stays open. Your colors above still apply on top of either theme.</p>
         {:else if page === "Audio Devices"}
           <label class="row">

@@ -169,7 +169,6 @@
     phaseAlign,
     setAudioOutput,
     setOutputMap,
-    themeBackground,
     setAudioDriver,
     recordStart,
     recordStatus,
@@ -2393,31 +2392,10 @@
     return () => document.removeEventListener("mouseover", markAeroCursor, true);
   });
 
-  /** Scene themes: your own picture behind the glass, or the theme's scene. */
-  let scenePicture: { path: string; url: string } | null = null;
-  async function showScenePicture(path: string | null) {
-    const root = document.documentElement;
-    if (scenePicture && scenePicture.path === path) return;
-    if (scenePicture) URL.revokeObjectURL(scenePicture.url);
-    scenePicture = null;
-    root.style.removeProperty("--scene-picture");
-    delete root.dataset.scenePicture;
-    if (!path || !isTauri()) return;
-    try {
-      const bytes = await themeBackground(path);
-      const url = URL.createObjectURL(new Blob([bytes]));
-      scenePicture = { path, url };
-      root.style.setProperty("--scene-picture", `url("${url}")`);
-      root.dataset.scenePicture = "";
-    } catch (e) {
-      showError(e);
-    }
-  }
   /** Puts settings that live outside the interface's own reads into effect. */
   function applyAppSettings(s: AppSettings, autosave: boolean) {
     if (s.theme !== "dark") document.documentElement.dataset.theme = s.theme;
     else delete document.documentElement.dataset.theme;
-    void showScenePicture(s.themePicture);
     const root = document.documentElement.style;
     for (const k of ["--wave", "--playhead", "--accent", "--lane-selected"]) root.removeProperty(k);
     for (const [k, v] of Object.entries(colorVars(s.colors))) root.setProperty(k, v);
