@@ -217,6 +217,8 @@ export interface EnvelopeDoc {
     | { type: "space"; param: SpaceParam };
   enabled: boolean;
   points: EnvelopePointDoc[];
+  /** A track's or bus's lane: its height in pixels (missing: the standard height). */
+  height?: number;
 }
 
 export interface TrackDoc {

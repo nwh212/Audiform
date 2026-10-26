@@ -15,6 +15,8 @@ import { DEFAULT_SPACE_POS, type EffectChainDoc, type EnvelopeDoc, type Envelope
 
 /** Height of one automation lane, in pixels. */
 export const AUTO_H = 54;
+/** A lane's height: its own, or the standard one. */
+export const laneHeight = (lane: { height?: number }) => Math.max(24, Math.min(400, lane.height ?? AUTO_H));
 
 export type AutoTarget = EnvelopeDoc["target"];
 

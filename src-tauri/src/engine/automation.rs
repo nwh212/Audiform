@@ -186,6 +186,7 @@ mod tests {
                     curve: EnvelopeCurve::Linear,
                 })
                 .collect(),
+            height: None,
         }
     }
 

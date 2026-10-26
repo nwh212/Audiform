@@ -1133,6 +1133,10 @@ pub struct Envelope {
     pub enabled: bool,
     /// Points sorted by position.
     pub points: Vec<EnvelopePoint>,
+    /// A track's or bus's automation lane: its height on screen, in
+    /// pixels. None is the standard height.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
 }
 
 /// Kind of marker.

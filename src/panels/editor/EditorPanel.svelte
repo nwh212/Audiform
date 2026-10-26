@@ -54,7 +54,7 @@
   import TempoStrip from "./TempoStrip.svelte";
   import MetronomeRow from "./MetronomeRow.svelte";
   import AutoLane from "./AutoLane.svelte";
-  import { AUTO_H, autoAt, autoChoices, autoMode, autoName, autoRange, autoRest, dropLane, isOrphan, newLane, nextTarget, putLane, setMode, shownLanes, targetKey, type AutoTarget } from "./automation";
+  import { AUTO_H, laneHeight, autoAt, autoChoices, autoMode, autoName, autoRange, autoRest, dropLane, isOrphan, newLane, nextTarget, putLane, setMode, shownLanes, targetKey, type AutoTarget } from "./automation";
   import { setMetronomePrefs } from "../../stores/metronome";
   import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
   import type { Readable } from "svelte/store";
@@ -1866,7 +1866,28 @@
   }
 
   // Automation lanes under a track.
-  const lanesHeight = (t: TrackDoc) => (t.show_automation && !t.collapsed ? shownLanes(t).length * AUTO_H : 0);
+  const lanesHeight = (t: TrackDoc) => (t.show_automation && !t.collapsed ? shownLanes(t).reduce((h, l) => h + liveLaneH(l), 0) : 0);
+  /** Lane heights while their edge is being dragged, shown at once. */
+  let laneDrag = $state<{ id: string; height: number } | null>(null);
+  const liveLaneH = (l: { id: string; height?: number }) => (laneDrag && laneDrag.id === l.id ? laneDrag.height : laneHeight(l));
+  /** Dragging a lane's bottom edge sets its height (one undoable step). */
+  function resizeLane(e: PointerEvent, track: TrackDoc, lane: EnvelopeDoc) {
+    if (e.button !== 0 || !lane.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const y0 = e.clientY;
+    const h0 = laneHeight(lane);
+    const move = (ev: PointerEvent) => (laneDrag = { id: lane.id, height: Math.max(24, Math.min(400, Math.round(h0 + ev.clientY - y0))) });
+    const up = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      const d = laneDrag;
+      laneDrag = null;
+      if (d && d.height !== h0) setLanes(track, putLane(track, { ...lane, height: d.height }), "Lane Height");
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  }
 
   function setLanes(track: TrackDoc, envelopes: EnvelopeDoc[], label: string) {
     void session.edit(label, { op: "set_envelopes", owner: track.id, envelopes }, runner).catch(onError);
@@ -2552,7 +2573,9 @@
             {#each lanes as lane, k (lane.id || "new")}
               {@const choices = autoChoices(track, fxCatalog, !!doc?.space)}
               {@const taken = (c: (typeof choices)[number]) => targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}
-              <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{AUTO_H}px">
+              <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{liveLaneH(lane)}px">
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="lane-edge" title="Drag to make this lane taller or shorter" onpointerdown={(e) => resizeLane(e, track, lane)}></div>
                 <div class="line">
                   <select
                     class="auto-pick"
@@ -2898,7 +2921,7 @@
         rest={autoRest(track, fxCatalog, lane.target)}
         {view}
         width={lanesWidth}
-        height={AUTO_H}
+        height={liveLaneH(lane)}
         color={trackColor(track.color, i)}
         {playhead}
         onPoints={(points, label) => setLanes(track, putLane(track, { ...lane, points }), label)}
@@ -3458,7 +3481,20 @@
     padding: 0 6px;
   }
 
+  .lane-edge {
+    position: absolute;
+    right: 0;
+    bottom: -3px;
+    left: 0;
+    z-index: 2;
+    height: 6px;
+    cursor: ns-resize;
+  }
+  .lane-edge:hover {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
   .header.auto-head {
+    position: relative;
     justify-content: center;
     padding-left: 22px;
     background: color-mix(in srgb, var(--header-a) 88%, var(--track-color) 12%);

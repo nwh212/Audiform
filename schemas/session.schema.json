@@ -649,6 +649,15 @@
         "enabled": {
           "type": "boolean"
         },
+        "height": {
+          "description": "A track's or bus's automation lane: its height on screen, in\npixels. None is the standard height.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "id": {
           "type": "string",
           "format": "uuid"

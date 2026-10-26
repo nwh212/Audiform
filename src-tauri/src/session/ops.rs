@@ -1518,6 +1518,7 @@ fn set_points(
             target,
             enabled: true,
             points: new,
+            height: None,
         }),
     }
     old
@@ -1588,6 +1589,7 @@ fn tidy_envelope(e: &Envelope) -> Envelope {
     points.sort_by_key(|p| p.position);
     Envelope {
         points,
+        height: e.height.map(|h| h.clamp(24, 400)),
         ..e.clone()
     }
 }
