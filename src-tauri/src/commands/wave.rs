@@ -36,6 +36,69 @@ pub struct WaveState {
 #[derive(Default)]
 pub struct OpenWave(pub Mutex<Option<WaveState>>);
 
+/// Channels switched off in the Waveform editor (true is off), in file
+/// order. Playback leaves them out; the file itself is not changed.
+#[derive(Default)]
+pub struct WaveChannelsOff(pub Mutex<Vec<bool>>);
+
+/// The session as playback should sound: each clip's switched-off
+/// channels send nothing, the channels still on play as they do.
+pub(crate) fn audible<'a>(session: &'a Session, off: &[bool]) -> std::borrow::Cow<'a, Session> {
+    if !off.iter().any(|&o| o) {
+        return std::borrow::Cow::Borrowed(session);
+    }
+    let mut s = session.clone();
+    let counts: std::collections::HashMap<_, _> = s
+        .media
+        .iter()
+        .map(|m| (m.id, usize::from(m.channels)))
+        .collect();
+    for t in &mut s.tracks {
+        for c in &mut t.clips {
+            let n = counts.get(&c.media_id).copied().unwrap_or(1);
+            if n < 2 {
+                continue;
+            }
+            let mut mix = c
+                .channel_mix
+                .clone()
+                .unwrap_or_else(|| crate::dsp::channels::default_mix(n));
+            for (k, send) in mix.sends.iter_mut().enumerate() {
+                if off.get(k).copied().unwrap_or(false) {
+                    send.left = 0.0;
+                    send.right = 0.0;
+                }
+            }
+            c.channel_mix = Some(mix);
+        }
+    }
+    std::borrow::Cow::Owned(s)
+}
+
+fn channels_off(off: &State<'_, WaveChannelsOff>) -> Vec<bool> {
+    off.0.lock().map(|v| v.clone()).unwrap_or_default()
+}
+
+/// Sets which channels are switched off (true is off). Playing audio
+/// follows at once.
+#[tauri::command]
+pub fn wave_set_channels_off(
+    wave: State<'_, OpenWave>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
+    state: State<'_, WaveChannelsOff>,
+    off: Vec<bool>,
+) -> Result<(), String> {
+    *state.0.lock().map_err(|e| e.to_string())? = off.clone();
+    if playing.is(PlayingDoc::Wave) {
+        let w = wave.0.lock().map_err(|e| e.to_string())?;
+        if let Some(open) = w.as_ref() {
+            transport.sync(&audible(&open.session, &off))?;
+        }
+    }
+    Ok(())
+}
+
 /// Files set aside when another file is opened in the Waveform editor,
 /// with their unsaved edits, so switching files never asks to save.
 #[derive(Default)]
@@ -297,6 +360,7 @@ pub fn wave_apply(
     wave: State<'_, OpenWave>,
     transport: State<'_, Transport>,
     playing: State<'_, Playing>,
+    off: State<'_, WaveChannelsOff>,
     op: Op,
 ) -> Result<Applied, String> {
     let mut w = wave.0.lock().map_err(|e| e.to_string())?;
@@ -305,7 +369,7 @@ pub fn wave_apply(
         .ok_or("No file is open in the Waveform editor.")?;
     let inverse = ops::apply(&mut state.session, &op).map_err(|e| e.to_string())?;
     if playing.is(PlayingDoc::Wave) {
-        if let Err(e) = transport.sync(&state.session) {
+        if let Err(e) = transport.sync(&audible(&state.session, &channels_off(&off))) {
             eprintln!("playback could not follow the edit: {e}");
             transport.stop();
         }
@@ -332,6 +396,7 @@ pub fn wave_play(
     transport: State<'_, Transport>,
     preview: State<'_, PreviewPlayer>,
     playing: State<'_, Playing>,
+    off: State<'_, WaveChannelsOff>,
     from: Option<u64>,
     mode: Option<super::transport::PlayMode>,
 ) -> Result<(), String> {
@@ -342,7 +407,7 @@ pub fn wave_play(
         .ok_or("No file is open in the Waveform editor.")?;
     playing.set(PlayingDoc::Wave);
     transport.play(
-        &state.session,
+        &audible(&state.session, &channels_off(&off)),
         from.unwrap_or(state.session.view.playhead),
         super::transport::jump_for(&state.session, mode),
     )
@@ -741,6 +806,34 @@ mod tests {
         assert_eq!(s.tracks[0].clips.len(), 1);
         assert_eq!(s.tracks[0].clips[0].source_out, 4_410);
         assert_eq!(s.media[0].channels, 1);
+    }
+
+    #[test]
+    fn switched_off_channels_are_left_out_of_playback() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("six.wav");
+        let spec = hound::WavSpec {
+            channels: 6,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..4_800 * 6 {
+            w.write_sample(0i16).unwrap();
+        }
+        w.finalize().unwrap();
+        let s = session_for(&codecs::probe(&path).unwrap()).unwrap();
+        // Nothing off: playback uses the session as it is.
+        assert!(matches!(audible(&s, &[false; 6]), std::borrow::Cow::Borrowed(_)));
+        // L off: only its sends go quiet; R still plays.
+        let heard = audible(&s, &[true, false, false, false, false, false]);
+        let mix = heard.tracks[0].clips[0].channel_mix.clone().unwrap();
+        let full = crate::dsp::channels::default_mix(6);
+        assert_eq!((mix.sends[0].left, mix.sends[0].right), (0.0, 0.0));
+        assert_eq!(mix.sends[1], full.sends[1]);
+        // The open file's own session is not touched.
+        assert!(s.tracks[0].clips[0].channel_mix.is_none());
     }
 
     #[test]

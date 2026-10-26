@@ -30,6 +30,7 @@ pub fn run() {
         .manage(commands::export::ExportCancel::default())
         .manage(commands::batch::BatchCancel::default())
         .manage(commands::wave::OpenWave::default())
+        .manage(commands::wave::WaveChannelsOff::default())
         .manage(commands::wave::ParkedWaves::default())
         .manage(commands::session::ParkedSessions::default())
         .manage(commands::wave::Playing::default())
@@ -136,6 +137,7 @@ pub fn run() {
             commands::quickpass::quickpass_repair_copy,
             commands::generate::generate_audio,
             commands::spectral::wave_spectrogram,
+            commands::wave::wave_set_channels_off,
             commands::spectral::wave_spectral_edit,
             commands::wave_fx::wave_apply_chain,
             commands::wave_fx::wave_reverse_invert,

@@ -228,6 +228,7 @@ pub(crate) fn is_mono(session: &Session) -> bool {
 /// The spectrogram of `start..end`: `rows` rows of `columns` bytes, top
 /// row the highest frequency, each 0 (silent) to 255 (full scale).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn wave_spectrogram(
     wave: State<'_, OpenWave>,
     start: u64,
@@ -236,6 +237,7 @@ pub async fn wave_spectrogram(
     rows: u32,
     hz: Option<Vec<f32>>,
     fft: Option<u32>,
+    per_channel: Option<bool>,
 ) -> Result<Response, String> {
     let session = snapshot(&wave)?;
     let rate = session.sample_rate;
@@ -260,6 +262,18 @@ pub async fn wave_spectrogram(
     let bytes = spawn_blocking(move || {
         let pad = n as i64;
         let from = start as i64 - pad;
+        if per_channel == Some(true) && file_channels(&session) > 1 {
+            // One picture per channel, stacked top to bottom in channel order.
+            let (audio, k) = render_n(&session, from, end as i64 + pad);
+            let mut out = Vec::new();
+            for c in 0..k {
+                let one: Vec<f32> = audio.iter().skip(c).step_by(k).copied().collect();
+                out.extend(spectral::spectrogram_rows(
+                    &one, from, rate, start, end, columns, &hz, n,
+                ));
+            }
+            return out;
+        }
         let stereo = render(&session, from, end as i64 + pad);
         let mono: Vec<f32> = stereo
             .as_chunks::<2>()

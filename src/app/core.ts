@@ -828,11 +828,18 @@ export async function audioInputs(asio?: boolean): Promise<AudioInput[]> {
 /**
  * The spectrogram of `start..end`. `hz` (optional) gives each row's edges
  * from the top down, one more than `rows`, for a zoomed or linear axis;
- * `fft` the analysis frame length (resolution).
+ * `fft` the analysis frame length (resolution). With `perChannel`, a
+ * file with more than one channel gets one picture per channel, stacked
+ * top to bottom (`rows` each).
  */
-export async function waveSpectrogram(start: number, end: number, columns: number, rows: number, hz?: number[], fft?: number): Promise<Uint8Array> {
-  const buf = await invoke<ArrayBuffer>("wave_spectrogram", { start, end, columns, rows, hz: hz ?? null, fft: fft ?? null });
+export async function waveSpectrogram(start: number, end: number, columns: number, rows: number, hz?: number[], fft?: number, perChannel = false): Promise<Uint8Array> {
+  const buf = await invoke<ArrayBuffer>("wave_spectrogram", { start, end, columns, rows, hz: hz ?? null, fft: fft ?? null, perChannel });
   return rawBytes(buf);
+}
+
+/** Which channels of the Waveform editor's file are switched off (true is off): playback leaves them out. */
+export function waveSetChannelsOff(off: boolean[]): Promise<void> {
+  return invoke<void>("wave_set_channels_off", { off });
 }
 
 /** An edit limited to one channel: `op` applied to a copy, `start..end` rendered, each channel taken as `take` says. */

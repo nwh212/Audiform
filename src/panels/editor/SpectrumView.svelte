@@ -9,6 +9,9 @@
   painted spot straight away. The mouse wheel over the frequency scale
   zooms the frequencies around the pointer (never past what the sample
   rate holds); over the spectrum it zooms time, as over the waveform.
+  A file with more than one channel shows each channel in its own band,
+  top to bottom like the waveform's; a selection drawn in one band
+  shows in every band (spectral edits reach the channels switched on).
   Right-click for the frequency zoom, Hertz or note names, a more linear
   or more logarithmic scale, the analysis resolution and the colors.
 -->
@@ -23,7 +26,9 @@
   import { noteName } from "./midi";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import { settings } from "../../stores/settings";
-  import { SPECTRUM_HIGH, SPECTRUM_LOW, spectrumLut } from "../../app/colors";
+  import { SPECTRUM_HIGH, SPECTRUM_LOW, spectrumLut, themeColor } from "../../app/colors";
+  import { appearanceTick } from "../../stores/appearance";
+  import { channelLabels } from "../properties/channel-mix";
 
   interface Props {
     doc: SessionDoc;
@@ -56,6 +61,10 @@
   const setSv = (patch: Partial<SpectrumViewState>) => spectrumView.update((v) => ({ ...v, ...patch }));
 
   let height = $state(200);
+  /** One band per channel. */
+  const lanes = $derived(Math.max(1, Math.min(64, doc.media[0]?.channels ?? 1)));
+  const laneNames = $derived(channelLabels(lanes));
+  const laneH = $derived(height / lanes);
   let canvas = $state<HTMLCanvasElement | null>(null);
   let image = $state<{ data: Uint8Array; columns: number; rows: number; start: number; end: number } | null>(null);
   let pitch = $state<{ hz: number[]; start: number; end: number } | null>(null);
@@ -82,7 +91,8 @@
   $effect(() => {
     const { start, end } = range;
     const columns = Math.max(1, Math.min(2048, Math.round(width)));
-    const rows = Math.max(16, Math.min(512, Math.round(height)));
+    const rows = Math.max(16, Math.min(512, Math.round(laneH)));
+    const perChannel = lanes > 1;
     const edges = rowEdges(rows, sv, nyquist);
     const fft = sv.fft;
     void doc;
@@ -92,10 +102,10 @@
       return;
     }
     const t = setTimeout(() => {
-      waveSpectrogram(start, end, columns, rows, edges, fft)
+      waveSpectrogram(start, end, columns, rows, edges, fft, perChannel)
         .then((data) => {
           if (my !== seq) return;
-          image = { data, columns, rows, start, end };
+          image = { data, columns, rows: data.length / columns, start, end };
           note = null;
         })
         .catch((e) => {
@@ -134,9 +144,12 @@
   // Places on screen for frequencies, through the view's scale. Selection
   // shapes keep the edits' own log axis (`frac` below), so they stay on the
   // same sounds whatever the view shows.
-  const yOf = (hz: number) => (1 - viewFrac(hz, sv, nyquist)) * height;
+  // All of these are within one band (y from the band's top).
+  const yOf = (hz: number) => (1 - viewFrac(hz, sv, nyquist)) * laneH;
   const yOfFrac = (f: number) => yOf(freqAt(f, nyquist));
-  const fracAtY = (y: number) => fracOf(viewFreq(1 - y / height, sv, nyquist), nyquist);
+  /** A y on the whole view, as a y within its band. */
+  const inLane = (y: number) => Math.max(0, Math.min(laneH, y - Math.min(lanes - 1, Math.floor(y / laneH)) * laneH));
+  const fracAtY = (y: number) => fracOf(viewFreq(1 - inLane(y) / laneH, sv, nyquist), nyquist);
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
@@ -171,7 +184,7 @@
       return;
     }
     e.preventDefault();
-    const hz = viewFreq(1 - (e.clientY - box.top) / height, sv, nyquist);
+    const hz = viewFreq(1 - inLane(e.clientY - box.top) / laneH, sv, nyquist);
     setSv(zoomFreq(sv, hz, e.deltaY > 0 ? 1.25 : 0.8, nyquist));
   }
 
@@ -182,7 +195,7 @@
     e.preventDefault();
     e.stopPropagation();
     const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const hz = viewFreq(1 - (e.clientY - box.top) / height, sv, nyquist);
+    const hz = viewFreq(1 - inLane(e.clientY - box.top) / laneH, sv, nyquist);
     const fi = FFT_SIZES.indexOf(sv.fft as (typeof FFT_SIZES)[number]);
     const logSteps = [0, 0.25, 0.5, 0.75, 1];
     const li = logSteps.findIndex((k) => Math.abs(k - sv.log) < 0.01);
@@ -243,7 +256,7 @@
     } else {
       // Brush strokes: a thick round line, scaled so it matches the brush shape.
       const rx = Math.max(0.5, s.rx / view.spp);
-      const ry = Math.max(0.5, s.ry * height);
+      const ry = Math.max(0.5, s.ry * laneH);
       g.setLineDash([]);
       g.strokeStyle = "rgba(255, 255, 255, 0.28)";
       g.lineCap = "round";
@@ -307,30 +320,40 @@
       g.restore();
     }
 
-    // Pitch line.
-    if (showPitch && pitch && pitch.hz.length) {
-      const n = pitch.hz.length;
-      const step = (pitch.end - pitch.start) / n;
+    // Pitch line and selection shapes, in every band.
+    for (let lane = 0; lane < lanes; lane++) {
       g.save();
-      g.strokeStyle = "#a6ff4d";
-      g.lineWidth = 2;
-      g.lineJoin = "round";
       g.beginPath();
-      let last = 0;
-      for (let i = 0; i < n; i++) {
-        const hz = pitch.hz[i]!;
-        if (hz <= 0) {
-          last = 0;
-          continue;
+      g.rect(0, lane * laneH, width, laneH);
+      g.clip();
+      g.translate(0, lane * laneH);
+      if (showPitch && pitch && pitch.hz.length) {
+        const n = pitch.hz.length;
+        const step = (pitch.end - pitch.start) / n;
+        g.save();
+        g.strokeStyle = "#a6ff4d";
+        g.lineWidth = 2;
+        g.lineJoin = "round";
+        g.beginPath();
+        let last = 0;
+        for (let i = 0; i < n; i++) {
+          const hz = pitch.hz[i]!;
+          if (hz <= 0) {
+            last = 0;
+            continue;
+          }
+          const x = xOf(pitch.start + (i + 0.5) * step, view);
+          const y = yOf(hz);
+          // Break the line at big jumps: those are octave slips, not glides.
+          if (last > 0 && Math.abs(Math.log2(hz / last)) < 0.35) g.lineTo(x, y);
+          else g.moveTo(x, y);
+          last = hz;
         }
-        const x = xOf(pitch.start + (i + 0.5) * step, view);
-        const y = yOf(hz);
-        // Break the line at big jumps: those are octave slips, not glides.
-        if (last > 0 && Math.abs(Math.log2(hz / last)) < 0.35) g.lineTo(x, y);
-        else g.moveTo(x, y);
-        last = hz;
+        g.stroke();
+        g.restore();
       }
-      g.stroke();
+      for (const s of shapes ?? []) drawShape(g, s, false);
+      if (drawing) drawShape(g, drawing, true);
       g.restore();
     }
 
@@ -343,9 +366,6 @@
         g.fillRect(a, 0, b - a, h);
       }
     }
-
-    for (const s of shapes ?? []) drawShape(g, s, false);
-    if (drawing) drawShape(g, drawing, true);
 
     // Brush outline under the pointer.
     if (hover && (tool === "brush" || tool === "spot")) {
@@ -371,13 +391,23 @@
     g.fillStyle = css("--text-faint");
     g.font = `10px ${css("--font-ui")}`;
     g.textBaseline = "middle";
-    for (const [hz, text] of scaleMarks(h)) {
-      const y = yOf(hz);
-      if (y < 8 || y > h - 6) continue;
-      g.fillRect(width, Math.round(y), 4, 1);
-      g.fillText(text, width + 7, y);
+    const marks = scaleMarks(laneH);
+    for (let lane = 0; lane < lanes; lane++) {
+      const top = lane * laneH;
+      for (const [hz, text] of marks) {
+        const y = yOf(hz);
+        if (y < 8 || y > laneH - 6) continue;
+        g.fillRect(width, Math.round(top + y), 4, 1);
+        if (laneH >= 40) g.fillText(text, width + 7, top + y);
+      }
+      g.fillText(lanes > 1 ? laneNames[lane] ?? "" : sv.notes ? "Note" : "Hz", width + 7, top + 7);
+      if (lane > 0) {
+        // A gap between bands, as between the waveform's channels.
+        g.fillStyle = css("--track-gap");
+        g.fillRect(0, Math.round(top) - 1, w, 2);
+        g.fillStyle = css("--text-faint");
+      }
     }
-    g.fillText(sv.notes ? "Note" : "Hz", width + 7, 7);
   });
 
   const cursor = $derived(tool === "time" ? "text" : tool === "brush" || tool === "spot" ? "none" : "crosshair");
@@ -399,7 +429,7 @@
 
     if (tool === "brush" || tool === "spot") {
       const r = brushSize / 2;
-      drawing = { kind: "brush", points: [[s0, f0]], rx: r * v.spp, ry: r / height };
+      drawing = { kind: "brush", points: [[s0, f0]], rx: r * v.spp, ry: r / laneH };
       dragged = true;
     } else if (tool === "lasso") {
       drawing = { kind: "lasso", points: [[s0, f0]] };
@@ -457,21 +487,26 @@
       } else {
         for (const [t, f] of s.points) {
           left = Math.min(left, xOf(t, view));
-          top = Math.min(top, yOfFrac(f) - (s.kind === "brush" ? s.ry * height : 0));
+          top = Math.min(top, yOfFrac(f) - (s.kind === "brush" ? s.ry * laneH : 0));
         }
       }
     }
     return { x: Math.max(4, Math.min(width - 330, left)), y: Math.max(4, top - 30) };
   });
 
-  // The palette: the built-in one, or the quiet and loud colors picked in Settings or the right-click menu.
-  let lut = $state<Uint8Array>(SPECTRUM_LUT);
-  $effect(() =>
-    settings.subscribe((v) => {
-      const c = v.colors;
-      lut = c.spectrumLow || c.spectrumHigh ? spectrumLut(c.spectrumLow || SPECTRUM_LOW, c.spectrumHigh || SPECTRUM_HIGH) : SPECTRUM_LUT;
-    }),
-  );
+  // The palette: the quiet and loud colors picked in Settings or the
+  // right-click menu, else the theme's own, else the built-in one.
+  let picked = $state({ low: "", high: "" });
+  $effect(() => settings.subscribe((v) => (picked = { low: v.colors.spectrumLow, high: v.colors.spectrumHigh })));
+  let looks = $state(0);
+  $effect(() => appearanceTick.subscribe((v) => (looks = v)));
+  const lut = $derived.by(() => {
+    void looks;
+    const low = themeColor("--spectrum-low");
+    const high = themeColor("--spectrum-high");
+    if (picked.low || picked.high) return spectrumLut(picked.low || low || SPECTRUM_LOW, picked.high || high || SPECTRUM_HIGH);
+    return low && high ? spectrumLut(low, high) : SPECTRUM_LUT;
+  });
 </script>
 
 <div class="spectrum" bind:clientHeight={height}>
