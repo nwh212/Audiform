@@ -216,6 +216,7 @@ Standard Windows shortcuts only. No application-specific keymap beyond these:
 | Paste | Ctrl+V |
 | Delete selected | Delete or Backspace |
 | Play / Stop (plays; stops when playing or recording) | Spacebar |
+| Record (starts recording; stops it when recording) | Shift+Space (approved by the Audiform project lead, 2026-10-26) |
 | Split at playhead | Ctrl+K |
 | Zoom in | Ctrl+= |
 | Zoom out | Ctrl+- |

@@ -397,14 +397,8 @@
   const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
   const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
 
-  // Page the view along while playing so the playhead stays visible.
-  $effect(() => {
-    if (!tp?.playing || lanesWidth <= 0) return;
-    const x = xOf(tp.position, view);
-    if (x > lanesWidth - 8 || x < 0) {
-      setView({ scroll: Math.max(0, tp.position - lanesWidth * view.spp * 0.05) });
-    }
-  });
+  // Following the playhead while playing is Follow Playhead's job (below):
+  // it lets go when you move the view yourself.
   const mediaMap = $derived(new Map((doc?.media ?? []).map((m) => [m.id, m])));
   const contentEnd = $derived.by(() => {
     if (!doc) return 0;

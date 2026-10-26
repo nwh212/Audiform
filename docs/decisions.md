@@ -1400,3 +1400,8 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Compatibility.** File formats, extensions and ids stay as they are (`.altaudio`, `altaudio.*` effect ids and so on), so sessions, templates, libraries and shortcut files open in both apps and changes can be merged back. On first start Audiform copies Altered Audio Editor's settings folders (only read, never changed) into its own, so preferences, shortcuts, workspaces and the plug-in list carry over; both apps can be installed side by side. Plug-ins see the host as "Audiform".
 - **Giving back.** Everything contributed to Audiform is also offered to The GCRN under Altered Audio Editor's CLA, so any of it can be merged there (README, CONTRIBUTING.md).
 - **Builds.** Test builds run on every push to `main` (Windows), and Linux on request; releases are named Audiform.
+
+## 2026-10-26: Record shortcut, and the playhead lets go for real
+
+- **Record is Shift+Space.** Approved by the Audiform project lead; added to the shortcut table in CLAUDE.md. It starts recording the armed tracks, and stops when recording.
+- **The playhead kept pulling the view back.** An older rule from before Follow Playhead was still in the Editor: whenever the playhead went off screen while playing, it moved the view back to it, whatever you had done and even with Follow Playhead off. It is removed; Follow Playhead alone pages the view now, and lets go when you move the view yourself (it picks up again when you leave the view alone with the playhead in it, when playback starts, or when the playhead is moved).

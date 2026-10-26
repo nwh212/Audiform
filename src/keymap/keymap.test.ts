@@ -22,6 +22,7 @@ const APPROVED: Record<string, string[]> = {
   "edit.paste": ["Ctrl+V"],
   "edit.delete": ["Delete", "Backspace"],
   "multitrack.play-pause": ["Space"],
+  "multitrack.record": ["Shift+Space"],
   "clip.split": ["Ctrl+K"],
   "view.zoom-in": ["Ctrl+=", "="],
   "view.zoom-out": ["Ctrl+-", "-"],
