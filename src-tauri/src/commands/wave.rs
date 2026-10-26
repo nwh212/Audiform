@@ -825,7 +825,10 @@ mod tests {
         w.finalize().unwrap();
         let s = session_for(&codecs::probe(&path).unwrap()).unwrap();
         // Nothing off: playback uses the session as it is.
-        assert!(matches!(audible(&s, &[false; 6]), std::borrow::Cow::Borrowed(_)));
+        assert!(matches!(
+            audible(&s, &[false; 6]),
+            std::borrow::Cow::Borrowed(_)
+        ));
         // L off: only its sends go quiet; R still plays.
         let heard = audible(&s, &[true, false, false, false, false, false]);
         let mix = heard.tracks[0].clips[0].channel_mix.clone().unwrap();
