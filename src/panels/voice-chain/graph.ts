@@ -12,14 +12,15 @@ import type { EffectInfo, EffectParamInfo } from "../../app/core";
 export const GRAPH_LOW = 20;
 export const GRAPH_HIGH = 20_000;
 
-/** Effects with a fixed response curve, which the core can graph. */
+/**
+ * Effects whose window shows the plain response graph. The Parametric EQ
+ * and the Notch Filter have graph editors of their own.
+ */
 export const GRAPHED = new Set([
-  "altaudio.parametric_eq",
   "altaudio.band_eq_10",
   "altaudio.band_eq_20",
   "altaudio.band_eq_30",
   "altaudio.hum_cut",
-  "altaudio.notch",
   "altaudio.precision_filter",
   "altaudio.curve_eq",
 ]);

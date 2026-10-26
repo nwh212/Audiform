@@ -23,6 +23,7 @@
   import { freqAt, freqTicks, xOf } from "./graph";
   import { eqNodes, formatHz, nodeOn, octavesOf, qFromEdge, qOf, widthEdges, type EqNode } from "./eq-graph";
   import ValueField from "./ValueField.svelte";
+  import type { Preferences } from "../../stores/preferences";
   import VSlider from "./VSlider.svelte";
 
   interface Props {
@@ -36,9 +37,11 @@
     wave: boolean;
     /** Controls moved: `done` on release, so a drag is one undoable step. */
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
+    /** Where the view choices are kept between runs. */
+    prefs?: Preferences;
   }
 
-  const { slot, info, playing, playhead, wave, onParams }: Props = $props();
+  const { slot, info, playing, playhead, wave, onParams, prefs }: Props = $props();
 
   let w = $state(460);
   const H = 250;
@@ -46,22 +49,15 @@
   const plotW = $derived(Math.max(60, w - PAD.l - PAD.r));
   const plotH = H - PAD.t - PAD.b;
   // Range: 30 dB (plus and minus 15) or 96 dB (plus and minus 48), and Q or width in octaves.
-  const KEY_VIEW = "audiform.eq.view";
-  const saved = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(KEY_VIEW) ?? "{}") as { range?: number; width?: boolean };
-    } catch {
-      return {};
-    }
-  })();
+  const KEY_VIEW = "eq.view";
+  // svelte-ignore state_referenced_locally
+  const saved = ((prefs?.raw(KEY_VIEW) as { range?: number; width?: boolean } | null) ?? {});
   let range = $state(saved.range === 96 ? 96 : 30);
   let byWidth = $state(saved.width === true);
   $effect(() => {
-    try {
-      localStorage.setItem(KEY_VIEW, JSON.stringify({ range, width: byWidth }));
-    } catch {
-      /* Not kept; fine. */
-    }
+    const v = { range, width: byWidth };
+    const old = prefs?.raw(KEY_VIEW) as typeof v | null;
+    if (old?.range !== v.range || old?.width !== v.width) prefs?.set(KEY_VIEW, v);
   });
   /** The gain the graph shows, top and bottom (dB). */
   const TOP = $derived(range / 2);

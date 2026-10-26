@@ -770,6 +770,7 @@
           <EqGraph
             slot={winSlot}
             info={winInfo}
+            {prefs}
             playing={!!ts?.playing}
             playhead={ts?.playing ? ts.position : ((inWave ? waveDoc : doc)?.view.playhead ?? 0)}
             wave={inWave}
@@ -808,7 +809,7 @@
         {:else if winSlot.effect === "altaudio.notch"}
           <NotchGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if winSlot.effect === PHASE_CURVE}
-          <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          <PhaseCurveGraph slot={winSlot} info={winInfo} {prefs} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if GRAPHED.has(winSlot.effect)}
           <ResponseGraph slot={winSlot} info={winInfo} onPoint={(pf, f, pg, g, done) => dragPoint(winSlot, pf, f, pg, g, done)} />
         {/if}

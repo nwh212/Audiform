@@ -16,35 +16,28 @@
   import { addPoint, curveAt, curvePoints, freqKey, phaseKey, rangeOf, removePoint } from "./phase-curve";
   import { freqTicks, xOf } from "./graph";
   import { paramValue } from "./chain";
+  import type { Preferences } from "../../stores/preferences";
 
   interface Props {
     slot: EffectSlotDoc;
     info: EffectInfo;
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
+    /** Where the view choices are kept between runs. */
+    prefs?: Preferences;
   }
 
-  const { slot, info, onParams }: Props = $props();
+  const { slot, info, onParams, prefs }: Props = $props();
 
   const LOW = 20;
   const HIGH = 20_000;
   let w = $state(460);
   const H = 300;
   const PAD = { l: 6, r: 40, t: 8, b: 18 };
-  // The frequency scale is how it is shown, kept between windows.
-  let linear = $state((() => {
-    try {
-      return localStorage.getItem("audiform.phase.linear") === "1";
-    } catch {
-      return false;
-    }
-  })());
-  $effect(() => {
-    try {
-      localStorage.setItem("audiform.phase.linear", linear ? "1" : "0");
-    } catch {
-      /* Not kept; fine. */
-    }
-  });
+  // The frequency scale is how it is shown, kept between runs.
+  const KEY_LINEAR = "phase-curve.linear";
+  // svelte-ignore state_referenced_locally
+  let linear = $state(prefs?.raw(KEY_LINEAR) === true);
+  $effect(() => prefs?.set(KEY_LINEAR, linear));
   const plotW = $derived(Math.max(60, w - PAD.l - PAD.r));
   const plotH = H - PAD.t - PAD.b;
   const range = $derived(rangeOf(slot));
