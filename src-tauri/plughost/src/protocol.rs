@@ -246,6 +246,11 @@ pub enum Request {
     Reset,
     /// Asks for the plug-in's settings as a [`Message::State`].
     GetState,
+    /// Replaces the plug-in's settings with saved ones (a preset), from
+    /// [`Message::State`] or a preset file. Answered with Ok.
+    SetState {
+        data: String,
+    },
     /// Opens the plug-in's own window, or brings it to the front.
     /// `owner` is the editor's main window (a Windows window handle; 0
     /// for none): the plug-in window stays above it.

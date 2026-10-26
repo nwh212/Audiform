@@ -1475,3 +1475,10 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Per-note pan.** Notes carry their own pan (-1 left to 1 right), shown and drawn in the lane under the roll (Lane: Velocity or Pan). It reaches the instrument as a per-note pan expression, which instruments that support it follow; others ignore it.
 - **MIDI channels as note colors.** Each note has a MIDI channel (1 to 16), shown as its color (channel 1 keeps the clip's color). The Channel picker sets the channel for new notes and the picked notes. Instruments with several parts (a split keyboard, an organ's upper and lower manuals) play each channel with its own part. Auditioned notes use their channel too.
 - Both are stored only when not the default, so older sessions and files are unchanged.
+
+## 2026-10-28: Effect presets
+
+- **Every effect window has presets:** a list to apply one (one undoable edit), Save As (a new name, or replace one of the same name) and Delete. Built-in effects keep theirs in the preferences, by effect; Default settings puts every control back.
+- **VST3 plug-ins use preset files** (`.vstpreset`) in the standard VST3 preset folders, which every VST3 program reads and writes. Presets saved for a plug-in in another program show up here, and presets saved here show up there. Save As writes to the user's own folder (under the maker and plug-in name); only presets there can be deleted from Audiform. A running plug-in takes a preset at once, without restarting, and undo puts its previous settings back the same way.
+- **Copying another editor's presets for its own built-in effects** was looked at and left out: those effects and their settings do not line up with Audiform's, so the presets would not mean the same thing. Its VST3 plug-in presets need no copying, since they are the shared preset files above.
+- **Moonlight transport orbs** have a soft outer edge; the left side of the rim was hard and bright.

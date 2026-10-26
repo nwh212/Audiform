@@ -15,6 +15,30 @@ use crate::plugins::{self, instance, Registry};
 use crate::session::model::{EffectChain, EffectSlot, Id, Session};
 
 /// Ids of every slot in the session that holds a plug-in.
+/// Each plug-in slot's saved settings, for noticing which ones an edit changed.
+pub fn plugin_states(s: &Session) -> std::collections::HashMap<Id, Option<String>> {
+    let mut out = std::collections::HashMap::new();
+    let mut add = |slot: &crate::session::model::EffectSlot| {
+        if plugins::is_plugin(&slot.effect) {
+            out.insert(slot.id, slot.plugin_state.clone());
+        }
+    };
+    for t in &s.tracks {
+        t.effects.slots.iter().for_each(&mut add);
+        for c in &t.clips {
+            c.effects.slots.iter().for_each(&mut add);
+        }
+        if let Some(i) = &t.instrument {
+            add(i);
+        }
+    }
+    for b in &s.buses {
+        b.effects.slots.iter().for_each(&mut add);
+    }
+    s.master.effects.slots.iter().for_each(&mut add);
+    out
+}
+
 pub fn plugin_slots(s: &Session) -> HashSet<Id> {
     let mut out = HashSet::new();
     let mut add = |c: &EffectChain| {
@@ -325,9 +349,59 @@ pub async fn midi_audition(
     let Some(slot) = slot.filter(|s| s.enabled) else {
         return Ok(false);
     };
-    let make = spawn_blocking(move || instance::audition(&slot, pitch, velocity, channel.unwrap_or(0), seconds))
-        .await
-        .map_err(|e| e.to_string())??;
+    let make = spawn_blocking(move || {
+        instance::audition(&slot, pitch, velocity, channel.unwrap_or(0), seconds)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     preview.play_made(make)?;
     Ok(true)
+}
+
+/// Presets for a plug-in (`effect` is its `vst3:` id) in the standard
+/// VST3 preset folders, shared with every other VST3 host.
+#[tauri::command]
+pub async fn plugin_presets(effect: String) -> Vec<crate::plugins::presets::PresetFile> {
+    let Some(cid) = effect.strip_prefix(plugins::PREFIX).map(str::to_string) else {
+        return Vec::new();
+    };
+    spawn_blocking(move || crate::plugins::presets::list(&cid))
+        .await
+        .unwrap_or_default()
+}
+
+/// A preset file's settings, to put in a slot as its `plugin_state`.
+#[tauri::command]
+pub async fn plugin_preset_read(path: PathBuf) -> Result<String, String> {
+    spawn_blocking(move || crate::plugins::presets::read(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Saves a plug-in slot's settings now (from the running plug-in, or
+/// as saved in the session) as a preset named `name`. Returns its path.
+#[tauri::command]
+pub async fn plugin_preset_save(slot: EffectSlot, name: String) -> Result<PathBuf, String> {
+    spawn_blocking(move || {
+        let found = plugins::find(&slot.effect).ok_or("The plug-in is not installed.")?;
+        let state = instance::running(slot.id)
+            .and_then(|h| h.lock().ok().and_then(|mut h| h.state()))
+            .or(slot.plugin_state.clone())
+            .ok_or("The plug-in has no settings to save yet. Open it once, then save.")?;
+        crate::plugins::presets::save(
+            &found.info.cid,
+            &found.info.vendor,
+            &found.info.name,
+            &name,
+            &state,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Deletes a preset file from the user's own preset folder.
+#[tauri::command]
+pub fn plugin_preset_delete(path: PathBuf) -> Result<(), String> {
+    crate::plugins::presets::delete(&path)
 }

@@ -15,8 +15,8 @@ use vst3::Steinberg::Vst::BusDirections_::{kInput, kOutput};
 use vst3::Steinberg::Vst::Event_::EventTypes_::{
     kNoteExpressionValueEvent, kNoteOffEvent, kNoteOnEvent,
 };
-use vst3::Steinberg::Vst::NoteExpressionTypeIDs_::kPanTypeID;
 use vst3::Steinberg::Vst::MediaTypes_::{kAudio, kEvent};
+use vst3::Steinberg::Vst::NoteExpressionTypeIDs_::kPanTypeID;
 use vst3::Steinberg::Vst::ParameterInfo_::ParameterFlags_::{
     kIsHidden, kIsProgramChange, kIsReadOnly,
 };
@@ -29,8 +29,8 @@ use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, Event, Event__type0, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentHandler, IComponentTrait, IConnectionPoint,
     IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IParameterChanges,
-    NoteExpressionValueEvent, NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext, ProcessData, ProcessSetup,
-    SpeakerArr, SpeakerArrangement,
+    NoteExpressionValueEvent, NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext,
+    ProcessData, ProcessSetup, SpeakerArr, SpeakerArrangement,
 };
 use vst3::Steinberg::{
     kResultOk, kResultTrue, FUnknown, IBStream, IPluginBaseTrait, IPluginFactoryTrait, TUID,
@@ -320,6 +320,26 @@ impl Plugin {
             out.extend_from_slice(&ctl);
             base64_encode(&out)
         }
+    }
+
+    /// Replaces the plug-in's settings with saved ones (see [`Plugin::state`]).
+    pub fn set_state(&self, data: &str) -> Result<(), String> {
+        let (comp, ctl) = split_state(data).ok_or("Those settings could not be read.")?;
+        unsafe {
+            let s = stream(comp.clone());
+            if self.component.setState(stream_ptr(&s)) != kResultOk {
+                return Err("The plug-in did not take those settings.".into());
+            }
+            if let (true, Some(c)) = (self.separate_controller, &self.controller) {
+                let s = stream(comp);
+                c.setComponentState(stream_ptr(&s));
+                if !ctl.is_empty() {
+                    let s = stream(ctl);
+                    c.setState(stream_ptr(&s));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The plug-in's look-ahead now (it may change with its settings).

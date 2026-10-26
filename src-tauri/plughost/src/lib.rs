@@ -211,6 +211,11 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                             break;
                         }
                     }
+                    Request::SetState { .. } => {
+                        if tx.send(ToMain::Request(cur, req)).is_err() {
+                            break;
+                        }
+                    }
                     Request::Tempo {
                         bpm,
                         beats_per_bar,
@@ -363,6 +368,19 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     }
                 }
             }
+            ToMain::Request(id, Request::SetState { data }) => match loaded.get(&id) {
+                Some(l) => match l.plugin.set_state(&data) {
+                    Ok(()) => send(out, id, &Message::Ok),
+                    Err(message) => send(out, id, &Message::Error { message }),
+                },
+                None => send(
+                    out,
+                    id,
+                    &Message::Error {
+                        message: "No plug-in loaded.".into(),
+                    },
+                ),
+            },
             ToMain::Request(id, Request::GetState) => match loaded.get(&id) {
                 Some(l) => send(
                     out,

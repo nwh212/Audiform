@@ -193,7 +193,13 @@ pub fn session_apply(
     op: Op,
 ) -> Result<Applied, String> {
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
+    let states = crate::commands::plugins::plugin_states(&s.session);
     let inverse = ops::apply(&mut s.session, &op).map_err(|e| e.to_string())?;
+    // Running plug-ins take settings the edit changed (a preset, an undo).
+    crate::plugins::instance::push_states(
+        &states,
+        &crate::commands::plugins::plugin_states(&s.session),
+    );
     // Plug-ins taken out of the session stop running.
     crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
     // New plug-ins and instruments start loading now, not when Play is pressed.

@@ -1231,3 +1231,29 @@ export interface SesxExportReport {
 export function sessionExportSesx(): Promise<{ path: string; report: SesxExportReport } | null> {
   return invoke<{ path: string; report: SesxExportReport } | null>("session_export_sesx");
 }
+
+/** A VST3 preset file found for a plug-in. `own` ones are in the user's folder and can be deleted. */
+export interface PluginPresetFile {
+  name: string;
+  path: string;
+  own: boolean;
+}
+
+/** Presets for a plug-in in the standard VST3 preset folders (shared with other VST3 programs). */
+export function pluginPresets(effect: string): Promise<PluginPresetFile[]> {
+  return invoke<PluginPresetFile[]>("plugin_presets", { effect });
+}
+
+/** A preset file's settings, for a slot's `plugin_state`. */
+export function pluginPresetRead(path: string): Promise<string> {
+  return invoke<string>("plugin_preset_read", { path });
+}
+
+/** Saves a plug-in slot's current settings as a preset file. Returns its path. */
+export function pluginPresetSave(slot: import("../stores/session").EffectSlotDoc, name: string): Promise<string> {
+  return invoke<string>("plugin_preset_save", { slot, name });
+}
+
+export function pluginPresetDelete(path: string): Promise<void> {
+  return invoke<void>("plugin_preset_delete", { path });
+}

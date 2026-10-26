@@ -325,6 +325,9 @@ pub struct Host {
     rate: u32,
     /// The stretch of the tempo map the plug-in was last told.
     told: Option<TempoSegment>,
+    /// The settings the plug-in last reported or was given, so the same
+    /// settings coming back from the session are not sent again.
+    last_state: Option<String>,
 }
 
 impl Host {
@@ -366,6 +369,7 @@ impl Host {
             buf: Vec::new(),
             rate,
             told: None,
+            last_state: state.clone(),
         };
         let load = Request::Load {
             path: found.bundle.to_string_lossy().into_owned(),
@@ -481,8 +485,27 @@ impl Host {
 
     pub fn state(&mut self) -> Option<String> {
         match self.request(&Request::GetState, REQUEST_TIMEOUT)? {
-            Message::State { data } => Some(data),
+            Message::State { data } => {
+                self.last_state = Some(data.clone());
+                Some(data)
+            }
             _ => None,
+        }
+    }
+
+    /// Gives the plug-in saved settings (a preset, or an undo), unless it
+    /// already has exactly these.
+    pub fn set_state(&mut self, data: &str) -> Result<(), String> {
+        if self.last_state.as_deref() == Some(data) {
+            return Ok(());
+        }
+        match self.request(&Request::SetState { data: data.into() }, REQUEST_TIMEOUT) {
+            Some(Message::Ok) => {
+                self.last_state = Some(data.into());
+                Ok(())
+            }
+            Some(Message::Error { message }) => Err(message),
+            _ => Err("The plug-in did not answer.".into()),
         }
     }
 
@@ -746,6 +769,31 @@ pub fn retain(slots: &HashSet<Id>) {
     if let Ok(mut p) = pool().lock() {
         p.retain(|id, _| slots.contains(id));
     }
+}
+
+/// Running plug-ins whose settings in the session changed (a preset, an
+/// undo) get the new settings, in the background. `before` holds each
+/// plug-in slot's settings before the change.
+pub fn push_states(before: &HashMap<Id, Option<String>>, after: &HashMap<Id, Option<String>>) {
+    let todo: Vec<(Arc<Mutex<Host>>, String)> = after
+        .iter()
+        .filter(|(id, s)| before.get(id).is_some_and(|b| b != *s))
+        .filter_map(|(id, s)| Some((running(*id)?, s.clone()?)))
+        .collect();
+    if todo.is_empty() {
+        return;
+    }
+    let _ = thread::Builder::new()
+        .name("plugin-state".into())
+        .spawn(move || {
+            for (h, s) in todo {
+                if let Ok(mut h) = h.lock() {
+                    if let Err(e) = h.set_state(&s) {
+                        eprintln!("plug-in settings not applied: {e}");
+                    }
+                }
+            }
+        });
 }
 
 /// Stops a slot's host, so the next playback starts it again (after a crash).

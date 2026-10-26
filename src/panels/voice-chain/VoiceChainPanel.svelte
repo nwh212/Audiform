@@ -15,6 +15,7 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
+  import EffectPresetBar from "./EffectPresetBar.svelte";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
   import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
@@ -736,6 +737,7 @@
         </header>
         <div class="editor">
       {#if winSlot && winInfo}
+        <EffectPresetBar slot={winSlot} info={winInfo} {prefs} {ask} {onNotice} {onError} onChange={(change, label) => commit(label, setSlot(chain, winSlot.id, change))} />
                 {#if winSlot.effect === "altaudio.parametric_eq"}
           <EqGraph
             slot={winSlot}

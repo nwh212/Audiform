@@ -20,6 +20,7 @@
 //!   on across stops and starts.
 
 pub mod instance;
+pub mod presets;
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
