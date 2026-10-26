@@ -101,6 +101,8 @@ export class TransportStore {
   private busy: Promise<unknown> = Promise.resolve();
   /** Set while recording, so playback never stops at the end of the old audio. */
   holdAtEnd = false;
+  /** Return to Start on Stop: the play/stop toggle puts the playhead back where playback started. */
+  returnOnStop = false;
 
   constructor(
     private readonly backend: TransportBackend,
@@ -153,7 +155,8 @@ export class TransportStore {
   }
 
   toggle(): Promise<void> {
-    return this.state.playing ? this.pause() : this.play();
+    if (!this.state.playing) return this.play();
+    return this.returnOnStop ? this.stop() : this.pause();
   }
 
   /** Moves playback to a new spot while playing, or the playhead while stopped. */

@@ -2218,6 +2218,16 @@
     if (ops.length) void session.edit("Track Height", { op: "batch", ops }, runner).catch(onError);
   }
 
+  // View > Zoom In/Out Vertically (Alt+= and Alt+-) and Zoom Out Full (Shift+\\): every track taller or shorter, or everything in view.
+  $effect(() => {
+    const offs = [
+      actions.register({ id: "view.zoom-in-vertical", run: () => resizeTracks(1.25), enabled: () => shown.length > 0 }),
+      actions.register({ id: "view.zoom-out-vertical", run: () => resizeTracks(0.8), enabled: () => shown.length > 0 }),
+      actions.register({ id: "view.zoom-out-full", run: () => zoomOutAll(), enabled: () => shown.length > 0 }),
+    ];
+    return () => offs.forEach((off) => off());
+  });
+
   /** A track's color for its header strip: its own color, or the palette by row. */
   function trackColor(c: string | null | undefined, row: number): string {
     const v = c ?? defaultTrackColor(row);

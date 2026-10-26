@@ -45,3 +45,10 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **"Five themes" in the README** counts Dark, Prism, Moonlight, Aqua and Meadow (Sky Glass lives on its own branch).
 - **Screenshots come from a mocked session** in a browser (no real audio): the waveforms are drawn from made-up shapes. The script is in my scratch folder; say if you want it kept in the repo (`scripts/`) to redo them later.
 - **The banner image is still needed:** it never reached my disk. Commit it (for example to `brand/banner.png`) or attach it again and I will use it for the README header and the launch splash.
+
+## Keyboard shortcuts
+
+- **I built five shortcut features** that had keys assigned but nothing behind them, because they are everyday basics in a music editor: Nudge (Alt+comma/period), vertical zoom (Alt+=/-), Zoom Out Full (Shift+Backslash), Hide All Effect Windows (Ctrl+Shift+H) and Return to Start on Stop (Shift+X). These keys were already approved in CLAUDE.md, so no new keys were added.
+- **Nudge distance is five pixels at the current zoom** (fine when zoomed in, coarse when zoomed out). A fixed time or grid step is the other common choice. Nudge moves audio clips only, not MIDI clips.
+- **Pressing 9 (or 1) with no file open in the Waveform editor** opens the New Audio File dialog, which then takes the keys. That is how it was built; say if 9 should just switch to an empty Waveform editor instead.
+- **Shift+D toggles the Waveform editor's spectrum view;** in the multitrack view it only flips that setting, so nothing visible changes there.

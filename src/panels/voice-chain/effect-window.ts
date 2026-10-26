@@ -10,6 +10,9 @@
 
 import { writable } from "svelte/store";
 
+/** Event on the window: close every effect window (Effects > Hide All Effect Windows). */
+export const HIDE_EFFECT_WINDOWS = "audiform:hide-effect-windows";
+
 /** Slot id to open in the effect window. The Audio FX panel takes it and clears it. */
 export const effectWindowRequest = writable<string | null>(null);
 

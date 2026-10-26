@@ -72,7 +72,7 @@
   import AmpPanel from "./AmpPanel.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
-  import { clampBox, effectWindowRequest, portal, type WindowBox } from "./effect-window";
+  import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, type WindowBox } from "./effect-window";
   import { dropEdit, effectMenu, ownerKey, slotOver, startSlotDrag, type SlotSpot } from "./slot-drag";
 
   interface Props {
@@ -280,6 +280,12 @@
 
   // Effect settings open in a floating window, one effect at a time.
   let winOpen = $state(false);
+  // Effects > Hide All Effect Windows.
+  $effect(() => {
+    const hide = () => (winOpen = false);
+    window.addEventListener(HIDE_EFFECT_WINDOWS, hide);
+    return () => window.removeEventListener(HIDE_EFFECT_WINDOWS, hide);
+  });
   let winBox = $state<WindowBox>({ x: 340, y: 140 });
   let winEl = $state<HTMLElement | null>(null);
   const winSlot = $derived(winOpen ? (chain.slots.find((s) => s.id === selectedSlot) ?? null) : null);

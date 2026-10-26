@@ -145,6 +145,7 @@
     generateAudio,
     exportMixdown,
     pluginEvents,
+    pluginCloseWindow,
     pluginState,
     exportBounce,
     exportMerge,
@@ -197,7 +198,7 @@
   import PendingPanel from "../panels/PendingPanel.svelte";
   import VoiceChainPanel from "../panels/voice-chain/VoiceChainPanel.svelte";
   import { addSlot, chainOf, newSlot } from "../panels/voice-chain/chain";
-  import { effectWindowRequest } from "../panels/voice-chain/effect-window";
+  import { effectWindowRequest, HIDE_EFFECT_WINDOWS } from "../panels/voice-chain/effect-window";
   import { setFxCatalog } from "../panels/editor/envelope";
   import type { Finding } from "../panels/quickpass/quickpass";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
@@ -2320,6 +2321,22 @@
     }
     return changes.length ? changes : null;
   }
+  /** Return to Start on Stop, kept between runs. */
+  const KEY_RETURN_ON_STOP = "transport.return-on-stop";
+  /** How far one nudge moves clips: five pixels at the current zoom. */
+  const NUDGE_PX = 5;
+  /** Clip > Nudge: the selected audio clips a little left or right; null when none can move. */
+  function clipsNudge(dir: -1 | 1): ClipChange[] | null {
+    const d = session.current;
+    const sel = editor.current().selectedClips;
+    if (!d || sel.size === 0) return null;
+    const step = Math.max(1, Math.round(d.view.samples_per_pixel * NUDGE_PX));
+    const picked = d.tracks.flatMap((t) => t.clips.filter((c) => sel.has(c.id)));
+    if (!picked.length || picked.some((c) => c.locked)) return null;
+    // Moving left stops at the session start, keeping the clips' spacing.
+    const by = dir < 0 ? -Math.min(step, Math.min(...picked.map((c) => c.start))) : step;
+    return by === 0 ? null : picked.map((c) => ({ id: c.id, start: c.start + by }));
+  }
   async function moveClipsToTrack(dir: -1 | 1) {
     const changes = clipsTrackMove(dir);
     const d = session.current;
@@ -3353,7 +3370,7 @@
     const jumpEdge = (dir: -1 | 1, markersOnly: boolean) => {
       const doc = session.current;
       if (!doc) return Promise.resolve();
-      const here = transport.current.position;
+      const here = playheadNow();
       const edges = new Set<number>(doc.markers.map((m) => m.position));
       if (!markersOnly) {
         const media = new Map(doc.media.map((m) => [m.id, m]));
@@ -4118,6 +4135,37 @@
           reason: () => (editor.current().selectedClips.size === 0 ? "Select clips first." : dir < 0 ? "The clips are already on the top track, or one is locked." : "The clips are already on the bottom track, or one is locked."),
         }),
       ),
+      ...([-1, 1] as const).map((dir) =>
+        actions.register({
+          id: dir < 0 ? "clip.nudge-left" : "clip.nudge-right",
+          run: async () => {
+            const changes = clipsNudge(dir);
+            if (changes) await session.edit(dir < 0 ? "Nudge Left" : "Nudge Right", { op: "set_clips", changes }, sessionHistory);
+          },
+          enabled: () => clipsNudge(dir) !== null,
+          reason: () => (editor.current().selectedClips.size === 0 ? "Select audio clips first." : "A selected clip is locked, or the clips are already at the start."),
+        }),
+      ),
+      actions.register({
+        id: "multitrack.return-on-stop",
+        run: () => {
+          transport.returnOnStop = !transport.returnOnStop;
+          prefs.set(KEY_RETURN_ON_STOP, transport.returnOnStop);
+        },
+        checked: () => transport.returnOnStop,
+      }),
+      actions.register({
+        id: "fx.hide-windows",
+        run: () => {
+          window.dispatchEvent(new Event(HIDE_EFFECT_WINDOWS));
+          // Plug-ins' own windows too.
+          const d = session.current;
+          if (!d) return;
+          const chains = [...d.tracks.flatMap((t) => [t.effects, ...t.clips.map((c) => c.effects)]), ...(d.buses ?? []).map((b) => b.effects), d.master?.effects];
+          for (const ch of chains) for (const s of ch?.slots ?? []) if (s.effect.startsWith("vst3:")) void pluginCloseWindow(s.id).catch(() => {});
+          for (const t of d.tracks) if (t.instrument?.effect.startsWith("vst3:")) void pluginCloseWindow(t.instrument.id).catch(() => {});
+        },
+      }),
       actions.register({ id: "clip.split", run: () => split(false), enabled: () => (session.current?.tracks.some((t) => t.clips.length > 0) ?? false) }),
       actions.register({ id: "clip.split-all", run: () => split(true), enabled: () => (session.current?.tracks.some((t) => t.clips.length > 0) ?? false) }),
       actions.register({
@@ -4538,6 +4586,7 @@
       .then(() => {
         // Editor settings (snapping, crossfades, time format) carry over between runs.
         restoreSettings(prefs.raw(KEY_EDITOR));
+        transport.returnOnStop = prefs.raw(KEY_RETURN_ON_STOP) === true;
         settings.set(sanitizeSettings(prefs.raw(KEY_SETTINGS)));
         applyAppSettings(settings.current, false);
         offs.push(startMetronome());
