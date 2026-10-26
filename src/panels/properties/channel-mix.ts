@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 /**
- * The Channel Routing: how much of each of a file's channels a clip sends
+ * The Source Channels: how much of each of a file's channels a clip sends
  * to the left and the right (from -100% to 100%; negative flips its
  * polarity). Channel names follow the standard order of multichannel
  * WAV files, the same as the core (`dsp/channels.rs`).
@@ -19,9 +19,9 @@ const NAMED: Record<number, string[]> = {
   5: ["L", "R", "C", "Ls", "Rs"],
   6: ["L", "R", "C", "LFE", "Ls", "Rs"],
   7: ["L", "R", "C", "LFE", "Cs", "Ls", "Rs"],
-  8: ["L", "R", "C", "LFE", "Lb", "Rb", "Ls", "Rs"],
-  10: ["L", "R", "C", "LFE", "Ls", "Rs", "Ltf", "Rtf", "Ltb", "Rtb"],
-  12: ["L", "R", "C", "LFE", "Lb", "Rb", "Ls", "Rs", "Ltf", "Rtf", "Ltb", "Rtb"],
+  8: ["L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss"],
+  10: ["L", "R", "C", "LFE", "Ls", "Rs", "Ltf", "Rtf", "Ltr", "Rtr"],
+  12: ["L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr"],
 };
 
 /** Speaker names for a file with `n` channels, in file order; numbers when the order is unknown. */

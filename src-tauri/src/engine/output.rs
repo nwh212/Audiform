@@ -12,6 +12,76 @@ use std::sync::Mutex;
 use cpal::traits::{DeviceTrait, HostTrait};
 
 static CHOICE: Mutex<Option<String>> = Mutex::new(None);
+static MAP: Mutex<Option<OutputMap>> = Mutex::new(None);
+
+/// Which device outputs (from 0) the mix plays on: the stereo mix's left
+/// and right, and in 3D Space sessions heard on speakers, each speaker
+/// by name. A speaker not named goes to the output at its place in the
+/// layout (L on 1, R on 2, C on 3...).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputMap {
+    pub stereo: [u16; 2],
+    pub speakers: std::collections::HashMap<String, u16>,
+}
+
+impl Default for OutputMap {
+    fn default() -> Self {
+        Self {
+            stereo: [0, 1],
+            speakers: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl OutputMap {
+    /// The output for speaker `name`, the `index`th of its layout.
+    pub fn speaker(&self, name: &str, index: usize) -> usize {
+        self.speakers.get(name).map_or(index, |&o| usize::from(o))
+    }
+}
+
+pub fn set_map(map: OutputMap) {
+    if let Ok(mut m) = MAP.lock() {
+        *m = Some(map);
+    }
+}
+
+pub fn map() -> OutputMap {
+    MAP.lock().ok().and_then(|m| m.clone()).unwrap_or_default()
+}
+
+/// The device's settings for playback with at least `channels` outputs:
+/// its default when that has enough, otherwise its widest setting at the
+/// default rate (and format, when it offers one).
+pub fn config_for(device: &cpal::Device, channels: usize) -> Option<cpal::SupportedStreamConfig> {
+    let def = device.default_output_config().ok()?;
+    if usize::from(def.channels()) >= channels {
+        return Some(def);
+    }
+    let rate = def.sample_rate();
+    let wide = device
+        .supported_output_configs()
+        .ok()?
+        .filter(|r| r.min_sample_rate() <= rate && rate <= r.max_sample_rate())
+        .max_by_key(|r| (r.channels(), r.sample_format() == def.sample_format()))?;
+    if wide.channels() <= def.channels() {
+        return Some(def);
+    }
+    Some(wide.with_sample_rate(rate))
+}
+
+/// Outputs on the chosen device in its widest setting (0 with no device).
+pub fn output_channels() -> u16 {
+    output_device_any()
+        .map(|d| {
+            let def = d.default_output_config().map_or(0, |c| c.channels());
+            d.supported_output_configs()
+                .map(|all| all.map(|r| r.channels()).max().unwrap_or(0))
+                .unwrap_or(0)
+                .max(def)
+        })
+        .unwrap_or(0)
+}
 
 /// Picks the output by its system name; None goes back to the default.
 pub fn set_choice(name: Option<String>) {
@@ -56,6 +126,14 @@ pub fn device_rate() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unnamed_speakers_keep_their_place() {
+        let mut m = OutputMap::default();
+        m.speakers.insert("C".into(), 7);
+        assert_eq!(m.speaker("C", 2), 7);
+        assert_eq!(m.speaker("Ls", 4), 4);
+    }
 
     #[test]
     fn blank_names_mean_the_default() {

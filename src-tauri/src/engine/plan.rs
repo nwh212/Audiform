@@ -68,7 +68,7 @@ pub struct ClipPlan {
     /// Clips above this one on the track that overlap it. A clip on top
     /// covers the ones under it; they come through only where it fades.
     pub covers: Vec<Cover>,
-    /// Channel Routing: `[left, right]` per channel of the file. None plays
+    /// Source Channels: `[left, right]` per channel of the file. None plays
     /// mono to both sides and stereo as it is.
     pub mix: Option<Vec<[f32; 2]>>,
 }

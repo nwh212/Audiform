@@ -307,7 +307,7 @@
           g.font = `9px ${css("--font-mono")}`;
           g.fillStyle = "rgba(255, 255, 255, 0.6)";
           g.textBaseline = "top";
-          for (let k = 0; k < ch; k++) g.fillText(names[k]!, Math.max(x0, 0) + 3, body.top + rowH * k + 1);
+          for (let k = 0; k < ch; k++) g.fillText(names[k]!, Math.max(x0, 0) + 16, body.top + rowH * k + 2);
           g.restore();
         }
         // Looped clips: a dashed line where each repeat begins.

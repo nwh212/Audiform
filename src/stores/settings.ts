@@ -42,6 +42,10 @@ export interface AppSettings {
   colors: AppColors;
   /** System name of the output; null is the system default. */
   output: string | null;
+  /** Device outputs (from 0) the stereo mix plays on: left, right. */
+  outputPair: [number, number];
+  /** 3D Space sessions heard on speakers: each speaker's device output (from 0) by name. Missing speakers play on the output at their place in the layout. */
+  speakerOutputs: Record<string, number>;
   /** How lively the level meters are. */
   meterSpeed: "fast" | "medium" | "slow";
   /** The custom loudness target: integrated LUFS and true peak ceiling. */
@@ -149,6 +153,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dropMany: "sequence",
   colors: { ...NO_COLORS },
   output: null,
+  outputPair: [0, 1],
+  speakerOutputs: {},
   waveInput: null,
   driver: "system",
   meterSpeed: "fast",
@@ -215,6 +221,15 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       phaseHigh: color(c.phaseHigh),
     },
     output: typeof o.output === "string" && o.output.trim() ? o.output : null,
+    outputPair:
+      Array.isArray(o.outputPair) && o.outputPair.length === 2 && o.outputPair.every((v) => Number.isInteger(v) && v >= 0 && v < 64)
+        ? [o.outputPair[0] as number, o.outputPair[1] as number]
+        : [0, 1],
+    speakerOutputs: Object.fromEntries(
+      Object.entries(typeof o.speakerOutputs === "object" && o.speakerOutputs ? (o.speakerOutputs as Record<string, unknown>) : {}).filter(
+        (e): e is [string, number] => /^[A-Za-z]{1,4}$/.test(e[0]) && Number.isInteger(e[1]) && (e[1] as number) >= 0 && (e[1] as number) < 64,
+      ),
+    ),
     driver: o.driver === "asio" ? "asio" : "system",
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"

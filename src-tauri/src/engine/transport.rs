@@ -575,10 +575,28 @@ fn run(
         let _ = ready.send(Err("No audio output device found.".into()));
         return;
     };
-    let supported = match device.default_output_config() {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = ready.send(Err(format!("The audio device is not available: {e}")));
+    // Which outputs the mix plays on. 3D Space sessions heard on
+    // speakers send each speaker to its own output.
+    let omap = super::output::map();
+    let stereo_out = omap.stereo.map(usize::from);
+    let bed_out: Option<Vec<usize>> = session
+        .space
+        .filter(|sp| sp.listen == crate::session::model::SpaceListen::Speakers)
+        .map(|sp| {
+            crate::dsp::space::speakers(sp.layout)
+                .iter()
+                .enumerate()
+                .map(|(k, s)| omap.speaker(s.name, k))
+                .collect()
+        });
+    let wanted = match &bed_out {
+        Some(m) => m.iter().max().map_or(2, |&o| o + 1),
+        None => stereo_out[0].max(stereo_out[1]) + 1,
+    };
+    let supported = match super::output::config_for(&device, wanted) {
+        Some(c) => c,
+        None => {
+            let _ = ready.send(Err("The audio device is not available.".into()));
             return;
         }
     };
@@ -633,16 +651,29 @@ fn run(
         consumers.push(c);
     }
     let (mut click_out, click_in) = RingBuffer::<f32>::new(cap);
+    let nb = bed_out.as_ref().map_or(0, Vec::len);
+    let (mut bed_prod, bed_in) = if nb > 0 {
+        let (p, c) = RingBuffer::<f32>::new(cap / 2 * nb);
+        (Some(p), Some(c))
+    } else {
+        (None, None)
+    };
+    let mut routing = Routing {
+        stereo: stereo_out,
+        bed: bed_in.zip(bed_out),
+        frame: vec![0.0; nb],
+    };
 
     // Fill ahead before the device starts, so playback starts clean.
     let mut blocks: Vec<Vec<f32>> = vec![Vec::with_capacity(BLOCK * 2); rings];
-    while producers.iter().all(|p| p.slots() >= BLOCK * 2) && click_out.slots() >= BLOCK * 2 {
+    while has_room(&producers, &click_out, bed_prod.as_ref(), nb) {
         render_block(
             &mut mix,
             &mut blocks,
             &mut producers,
             &mut click,
             &mut click_out,
+            bed_prod.as_mut(),
         );
         shared.push_meters(&mut mix);
     }
@@ -650,7 +681,17 @@ fn run(
     let render_shared = shared.clone();
     let render = thread::Builder::new()
         .name("transport-render".into())
-        .spawn(move || render_loop(mix, producers, blocks, click, click_out, render_shared));
+        .spawn(move || {
+            render_loop(
+                mix,
+                producers,
+                blocks,
+                click,
+                click_out,
+                bed_prod,
+                render_shared,
+            )
+        });
     let render = match render {
         Ok(r) => r,
         Err(e) => {
@@ -667,6 +708,7 @@ fn run(
             click_in,
             shared.clone(),
             channels,
+            std::mem::take(&mut routing),
         ),
         SampleFormat::I16 => build::<i16>(
             &device,
@@ -675,6 +717,7 @@ fn run(
             click_in,
             shared.clone(),
             channels,
+            std::mem::take(&mut routing),
         ),
         SampleFormat::I32 => build::<i32>(
             &device,
@@ -683,6 +726,7 @@ fn run(
             click_in,
             shared.clone(),
             channels,
+            std::mem::take(&mut routing),
         ),
         SampleFormat::U16 => build::<u16>(
             &device,
@@ -691,6 +735,7 @@ fn run(
             click_in,
             shared.clone(),
             channels,
+            std::mem::take(&mut routing),
         ),
         other => Err(format!("Unsupported output sample format: {other}")),
     };
@@ -759,17 +804,56 @@ impl Ticker {
     }
 }
 
-/// Renders one block of the mix and its click, and queues both.
+/// Room in every queue for one more block.
+fn has_room(
+    producers: &[Producer<f32>],
+    click_out: &Producer<f32>,
+    bed: Option<&Producer<f32>>,
+    nb: usize,
+) -> bool {
+    producers.iter().all(|p| p.slots() >= BLOCK * 2)
+        && click_out.slots() >= BLOCK * 2
+        && bed.is_none_or(|b| b.slots() >= BLOCK * nb)
+}
+
+/// Where the device's outputs get the mix from: the stereo mix's left and
+/// right outputs, or each speaker of the bed on its own output.
+#[derive(Default)]
+struct Routing {
+    stereo: [usize; 2],
+    /// The bed's queue and each speaker's output.
+    bed: Option<(Consumer<f32>, Vec<usize>)>,
+    /// One frame of the bed, scratch for the audio thread.
+    frame: Vec<f32>,
+}
+
+impl Routing {
+    #[cfg(test)]
+    fn stereo() -> Self {
+        Self {
+            stereo: [0, 1],
+            ..Self::default()
+        }
+    }
+}
+
+/// Renders one block of the mix and its click, and queues both (and the
+/// speaker bed when it plays on its own outputs).
 fn render_block(
     mix: &mut Mix,
     blocks: &mut [Vec<f32>],
     producers: &mut [Producer<f32>],
     click: &mut Ticker,
     click_out: &mut Producer<f32>,
+    bed: Option<&mut Producer<f32>>,
 ) {
     let rendered = mix.rendered();
     let n = mix.render(BLOCK, blocks);
     push_all(producers, blocks);
+    if let Some(b) = bed {
+        let (_, left) = b.push_partial_slice(mix.graph().bed());
+        debug_assert!(left.is_empty(), "room was checked first");
+    }
     click.render(rendered, n);
     let (_, left) = click_out.push_partial_slice(&click.buf);
     debug_assert!(left.is_empty(), "room was checked first");
@@ -781,8 +865,10 @@ fn render_loop(
     mut blocks: Vec<Vec<f32>>,
     mut click: Ticker,
     mut click_out: Producer<f32>,
+    mut bed: Option<Producer<f32>>,
     shared: Arc<Shared>,
 ) {
+    let nb = mix.graph().bed_channels();
     while !shared.stop.load(Ordering::SeqCst) {
         if let Some(update) = shared.take_chains() {
             // Checked by the caller: every chain here keeps its look-ahead.
@@ -791,13 +877,14 @@ fn render_loop(
         if let Some(levels) = shared.take_levels() {
             mix.graph().set_levels(levels);
         }
-        if producers.iter().all(|p| p.slots() >= BLOCK * 2) && click_out.slots() >= BLOCK * 2 {
+        if has_room(&producers, &click_out, bed.as_ref(), nb) {
             render_block(
                 &mut mix,
                 &mut blocks,
                 &mut producers,
                 &mut click,
                 &mut click_out,
+                bed.as_mut(),
             );
             shared.push_meters(&mut mix);
         } else {
@@ -813,6 +900,7 @@ fn build<T>(
     mut click: Consumer<f32>,
     shared: Arc<Shared>,
     channels: usize,
+    mut routing: Routing,
 ) -> Result<cpal::Stream, String>
 where
     T: SizedSample + FromSample<f32>,
@@ -833,6 +921,7 @@ where
                     &shared,
                     &mut gains,
                     &mut peaks,
+                    &mut routing,
                 );
             },
             |e| eprintln!("transport stream error: {e}"),
@@ -842,6 +931,7 @@ where
 }
 
 /// The audio thread's whole job: no allocation, no locks, no I/O.
+#[allow(clippy::too_many_arguments)]
 fn mix<T>(
     out: &mut [T],
     channels: usize,
@@ -850,6 +940,7 @@ fn mix<T>(
     shared: &Shared,
     gains: &mut [[f32; 2]],
     peaks: &mut [[f32; 2]],
+    routing: &mut Routing,
 ) where
     T: SizedSample + FromSample<f32>,
 {
@@ -860,7 +951,13 @@ fn mix<T>(
         .map(|c| c.slots() / 2)
         .min()
         .unwrap_or(0)
-        .min(click.slots() / 2);
+        .min(click.slots() / 2)
+        .min(
+            routing
+                .bed
+                .as_ref()
+                .map_or(usize::MAX, |(c, m)| c.slots() / m.len().max(1)),
+        );
     let n = avail.min(frames);
     for (g, a) in gains.iter_mut().zip(&shared.gains) {
         g[0] = bits_f32(a[0].load(Ordering::Relaxed));
@@ -894,15 +991,49 @@ fn mix<T>(
         mpeak[1] = mpeak[1].max(r.abs());
         super::scope::push(l, r);
         // The metronome after the master fader, meters and scope.
-        l += click.pop().unwrap_or(0.0);
-        r += click.pop().unwrap_or(0.0);
+        let ck = [click.pop().unwrap_or(0.0), click.pop().unwrap_or(0.0)];
+        l += ck[0];
+        r += ck[1];
         let frame = &mut out[f * channels..(f + 1) * channels];
-        frame[0] = T::from_sample(l);
-        if channels > 1 {
-            frame[1] = T::from_sample(r);
-        }
-        for s in frame.iter_mut().skip(2) {
+        for s in frame.iter_mut() {
             *s = T::from_sample(0.0f32);
+        }
+        match routing.bed.as_mut() {
+            // Each speaker on its own output; the click on the stereo pair.
+            Some((bed, map)) => {
+                for (k, &o) in map.iter().enumerate() {
+                    let v = bed.pop().unwrap_or(0.0) * master;
+                    routing.frame[k] = v;
+                    if let Some(s) = frame.get_mut(o) {
+                        *s = T::from_sample(v);
+                    }
+                }
+                let [ol, or] = routing.stereo;
+                for (o, v) in [(ol, ck[0]), (or, ck[1])] {
+                    if v != 0.0 {
+                        if let Some(s) = frame.get_mut(o) {
+                            let speaker = map
+                                .iter()
+                                .position(|&m| m == o)
+                                .map_or(0.0, |k| routing.frame[k]);
+                            *s = T::from_sample(speaker + v);
+                        }
+                    }
+                }
+            }
+            None => {
+                let [ol, or] = routing.stereo;
+                if channels == 1 {
+                    frame[0] = T::from_sample(l);
+                } else {
+                    if let Some(s) = frame.get_mut(ol) {
+                        *s = T::from_sample(l);
+                    }
+                    if let Some(s) = frame.get_mut(or) {
+                        *s = T::from_sample(r);
+                    }
+                }
+            }
         }
     }
     for s in out[n * channels..].iter_mut() {
@@ -978,6 +1109,7 @@ mod tests {
             &shared,
             &mut gains,
             &mut peaks,
+            &mut Routing::stereo(),
         );
         // Two frames mixed, the third is silence because the rings ran dry.
         assert_eq!(out, [0.5, 0.25, -0.25, -0.125, 0.0, 0.0]);
@@ -1020,6 +1152,7 @@ mod tests {
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
+            &mut Routing::stereo(),
         );
         assert_eq!(out, [0.5, 0.5]);
         assert_eq!(
@@ -1045,6 +1178,7 @@ mod tests {
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
+            &mut Routing::stereo(),
         );
         assert_eq!(out, [0.5, 0.0]);
     }
@@ -1066,9 +1200,64 @@ mod tests {
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
+            &mut Routing::stereo(),
         );
         set_mono_check(false);
         assert_eq!(out, [0.25, 0.25]);
+    }
+
+    #[test]
+    fn speakers_play_on_their_mapped_outputs() {
+        let shared = Shared::new(1, &[[1.0, 1.0]], 1.0);
+        let (mut p, c) = RingBuffer::<f32>::new(4);
+        p.push(0.9).unwrap();
+        p.push(0.9).unwrap();
+        // Three speakers: L on output 3, R on 1, C on 2; output 4 unused.
+        let (mut bp, bc) = RingBuffer::<f32>::new(6);
+        for v in [0.1, 0.2, 0.3] {
+            bp.push(v).unwrap();
+        }
+        let mut routing = Routing {
+            stereo: [0, 1],
+            bed: Some((bc, vec![2, 0, 1])),
+            frame: vec![0.0; 3],
+        };
+        let mut out = [7f32; 4];
+        mix(
+            &mut out,
+            4,
+            &mut [c],
+            &mut quiet(),
+            &shared,
+            &mut [[0.0; 2]],
+            &mut [[0.0; 2]],
+            &mut routing,
+        );
+        assert_eq!(out, [0.2, 0.3, 0.1, 0.0], "the stereo fold is not played");
+    }
+
+    #[test]
+    fn stereo_plays_on_the_picked_pair() {
+        let shared = Shared::new(1, &[[1.0, 1.0]], 1.0);
+        let (mut p, c) = RingBuffer::<f32>::new(4);
+        p.push(0.3).unwrap();
+        p.push(0.6).unwrap();
+        let mut routing = Routing {
+            stereo: [3, 2],
+            ..Routing::default()
+        };
+        let mut out = [7f32; 4];
+        mix(
+            &mut out,
+            4,
+            &mut [c],
+            &mut quiet(),
+            &shared,
+            &mut [[0.0; 2]],
+            &mut [[0.0; 2]],
+            &mut routing,
+        );
+        assert_eq!(out, [0.0, 0.0, 0.6, 0.3]);
     }
 
     #[test]
@@ -1086,6 +1275,7 @@ mod tests {
             &shared,
             &mut [[0.0; 2]],
             &mut [[0.0; 2]],
+            &mut Routing::stereo(),
         );
         assert_eq!(out, [0.3, 0.6, 0.0, 0.0]);
     }

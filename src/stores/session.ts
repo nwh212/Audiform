@@ -124,7 +124,7 @@ export interface ClipDoc {
   stretch?: StretchDoc | null;
   /** What the clip holds. */
   audio_type?: AudioType | null;
-  /** Channel Routing: how much of each of the file's channels goes left and right. Missing uses the default. */
+  /** Source Channels: how much of each of the file's channels goes left and right. Missing uses the default. */
   channel_mix?: ChannelMixDoc | null;
   effects?: EffectChainDoc;
   [key: string]: unknown;
@@ -272,7 +272,7 @@ export const SPACE_LAYOUTS: SpaceLayout[] = ["2.0", "5.1", "7.1", "5.1.2", "7.1.
 export interface SpaceDoc {
   layout: SpaceLayout;
   /** Stereo: each sound folded to stereo. Binaural: the speakers heard around a head, for headphones. */
-  listen?: "stereo" | "binaural";
+  listen?: "stereo" | "binaural" | "speakers";
 }
 /** A spot in the room: x left -1 to right 1, y back -1 to front 1, z floor 0 to ceiling 1. */
 /** A setting of a spot in the room that automation can move. */
@@ -414,9 +414,9 @@ export interface ClipChange {
   audio_type?: AudioType;
   /** Clears the audio type. */
   clear_audio_type?: boolean;
-  /** Sets the Channel Routing. */
+  /** Sets the Source Channels. */
   channel_mix?: ChannelMixDoc;
-  /** Back to the default Channel Routing for the file. */
+  /** Back to the default Source Channels for the file. */
   clear_channel_mix?: boolean;
   /** Place in the track's stacking order after the change: 0 is the bottom; past the end is the top. */
   layer?: number;

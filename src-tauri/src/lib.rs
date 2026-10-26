@@ -106,6 +106,8 @@ pub fn run() {
             commands::devices::audio_inputs,
             commands::devices::audio_outputs,
             commands::devices::set_audio_output,
+            commands::devices::set_output_map,
+            commands::devices::output_channels,
             commands::devices::audio_driver,
             commands::devices::set_audio_driver,
             commands::cache::cache_info,

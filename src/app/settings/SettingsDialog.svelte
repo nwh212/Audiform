@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, type CacheInfo } from "../core";
-  import { audioDriver, audioInputs, audioOutputs, type AudioDriver, type AudioInput } from "../core";
+  import { audioDriver, audioInputs, audioOutputs, outputChannels, type AudioDriver, type AudioInput } from "../core";
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
@@ -36,6 +36,10 @@
   let driver = $state<AudioDriver | null>(null);
   const systemDriverName = () => (navigator.userAgent.includes("Windows") ? "WASAPI" : navigator.userAgent.includes("Mac") ? "Core Audio" : "ALSA");
   let cache = $state<CacheInfo | null>(null);
+  // Channel Routing: the device's outputs, and every speaker name a 3D Space layout uses.
+  let outCount = $state<number | null>(null);
+  const outs = $derived(Array.from({ length: Math.max(outCount ?? 0, 2, d.app.outputPair[0] + 1, d.app.outputPair[1] + 1, ...Object.values(d.app.speakerOutputs).map((v) => v + 1)) }, (_, i) => i));
+  const SPEAKER_NAMES = ["L", "R", "C", "LFE", "Ls", "Rs", "Lrs", "Rrs", "Lss", "Rss", "Ltm", "Rtm", "Ltf", "Rtf", "Ltr", "Rtr"];
   let busy = $state(false);
   // Device lookups run one after another, never together: a driver that
   // misbehaves under parallel calls can no longer take the app down.
@@ -59,6 +63,7 @@
   $effect(() => {
     if (page === "Audio Devices" && (outputs === null || inputs === null || driver === null)) void loadDevices();
     if (page === "Cache and Files" && cache === null) void refreshCache();
+    if (page === "Channel Routing" && outCount === null) void outputChannels().then((n) => (outCount = n), () => (outCount = 0));
   });
   async function refreshCache() {
     cache = await cacheInfo().catch(() => null);
@@ -233,8 +238,41 @@
           <p class="note">ASIO is a trademark of Steinberg Media Technologies GmbH.</p>
           <div><button type="button" onclick={() => void openSoundSettings()}>Open System Sound Settings</button></div>
         {:else if page === "Channel Routing"}
-          <label class="off"><select disabled><option>1 and 2</option></select> Input channels for stereo tracks</label>
-          <label class="off"><select disabled><option>1 and 2</option></select> Output channels</label>
+          <p class="note">Which outputs of {d.app.output ?? "the playback device"} the mix plays on.{outCount ? ` It has ${outCount} outputs.` : ""} Takes effect from the next playback.</p>
+          <div class="outmap">
+            <span class="head">Stereo mix</span>
+            {#each ["Left", "Right"] as side, k (side)}
+              <span>{side}</span>
+              <select aria-label="{side} output" value={d.app.outputPair[k]} onchange={(e) => (d.app.outputPair[k] = Number(e.currentTarget.value))}>
+                {#each outs as o (o)}<option value={o}>Output {o + 1}</option>{/each}
+              </select>
+            {/each}
+            <span class="head">3D Space speakers</span>
+            {#each SPEAKER_NAMES as name (name)}
+              <span>{name}</span>
+              <select
+                aria-label="{name} output"
+                value={d.app.speakerOutputs[name] ?? ""}
+                onchange={(e) => {
+                  const v = e.currentTarget.value;
+                  const next = { ...d.app.speakerOutputs };
+                  if (v === "") delete next[name];
+                  else next[name] = Number(v);
+                  d.app.speakerOutputs = next;
+                }}
+              >
+                <option value="">Its place in the layout</option>
+                {#each outs as o (o)}<option value={o}>Output {o + 1}</option>{/each}
+              </select>
+            {/each}
+          </div>
+          <p class="note">
+            Speakers are used by 3D Space sessions whose Listen is set to Speakers: each speaker plays on its own output, with no fold-down. A speaker left at its place plays on the output with
+            its number in the layout's order (L on 1, R on 2, C on 3, LFE on 4, then the surrounds and heights). The metronome plays on the stereo pair.
+          </p>
+          <div>
+            <button type="button" onclick={() => { d.app.outputPair = [0, 1]; d.app.speakerOutputs = {}; }}>Reset</button>
+          </div>
         {:else if page === "Autosave"}
           <label><input type="checkbox" bind:checked={d.app.autosave} /> Save a recovery copy of the session</label>
           <label class="row" class:dim={!d.app.autosave}>Every <input type="number" min="1" max="60" step="1" bind:value={d.app.autosaveMinutes} disabled={!d.app.autosave} /> minutes</label>
@@ -588,5 +626,18 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--on-accent, #fff);
+  }
+  .outmap {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    align-items: center;
+    max-width: 360px;
+  }
+  .outmap .head {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    color: var(--text);
+    font-weight: 600;
   }
 </style>

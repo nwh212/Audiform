@@ -2,7 +2,7 @@
 // Copyright (c) The Audiform contributors.
 // This file is part of Audiform, based on Altered Audio Editor.
 
-//! The Channel Routing: how a file's channels reach a track's left and
+//! The Source Channels: how a file's channels reach a track's left and
 //! right. Each source channel goes to the left and the right by its own
 //! amount (negative flips its polarity), and the sides are the sums.
 //!
@@ -23,10 +23,10 @@ pub fn labels(n: usize) -> Vec<String> {
         5 => &["L", "R", "C", "Ls", "Rs"],
         6 => &["L", "R", "C", "LFE", "Ls", "Rs"],
         7 => &["L", "R", "C", "LFE", "Cs", "Ls", "Rs"],
-        8 => &["L", "R", "C", "LFE", "Lb", "Rb", "Ls", "Rs"],
-        10 => &["L", "R", "C", "LFE", "Ls", "Rs", "Ltf", "Rtf", "Ltb", "Rtb"],
+        8 => &["L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss"],
+        10 => &["L", "R", "C", "LFE", "Ls", "Rs", "Ltf", "Rtf", "Ltr", "Rtr"],
         12 => &[
-            "L", "R", "C", "LFE", "Lb", "Rb", "Ls", "Rs", "Ltf", "Rtf", "Ltb", "Rtb",
+            "L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr",
         ],
         _ => &[],
     };
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn names_follow_the_wav_order() {
         assert_eq!(labels(6), ["L", "R", "C", "LFE", "Ls", "Rs"]);
-        assert_eq!(labels(12)[11], "Rtb");
+        assert_eq!(labels(12)[11], "Rtr");
         assert_eq!(labels(9), ["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
     }
 

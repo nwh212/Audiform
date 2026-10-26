@@ -220,10 +220,10 @@ pub struct ClipChange {
     /// Clears the clip's audio type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_audio_type: Option<bool>,
-    /// Sets the clip's Channel Routing.
+    /// Sets the clip's Source Channels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mix: Option<ChannelMix>,
-    /// Goes back to the default Channel Routing for the file.
+    /// Goes back to the default Source Channels for the file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_channel_mix: Option<bool>,
     /// Where the clip sits in its track's stacking order after the change:

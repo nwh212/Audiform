@@ -261,7 +261,7 @@
       ]
     },
     "ChannelMix": {
-      "description": "A clip's Channel Routing: one entry per channel of its file, in file order.",
+      "description": "A clip's Source Channels: one entry per channel of its file, in file order.",
       "type": "object",
       "properties": {
         "sends": {
@@ -327,7 +327,7 @@
           ]
         },
         "channel_mix": {
-          "description": "Channel Routing: how much of each of the file's channels goes to the\nleft and right. None uses the default for the file's channels.",
+          "description": "Source Channels: how much of each of the file's channels goes to the\nleft and right. None uses the default for the file's channels.",
           "anyOf": [
             {
               "$ref": "#/$defs/ChannelMix"
@@ -1290,6 +1290,11 @@
           "description": "The layout's speakers heard as if around a head, for headphones.",
           "type": "string",
           "const": "binaural"
+        },
+        {
+          "description": "Each speaker to its own output of the audio device, for a room\nwith the layout's speakers (Settings > Audio Hardware maps them).",
+          "type": "string",
+          "const": "speakers"
         }
       ]
     },

@@ -274,10 +274,11 @@
           {#each SPACE_LAYOUTS as l (l)}<option value={l}>{LAYOUT_NAMES[l]}</option>{/each}
         </select>
       </label>
-      <label title="How you hear it while working. Stereo folds each sound to your speakers by where it sits left to right. Headphones plays the layout's speakers as if they stood around your head (binaural).">Listen
-        <select value={space.listen ?? "stereo"} onchange={(e) => setSpace({ ...space, listen: e.currentTarget.value === "binaural" ? "binaural" : "stereo" }, "Listen To 3D Space")}>
+      <label title="How you hear it while working. Stereo folds each sound to your speakers by where it sits left to right. Headphones plays the layout's speakers as if they stood around your head (binaural). Speakers plays each speaker on its own output of your audio device, for a room with these speakers (Settings > Channel Routing picks the outputs).">Listen
+        <select value={space.listen ?? "stereo"} onchange={(e) => { const v = e.currentTarget.value; setSpace({ ...space, listen: v === "binaural" || v === "speakers" ? v : "stereo" }, "Listen To 3D Space"); }}>
           <option value="stereo">Stereo speakers</option>
           <option value="binaural">Headphones (binaural)</option>
+          <option value="speakers">Speakers (each on its own output)</option>
         </select>
       </label>
       <button type="button" class="toggle" class:on={snapOn} aria-pressed={snapOn} title="Snapping: dots snap to speakers, the center lines and a quarter-room grid, widths to quarter steps and turns to 15 degrees. Hold Alt while dragging to place freely." onclick={toggleSnap}>

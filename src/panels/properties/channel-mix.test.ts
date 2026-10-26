@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { channelLabels, defaultMix, mixOf, presetFor, presets } from "./channel-mix";
 
-describe("Channel Routing", () => {
+describe("Source Channels", () => {
   it("names channels in the WAV order", () => {
     expect(channelLabels(6)).toEqual(["L", "R", "C", "LFE", "Ls", "Rs"]);
     expect(channelLabels(9)[8]).toBe("9");
@@ -20,7 +20,7 @@ describe("Channel Routing", () => {
 
   it("offers each pair and each channel alone", () => {
     const ids = presets(12).map((p) => p.label);
-    expect(ids).toContain("Ls and Rs only");
+    expect(ids).toContain("Lss and Rss only");
     expect(ids).toContain("Ltf and Rtf only");
     expect(ids).toContain("C alone, to both sides");
     expect(presets(2).map((p) => p.id)).toContain("swap");

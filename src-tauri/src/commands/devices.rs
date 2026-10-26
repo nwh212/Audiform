@@ -110,6 +110,21 @@ pub fn set_audio_output(name: Option<String>) {
     crate::engine::output::set_choice(name);
 }
 
+/// Which outputs playback uses (from 0): the stereo mix's left and right,
+/// and each speaker by name for 3D Space sessions heard on speakers.
+#[tauri::command]
+pub fn set_output_map(stereo: [u16; 2], speakers: std::collections::HashMap<String, u16>) {
+    crate::engine::output::set_map(crate::engine::output::OutputMap { stereo, speakers });
+}
+
+/// How many outputs the playback device has.
+#[tauri::command]
+pub async fn output_channels() -> Result<u16, String> {
+    spawn_blocking(crate::engine::output::output_channels)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioDriver {

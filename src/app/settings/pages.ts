@@ -44,9 +44,7 @@ export const PAGES = [
 export type Page = (typeof PAGES)[number];
 
 /** Pages with nothing that works yet: shown, but marked as later. */
-export const LATER_PAGES: Partial<Record<Page, string>> = {
-  "Channel Routing": "Arrives with ASIO and per-channel routing, which needs real multichannel hardware to build and test.",
-};
+export const LATER_PAGES: Partial<Record<Page, string>> = {};
 
 /** The draft as it should be saved: every value checked and in range. */
 export function cleanDraft(d: SettingsDraft): SettingsDraft {

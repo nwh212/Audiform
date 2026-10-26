@@ -47,7 +47,7 @@ pub struct AudioReader {
     /// Decoded, channel-mapped samples waiting for the resampler.
     pending: Vec<f32>,
     scratch: Vec<f32>,
-    /// Channel Routing: `[left, right]` per source channel, mixing to stereo
+    /// Source Channels: `[left, right]` per source channel, mixing to stereo
     /// instead of the plain channel mapping.
     mix: Option<Vec<[f32; 2]>>,
     ended: bool,

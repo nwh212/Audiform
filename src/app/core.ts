@@ -907,6 +907,16 @@ export function setAudioOutput(name: string | null): Promise<void> {
   return invoke<void>("set_audio_output", { name });
 }
 
+/** Which device outputs (from 0) playback uses: the stereo pair, and each speaker by name in 3D Space sessions heard on speakers. */
+export function setOutputMap(stereo: [number, number], speakers: Record<string, number>): Promise<void> {
+  return invoke<void>("set_output_map", { stereo, speakers });
+}
+
+/** How many outputs the playback device has. */
+export function outputChannels(): Promise<number> {
+  return invoke<number>("output_channels");
+}
+
 export interface CacheInfo {
   path: string;
   folders: { name: string; bytes: number; clearable: boolean }[];

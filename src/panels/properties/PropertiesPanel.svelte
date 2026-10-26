@@ -5,7 +5,7 @@
 
   Properties: the selected clip's details and its stretch and pitch.
   Stretch makes a clip play longer or shorter; pitch moves it up or down
-  in semitones without changing its length. The Channel Routing sets how
+  in semitones without changing its length. Source Channels sets how
   much of each of the file's channels goes to the left and right. The type picks how: a
   single voice or instrument, music with several notes at once, or
   varispeed, where the pitch follows the speed like tape. Live and
@@ -70,7 +70,7 @@
     const v = num(e);
     if (Number.isFinite(v)) void apply({ pitch: Math.max(-24, Math.min(24, v)) });
   }
-  // Channel Routing: one setting for every selected clip whose file has the same channels.
+  // Source Channels: one setting for every selected clip whose file has the same channels.
   const chans = $derived(media?.channels ?? 0);
   const sameChans = $derived(picked.every((p) => doc?.media.find((m) => m.id === p.clip.media_id)?.channels === chans));
   const mix = $derived(first && chans > 0 ? mixOf(first.clip.channel_mix, chans) : null);
@@ -79,7 +79,7 @@
   const current = $derived(mix ? presetFor(mix, chans) : null);
   const custom = $derived(picked.some((p) => p.clip.channel_mix));
 
-  function setMix(next: ChannelMixDoc | null, label = "Channel Routing") {
+  function setMix(next: ChannelMixDoc | null, label = "Source Channels") {
     const changes: ClipChange[] = picked.map(({ clip }) => (next ? { id: clip.id, channel_mix: next } : { id: clip.id, clear_channel_mix: true }));
     if (changes.length) void onEdit(label, changes).catch(onError);
   }
@@ -175,16 +175,16 @@
       </details>
     {/if}
 
-    <h2>Channel Routing</h2>
+    <h2>Source Channels</h2>
     {#if !mix}
       <p class="note">The clip's file is missing.</p>
     {:else if !sameChans}
-      <p class="note">The selected clips' files have different channels. Select clips of one kind to set their Channel Routing.</p>
+      <p class="note">The selected clips' files have different channels. Select clips of one kind to set their Source Channels.</p>
     {:else}
       <p class="note">{chans} channel{chans === 1 ? "" : "s"}. How much of each goes to the track's left and right. Negative flips polarity.</p>
       <div class="grid">
         <label for="pp-mixp">Preset</label>
-        <select id="pp-mixp" value={current ?? ""} onchange={(e) => { const p = quick.find((x) => x.id === e.currentTarget.value); if (p) setMix(p.id === "default" ? null : p.mix, `Channel Routing: ${p.label}`); }}>
+        <select id="pp-mixp" value={current ?? ""} onchange={(e) => { const p = quick.find((x) => x.id === e.currentTarget.value); if (p) setMix(p.id === "default" ? null : p.mix, `Source Channels: ${p.label}`); }}>
           {#if !current}<option value="" disabled>Custom</option>{/if}
           {#each quick as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
         </select>
@@ -209,7 +209,7 @@
         </tbody>
       </table>
       <div class="quick">
-        <button type="button" disabled={!custom} onclick={() => setMix(null, "Channel Routing: Reset")}>Reset</button>
+        <button type="button" disabled={!custom} onclick={() => setMix(null, "Source Channels: Reset")}>Reset</button>
       </div>
     {/if}
   {/if}
