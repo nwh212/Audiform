@@ -30,7 +30,12 @@ fn copy_path(path: &Path) -> Option<PathBuf> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs());
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in path.to_string_lossy().bytes().chain(meta.len().to_le_bytes()).chain(modified.to_le_bytes()) {
+    for b in path
+        .to_string_lossy()
+        .bytes()
+        .chain(meta.len().to_le_bytes())
+        .chain(modified.to_le_bytes())
+    {
         h ^= u64::from(b);
         h = h.wrapping_mul(0x0100_0000_01b3);
     }
@@ -90,13 +95,19 @@ pub fn prepare(path: &Path) -> Result<PathBuf, String> {
         while end > 0 {
             let start = end.saturating_sub(PIECE);
             let n = (end - start) as usize;
-            src.seek(SeekFrom::Start(start * frame_bytes)).map_err(|e| e.to_string())?;
+            src.seek(SeekFrom::Start(start * frame_bytes))
+                .map_err(|e| e.to_string())?;
             bytes.resize(n * frame_bytes as usize, 0);
             src.read_exact(&mut bytes).map_err(|e| e.to_string())?;
             for f in (0..n).rev() {
                 for c in 0..channels {
                     let at = (f * channels + c) * 4;
-                    let v = f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+                    let v = f32::from_le_bytes([
+                        bytes[at],
+                        bytes[at + 1],
+                        bytes[at + 2],
+                        bytes[at + 3],
+                    ]);
                     w.write_sample(v).map_err(|e| e.to_string())?;
                 }
             }
@@ -119,7 +130,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         set_dir(dir.path().join("rev"));
         let src = dir.path().join("a.wav");
-        let spec = hound::WavSpec { channels: 2, sample_rate: 48_000, bits_per_sample: 32, sample_format: hound::SampleFormat::Float };
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 48_000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
         let mut w = hound::WavWriter::create(&src, spec).unwrap();
         for i in 0..100_000u32 {
             w.write_sample(i as f32 / 100_000.0).unwrap();

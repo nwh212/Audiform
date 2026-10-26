@@ -247,8 +247,20 @@ mod tests {
         let eq = "altaudio.parametric_eq";
         assert!(level(eq, &[], 1000.0).abs() < 0.05, "flat by default");
         assert!((level(eq, &[("b2_gain", 6.0), ("b2_freq", 1000.0)], 1000.0) - 6.0).abs() < 0.3);
-        assert!(level(eq, &[("b2_gain", 6.0), ("b2_freq", 1000.0), ("b2_on", 0.0)], 1000.0).abs() < 0.05, "a band switched off");
-        assert!((level(eq, &[("gain", -6.0)], 1000.0) + 6.0).abs() < 0.05, "overall gain");
+        assert!(
+            level(
+                eq,
+                &[("b2_gain", 6.0), ("b2_freq", 1000.0), ("b2_on", 0.0)],
+                1000.0
+            )
+            .abs()
+                < 0.05,
+            "a band switched off"
+        );
+        assert!(
+            (level(eq, &[("gain", -6.0)], 1000.0) + 6.0).abs() < 0.05,
+            "overall gain"
+        );
         assert!(
             level(
                 eq,

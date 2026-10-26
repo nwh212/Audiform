@@ -25,8 +25,8 @@ use std::thread;
 use std::time::Duration;
 
 use altered_plughost::protocol::{
-    decode_samples, encode_audio_ch, read_frame, write_frame, Message, NoteEvent, ParamInfo, Request,
-    AUDIO, CONTROL, SELECT,
+    decode_samples, encode_audio_ch, read_frame, write_frame, Message, NoteEvent, ParamInfo,
+    Request, AUDIO, CONTROL, SELECT,
 };
 use serde::Serialize;
 
@@ -449,7 +449,13 @@ impl Host {
     }
 
     /// [`Host::process`] for `channels` interleaved channels.
-    pub fn process_ch(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32], channels: usize) -> bool {
+    pub fn process_ch(
+        &mut self,
+        changes: &[(u32, f64)],
+        notes: &[NoteEvent],
+        io: &mut [f32],
+        channels: usize,
+    ) -> bool {
         if self.is_dead() || io.is_empty() {
             return false;
         }
@@ -692,7 +698,13 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
             thread::sleep(Duration::from_millis(50));
         }
     }
-    let started = Host::start(&found, rate, slot.plugin_state.clone(), slot_params(slot), wide_of(slot));
+    let started = Host::start(
+        &found,
+        rate,
+        slot.plugin_state.clone(),
+        slot_params(slot),
+        wide_of(slot),
+    );
     if !fresh {
         if let Ok(mut s) = starting().lock() {
             s.remove(&slot.id);
@@ -813,9 +825,12 @@ pub fn live_params(effect: &str) -> Option<Vec<ParamInfo>> {
         .filter(|p| p.effect.eq_ignore_ascii_case(effect))
         .map(|p| p.host.clone())
         .collect();
-    hosts
-        .into_iter()
-        .find_map(|h| h.try_lock().ok().map(|h| h.params.clone()).filter(|p| !p.is_empty()))
+    hosts.into_iter().find_map(|h| {
+        h.try_lock()
+            .ok()
+            .map(|h| h.params.clone())
+            .filter(|p| !p.is_empty())
+    })
 }
 
 /// Running plug-ins whose settings in the session changed (a preset, an
@@ -908,7 +923,13 @@ pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
     let host = host_for(slot, rate)?;
     let (latency, pending, ins, outs, width) = {
         let h = host.lock().ok()?;
-        (h.latency, h.differing(&slot_params(slot)), h.inputs.clone(), h.outputs.clone(), h.width())
+        (
+            h.latency,
+            h.differing(&slot_params(slot)),
+            h.inputs.clone(),
+            h.outputs.clone(),
+            h.width(),
+        )
     };
     Some(PluginProcessor {
         host,
@@ -1079,7 +1100,10 @@ pub struct SeqNote {
 /// Plays notes through a MIDI track's instrument on their own (a MIDI
 /// clip heard alone, from the piano roll), then a short tail. Stopped
 /// early, every note still sounding is let go.
-pub fn sequence(slot: &EffectSlot, notes: Vec<SeqNote>) -> Result<crate::engine::preview::MakeFill, String> {
+pub fn sequence(
+    slot: &EffectSlot,
+    notes: Vec<SeqNote>,
+) -> Result<crate::engine::preview::MakeFill, String> {
     let rate = crate::engine::output::device_rate();
     let host = host_for(slot, rate).ok_or("The instrument could not start.")?;
     if host.lock().map_err(|e| e.to_string())?.is_dead() {

@@ -62,6 +62,7 @@
   import ResponseGraph from "./ResponseGraph.svelte";
   import BandEqPanel from "./BandEqPanel.svelte";
   import NotchGraph from "./NotchGraph.svelte";
+  import CenterPanel from "./CenterPanel.svelte";
   import EqGraph from "./EqGraph.svelte";
   import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
   import EffectControls from "./EffectControls.svelte";
@@ -550,7 +551,7 @@
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
   const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
-  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -787,6 +788,8 @@
             onData={(data, label) => commit(label, setSlot(chain, winSlot.id, { data }))}
             {onError}
           />
+        {:else if winSlot.effect === "altaudio.center_extractor"}
+          <CenterPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if winSlot.effect === "altaudio.notch"}
           <NotchGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if winSlot.effect === PHASE_CURVE}
@@ -1129,6 +1132,9 @@
       width: auto;
       min-width: 380px;
       max-width: 96vw;
+    }
+    &:has(:global(.cce)) {
+      width: min(560px, 96vw);
     }
     &:has(:global(.notchwin)) {
       width: min(640px, 96vw);

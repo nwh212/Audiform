@@ -55,6 +55,7 @@ const KNOWN = new Set([
   "altaudio.precision_filter",
   "altaudio.curve_eq",
   "altaudio.center_remover",
+  "altaudio.center_extractor",
   "altaudio.pitch_shift",
   "altaudio.phase_rotate",
 ]);

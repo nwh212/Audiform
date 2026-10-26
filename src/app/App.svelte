@@ -2024,7 +2024,7 @@
     "precision_filter",
     "notch",
     "pitch_shift",
-    "center_remover",
+    "center_extractor",
     "phase_curve",
   ];
   function fxTarget(): { target: EffectTarget; chain: EffectChainDoc | undefined; name: string; wave?: boolean } | null {

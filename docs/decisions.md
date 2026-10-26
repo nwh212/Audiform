@@ -1541,3 +1541,11 @@ Several requests compared behavior to another editor; per the guardrails they ar
 
 - **Graph:** the response on the shared frequency ruler, 0 to -60 dB, with a numbered marker per notch. Drag a marker for frequency (across) and depth (up and down); double-click it to switch that notch on or off.
 - **Table:** a column per notch (1 to 6): Frequency, Depth and its on switch. The width (Q) shared by all notches sits under it. The effect and its settings are unchanged, so old sessions sound the same.
+
+## 2026-10-28: Center Channel Extractor replaces the Center Remover
+
+- **What it does:** finds the sound at one place in a stereo mix and sets its level apart from the rest. **Center** level all the way down takes the vocal out; **Side** all the way down keeps only the vocal. Works on the spectrum: for each frequency it compares the left and right phase and level with the target, within the Discrimination limits, and fades out past them.
+- **Extraction tab:** Extract Center, Left, Right, Surround (out of phase) or Custom (Phase angle, Pan, Delay). Frequency range: Full spectrum, Bass, Male voice, Female voice or Custom (Center frequency and Width in octaves).
+- **Discrimination tab:** Crossover bleed, Phase and Amplitude discrimination, Amplitude bandwidth, Spectral decay. **Advanced:** FFT size.
+- **Its own window:** the stereo stage from above with the target lit (drag it to pick a pan), the Center and Side faders, the two tabs. Listed under Effects > Stereo with Phase Curve.
+- **The Center Remover is retired:** no longer offered, but sessions that use it still play it. The Remove Vocals preset now uses the Center Channel Extractor (Center off, 150 Hz to 12 kHz, so the bass stays).

@@ -213,7 +213,7 @@ describe("menu model", () => {
       "fx.add.precision_filter",
       "fx.add.notch",
       "fx.add.pitch_shift",
-      "fx.add.center_remover",
+      "fx.add.center_extractor",
       "fx.add.phase_curve",
       "file.export.sesx",
       "clip.to-track-above",

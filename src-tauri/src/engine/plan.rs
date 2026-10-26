@@ -356,8 +356,16 @@ pub type FadeLook = (FadeShape, f32);
 /// shape: above 0 it rises sooner (bulging up), below 0 later (dipping).
 pub fn fade_curve((shape, bend): FadeLook, t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
-    let bend = if bend.is_finite() { bend.clamp(-1.0, 1.0) } else { 0.0 };
-    let t = if bend == 0.0 { t } else { t.powf(4f32.powf(-bend)) };
+    let bend = if bend.is_finite() {
+        bend.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
+    let t = if bend == 0.0 {
+        t
+    } else {
+        t.powf(4f32.powf(-bend))
+    };
     match shape {
         FadeShape::Linear => t,
         // Rises fast, then eases in: sounds even to the ear on speech.
@@ -531,7 +539,11 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                             0.0
                         } else {
                             let g = 10f64.powf(c.gain_db.clamp(-96.0, 24.0) / 20.0) as f32;
-                            if c.inverted { -g } else { g }
+                            if c.inverted {
+                                -g
+                            } else {
+                                g
+                            }
                         },
                         fade_in: fade(c.fade_in.length),
                         fade_out: fade(c.fade_out.length),

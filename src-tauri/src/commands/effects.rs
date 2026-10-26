@@ -313,14 +313,28 @@ pub struct EffectChannels {
 pub async fn effect_channels(slot: EffectSlot) -> EffectChannels {
     let stereo = crate::dsp::effects::routing::stereo;
     if !crate::plugins::is_plugin(&slot.effect) {
-        return EffectChannels { inputs: stereo(), outputs: stereo() };
+        return EffectChannels {
+            inputs: stereo(),
+            outputs: stereo(),
+        };
     }
     tauri::async_runtime::spawn_blocking(move || {
         let rate = crate::engine::output::device_rate();
         crate::plugins::instance::host_for(&slot, rate)
-            .and_then(|h| h.lock().ok().map(|h| EffectChannels { inputs: h.inputs.clone(), outputs: h.outputs.clone() }))
-            .unwrap_or(EffectChannels { inputs: stereo(), outputs: stereo() })
+            .and_then(|h| {
+                h.lock().ok().map(|h| EffectChannels {
+                    inputs: h.inputs.clone(),
+                    outputs: h.outputs.clone(),
+                })
+            })
+            .unwrap_or(EffectChannels {
+                inputs: stereo(),
+                outputs: stereo(),
+            })
     })
     .await
-    .unwrap_or(EffectChannels { inputs: stereo(), outputs: stereo() })
+    .unwrap_or(EffectChannels {
+        inputs: stereo(),
+        outputs: stereo(),
+    })
 }

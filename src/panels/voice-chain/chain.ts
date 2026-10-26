@@ -558,7 +558,7 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
     fx("pitch_shift", { semitones: -2, cents: 0 }),
   ]),
   chainP("Remove Vocals", "Processing", [
-    fx("center_remover", { amount: 100, keep_below: 150 }),
+    fx("center_extractor", { range: 4, center_freq: 1342, width: 6.3, center: -48 }),
   ]),
   chainP("Remove Clicks", "Repair", [
     fx("click_repair", { sensitivity: 50, width: 1 }),

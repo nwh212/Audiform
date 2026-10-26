@@ -37,7 +37,8 @@ impl Fx {
 
     /// A chain over channels named `names` (a 3D Space master's speakers).
     pub fn with_channels(chain: &EffectChain, rate: u32, names: &[String]) -> Option<Self> {
-        ChainProcessor::with_channels(chain, rate, names).map(|c| Self::from_ch(c, rate, names.len()))
+        ChainProcessor::with_channels(chain, rate, names)
+            .map(|c| Self::from_ch(c, rate, names.len()))
     }
 
     pub fn from(c: ChainProcessor, rate: u32) -> Self {
@@ -93,7 +94,12 @@ pub(crate) fn swap_fx(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32) -> 
 }
 
 /// [`swap_fx`] for a chain over channels named `names`.
-pub(crate) fn swap_fx_ch(slot: &mut Option<Fx>, chain: &EffectChain, rate: u32, names: &[String]) -> bool {
+pub(crate) fn swap_fx_ch(
+    slot: &mut Option<Fx>,
+    chain: &EffectChain,
+    rate: u32,
+    names: &[String],
+) -> bool {
     let new = ChainProcessor::with_channels(chain, rate, names);
     let old_lat = slot.as_ref().map_or(0, |f| f.latency);
     if new.as_ref().map_or(0, |c| c.latency() as u64) != old_lat {

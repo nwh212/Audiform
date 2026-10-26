@@ -37,7 +37,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::fx::{swap_fx_ch, swap_fx, Fx};
+use super::fx::{swap_fx, swap_fx_ch, Fx};
 use super::render::{ChainUpdate, Renderer};
 use crate::dsp::effects::Delay;
 use crate::session::model::{ChannelLayout, EffectChain, Id, Session, Tempo};
@@ -544,17 +544,24 @@ impl Graph {
         // 3D Space sessions: the master chain runs on the speakers.
         let bed_names: Vec<String> = s
             .space
-            .map(|sp| crate::dsp::space::speakers(sp.layout).iter().map(|x| x.name.to_string()).collect())
+            .map(|sp| {
+                crate::dsp::space::speakers(sp.layout)
+                    .iter()
+                    .map(|x| x.name.to_string())
+                    .collect()
+            })
             .unwrap_or_default();
         let mut master = Strip {
             id: Id::nil(),
             fx: match (routed, bed_names.is_empty()) {
                 (false, _) => None,
                 (true, true) => fx(&s.master.effects),
-                (true, false) => Fx::with_channels(&s.master.effects, rate, &bed_names).map(|mut f| {
-                    f.primed = true;
-                    f
-                }),
+                (true, false) => {
+                    Fx::with_channels(&s.master.effects, rate, &bed_names).map(|mut f| {
+                        f.primed = true;
+                        f
+                    })
+                }
             },
             ..Strip::default()
         };
@@ -1075,7 +1082,8 @@ impl Graph {
                 let mut m = std::mem::take(&mut self.master);
                 self.fill_keys(&mut m.keys, n);
                 if let Some(fx) = m.fx.as_mut() {
-                    let keys: Vec<(Id, &[f32])> = m.keys.iter().map(|t| (t.id, t.buf.as_slice())).collect();
+                    let keys: Vec<(Id, &[f32])> =
+                        m.keys.iter().map(|t| (t.id, t.buf.as_slice())).collect();
                     fx.run_keyed(&mut self.bed, &keys);
                 }
                 self.master = m;

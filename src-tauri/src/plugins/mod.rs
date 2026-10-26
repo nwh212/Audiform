@@ -564,7 +564,11 @@ pub fn effect_info(found: &Found) -> EffectInfo {
     } else {
         Vec::new()
     };
-    let params = if i.params.is_empty() { &live } else { &i.params };
+    let params = if i.params.is_empty() {
+        &live
+    } else {
+        &i.params
+    };
     EffectInfo {
         id: intern(&format!("{PREFIX}{}", i.cid)),
         name: intern(&i.name),

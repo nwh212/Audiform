@@ -433,7 +433,7 @@ export const MENUS: readonly Menu[] = [
       ]),
       sub("Stereo", [
         item("fx.add.phase_curve", "Phase Curve"),
-        item("fx.add.center_remover", "Center Remover (remove vocals)"),
+        item("fx.add.center_extractor", "Center Channel Extractor (remove or keep vocals)"),
       ]),
       sub("QuickPass", [
         item("fx.quickpass", "Presets arrive in P5", {

@@ -14,8 +14,8 @@
 //! effects may keep state but must not block. Effects with look-ahead
 //! report a latency, which the renderer compensates for.
 
-pub mod routing;
 pub mod amp;
+pub mod center;
 mod dynamics;
 mod eq;
 mod filters;
@@ -24,6 +24,7 @@ pub mod phase_curve;
 mod pitch;
 pub mod print;
 mod restore;
+pub mod routing;
 pub mod shaped;
 pub mod tube;
 
@@ -188,6 +189,7 @@ pub fn catalog() -> Vec<EffectInfo> {
         tube::opto_info(),
         tube::preamp_info(),
         filters::center_info(),
+        center::center_extractor_info(),
         pitch::pitch_info(),
         restore::noise_info(),
         print::print_info(),
@@ -413,8 +415,9 @@ pub(crate) fn db_to_gain(db: f64) -> f32 {
 }
 
 /// Effects no longer offered (Phase Curve does what Phase Rotate did, and
-/// more). Sessions that use them still play them.
-pub const RETIRED: [&str; 1] = ["altaudio.phase_rotate"];
+/// the Center Channel Extractor what the Center Remover did, and more).
+/// Sessions that use them still play them.
+pub const RETIRED: [&str; 2] = ["altaudio.phase_rotate", "altaudio.center_remover"];
 
 /// Builds the processor for one slot, or None for an unknown effect (or a
 /// plug-in that is not installed or would not start).
@@ -464,6 +467,7 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.pitch_shift" => Box::new(pitch::PitchShift::new(&p, rate)),
         "altaudio.phase_rotate" => Box::new(phase::PhaseRotate::new(&p, rate)),
         "altaudio.phase_curve" => Box::new(phase_curve::PhaseCurve::new(&p, rate)),
+        center::ID => Box::new(center::CenterExtractor::new(&p, rate)),
         _ => return None,
     })
 }
@@ -551,19 +555,21 @@ impl ChainProcessor {
                 keys.push(s.sidechain.map(|id| (id, Delay::new(before))));
                 let (ins, outs) = p.channels();
                 let map = routing::resolve(s.routing.as_ref(), &ins, &outs, names);
-                routes.push((!(map.is_straight(ch) && ins.len() == ch && outs.len() == ch)).then(|| {
-                    let mut targets = vec![false; ch];
-                    for c in map.outputs.iter().flatten() {
-                        targets[*c] = true;
-                    }
-                    Route {
-                        width: ins.len().max(outs.len()).max(1),
-                        buf: Vec::new(),
-                        pass: Delay::with_channels(p.latency(), ch),
-                        targets,
-                        map,
-                    }
-                }));
+                routes.push(
+                    (!(map.is_straight(ch) && ins.len() == ch && outs.len() == ch)).then(|| {
+                        let mut targets = vec![false; ch];
+                        for c in map.outputs.iter().flatten() {
+                            targets[*c] = true;
+                        }
+                        Route {
+                            width: ins.len().max(outs.len()).max(1),
+                            buf: Vec::new(),
+                            pass: Delay::with_channels(p.latency(), ch),
+                            targets,
+                            map,
+                        }
+                    }),
+                );
                 before += p.latency();
                 stages.push(p);
                 slots.push((s.id, i, s.params.clone(), s.data.clone()));
@@ -682,7 +688,12 @@ impl ChainProcessor {
         }
         let ch = self.ch;
         let frames = buf.len() / ch;
-        for ((st, key), route) in self.stages.iter_mut().zip(&mut self.keys).zip(&mut self.routes) {
+        for ((st, key), route) in self
+            .stages
+            .iter_mut()
+            .zip(&mut self.keys)
+            .zip(&mut self.routes)
+        {
             // Keys are stereo: they reach stages that run on two channels.
             let found = key.as_mut().and_then(|(id, delay)| {
                 keys.iter()

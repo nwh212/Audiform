@@ -445,8 +445,16 @@ unsafe fn setup_buses(
             .map(|i| channels(current(kOutput as i32, i)))
             .collect(),
         events,
-        if nin > 0 { speaker_names(current(kInput as i32, 0)) } else { Vec::new() },
-        if nout > 0 { speaker_names(current(kOutput as i32, 0)) } else { Vec::new() },
+        if nin > 0 {
+            speaker_names(current(kInput as i32, 0))
+        } else {
+            Vec::new()
+        },
+        if nout > 0 {
+            speaker_names(current(kOutput as i32, 0))
+        } else {
+            Vec::new()
+        },
     )
 }
 

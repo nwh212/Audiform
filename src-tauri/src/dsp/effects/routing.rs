@@ -94,7 +94,9 @@ pub fn resolve(
 impl Map {
     /// True when the effect simply runs on the chain's channels as they are.
     pub fn is_straight(&self, channels: usize) -> bool {
-        let same = |v: &[Option<usize>]| v.len() == channels && v.iter().enumerate().all(|(k, c)| *c == Some(k));
+        let same = |v: &[Option<usize>]| {
+            v.len() == channels && v.iter().enumerate().all(|(k, c)| *c == Some(k))
+        };
         same(&self.inputs) && same(&self.outputs)
     }
 }
@@ -120,10 +122,15 @@ mod tests {
 
     #[test]
     fn a_five_one_effect_on_a_seven_one_four_master_works_on_its_speakers() {
-        let bed = names(&["L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr"]);
+        let bed = names(&[
+            "L", "R", "C", "LFE", "Lrs", "Rrs", "Lss", "Rss", "Ltf", "Rtf", "Ltr", "Rtr",
+        ]);
         let fx = names(&["L", "R", "C", "LFE", "Ls", "Rs"]);
         let m = resolve(None, &fx, &fx, &bed);
-        assert_eq!(m.inputs, vec![Some(0), Some(1), Some(2), Some(3), Some(6), Some(7)]);
+        assert_eq!(
+            m.inputs,
+            vec![Some(0), Some(1), Some(2), Some(3), Some(6), Some(7)]
+        );
         assert_eq!(m.outputs, m.inputs);
         let fx71 = names(&["L", "R", "C", "LFE", "Ls", "Rs", "Lss", "Rss"]);
         let m = resolve(None, &fx71, &fx71, &bed);
