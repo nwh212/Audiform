@@ -798,4 +798,3 @@ mod tests {
         assert_eq!(s.media[0].channels, 2);
     }
 }
-
