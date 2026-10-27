@@ -2,10 +2,10 @@
 # Copyright (c) The GeekCast Radio Network, LLC.
 # This file is part of Audiform, based on Altered Audio Editor.
 
-# Test build of main and build/* branches: the Windows installer and portable exe on
-# every push, and an experimental Linux AppImage and deb when asked for
-# (Actions > Test build > Run workflow), as downloadable artifacts.
-# Releases (release.yml) always build Linux.
+# Test build of main and build/* branches: the Windows installer and
+# portable exe on every push (or Actions > Test build > Run workflow), as
+# downloadable artifacts. Test builds are Windows only; releases
+# (release.yml) build every platform.
 
 name: Test build
 
@@ -64,50 +64,3 @@ jobs:
           path: ${{ runner.temp }}/test-build/*
           if-no-files-found: error
 
-  linux:
-    name: Linux test build (experimental)
-    # Only when run by hand, to save build time on every push.
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install system libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential file xdg-utils libxdo-dev libssl-dev libfuse2t64 libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      # The AppImage tools are AppImages themselves; extract-and-run means
-      # they work without FUSE on the runner.
-      - name: Build
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: 1
-          NO_STRIP: true
-        run: npm run tauri build -- --bundles appimage,deb
-
-      - name: Package
-        run: |
-          out="$RUNNER_TEMP/test-build"
-          mkdir -p "$out"
-          cp src-tauri/target/release/bundle/appimage/*.AppImage "$out/Audiform-test-linux-x86_64.AppImage"
-          cp src-tauri/target/release/bundle/deb/*.deb "$out/Audiform-test-linux-amd64.deb"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: audiform-test-linux
-          path: ${{ runner.temp }}/test-build/*
-          if-no-files-found: error
