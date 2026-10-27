@@ -417,6 +417,8 @@ enum Inner {
 struct FlacOut {
     file: BufWriter<File>,
     cfg: flacenc::error::Verified<flacenc::config::Encoder>,
+    /// Stores the samples as they are. Used for a block the usual settings would make larger.
+    safe: flacenc::error::Verified<flacenc::config::Encoder>,
     info: flacenc::component::StreamInfo,
     ctx: flacenc::source::Context,
     fb: flacenc::source::FrameBuf,
@@ -428,6 +430,12 @@ struct FlacOut {
 }
 
 const FLAC_BLOCK: usize = 4_096;
+
+/// The most bytes a block needs when its samples are stored as they are: every
+/// channel one bit wider than the samples (a stereo side channel needs it), plus headers.
+fn raw_frame_cap(channels: usize, samples: usize, bits: u16) -> usize {
+    channels * samples * (usize::from(bits) + 1) / 8 + 64 + 16 * channels
+}
 
 impl FlacOut {
     fn header(info: &flacenc::component::StreamInfo) -> Result<Vec<u8>, EncodeError> {
@@ -441,7 +449,6 @@ impl FlacOut {
     }
 
     fn encode_block(&mut self, samples: &[i32]) -> Result<(), EncodeError> {
-        use flacenc::component::BitRepr;
         use flacenc::source::Fill;
         self.fb
             .fill_interleaved(samples)
@@ -449,14 +456,33 @@ impl FlacOut {
         self.ctx
             .fill_interleaved(samples)
             .map_err(|e| werr(format!("{e:?}")))?;
-        let frame = flacenc::encode_fixed_size_frame(&self.cfg, &self.fb, self.frame, &self.info)
-            .map_err(|e| werr(format!("{e:?}")))?;
+        let (frame, bytes) = self.frame_with(&self.cfg)?;
+        // The predictor choice can go wrong on loud 24-bit audio and write a frame far
+        // larger than the samples themselves (one reached 100 MB, which broke players).
+        // Past the size of the raw samples, the block is stored raw instead.
+        let cap = raw_frame_cap(self.ch, samples.len() / self.ch, self.bits);
+        let (frame, bytes) = if bytes.len() > cap {
+            self.frame_with(&self.safe)?
+        } else {
+            (frame, bytes)
+        };
         self.info.update_frame_info(&frame);
-        let mut sink = flacenc::bitsink::ByteSink::new();
-        frame.write(&mut sink).map_err(|e| werr(format!("{e:?}")))?;
-        self.file.write_all(sink.as_slice()).map_err(werr)?;
+        self.file.write_all(&bytes).map_err(werr)?;
         self.frame += 1;
         Ok(())
+    }
+
+    /// The frame for the block in the buffer under `cfg`, and its bytes.
+    fn frame_with(
+        &self,
+        cfg: &flacenc::error::Verified<flacenc::config::Encoder>,
+    ) -> Result<(flacenc::component::Frame, Vec<u8>), EncodeError> {
+        use flacenc::component::BitRepr;
+        let frame = flacenc::encode_fixed_size_frame(cfg, &self.fb, self.frame, &self.info)
+            .map_err(|e| werr(format!("{e:?}")))?;
+        let mut sink = flacenc::bitsink::ByteSink::new();
+        frame.write(&mut sink).map_err(|e| werr(format!("{e:?}")))?;
+        Ok((frame, sink.as_slice().to_vec()))
     }
 }
 
@@ -517,6 +543,15 @@ impl Writer {
                 let cfg = cfg
                     .into_verified()
                     .map_err(|e| EncodeError::Settings(format!("{e:?}")))?;
+                // Raw storage, for a block the usual settings would make larger.
+                let mut safe = flacenc::config::Encoder::default();
+                safe.block_size = FLAC_BLOCK;
+                safe.subframe_coding.use_constant = false;
+                safe.subframe_coding.use_fixed = false;
+                safe.subframe_coding.use_lpc = false;
+                let safe = safe
+                    .into_verified()
+                    .map_err(|e| EncodeError::Settings(format!("{e:?}")))?;
                 let info = flacenc::component::StreamInfo::new(
                     fmt.rate as usize,
                     out_ch,
@@ -529,6 +564,7 @@ impl Writer {
                 Inner::Flac(Box::new(FlacOut {
                     file,
                     cfg,
+                    safe,
                     info,
                     ctx: flacenc::source::Context::new(usize::from(fmt.bits), out_ch),
                     fb: flacenc::source::FrameBuf::with_size(out_ch, FLAC_BLOCK)
@@ -833,6 +869,52 @@ mod tests {
         assert_eq!(info.sample_rate, 48_000);
         let (rate, ch, back) = read_all(&p);
         assert_eq!((rate, ch, back.len()), (48_000, 2, data.len()));
+        let err = data
+            .iter()
+            .zip(&back)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0f32, f32::max);
+        assert!(err < 1e-5, "max error {err}");
+    }
+
+    /// Loud, noisy 24-bit audio once made the FLAC encoder write one frame of 100 MB.
+    /// No file may end up larger than its samples stored as they are, and it must still
+    /// read back the same.
+    #[test]
+    fn flac_never_grows_past_raw_samples() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("loud.flac");
+        let rate = 48_000u32;
+        let n = rate as usize * 6;
+        let mut data = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let t = i as f64 / f64::from(rate);
+            let mut z = (i as u64).wrapping_add(0x9E37_79B9_7F4A_7C15);
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^= z >> 31;
+            let noise = (z >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+            let env = 0.15 + 0.8 * (t * 0.3).sin().abs();
+            let tone = (t * 220.0 * std::f64::consts::TAU).sin() * 0.5
+                + (t * 1730.0 * std::f64::consts::TAU).sin() * 0.2;
+            let v = env * (tone + noise * 0.3);
+            data.push(v as f32);
+            data.push((v * 0.95) as f32);
+        }
+        let fmt = OutputFormat {
+            kind: FormatKind::Flac,
+            bit_depth: Some(24),
+            ..Default::default()
+        };
+        write(&p, fmt, rate, 2, &data);
+        let raw = data.len() as u64 * 3;
+        let size = std::fs::metadata(&p).unwrap().len();
+        assert!(
+            size < raw + raw / 100 + 4_096,
+            "{size} bytes for {raw} bytes of samples"
+        );
+        let (_, _, back) = read_all(&p);
+        assert_eq!(back.len(), data.len());
         let err = data
             .iter()
             .zip(&back)

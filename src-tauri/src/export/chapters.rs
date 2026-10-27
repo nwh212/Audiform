@@ -14,7 +14,8 @@
 //!
 //! Both are added after the audio is written, by rewriting the file once.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use serde::Deserialize;
@@ -250,46 +251,65 @@ pub(crate) fn set_flac_comments(
     edit: impl FnOnce(Vec<String>) -> Vec<String>,
 ) -> std::io::Result<()> {
     let bad = || std::io::Error::new(std::io::ErrorKind::InvalidData, "Not a FLAC file.");
-    let data = fs::read(path)?;
-    if data.len() < 8 || &data[..4] != b"fLaC" {
+    let mut src = BufReader::new(File::open(path)?);
+    let mut magic = [0u8; 4];
+    src.read_exact(&mut magic).map_err(|_| bad())?;
+    if &magic != b"fLaC" {
         return Err(bad());
     }
-    // Walk the metadata blocks, keeping all but the old Vorbis comment.
-    let mut at = 4;
-    let mut blocks: Vec<(u8, &[u8])> = Vec::new();
+    // Read only the metadata blocks, keeping all but the old Vorbis comment. The audio
+    // after them can be hours long, so it is copied across and never held in memory.
+    let mut blocks: Vec<(u8, Vec<u8>)> = Vec::new();
     let mut old = Vec::new();
     loop {
-        if at + 4 > data.len() {
-            return Err(bad());
-        }
-        let head = data[at];
-        let len = (usize::from(data[at + 1]) << 16)
-            | (usize::from(data[at + 2]) << 8)
-            | usize::from(data[at + 3]);
-        let body = data.get(at + 4..at + 4 + len).ok_or_else(bad)?;
-        let kind = head & 0x7f;
+        let mut head = [0u8; 4];
+        src.read_exact(&mut head).map_err(|_| bad())?;
+        let len = (usize::from(head[1]) << 16) | (usize::from(head[2]) << 8) | usize::from(head[3]);
+        let mut body = vec![0u8; len];
+        src.read_exact(&mut body).map_err(|_| bad())?;
+        let kind = head[0] & 0x7f;
         if kind == 4 {
-            old.extend(vorbis_items(body));
+            old.extend(vorbis_items(&body));
         } else {
             blocks.push((kind, body));
         }
-        at += 4 + len;
-        if head & 0x80 != 0 {
+        if head[0] & 0x80 != 0 {
             break;
         }
     }
     let comments = vorbis_block(&edit(old));
-    blocks.insert(1.min(blocks.len()), (4, &comments));
-    let mut out = b"fLaC".to_vec();
+    blocks.insert(1.min(blocks.len()), (4, comments));
+    // Written beside the file, then swapped in, so a failure never leaves half a file.
+    let tmp = path.with_extension("chapters.tmp");
+    let written = write_flac_copy(&tmp, &blocks, &mut src);
+    // Closed before the swap: Windows will not replace a file that is still open.
+    drop(src);
+    match written.and_then(|_| fs::rename(&tmp, path)) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
+/// A new FLAC file at `tmp`: the marker, `blocks` (the last flagged as last), then
+/// everything left in `rest`, which is the audio.
+fn write_flac_copy(
+    tmp: &Path,
+    blocks: &[(u8, Vec<u8>)],
+    rest: &mut impl Read,
+) -> std::io::Result<()> {
+    let mut out = BufWriter::new(File::create(tmp)?);
+    out.write_all(b"fLaC")?;
     let last = blocks.len() - 1;
     for (i, (kind, body)) in blocks.iter().enumerate() {
-        out.push(if i == last { kind | 0x80 } else { *kind });
-        let n = body.len() as u32;
-        out.extend_from_slice(&n.to_be_bytes()[1..]);
-        out.extend_from_slice(body);
+        out.write_all(&[if i == last { kind | 0x80 } else { *kind }])?;
+        out.write_all(&(body.len() as u32).to_be_bytes()[1..])?;
+        out.write_all(body)?;
     }
-    out.extend_from_slice(&data[at..]);
-    replace(path, &out)
+    std::io::copy(rest, &mut out)?;
+    out.flush()
 }
 
 /// Writes beside the file, then swaps it in, so a failure never leaves half a file.
