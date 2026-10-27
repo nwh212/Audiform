@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="26" height="24" viewBox="0 0 26 24">
+  <!-- Audiform Mall Pastel '95 theme: the stepped foot of a column. -->
+  <rect x="4" y="0" width="18" height="6" fill="#ffffff"/>
+  <path d="M7 0v6M10 0v6M13 0v6M16 0v6M19 0v6" stroke="#e2d8f2" stroke-width="1"/>
+  <rect x="3" y="6" width="20" height="4" rx="2" fill="#ffffff" stroke="#b9a8dc"/>
+  <rect x="1.5" y="10" width="23" height="5" fill="#ffffff" stroke="#b9a8dc"/>
+  <rect x="0" y="15" width="26" height="9" fill="#f3ecff" stroke="#b9a8dc"/>
+</svg>

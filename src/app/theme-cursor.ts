@@ -27,6 +27,14 @@ import pxNwse from "../assets/themes/phosphor-nwse.svg";
 import pxNesw from "../assets/themes/phosphor-nesw.svg";
 import pxGrab from "../assets/themes/phosphor-grab.svg";
 import pxGrabbing from "../assets/themes/phosphor-grabbing.svg";
+import mpText from "../assets/themes/mallpastel-text.svg";
+import mpEw from "../assets/themes/mallpastel-ew.svg";
+import mpNs from "../assets/themes/mallpastel-ns.svg";
+import mpNwse from "../assets/themes/mallpastel-nwse.svg";
+import mpNesw from "../assets/themes/mallpastel-nesw.svg";
+import mpGrab from "../assets/themes/mallpastel-grab.svg";
+import mpGrabbing from "../assets/themes/mallpastel-grabbing.svg";
+import mpBusy from "../assets/themes/mallpastel-busy.svg";
 
 /** One theme's pictures for each kind of pointer, with the hot spot (the middle of the art). */
 interface PointerSet {
@@ -37,11 +45,13 @@ interface PointerSet {
   nesw: string;
   grab: string;
   grabbing: string;
+  /** Busy (waiting) pointer, for themes that draw one. */
+  busy?: string;
   /** Hot spot in pixels: one value for x and y on every picture, or x and y per picture. */
   hot: number | Record<Kind, [number, number]>;
 }
 
-type Kind = "text" | "ew" | "ns" | "nwse" | "nesw" | "grab" | "grabbing";
+type Kind = "text" | "ew" | "ns" | "nwse" | "nesw" | "grab" | "grabbing" | "busy";
 
 const GLASS: PointerSet = {
   text: glassText,
@@ -70,7 +80,20 @@ const PHOSPHOR: PointerSet = {
     nesw: [9, 9],
     grab: [10, 9],
     grabbing: [10, 7],
+    busy: [10, 10],
   },
+};
+/** Mall Pastel '95 (both versions): 24 pixel line art, hot spot in the middle. */
+const MALL_PASTEL: PointerSet = {
+  text: mpText,
+  ew: mpEw,
+  ns: mpNs,
+  nwse: mpNwse,
+  nesw: mpNesw,
+  grab: mpGrab,
+  grabbing: mpGrabbing,
+  busy: mpBusy,
+  hot: 12,
 };
 
 /** Themes with their own pointers. */
@@ -80,6 +103,8 @@ const SETS: Record<string, PointerSet> = {
   moonlight: GLASS,
   prism: GLASS,
   phosphor: PHOSPHOR,
+  mallpastel: MALL_PASTEL,
+  mallnight: MALL_PASTEL,
 };
 
 /** Which picture stands in for each standard pointer. */
@@ -102,6 +127,8 @@ const KIND: Record<string, Kind> = {
   "sw-resize": "nesw",
   grab: "grab",
   grabbing: "grabbing",
+  wait: "busy",
+  progress: "busy",
 };
 
 /** The standard pointer a cursor value asks for: its last, fallback keyword. */
@@ -115,7 +142,7 @@ export function themedFor(cursor: string, theme: string): string | null {
   const set = SETS[theme];
   const kw = keywordOf(cursor);
   const kind = KIND[kw];
-  if (!set || !kind) return null;
+  if (!set || !kind || !set[kind]) return null;
   const [x, y] =
     typeof set.hot === "number" ? [set.hot, set.hot] : set.hot[kind];
   return `url("${set[kind]}") ${x} ${y}, ${kw}`;

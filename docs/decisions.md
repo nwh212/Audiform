@@ -1801,3 +1801,10 @@ Reported: M4A files did not open. Stereo AAC, ALAC, FLAC, MP3 and Opus in M4A al
 - Several files dragged onto the Editor go one per track, all from the drop time; holding Alt puts them one after another on one track. The preview follows Alt as it goes down and up. The setting that chose this is gone. While files come from the file manager the window hears no keys, so on Windows Alt is read from the system (`src-tauri/os-keys`, its own crate because the call needs `unsafe`).
 - A clip now covers any clip under it on the same track instead of showing it through.
 - Decided by the project lead.
+
+## 2026-10-27: Mall Pastel '95 themes
+
+- Picked by the project lead from vaporwave concept boards. Mall Pastel '95 (モール・パステル '95): a lavender and mint checkerboard, a key border under the menu bar, marble bars and a fluted column at each side of the window, a faint striped sun and palm behind the tracks. Mall Pastel '95 Night (モール・パステル '95 ナイト): the same plaza after closing, with dusk-violet marble, moonlit columns, a striped moon and soft pink neon. Both share one style sheet.
+- A neon "Night Drive" theme was built first and dropped by the project lead in favor of the Night version.
+- Menus, lists, dialogs, buttons and scroll bars are square bevelled panels in the spirit of 1990s desktop computers, built from generic bevels only: no operating system's artwork, icons or logos.
+- Their own pointers (arrow, text, resize, grab and a new busy pointer). Japanese lettering uses the system's Japanese fonts; nothing loads from the network. The theme font (Nunito) is bundled, SIL Open Font License.

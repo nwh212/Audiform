@@ -16,6 +16,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/nunito": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.1",
     "@tauri-apps/api": "^2.12.3",
     "dockview": "^8.5.1"

@@ -186,7 +186,7 @@
           </div>
           <label class="row">
             Theme
-            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" || v === "prism" || v === "phosphor" || v === "analog" ? v : "dark"; }}>
+            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" || v === "prism" || v === "phosphor" || v === "analog" || v === "mallpastel" || v === "mallnight" ? v : "dark"; }}>
               <option value="dark">Dark</option>
               <option value="meadow">Meadow Aero</option>
               <option value="aqua">Aqua Aero</option>
@@ -194,9 +194,11 @@
               <option value="prism">Prism</option>
               <option value="phosphor">Phosphor</option>
               <option value="analog">Analog</option>
+              <option value="mallpastel">Mall Pastel '95 (モール・パステル '95)</option>
+              <option value="mallnight">Mall Pastel '95 Night (モール・パステル '95 ナイト)</option>
             </select>
           </label>
-          <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Phosphor is an early studio computer: green screens in a beige case. Apply tries one while this window stays open. Your colors above still apply on top of any theme.</p>
+          <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Phosphor is an early studio computer: green screens in a beige case. Mall Pastel '95 is a pastel shopping plaza with marble columns; its Night version is the same plaza after closing. Apply tries one while this window stays open. Your colors above still apply on top of any theme.</p>
         {:else if page === "Audio Devices"}
           <label class="row">
             Play through

@@ -1,0 +1,494 @@
+/*
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Mall Pastel '95 theme (Settings > Appearance > Theme,
+  data-theme="mallpastel"): a shopping plaza at sunset, around 1995. A
+  lavender and mint checkerboard runs along the top, a key border under
+  the menu bar, and a fluted marble column stands at each side of the
+  window. Bars and tab rows are white marble; menus, lists and dialogs
+  are square bevelled panels from an old computer in pastel; a striped
+  sun and a palm sit faintly behind the tracks.
+
+  Mall Pastel '95 Night (data-theme="mallnight") is the same plaza after
+  closing: dusk-violet marble, moonlit columns, a striped moon over the
+  palm and soft pink neon. It shares every rule below; its own colors and
+  pictures are in the Night section at the end.
+*/
+
+:root[data-theme="mallpastel"] {
+  color-scheme: light;
+
+  --surface-0: #fdf0f7;
+  --surface-1: #ffffff;
+  --surface-2: #fbf7ff;
+  --menu-bg: #ffffff;
+  --surface-3: #f3ecff;
+  --border: #e2d6f5;
+  --border-strong: #c9b8ff;
+
+  --text: #3b2a5c;
+  --text-dim: #5f4f80;
+  --text-faint: #85769f;
+
+  --accent: #7458d6;
+  --accent-dim: #c9b8ff;
+  --playhead: #ff3f95;
+  --value: #0f6f69;
+  --gutter: #e8def5;
+  --danger: #d6336c;
+  --selected-text: #ffffff;
+
+  /* Lanes are white enough to read, clear enough for the sun behind. */
+  --lane-a: rgba(255, 255, 255, 0.74);
+  --lane-b: rgba(253, 246, 251, 0.74);
+  --lane-selected: rgba(236, 229, 255, 0.88);
+  --track-gap: #e8def5;
+  --header-a: #ffffff;
+  --header-b: #fbf7ff;
+
+  /* Sherbet: pink, teal, lavender, peach, sky, coral, mint. */
+  --clip-1: #ff8fc7;
+  --clip-2: #2ec4b6;
+  --clip-3: #a98bff;
+  --clip-4: #ffb84d;
+  --clip-5: #5cc8ff;
+  --clip-6: #ff8a6b;
+  --clip-7: #6fe0b8;
+  --clip-body-alpha: 0.38;
+  --clip-wave-tone: -0.5;
+  --clip-gloss: 0;
+
+  --font-ui: "Nunito", "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  /* Theme parts. */
+  --mp-lavender: #b39cff;
+  --mp-mint: #9ff0d6;
+  --mp-pink: #ff8fc7;
+  --mp-ink: #3b2a5c;
+  --mp-hi: #ffffff;
+  --mp-lo: #8c7bb0;
+  --mp-raised: var(--mp-hi) var(--mp-lo) var(--mp-lo) var(--mp-hi);
+  --mp-sunken: var(--mp-lo) var(--mp-hi) var(--mp-hi) var(--mp-lo);
+  --mp-marble: url("../assets/themes/mallpastel-marble.svg") 0 0 / 400px 400px;
+  --mp-checker: linear-gradient(45deg, var(--mp-lavender) 25%, transparent 25%, transparent 75%, var(--mp-lavender) 75%) 0 0 / 12px 12px,
+    linear-gradient(45deg, var(--mp-lavender) 25%, var(--mp-mint) 25%, var(--mp-mint) 75%, var(--mp-lavender) 75%) 6px 6px / 12px 12px;
+  --mp-japanese: "MS Gothic", "Yu Gothic", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+
+  --spectrum-low: #fdf0f7;
+  --spectrum-high: #4a2f8c;
+  --phase-low: #2ec4b6;
+  --phase-high: #ff5fa8;
+}
+
+/* A marble column at each side of the window, on a pastel sunset. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) body {
+  padding: 0 26px;
+  background:
+    url("../assets/themes/mallpastel-capital.svg") left top / 26px 30px no-repeat,
+    url("../assets/themes/mallpastel-capital.svg") right top / 26px 30px no-repeat,
+    url("../assets/themes/mallpastel-base.svg") left bottom / 26px 24px no-repeat,
+    url("../assets/themes/mallpastel-base.svg") right bottom / 26px 24px no-repeat,
+    url("../assets/themes/mallpastel-shaft.svg") left top / 26px 12px repeat-y,
+    url("../assets/themes/mallpastel-shaft.svg") right top / 26px 12px repeat-y,
+    linear-gradient(180deg, #ffd9ec 0%, #fdf0f7 45%, #e9f9f4 100%) fixed;
+}
+
+/* The checkerboard along the top, and the key border under the menu bar:
+   the top bar stacks them around the menu bar and grows to fit. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .shell {
+  grid-template-rows: auto auto 1fr var(--row-height);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) header.top {
+  position: relative;
+  z-index: 50;
+  flex-direction: column;
+  border-bottom: 0;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) header.top .menubar {
+  height: 24px;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) header.top::before {
+  content: "";
+  display: block;
+  height: 12px;
+  background: var(--mp-checker);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) header.top::after {
+  content: "";
+  display: block;
+  height: 14px;
+  background: #f6f1fb url("../assets/themes/mallpastel-meander.svg") left center / 24px 14px repeat-x;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+/* Bars and tab rows: white marble. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar, .strip, footer.status) {
+  background: var(--mp-marble), #ffffff;
+  color: var(--mp-ink);
+  border-color: var(--border-strong);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .menubar::before {
+  content: "ＡＵＤＩＦＯＲＭ";
+  align-self: center;
+  margin: 0 10px 0 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #8a2f74;
+  pointer-events: none;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) footer.status::after {
+  content: "ショッピングモール ・ ａｅｓｔｈｅｔｉｃ";
+  margin-left: auto;
+  padding-right: 8px;
+  font-family: var(--mp-japanese);
+  color: #6a4fb3;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .top:hover, .menubar .top.open) {
+  background: var(--accent);
+  color: #ffffff;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .dockview-theme-altaudio {
+  --dv-group-view-background-color: #ffffff;
+  --dv-tabs-and-actions-container-background-color: #fbf7ff;
+  --dv-activegroup-visiblepanel-tab-background-color: #ffffff;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #f6f1fb;
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-color: #8a2f74;
+  --dv-activegroup-hiddenpanel-tab-color: var(--text-dim);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-dim);
+  --dv-tab-divider-color: var(--border);
+  --dv-active-sash-color: var(--mp-lavender);
+  --dv-drag-over-background-color: rgba(179, 156, 255, 0.18);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  background: var(--mp-marble), #fbf7ff;
+  border-bottom: 1px solid var(--border-strong);
+}
+/* Each panel is a raised white plate. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .dockview-theme-altaudio .dv-groupview {
+  border: 2px solid;
+  border-color: var(--mp-raised);
+  box-shadow: 1px 1px 0 #5d4b86;
+  overflow: hidden;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .dockview-theme-altaudio .dv-tab {
+  font-weight: 700;
+}
+
+/* A striped sun and a palm, faint behind the tracks. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .lanes {
+  background: url("../assets/themes/mallpastel-sun.svg") right 40px top 16px / 260px 220px no-repeat;
+}
+
+/* Old-computer bevels in pastel: square raised menus, dialogs and keys. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context) {
+  background: #ffffff;
+  border: 2px solid;
+  border-color: var(--mp-raised);
+  border-radius: 0;
+  box-shadow: 1px 1px 0 #5d4b86, 5px 5px 0 rgba(140, 123, 176, 0.35);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context) .sep {
+  height: 0;
+  background: transparent;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid #ffffff;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
+  background: var(--accent);
+  color: #ffffff;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.dialog, [role="dialog"], [role="alertdialog"]) {
+  background: #ffffff;
+  border: 2px solid;
+  border-color: var(--mp-raised);
+  border-radius: 0;
+  box-shadow: 1px 1px 0 #5d4b86, 6px 6px 0 rgba(140, 123, 176, 0.3);
+}
+/* A dialog's title sits in a mint-to-lavender title bar. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.dialog, [role="dialog"], [role="alertdialog"]) > :is(h1:first-child, header:first-child) {
+  padding: 4px 8px;
+  background: linear-gradient(90deg, #2ec4b6, var(--mp-mint) 35%, var(--mp-lavender));
+  color: #1d1236;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.dialog, [role="dialog"], [role="alertdialog"], .strip, .bar:has(> .transport)) :is(button, .tool) {
+  background: #f3ecff;
+  color: var(--mp-ink);
+  border: 2px solid;
+  border-color: var(--mp-raised);
+  border-radius: 0;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.dialog, [role="dialog"], [role="alertdialog"], .strip, .bar:has(> .transport)) :is(button, .tool):active:not(:disabled) {
+  border-color: var(--mp-sunken);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.dialog, [role="dialog"], [role="alertdialog"]) button.primary {
+  background: var(--mp-mint);
+  color: #1d1236;
+  outline: 1px dotted var(--mp-ink);
+  outline-offset: -5px;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.strip, .bar:has(> .transport)) :is(.tool.on, button.on, .view.on) {
+  background: var(--mp-mint);
+  color: #0f4f4a;
+  border-color: var(--mp-sunken);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .bar:has(> .transport) .transport .tool.rec.on {
+  background: #ffd0e4;
+  color: #b0204f;
+}
+
+/* The clock: mint digits on a dark plum display, set into the marble. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .bar .clock {
+  background: var(--mp-ink);
+  color: var(--mp-mint);
+  border: 2px solid;
+  border-color: var(--mp-sunken);
+  border-radius: 0;
+}
+
+/* Fields and lists: sunken white wells. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, select) {
+  background: #ffffff;
+  color: var(--mp-ink);
+  border: 2px solid;
+  border-color: var(--mp-sunken);
+  border-radius: 0;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--accent);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) ::selection {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Scroll bars: a fine checker slot and a pink bevelled thumb. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) ::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) ::-webkit-scrollbar-track {
+  background:
+    linear-gradient(45deg, #e4dcef 25%, transparent 25%, transparent 75%, #e4dcef 75%) 0 0 / 4px 4px,
+    linear-gradient(45deg, #e4dcef 25%, #ffffff 25%, #ffffff 75%, #e4dcef 75%) 2px 2px / 4px 4px;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) ::-webkit-scrollbar-thumb {
+  background: #ffd9ec;
+  border: 2px solid;
+  border-color: var(--mp-raised);
+}
+
+/* Meters light up in pastel blocks. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.levels .bar, .phase .legend .bar, .phase .track) {
+  position: relative;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.levels .bar, .phase .legend .bar, .phase .track)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 6px, #ffffff 6px 7px);
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) .phase .mark {
+  background: var(--playhead);
+}
+
+/* The lavender arrow pointer, over everything you click too. Text,
+   resize, grab and busy pointers come from src/app/theme-cursor.ts;
+   elements whose own style asks for the hand or the plain arrow are
+   marked by the app (data-aero-cursor) so they get the arrow as well. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]),
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) body,
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
+  cursor: url("../assets/themes/mallpastel-arrow.svg") 3 2, default;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) [data-aero-cursor] {
+  cursor: url("../assets/themes/mallpastel-arrow.svg") 3 2, default !important;
+}
+
+/* ---------- Night: the same plaza after closing ---------- */
+
+:root[data-theme="mallnight"] {
+  color-scheme: dark;
+
+  --surface-0: #160f2b;
+  --surface-1: #1d1538;
+  --surface-2: #241a45;
+  --menu-bg: #241a45;
+  --surface-3: #2e2256;
+  --border: #3a2d66;
+  --border-strong: #6a55b8;
+
+  --text: #f1e9ff;
+  --text-dim: #c4b6e6;
+  --text-faint: #9a8ac4;
+
+  --accent: #b39cff;
+  --accent-dim: #4a3a8c;
+  --playhead: #ff7ab8;
+  --value: #7ff0d0;
+  --gutter: #120c24;
+  --danger: #ff6b9a;
+  --selected-text: #1a1033;
+
+  --lane-a: rgba(29, 21, 56, 0.78);
+  --lane-b: rgba(36, 26, 69, 0.78);
+  --lane-selected: rgba(70, 52, 130, 0.86);
+  --track-gap: #120c24;
+  --header-a: #1d1538;
+  --header-b: #221a42;
+
+  /* The same sherbet, glowing a little on the dark. */
+  --clip-1: #ff8fc7;
+  --clip-2: #3fd8c8;
+  --clip-3: #b39cff;
+  --clip-4: #ffc46b;
+  --clip-5: #6fd0ff;
+  --clip-6: #ff9a7a;
+  --clip-7: #8ff0c8;
+  --clip-body-alpha: 0.26;
+  --clip-wave-tone: 0.45;
+  --clip-gloss: 0;
+
+  --font-ui: "Nunito", "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  --mp-lavender: #6a55b8;
+  --mp-mint: #2f8f7c;
+  --mp-pink: #ff8fc7;
+  --mp-ink: #f1e9ff;
+  --mp-hi: #6a55b8;
+  --mp-lo: #0b0718;
+  --mp-raised: var(--mp-hi) var(--mp-lo) var(--mp-lo) var(--mp-hi);
+  --mp-sunken: var(--mp-lo) var(--mp-hi) var(--mp-hi) var(--mp-lo);
+  --mp-marble: url("../assets/themes/mallnight-marble.svg") 0 0 / 400px 400px;
+  --mp-checker: linear-gradient(45deg, var(--mp-lavender) 25%, transparent 25%, transparent 75%, var(--mp-lavender) 75%) 0 0 / 12px 12px,
+    linear-gradient(45deg, var(--mp-lavender) 25%, var(--mp-mint) 25%, var(--mp-mint) 75%, var(--mp-lavender) 75%) 6px 6px / 12px 12px;
+  --mp-japanese: "MS Gothic", "Yu Gothic", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+  --mp-neon: 0 0 6px rgba(255, 143, 199, 0.85), 0 0 14px rgba(255, 143, 199, 0.45);
+
+  --spectrum-low: #120c24;
+  --spectrum-high: #ffd6f0;
+  --phase-low: #3fd8c8;
+  --phase-high: #ff8fc7;
+}
+
+/* Moonlit columns on a dusk sky that fades to teal at the bottom. */
+:root[data-theme="mallnight"] body {
+  background:
+    url("../assets/themes/mallnight-capital.svg") left top / 26px 30px no-repeat,
+    url("../assets/themes/mallnight-capital.svg") right top / 26px 30px no-repeat,
+    url("../assets/themes/mallnight-base.svg") left bottom / 26px 24px no-repeat,
+    url("../assets/themes/mallnight-base.svg") right bottom / 26px 24px no-repeat,
+    url("../assets/themes/mallnight-shaft.svg") left top / 26px 12px repeat-y,
+    url("../assets/themes/mallnight-shaft.svg") right top / 26px 12px repeat-y,
+    linear-gradient(180deg, #1b1236 0%, #2a1846 50%, #0f2a33 100%) fixed;
+}
+:root[data-theme="mallnight"] header.top::after {
+  background: #1d1538 url("../assets/themes/mallnight-meander.svg") left center / 24px 14px repeat-x;
+}
+:root[data-theme="mallnight"] :is(.menubar, .strip, footer.status) {
+  background: var(--mp-marble), #241a45;
+}
+/* The name lit like a pink neon sign. */
+:root[data-theme="mallnight"] .menubar::before {
+  color: #ffd6ec;
+  text-shadow: var(--mp-neon);
+}
+:root[data-theme="mallnight"] footer.status::after {
+  content: "ショッピングモール ・ ナイト";
+  color: #ff9ad5;
+  text-shadow: var(--mp-neon);
+}
+:root[data-theme="mallnight"] :is(.menubar .top:hover, .menubar .top.open) {
+  background: var(--accent);
+  color: var(--selected-text);
+}
+:root[data-theme="mallnight"] .dockview-theme-altaudio {
+  --dv-group-view-background-color: #1d1538;
+  --dv-tabs-and-actions-container-background-color: #241a45;
+  --dv-activegroup-visiblepanel-tab-background-color: #2e2256;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #241a45;
+  --dv-activegroup-visiblepanel-tab-color: #ffd6ec;
+  --dv-drag-over-background-color: rgba(179, 156, 255, 0.18);
+}
+:root[data-theme="mallnight"] .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  background: var(--mp-marble), #241a45;
+}
+:root[data-theme="mallnight"] .dockview-theme-altaudio .dv-groupview {
+  box-shadow: 1px 1px 0 #0b0718;
+}
+:root[data-theme="mallnight"] .dockview-theme-altaudio .dv-tab.dv-active-tab {
+  text-shadow: var(--mp-neon);
+}
+:root[data-theme="mallnight"] .lanes {
+  background-image: url("../assets/themes/mallnight-moon.svg");
+}
+:root[data-theme="mallnight"] :is(.menubar .dropdown, .context) {
+  background: #241a45;
+  box-shadow: 1px 1px 0 #0b0718, 5px 5px 0 rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="mallnight"] :is(.menubar .dropdown, .context) .sep {
+  border-top-color: #0b0718;
+  border-bottom-color: #4a3d7a;
+}
+:root[data-theme="mallnight"] :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
+  background: var(--accent);
+  color: var(--selected-text);
+}
+:root[data-theme="mallnight"] :is(.dialog, [role="dialog"], [role="alertdialog"]) {
+  background: #1d1538;
+  box-shadow: 1px 1px 0 #0b0718, 6px 6px 0 rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="mallnight"] :is(.dialog, [role="dialog"], [role="alertdialog"]) > :is(h1:first-child, header:first-child) {
+  background: linear-gradient(90deg, #1f6f66, #4a3a8c 45%, #a0457f);
+  color: #ffffff;
+}
+:root[data-theme="mallnight"] :is(.dialog, [role="dialog"], [role="alertdialog"], .strip, .bar:has(> .transport)) :is(button, .tool) {
+  background: #2e2256;
+  color: var(--text);
+}
+:root[data-theme="mallnight"] :is(.dialog, [role="dialog"], [role="alertdialog"]) button.primary {
+  background: #2f8f7c;
+  color: #ffffff;
+  outline-color: #ffffff;
+}
+:root[data-theme="mallnight"] :is(.strip, .bar:has(> .transport)) :is(.tool.on, button.on, .view.on) {
+  background: #2f8f7c;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(127, 240, 208, 0.5);
+}
+:root[data-theme="mallnight"] .bar:has(> .transport) .transport .tool.rec.on {
+  background: #6a1f45;
+  color: #ffd6ec;
+  box-shadow: var(--mp-neon);
+}
+:root[data-theme="mallnight"] .bar .clock {
+  background: #0b0718;
+  color: #9ff0d6;
+  text-shadow: 0 0 6px rgba(159, 240, 214, 0.7);
+}
+:root[data-theme="mallnight"] :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, select) {
+  background: #120c24;
+  color: var(--text);
+}
+:root[data-theme="mallnight"] ::selection {
+  background: var(--accent);
+  color: var(--selected-text);
+}
+:root[data-theme="mallnight"] ::-webkit-scrollbar-track {
+  background:
+    linear-gradient(45deg, #2a2150 25%, transparent 25%, transparent 75%, #2a2150 75%) 0 0 / 4px 4px,
+    linear-gradient(45deg, #2a2150 25%, #1d1538 25%, #1d1538 75%, #2a2150 75%) 2px 2px / 4px 4px;
+}
+:root[data-theme="mallnight"] ::-webkit-scrollbar-thumb {
+  background: #6a2f5f;
+}
+:root[data-theme="mallnight"] :is(.levels .bar, .phase .legend .bar, .phase .track)::after {
+  background: repeating-linear-gradient(90deg, transparent 0 6px, #1d1538 6px 7px);
+}

@@ -23,6 +23,13 @@ describe("theme pointers", () => {
     expect(themedFor("ew-resize", "phosphor")).toMatch(/\) 11 5, ew-resize$/);
   });
 
+  it("draws a busy pointer only for themes that have one", () => {
+    expect(themedFor("progress", "mallnight")).toMatch(/^url\(.+\) 12 12, progress$/);
+    expect(themedFor("wait", "mallpastel")).toMatch(/, wait$/);
+    expect(themedFor("text", "mallpastel")).toMatch(/\) 12 12, text$/);
+    expect(themedFor("wait", "prism")).toBeNull();
+  });
+
   it("leaves other pointers and other themes alone", () => {
     expect(themedFor("default", "prism")).toBeNull();
     expect(themedFor("crosshair", "phosphor")).toBeNull();

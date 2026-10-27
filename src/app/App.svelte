@@ -1420,7 +1420,7 @@
   // style the mark).
   function markAeroCursor(e: MouseEvent) {
     const root = document.documentElement;
-    if (!["meadow", "aqua", "moonlight", "prism", "phosphor"].includes(root.dataset.theme ?? "")) return;
+    if (!["meadow", "aqua", "moonlight", "prism", "phosphor", "mallpastel", "mallnight"].includes(root.dataset.theme ?? "")) return;
     for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
       if (el.dataset.aeroCursor !== undefined) return;
       const c = getComputedStyle(el).cursor;

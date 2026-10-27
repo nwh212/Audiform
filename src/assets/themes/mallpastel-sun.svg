@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="220" viewBox="0 0 260 220">
+  <!-- Audiform Mall Pastel '95 theme: a striped pastel sun with a palm, faint behind the tracks. -->
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc46b"/>
+      <stop offset="0.6" stop-color="#ff8fc7"/>
+      <stop offset="1" stop-color="#b39cff"/>
+    </linearGradient>
+    <mask id="stripes">
+      <rect width="260" height="220" fill="#fff"/>
+      <rect x="0" y="96" width="260" height="4" fill="#000"/>
+      <rect x="0" y="116" width="260" height="5" fill="#000"/>
+      <rect x="0" y="136" width="260" height="6" fill="#000"/>
+      <rect x="0" y="156" width="260" height="7" fill="#000"/>
+    </mask>
+  </defs>
+  <circle cx="110" cy="100" r="80" fill="url(#sun)" mask="url(#stripes)" opacity="0.45"/>
+  <g fill="#6a4fb3" opacity="0.28">
+    <path d="M210 220c-4-44-2-88 7-124" fill="none" stroke="#6a4fb3" stroke-width="6"/>
+    <path d="M217 96c-15-15-42-18-60-7 20-2 38 2 53 13zM217 96c11-20 36-29 55-22-18 2-35 11-48 26zM217 96c-2-22-15-40-35-46 13 11 22 26 28 48zM217 96c18-7 40-2 53 13-15-7-33-7-48 0z"/>
+  </g>
+</svg>
