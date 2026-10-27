@@ -74,6 +74,33 @@
     else transport.clearOver();
   }
 
+  /**
+   * Many speaker channels in a short panel: the rows go into side-by-side
+   * columns (each with its own scale) until each row has room for its
+   * label and reading. If even that is too tight, the labels and readings
+   * hide (each row's tooltip still says them) and one line under the
+   * meters names the loudest channel.
+   */
+  let boxW = $state(0);
+  let boxH = $state(0);
+  const ROW_MIN = 11;
+  const SCALE_H = 14;
+  const COL_MIN_W = 280;
+  const cols = $derived.by(() => {
+    if (rows.length <= 2 || boxH <= 0) return 1;
+    const most = Math.max(1, Math.min(4, Math.floor(boxW / COL_MIN_W)));
+    for (let c = 1; c <= most; c++) if ((boxH - SCALE_H - 6) / Math.ceil(rows.length / c) >= ROW_MIN) return c;
+    return most;
+  });
+  const perCol = $derived(Math.ceil(rows.length / cols));
+  const columns = $derived(Array.from({ length: cols }, (_, c) => rows.slice(c * perCol, (c + 1) * perCol)));
+  const tight = $derived(rows.length > 2 && boxH > 0 && (boxH - SCALE_H - 6) / perCol < ROW_MIN);
+  const loudest = $derived.by(() => {
+    let best: (typeof rows)[number] | null = null;
+    for (const r of rows) if (r.m && r.m.peak > (best?.m?.peak ?? 0)) best = r;
+    return best;
+  });
+
   const TICKS = [-60, -48, -36, -24, -18, -12, -9, -6, -3, 0];
   const pos = (db: number) => ((db + 60) / 60) * 100;
 
@@ -84,10 +111,12 @@
   }
 </script>
 
-<section class="levels" class:many={rows.length > 2} style:--rows={rows.length} aria-label="Levels">
-  {#each rows as row (row.label)}
+<section class="levels" class:many={rows.length > 2} class:tight style:--rows={perCol} style:--cols={cols} aria-label="Levels" bind:clientWidth={boxW} bind:clientHeight={boxH}>
+  {#each columns as col, ci (ci)}
+  <div class="col">
+  {#each col as row (row.label)}
     {@const m = row.m}
-    <div class="row">
+    <div class="row" title={tight ? `${row.label}: ${db(m)} dB` : undefined}>
       <span class="ch">{row.label}</span>
       <div
         class="bar"
@@ -118,27 +147,42 @@
         <span style:left="{pos(t)}%">{t}</span>
       {/each}
     </div>
+    {#if tight}<span></span><span class="loud" title="The loudest channel">{ci === cols - 1 && loudest ? `${loudest.label} ${db(loudest.m)}` : ""}</span>{/if}
   </div>
+  </div>
+  {/each}
 </section>
 
 <style>
   .levels {
     display: grid;
-    align-content: center;
-    gap: 4px;
+    grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+    column-gap: 18px;
     height: 100%;
     padding: 6px 12px;
     box-sizing: border-box;
     background: var(--surface-1);
+    overflow: hidden;
   }
 
-  /* Every speaker channel shares the panel's height, so all of them fit. */
+  .col {
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Every speaker channel shares the column's height, so all of them fit. */
   .levels.many {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  .levels.many .col {
     grid-template-rows: repeat(var(--rows), minmax(0, 1fr)) auto;
     align-content: stretch;
     gap: 1px;
-    padding-top: 3px;
-    padding-bottom: 3px;
   }
 
   .levels.many .row {
@@ -158,6 +202,42 @@
   .levels.many .val {
     font-size: 9px;
     line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* Too tight for text: thin rows of bars only, a hairline apart. */
+  .levels.tight .row {
+    grid-template-columns: 0 1fr 6px 52px;
+    gap: 0 6px;
+  }
+
+  .levels.tight .ch,
+  .levels.tight .val {
+    visibility: hidden;
+  }
+
+  .levels.tight .over {
+    width: 6px;
+  }
+
+  .levels.tight .peak {
+    width: 1px;
+    transform: none;
+  }
+
+  .levels.tight .scale {
+    grid-template-columns: 0 1fr 6px 52px;
+    gap: 0 6px;
+  }
+
+  .levels.tight .scale .loud {
+    grid-column: 4;
+    color: var(--value);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    white-space: nowrap;
+    justify-self: end;
   }
 
   .row,
