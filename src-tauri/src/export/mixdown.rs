@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::encode::{EncodeError, OutputFormat, Writer};
+use super::loudness::LoudnessReport;
 use crate::engine::graph::{Graph, Mix};
 use crate::engine::plan;
 use crate::engine::render::Renderer;
@@ -72,6 +73,21 @@ pub struct MixdownRequest {
     /// layout heard around a head.
     #[serde(default)]
     pub binaural: bool,
+    /// Brings the mix to a loudness before it is written (podcast
+    /// targets): measured first, then one fixed gain, never past the peak
+    /// limit. Stereo and mono files only; a 3D Space speaker bed is left
+    /// as mixed.
+    #[serde(default)]
+    pub normalize: Option<Normalize>,
+}
+
+/// A loudness to export at.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct Normalize {
+    /// Integrated loudness to reach, LUFS.
+    pub lufs: f64,
+    /// Highest true peak allowed after the gain, dBTP.
+    pub peak: f64,
 }
 
 /// What a 3D Space export writes: every speaker of `layout`, or stereo.
@@ -359,10 +375,41 @@ pub fn mixdown(
     if let Some((SpaceOut::Bed(layout), _)) = space_out(session, req) {
         return mixdown_bed(session, req, path, cancel, progress, layout, fmt.bits);
     }
+    let mut progress = progress;
+    let mut gain = 1.0f32;
+    let mut passes = 1u64;
+    if let Some(n) = req.normalize {
+        // Measure first (the same render), then write with one fixed gain.
+        passes = 2;
+        let report = super::loudness::measure(session, req, cancel, |d, t| progress(d, t * 2))?;
+        if report.cancelled {
+            return Ok(MixdownResult {
+                frames: 0,
+                sample_rate: session.sample_rate,
+                bit_depth: fmt.bits,
+                peak: 0.0,
+                cancelled: true,
+            });
+        }
+        gain = normalize_gain(&report, n, mono);
+    }
     let mut w = Writer::create(path, &fmt, session.sample_rate, 2).map_err(enc_err)?;
-    let r = render_mix(session, req, cancel, progress, |stereo| {
-        w.write(stereo).map_err(enc_err)
-    })?;
+    let mut scaled: Vec<f32> = Vec::new();
+    let r = render_mix(
+        session,
+        req,
+        cancel,
+        |d, t| progress(d + (passes - 1) * t, t * passes),
+        |stereo| {
+            if gain == 1.0 {
+                w.write(stereo).map_err(enc_err)
+            } else {
+                scaled.clear();
+                scaled.extend(stereo.iter().map(|v| v * gain));
+                w.write(&scaled).map_err(enc_err)
+            }
+        },
+    )?;
     if r.cancelled {
         drop(w);
         let _ = std::fs::remove_file(path);
@@ -373,9 +420,25 @@ pub fn mixdown(
         frames: r.frames,
         sample_rate: r.sample_rate,
         bit_depth: fmt.bits,
-        peak: r.peak,
+        peak: r.peak * gain,
         cancelled: r.cancelled,
     })
+}
+
+/// The gain that brings a mix to the target loudness, held back so its
+/// true peak stays under the target's limit. Silence is left alone.
+fn normalize_gain(report: &LoudnessReport, n: Normalize, mono: bool) -> f32 {
+    let measured = if mono {
+        report.integrated_mono
+    } else {
+        report.integrated
+    };
+    if !measured.is_finite() || !report.true_peak.is_finite() {
+        return 1.0;
+    }
+    let want = n.lufs - measured;
+    let room = n.peak - report.true_peak;
+    10f64.powf(want.min(room).clamp(-60.0, 60.0) / 20.0) as f32
 }
 
 /// A 3D Space session to a multichannel WAV, one channel per speaker of
@@ -659,6 +722,101 @@ mod tests {
         assert!((at(100_000) - 0.125).abs() < 0.01, "track B at -6 dB");
     }
 
+    /// A mono 997 Hz sine at `peak`, five seconds long, on one track.
+    fn sine_session(dir: &Path, peak: f32) -> Session {
+        let path = dir.join("sine.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..48_000 * 5 {
+            let t = i as f32 / 48_000.0;
+            w.write_sample(peak * (2.0 * std::f32::consts::PI * 997.0 * t).sin())
+                .unwrap();
+        }
+        w.finalize().unwrap();
+        let mut s = Session::new("t", 48_000);
+        let m = MediaRef {
+            id: new_id(),
+            path,
+            relative_path: None,
+            sample_rate: 48_000,
+            channels: 1,
+            length: 240_000,
+        };
+        let mid = m.id;
+        s.media.push(m);
+        s.tracks.push(Track::new("A", ChannelLayout::Mono));
+        let tid = s.tracks[0].id;
+        apply(
+            &mut s,
+            &Op::AddClips {
+                track_id: tid,
+                clips: vec![ClipSpec {
+                    id: new_id(),
+                    name: "c".into(),
+                    media_id: mid,
+                    start: 0,
+                    source_in: 0,
+                    source_out: 240_000,
+                }],
+            },
+        )
+        .unwrap();
+        s
+    }
+
+    #[test]
+    fn normalizing_reaches_the_target_and_respects_the_peak_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = sine_session(dir.path(), 0.1);
+        let run = |name: &str, normalize: Option<Normalize>| {
+            mixdown(
+                &s,
+                &MixdownRequest {
+                    normalize,
+                    ..Default::default()
+                },
+                &dir.path().join(name),
+                &AtomicBool::new(false),
+                |_, _| {},
+            )
+            .unwrap()
+        };
+        let plain = run("plain.wav", None);
+        let measured = crate::export::loudness::measure(
+            &s,
+            &MixdownRequest::default(),
+            &AtomicBool::new(false),
+            |_, _| {},
+        )
+        .unwrap();
+        // Room to spare under the peak limit: the loudness reaches the target.
+        let to_target = run(
+            "a.wav",
+            Some(Normalize {
+                lufs: -16.0,
+                peak: 0.0,
+            }),
+        );
+        let expect = 10f32.powf(((-16.0 - measured.integrated) / 20.0) as f32);
+        let got = to_target.peak / plain.peak;
+        assert!((got - expect).abs() < expect * 0.02, "{got} vs {expect}");
+        // A low peak limit holds the gain back, so the target is not reached.
+        let limited = run(
+            "b.wav",
+            Some(Normalize {
+                lufs: -3.0,
+                peak: -12.0,
+            }),
+        );
+        assert!(limited.peak <= 0.2515, "{}", limited.peak);
+        assert!(limited.peak > plain.peak, "it still gets louder");
+    }
+
     #[test]
     fn a_realtime_mixdown_takes_as_long_as_the_audio() {
         let dir = tempfile::tempdir().unwrap();
@@ -696,6 +854,7 @@ mod tests {
             realtime: false,
             space_layout: None,
             binaural: false,
+            normalize: None,
         };
         let r = mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
         assert_eq!(r.frames, 10_000);
@@ -817,6 +976,7 @@ mod tests {
             realtime: false,
             space_layout: None,
             binaural: false,
+            normalize: None,
         };
         mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
         let rd = hound::WavReader::open(&out).unwrap();

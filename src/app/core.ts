@@ -10,7 +10,7 @@
 import { listen } from "@tauri-apps/api/event";
 import type { OutputFormat } from "./output-format";
 import { invoke } from "@tauri-apps/api/core";
-import type { EffectChainDoc, MediaRefDoc } from "../stores/session";
+import type { EffectChainDoc, EffectSlotDoc, MediaRefDoc } from "../stores/session";
 import type { SpectralMask } from "../panels/editor/spectrum";
 
 export interface AppInfo {
@@ -646,6 +646,8 @@ export interface MixdownRequest {
   spaceLayout?: string;
   /** 3D Space sessions: a stereo file for headphones. */
   binaural?: boolean;
+  /** Bring the mix to this loudness (LUFS) with true peaks under the limit (dBTP) before writing. */
+  normalize?: { lufs: number; peak: number };
 }
 
 export interface MixdownResult {
@@ -691,6 +693,7 @@ export function exportMixdown(path: string, request: MixdownRequest): Promise<Mi
       realtime: request.realtime ?? false,
       space_layout: request.spaceLayout ?? null,
       binaural: request.binaural ?? false,
+      normalize: request.normalize ?? null,
     },
   });
 }
@@ -837,6 +840,21 @@ export async function waveSpectrogram(start: number, end: number, columns: numbe
   return rawBytes(buf);
 }
 
+/** A live copy of the Waveform editor's file with its unsaved edits, which the session plays and draws instead. */
+export interface LiveCopy {
+  original: string;
+  path: string;
+  length: number;
+}
+/** Renders the Waveform editor's file, edits and all, to a live copy for the session. Null for an untitled file. */
+export function waveLiveRender(): Promise<LiveCopy | null> {
+  return invoke<LiveCopy | null>("wave_live_render");
+}
+/** Drops a file's live copy: the session hears the file itself again. */
+export function waveLiveClear(original: string): Promise<void> {
+  return invoke<void>("wave_live_clear", { original });
+}
+
 /** Which channels of the Waveform editor's file are switched off (true is off): playback leaves them out. */
 export function waveSetChannelsOff(off: boolean[]): Promise<void> {
   return invoke<void>("wave_set_channels_off", { off });
@@ -888,6 +906,8 @@ export interface RecordTarget {
   name: string;
   /** Also play the input through the speakers. */
   monitor?: boolean;
+  /** With monitor: the track's effects, whose built-in ones the player hears. */
+  chain?: import("../stores/session").EffectChainDoc | null;
 }
 
 export interface Take {
@@ -896,6 +916,8 @@ export interface Take {
   sample_rate: number;
   channels: number;
   length: number;
+  /** Frames into the recording at which this take began. */
+  start: number;
 }
 
 export interface LiveLevel {
@@ -924,6 +946,16 @@ export interface RecordStatus {
 /** Starts recording. Returns the folder the takes go in. */
 export function recordStart(targets: RecordTarget[]): Promise<string> {
   return invoke<string>("record_start", { targets });
+}
+
+/** While recording, starts a take for a track armed just now. */
+export function recordAdd(target: RecordTarget): Promise<void> {
+  return invoke<void>("record_add", { target });
+}
+
+/** While recording, ends the take of a track disarmed just now. */
+export function recordRemove(key: string): Promise<void> {
+  return invoke<void>("record_remove", { key });
 }
 
 /** Stops recording and returns the takes. */
@@ -1151,6 +1183,8 @@ export interface PluginEvents {
   latencyChanged: boolean;
   /** Why it stopped (crashed or hung); it is bypassed. */
   stopped: string | null;
+  /** The power button on its window was clicked: bypassed now, or not. */
+  bypass?: boolean | null;
 }
 
 export function pluginsRegistry(): Promise<PluginRegistry> {
@@ -1192,6 +1226,16 @@ export function pluginCloseWindow(slotId: string): Promise<void> {
   return invoke<void>("plugin_close_window", { slotId });
 }
 
+/** The effect was bypassed or turned on: its window's power button follows. */
+export function pluginShowBypassed(slotId: string, bypassed: boolean): Promise<void> {
+  return invoke<void>("plugin_show_bypassed", { slotId, bypassed });
+}
+
+/** Hides every plug-in window (while the close prompt shows), or shows them again. */
+export function pluginHideWindows(hidden: boolean): Promise<void> {
+  return invoke<void>("plugin_hide_windows", { hidden });
+}
+
 export function pluginEvents(): Promise<PluginEvents[]> {
   return invoke<PluginEvents[]>("plugin_events");
 }
@@ -1216,8 +1260,13 @@ export function shapedNoiseCurves(slot: import("../stores/session").EffectSlotDo
 }
 
 /** An effect's own meter: gain reduction (dB) and output level (dBFS), or null before it has run. */
-export function effectMeter(slot: string): Promise<[number, number] | null> {
-  return invoke<[number, number] | null>("effect_meter", { slot });
+export function effectMeter(slot: string): Promise<[number, number, number] | null> {
+  return invoke<[number, number, number] | null>("effect_meter", { slot });
+}
+
+/** The Vox Strip's Tone curve: [Hz, dB] at `points` frequencies from 20 Hz to 20 kHz. */
+export function voxToneCurve(slot: EffectSlotDoc, points: number): Promise<[number, number][]> {
+  return invoke<[number, number][]>("vox_tone_curve", { slot, points });
 }
 
 export function effectResponse(slot: import("../stores/session").EffectSlotDoc, points: number): Promise<[number, number][]> {
@@ -1320,4 +1369,30 @@ export interface SeqNote {
 /** Plays notes alone through a MIDI track's instrument (the piano roll's Play). False when nothing played. */
 export function midiPlayNotes(trackId: string, notes: SeqNote[]): Promise<boolean> {
   return invoke<boolean>("midi_play_notes", { trackId, notes });
+}
+
+/** Where a pre-rendered track stands: being rendered, playing its render, or waiting for one. */
+export interface PrerenderStatus {
+  trackId: string;
+  state: "rendering" | "ready" | "waiting";
+}
+
+/** Each pre-rendered track's state. */
+export function prerenderStatus(): Promise<PrerenderStatus[]> {
+  return invoke<PrerenderStatus[]>("prerender_status");
+}
+
+/** Calls `fn` when a pre-render starts or finishes. Returns the stop function. */
+export function onPrerenderChanged(fn: () => void): Promise<() => void> {
+  return listen("prerender-changed", () => fn());
+}
+
+/** Hears a level change (dB) over `start..end` samples of what plays (end 0: everything), before editing. 0 dB ends it. */
+/** Hears a clip's level change (dB against its level now) on its track at once while its handle is dragged. False when edits must be heard instead. */
+export function transportAuditionClip(trackId: string, db: number, start: number, end: number): Promise<boolean> {
+  return invoke<boolean>("transport_audition_clip", { trackId, db, start, end });
+}
+
+export function transportAuditionLevel(db: number, start: number, end: number): Promise<void> {
+  return invoke<void>("transport_audition_level", { db, start, end });
 }

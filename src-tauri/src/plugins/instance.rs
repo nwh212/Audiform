@@ -52,6 +52,8 @@ pub struct Events {
     /// Settings changed that are not controls; save its state to keep them.
     pub dirty: bool,
     pub window_closed: bool,
+    /// The power button on its window was clicked: bypassed or not now.
+    pub bypass: Option<bool>,
     /// Its look-ahead changed; playback must re-align.
     pub latency_changed: bool,
     /// It crashed or stopped answering, and is bypassed.
@@ -142,6 +144,7 @@ impl Conn {
                                     e.dirty = true;
                                 }
                                 Message::LatencyChanged { .. } => e.latency_changed = true,
+                                Message::BypassPicked { bypassed } => e.bypass = Some(bypassed),
                                 reply => {
                                     drop(e);
                                     let _ = r.replies.send(reply);
@@ -542,11 +545,12 @@ impl Host {
 
     /// Opens the plug-in's window, owned by `owner` (the main window's
     /// handle on Windows, 0 for none) so it stays above it.
-    pub fn open_window(&mut self, title: &str, owner: u64) -> Result<(), String> {
+    pub fn open_window(&mut self, title: &str, owner: u64, bypassed: bool) -> Result<(), String> {
         match self.request(
             &Request::OpenEditor {
                 title: title.into(),
                 owner,
+                bypassed,
             },
             REQUEST_TIMEOUT,
         ) {
@@ -558,6 +562,15 @@ impl Host {
 
     pub fn close_window(&mut self) {
         let _ = self.request(&Request::CloseEditor, REQUEST_TIMEOUT);
+    }
+
+    /// Sets the power button on the plug-in's window, if it is open.
+    pub fn show_bypassed(&mut self, bypassed: bool) {
+        let _ = self.request(&Request::EditorBypassed { bypassed }, REQUEST_TIMEOUT);
+    }
+
+    pub fn hide_window(&mut self, hidden: bool) {
+        let _ = self.request(&Request::HideEditor { hidden }, REQUEST_TIMEOUT);
     }
 
     pub fn reset(&mut self) {
@@ -895,6 +908,19 @@ pub fn restart(slot: Id) {
 }
 
 /// Everything plug-ins reported since the last call, by slot.
+/// Hides every open plug-in window for a while, or shows them again.
+pub fn hide_windows(hidden: bool) {
+    let hosts: Vec<Arc<Mutex<Host>>> = pool()
+        .lock()
+        .map(|p| p.values().map(|e| e.host.clone()).collect())
+        .unwrap_or_default();
+    for h in hosts {
+        if let Ok(mut h) = h.lock() {
+            h.hide_window(hidden);
+        }
+    }
+}
+
 pub fn take_events() -> Vec<(Id, Events)> {
     let mut out: Vec<(Id, Events)> = Vec::new();
     let hosts: Vec<(Id, Arc<Mutex<Host>>)> = pool()

@@ -20,7 +20,7 @@ Every update that goes out gets its own version, so a bug report can name the bu
 
 4. The Release workflow builds the installer and a portable zip, then makes a **draft** release.
 5. Install the installer on a clean Windows machine and run it. Release immutability means a published release can't be changed, so test first.
-6. Edit the notes, then publish the draft. Versions starting `v0.` are marked pre-release.
+6. Edit the notes, then publish the draft. It becomes the Latest release (0.x versions too). Don't make a release by hand on GitHub: publishing one creates the tag, and the workflow's draft step then fails because the release already exists.
 
 Local build: `npm run tauri build`. The installer lands in `src-tauri/target/release/bundle/nsis/`.
 

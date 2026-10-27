@@ -18,9 +18,9 @@
 <script lang="ts">
   import type { CommandRunner } from "../../stores/media-pool";
   import { editor, type EditorState } from "../../stores/editor";
-  import { SPACE_LAYOUTS, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
+  import { SPACE_LAYOUTS, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
-  import { angleOf, fromView, lastLayout, LAYOUT_NAMES, sides, spaceToggle, snapAngle, snapSpot, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
+  import { angleOf, fromView, lastLayout, LAYOUT_NAMES, sides, spaceToggle, snapAngle, snapSpot, SPATIALIZE_MODES, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
   import { settings } from "../../stores/settings";
   import SpaceFader from "./SpaceFader.svelte";
 
@@ -260,7 +260,9 @@
 </script>
 
 <section class="space-panel" bind:clientWidth={panelW} class:narrow={panelW < 460}>
-  {#if !doc}
+  {#if ed.mode === "waveform"}
+    <p class="hint">3D Space is where you set up surround and height sound for a session. Switch to the Multitrack editor to use it.</p>
+  {:else if !doc}
     <p class="hint">Open a session to place its tracks in a room.</p>
   {:else if !space}
     <div class="intro">
@@ -405,12 +407,18 @@
           {#if picked.stereo}
             <SpaceFader label="Width" value={p.width} min={0} max={1} step={0.01} format={pct} title="How far its left and right sides sit from its center. Also drag a side dot away from or toward the center." onChange={(v) => setPos(picked, { width: v })} />
             <SpaceFader label="Rotation" value={p.rotation ?? 0} min={-180} max={180} step={1} origin={0} format={deg} title="Turns the pair around its center, clockwise seen from above. Also drag the turn arrows, or Shift and the wheel over it." onChange={(v) => setPos(picked, { rotation: v })} />
-            <SpaceFader label="Spatialize" value={p.spatialize ?? 0} min={0} max={1} step={0.01} format={pct} title="Opens a stereo sound out into the room: what differs between its left and right goes, delayed and decorrelated, to the surround and height speakers (left ones in phase, right ones inverted), and what the sides share is fed to the center." onChange={(v) => setPos(picked, { spatialize: v })} />
+            <SpaceFader label="Spatialize" value={p.spatialize ?? 0} min={0} max={1} step={0.01} format={pct} title="Opens a stereo sound out into the room, the way the Method below picks, with what the sides share fed to the center." onChange={(v) => setPos(picked, { spatialize: v })} />
+            <label class="row method" title={SPATIALIZE_MODES.find((m) => m.id === (p.spatialize_mode ?? "side_spread"))?.tip}>
+              Method
+              <select value={p.spatialize_mode ?? "side_spread"} onchange={(e) => setPos(picked, { spatialize_mode: e.currentTarget.value as SpatializeMode })}>
+                {#each SPATIALIZE_MODES as m (m.id)}<option value={m.id} title={m.tip}>{m.label}</option>{/each}
+              </select>
+            </label>
           {/if}
           <SpaceFader label="LFE send" value={p.lfe ?? 0} min={0} max={1} step={0.01} format={(v) => (v > 0 ? `${(20 * Math.log10(v)).toFixed(1)} dB` : "Off")} title="Also sends it to the low-frequency (subwoofer) channel, filtered to 20 to 120 Hz. For kick, bass, booms. Layouts without that channel (2.0) leave it out." onChange={(v) => setPos(picked, { lfe: v })} />
           <SpaceFader label="Left / right" value={p.x} min={-1} max={1} step={0.01} origin={0} format={(v) => v.toFixed(2)} onChange={(v) => setPos(picked, { x: v })} />
           <SpaceFader label="Back / front" value={p.y} min={-1} max={1} step={0.01} origin={0} format={(v) => v.toFixed(2)} onChange={(v) => setPos(picked, { y: v })} />
-          <button type="button" class="quiet" onclick={() => setPos(picked, { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, spread: 0, spatialize: 0 })}>Back to Front Center</button>
+          <button type="button" class="quiet" onclick={() => setPos(picked, { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, spread: 0, spatialize: 0, spatialize_mode: "side_spread" })}>Back to Front Center</button>
         {:else}
           <p class="hint">Click a dot (or a track) to set its height, size, spread, width, rotation, spatialize and LFE send. Drag a dot, or a stereo pair's center diamond, to move it; drag a pair's L or R dot to set its width; drag the arrows around a picked pair to turn it. The wheel raises or lowers one. Tracks routed to a bus play where the bus sits.</p>
         {/if}

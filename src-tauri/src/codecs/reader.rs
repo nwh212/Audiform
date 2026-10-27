@@ -10,7 +10,6 @@
 //! allocates. Run it on a worker thread and hand samples over through a
 //! lock-free queue.
 
-use std::fs::File;
 use std::path::Path;
 
 use audioadapter_buffers::owned::InterleavedOwned;
@@ -19,7 +18,6 @@ use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
-use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::Time;
 
@@ -28,10 +26,22 @@ use super::probe::ProbeError;
 /// Frames fed to the resampler per call.
 const RESAMPLE_CHUNK: usize = 1024;
 
+/// Where decoded samples come from.
+enum Backend {
+    Symphonia {
+        format: Box<dyn FormatReader>,
+        decoder: Box<dyn AudioDecoder>,
+        track_id: u32,
+    },
+    /// A DTS stream (in a WAV or a raw `.dts` file), decoded here.
+    Dts(Box<super::dts::DtsStream>),
+    /// A decoder built into the operating system, for what Symphonia
+    /// cannot read (HE-AAC, Dolby Digital and Dolby Digital Plus).
+    Os(audiform_os_decode::OsReader),
+}
+
 pub struct AudioReader {
-    format: Box<dyn FormatReader>,
-    decoder: Box<dyn AudioDecoder>,
-    track_id: u32,
+    backend: Backend,
     src_rate: u32,
     src_channels: usize,
     out_channels: usize,
@@ -73,13 +83,81 @@ impl AudioReader {
         out_channels: usize,
         out_rate: Option<u32>,
     ) -> Result<Self, ProbeError> {
-        let file = File::open(path).map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => ProbeError::NotFound,
-            _ => ProbeError::Io(e),
-        })?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        let (backend, src_rate, src_channels) = if let Some(dts) = super::dts::sniff(path) {
+            let (rate, ch) = (dts.sample_rate, dts.channels());
+            (
+                Backend::Dts(Box::new(super::dts::DtsStream::open(path, dts)?)),
+                rate,
+                ch,
+            )
+        } else {
+            match Self::open_symphonia(path).map_err(|e| super::probe::name_hidden_codec(path, e)) {
+                Ok(b) => b,
+                Err(e) => match Self::open_os(path, &e) {
+                    Some(b) => b,
+                    None => return Err(e),
+                },
+            }
+        };
+        match Self::finish(backend, src_rate, src_channels, out_channels, out_rate) {
+            Ok(r) => Ok(r),
+            // A codec variant Symphonia only refuses once it decodes (such
+            // as HE-AAC that signals itself inside the stream).
+            Err(e) => match Self::open_os(path, &e) {
+                Some((b, rate, ch)) => Self::finish(b, rate, ch, out_channels, out_rate),
+                None => Err(e),
+            },
+        }
+    }
+
+    /// Opens a file through the system's decoders after `why` kept the
+    /// app's own from reading it. None where that cannot help.
+    fn open_os(path: &Path, why: &ProbeError) -> Option<(Backend, u32, usize)> {
+        if !audiform_os_decode::AVAILABLE
+            || !matches!(
+                why,
+                ProbeError::UnsupportedCodec(_) | ProbeError::UnknownFormat
+            )
+        {
+            return None;
+        }
+        let os = audiform_os_decode::OsReader::open(path).ok()?;
+        let (rate, ch) = (os.info().sample_rate, os.info().channels);
+        Some((Backend::Os(os), rate, ch))
+    }
+
+    fn finish(
+        backend: Backend,
+        src_rate: u32,
+        src_channels: usize,
+        out_channels: usize,
+        out_rate: Option<u32>,
+    ) -> Result<Self, ProbeError> {
+        let mut reader = Self {
+            backend,
+            src_rate,
+            src_channels,
+            out_channels: out_channels.max(1),
+            out_rate: 0,
+            resampler: None,
+            pending: Vec::new(),
+            scratch: Vec::new(),
+            mix: None,
+            ended: false,
+            flushed: false,
+            skip: 0,
+            skip_src: 0,
+        };
+        reader.finish_open(out_rate)?;
+        Ok(reader)
+    }
+
+    /// Opens a file through Symphonia: its backend, rate and channels
+    /// (0 when only the first decode will tell).
+    fn open_symphonia(path: &Path) -> Result<(Backend, u32, usize), ProbeError> {
+        let (mss, ext) = super::source::open(path)?;
         let mut hint = Hint::new();
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if let Some(ext) = ext.as_deref() {
             hint.with_extension(ext);
         }
         let format = symphonia::default::get_probe()
@@ -104,27 +182,23 @@ impl AudioReader {
             .make_audio_decoder(&params, &AudioDecoderOptions::default())
             .map_err(|e| ProbeError::UnsupportedCodec(e.to_string()))?;
 
-        let mut reader = Self {
-            format,
-            decoder,
-            track_id,
-            src_rate: params.sample_rate.unwrap_or(0),
-            src_channels: params.channels.as_ref().map(|c| c.count()).unwrap_or(0),
-            out_channels: out_channels.max(1),
-            out_rate: 0,
-            resampler: None,
-            pending: Vec::new(),
-            scratch: Vec::new(),
-            mix: None,
-            ended: false,
-            flushed: false,
-            skip: 0,
-            skip_src: 0,
-        };
-        // Some formats only reveal rate and channels after the first decode.
-        if reader.src_rate == 0 || reader.src_channels == 0 {
-            reader.decode_next()?;
-        }
+        Ok((
+            Backend::Symphonia {
+                format,
+                decoder,
+                track_id,
+            },
+            params.sample_rate.unwrap_or(0),
+            params.channels.as_ref().map(|c| c.count()).unwrap_or(0),
+        ))
+    }
+
+    fn finish_open(&mut self, out_rate: Option<u32>) -> Result<(), ProbeError> {
+        let reader = self;
+        // Some formats only reveal rate and channels after the first decode,
+        // and some codec variants are only refused then: decode the first
+        // packet now, so a refusal shows here and not mid-playback.
+        reader.decode_next()?;
         if reader.src_rate == 0 || reader.src_channels == 0 {
             return Err(ProbeError::NoAudio);
         }
@@ -143,7 +217,7 @@ impl AudioReader {
             reader.skip = resampler.output_delay() * reader.out_channels;
             reader.resampler = Some(resampler);
         }
-        Ok(reader)
+        Ok(())
     }
 
     pub fn source_rate(&self) -> u32 {
@@ -164,18 +238,52 @@ impl AudioReader {
 
     /// Moves to a time in seconds. Returns the time actually reached.
     pub fn seek(&mut self, seconds: f64) -> Result<f64, ProbeError> {
+        let (format, decoder, track_id) = match &mut self.backend {
+            Backend::Symphonia {
+                format,
+                decoder,
+                track_id,
+            } => (format, decoder, *track_id),
+            Backend::Os(os) => {
+                let rate = f64::from(self.src_rate);
+                let target = (seconds.max(0.0) * rate).round();
+                os.seek(target as u64).map_err(ProbeError::Damaged)?;
+                if let Some(r) = self.resampler.as_mut() {
+                    r.reset();
+                    self.skip = r.output_delay() * self.out_channels;
+                }
+                self.pending.clear();
+                self.ended = false;
+                self.flushed = false;
+                self.skip_src = 0;
+                return Ok(target / rate.max(1.0));
+            }
+            Backend::Dts(d) => {
+                let rate = f64::from(self.src_rate);
+                let target = (seconds.max(0.0) * rate).round();
+                let landed = d.seek(target as u64) as f64;
+                if let Some(r) = self.resampler.as_mut() {
+                    r.reset();
+                    self.skip = r.output_delay() * self.out_channels;
+                }
+                self.pending.clear();
+                self.ended = false;
+                self.flushed = false;
+                self.skip_src = (target - landed).max(0.0) as usize;
+                return Ok((landed + self.skip_src as f64) / rate.max(1.0));
+            }
+        };
         let time = Time::try_from_secs_f64(seconds.max(0.0)).unwrap_or(Time::from_nanos(0));
-        let seeked = self
-            .format
+        let seeked = format
             .seek(
                 SeekMode::Accurate,
                 SeekTo::Time {
                     time,
-                    track_id: Some(self.track_id),
+                    track_id: Some(track_id),
                 },
             )
             .map_err(|e| ProbeError::Damaged(e.to_string()))?;
-        self.decoder.reset();
+        decoder.reset();
         if let Some(r) = self.resampler.as_mut() {
             r.reset();
             self.skip = r.output_delay() * self.out_channels;
@@ -184,11 +292,10 @@ impl AudioReader {
         self.skip_src = 0;
         self.ended = false;
         self.flushed = false;
-        let tb = self
-            .format
+        let tb = format
             .tracks()
             .iter()
-            .find(|t| t.id == self.track_id)
+            .find(|t| t.id == track_id)
             .and_then(|t| t.time_base);
         let secs = |ts| tb.and_then(|tb| tb.calc_time(ts)).map(|t| t.as_secs_f64());
         let actual = secs(seeked.actual_ts).unwrap_or(seconds);
@@ -254,8 +361,46 @@ impl AudioReader {
 
     /// Decodes one packet into `pending`, mapped to the output channels.
     fn decode_next(&mut self) -> Result<(), ProbeError> {
+        let (format, decoder, track_id) = match &mut self.backend {
+            Backend::Symphonia {
+                format,
+                decoder,
+                track_id,
+            } => (format, decoder, *track_id),
+            Backend::Os(os) => {
+                self.scratch.clear();
+                if !os.read(&mut self.scratch).map_err(ProbeError::Damaged)? {
+                    self.ended = true;
+                    return Ok(());
+                }
+                let channels = self.src_channels.max(1);
+                self.push_scratch(channels);
+                return Ok(());
+            }
+            Backend::Dts(d) => {
+                self.scratch.clear();
+                loop {
+                    if !d.next_into(&mut self.scratch)? {
+                        self.ended = true;
+                        return Ok(());
+                    }
+                    let channels = self.src_channels.max(1);
+                    if self.skip_src > 0 {
+                        let frames = self.scratch.len() / channels;
+                        let drop = self.skip_src.min(frames);
+                        self.skip_src -= drop;
+                        self.scratch.drain(..drop * channels);
+                        if self.scratch.is_empty() {
+                            continue;
+                        }
+                    }
+                    self.push_scratch(channels);
+                    return Ok(());
+                }
+            }
+        };
         loop {
-            let packet = match self.format.next_packet() {
+            let packet = match format.next_packet() {
                 Ok(Some(p)) => p,
                 Ok(None) => {
                     self.ended = true;
@@ -266,17 +411,20 @@ impl AudioReader {
                     return Ok(());
                 }
                 Err(SymError::ResetRequired) => {
-                    self.decoder.reset();
+                    decoder.reset();
                     continue;
                 }
                 Err(e) => return Err(ProbeError::Damaged(e.to_string())),
             };
-            if packet.track_id != self.track_id {
+            if packet.track_id != track_id {
                 continue;
             }
-            let buf = match self.decoder.decode(&packet) {
+            let buf = match decoder.decode(&packet) {
                 Ok(b) => b,
                 Err(SymError::DecodeError(_)) => continue,
+                Err(SymError::Unsupported(what)) => {
+                    return Err(ProbeError::UnsupportedCodec(what.to_string()))
+                }
                 Err(e) => return Err(ProbeError::Damaged(e.to_string())),
             };
             let spec = buf.spec();
@@ -297,18 +445,23 @@ impl AudioReader {
                     continue;
                 }
             }
-            match self.mix.as_deref() {
-                Some(g) if self.out_channels == 2 => {
-                    crate::dsp::channels::mix_into(&self.scratch, channels, g, &mut self.pending);
-                }
-                _ => map_channels(
-                    &self.scratch,
-                    channels,
-                    self.out_channels,
-                    &mut self.pending,
-                ),
-            }
+            self.push_scratch(channels);
             return Ok(());
+        }
+    }
+
+    /// Maps the decoded samples in `scratch` to the output channels.
+    fn push_scratch(&mut self, channels: usize) {
+        match self.mix.as_deref() {
+            Some(g) if self.out_channels == 2 => {
+                crate::dsp::channels::mix_into(&self.scratch, channels, g, &mut self.pending);
+            }
+            _ => map_channels(
+                &self.scratch,
+                channels,
+                self.out_channels,
+                &mut self.pending,
+            ),
         }
     }
 }

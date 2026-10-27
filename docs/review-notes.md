@@ -69,3 +69,24 @@ The project lead asked (2026-10-28) that open questions be decided rather than w
 - **Clips keep their track colors** (pink drums, orange bass and so on), since those are your session's own colors. A strict one-color screen would make every track green and hard to tell apart; say if you want clips forced to shades of green in this theme.
 - **Record and errors stay orange-red** for the same reason.
 - **The scan lines are faint on purpose.** They sit over everything, so stronger ones would hurt reading on long sessions.
+
+## This round (2026-10-27)
+
+- **Multichannel in a stereo session:** I couldn't find a way for a multichannel file to light up more than two meters in a stereo session; it folds down to left and right there. The extra meters appear in 3D Space sessions, where such files pass through to the speakers by default. I made that easy to switch (clip right-click > Pass Through to Speakers). If you saw it in a session with 3D Space off, tell me how and I'll chase it.
+- **3D Space note in the Waveform editor** says "surround and height sound" rather than "spatial audio", to steer clear of any branded term.
+- **Effects menu search:** the box takes the cursor as soon as the Effects menu opens, so typing searches straight away. That replaces jump-by-letter in that one menu.
+- **Spatialize methods:** Side Spread (as before), Matrix, Ambience, Height Lift. Names and designs are our own.
+- **Live copies of unsaved edits** are re-rendered a moment after each edit; a very long file may take a second or two to catch up in the session.
+- **Track deletion shortcut:** Shift+Delete, as asked. Ctrl+Alt+Backspace is gone.
+- **Session files:** saved as `.audfrm`. Saving as `.sesx` was not chosen: that format cannot hold MIDI, 3D Space, automation of our own effects and so on, so a session would lose work. `.altaudio` files still open and save again as `.audfrm`.
+- **DTS:** not added. There is no open decoder we can ship, and the codec carries patent and licence questions. A later option is converting through a copy of FFmpeg the user installs.
+- **MOGG:** unencrypted (version 10) files open. Encrypted ones are refused with a clear reason; we do not break their encryption.
+- **Slow stretching:** drum hits and other sharp attacks now play at their natural speed and land exactly on their stretched time; the space between them is what stretches. Pitch Shift keeps the old fixed timing, since it has to report a fixed delay.
+- **MIDI stretch:** Alt+drag a MIDI clip's edge stretches its notes, snapping to a quarter beat (hold Ctrl as well for no snap).
+- **Pre-render:** the button sits on the Track Effects tab only (not buses or the master, which mix live sound from other tracks). The cache keeps the 24 newest renders, so undo can reuse them, and removes older ones.
+- **Phosphor pointers:** redrawn on a whole-pixel grid (each cell two screen pixels) so they stay crisp; the arrow is about two thirds of its old size.
+- **MOGG, second try:** the test file was a plain Ogg with no MOGG header and 10 channels. Both now work: a header is only read when the file does not start with Ogg data, and the decoder library is patched (`src-tauri/vendor/symphonia-common`) to accept Vorbis files with more than 8 channels as numbered channels.
+- **MIDI stretch:** the drag preview drew the notes stretched even for a plain length change, so it looked like a stretch that undid itself on release. The preview now shows what will happen, Alt counts if pressed at any point during the drag, and with Stretch Handles on the top-right corner of a MIDI clip stretches without Alt.
+- **Pre-render button** now has a text label ("Pre-render", "Rendering…" while busy) so it is easy to find on the Track Effects tab.
+- **DTS:** now built after all (see decisions.md). The DTS core decodes bit-exactly like FFmpeg; extensions beyond 6.1 (96 kHz, more channels, lossless) play just their core. Saving a DTS WAV from the Waveform editor writes plain PCM.
+- **Vox Strip:** named Vox Strip rather than VoxChain, since the effects rack itself was called Voice Chain until recently and the two would be easy to mix up. It is in Effects > Vox Strip (vocal chain) and the Add effect list (category Vocal). The window's layout is our own design, not a copy; Air is described in decisions.md. Each module's "solo" button from the reference was left out; bypassing the other modules does the same job.

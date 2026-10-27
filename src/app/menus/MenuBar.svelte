@@ -8,7 +8,9 @@
   menu; arrows move; Enter runs; Escape closes. Typing letters jumps to
   the first item in the open list that starts with them. A popup entry
   (the scanned plug-ins) opens a list the app builds at that moment, as
-  a menu beside it that nests as deep as it needs.
+  a menu beside it that nests as deep as it needs. A menu with a search
+  box (Effects) lists what matches the text typed into it in place of
+  its items.
 -->
 <script lang="ts" module>
   import type { ContextItem } from "../ContextMenu.svelte";
@@ -30,9 +32,31 @@
     onError: (e: unknown) => void;
     /** Builds each popup entry's list by id, when it opens. */
     popups?: Record<string, () => PopupList>;
+    /** Menus with a search box at the top, by menu label: what each finds for the text typed. */
+    searches?: Record<string, { placeholder: string; find: (query: string) => readonly ContextItem[] }>;
   }
 
-  const { menus, actions, shortcutFor, onError, popups = {} }: Props = $props();
+  const { menus, actions, shortcutFor, onError, popups = {}, searches = {} }: Props = $props();
+  /** Text in the open menu's search box, and the highlighted result. */
+  let menuQuery = $state("");
+  let resultActive = $state(-1);
+  const results = $derived.by(() => {
+    const q = menuQuery.trim();
+    const box = openMenu === null ? undefined : searches[menus[openMenu]?.label ?? ""];
+    if (!q || !box) return [];
+    return box.find(q).filter((r): r is Extract<ContextItem, { kind: "item" }> => r.kind === "item");
+  });
+  /** Puts the cursor in the search box once the menu is on screen, so typing searches straight away. */
+  function focusSoon(node: HTMLInputElement) {
+    requestAnimationFrame(() => node.focus());
+  }
+
+  function runResult(i: number) {
+    const r = results[i];
+    if (!r || r.disabled) return;
+    close();
+    r.run();
+  }
   /** The popup list open beside its entry, if any. */
   let popupOpen = $state<{ id: string; x: number; y: number; items: readonly ContextItem[] } | null>(null);
   const jump = typeahead();
@@ -113,6 +137,8 @@
   }
 
   function open(i: number, focusFirst = false) {
+    menuQuery = "";
+    resultActive = -1;
     openMenu = i;
     openSub = null;
     subActive = -1;
@@ -155,6 +181,27 @@
   function onKey(e: KeyboardEvent) {
     // A dialog owns the keyboard while it is open.
     if (document.querySelector('[aria-modal="true"]')) return;
+    if (e.target instanceof HTMLInputElement && e.target.dataset.menuSearch !== undefined) {
+      // In the search box: typing goes into it; the arrows, Enter and Escape work the results.
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (menuQuery) menuQuery = "";
+        else close();
+        return;
+      }
+      if (menuQuery.trim()) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const n = results.length;
+          if (n) resultActive = (resultActive + (e.key === "ArrowDown" ? 1 : n - 1) + (resultActive < 0 && e.key === "ArrowUp" ? 1 : 0)) % n;
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          runResult(Math.max(0, resultActive));
+        }
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
+    }
     if (e.key === "Alt") {
       altHeld = true;
       return;
@@ -225,7 +272,9 @@
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (openMenu !== null && !root.contains(e.target as Node)) close();
+    // A popup list lives at the end of the page (see ContextMenu), so it counts as inside too.
+    const t = e.target as Element;
+    if (openMenu !== null && !root.contains(t) && !t.closest?.(".context")) close();
   }
 </script>
 
@@ -304,10 +353,51 @@
         {@render labelWithMnemonic(menu.label, menu.mnemonic)}
       </button>
       {#if openMenu === mi}
+        {@const box = searches[menu.label]}
         <div class="dropdown" role="menu">
-          {#each shown(menu.items) as it, ii (ii)}
-            <div class="cell">{@render row(it, ii, false)}</div>
-          {/each}
+          {#if box}
+            <div class="search">
+              <input
+                type="search"
+                spellcheck="false"
+                data-menu-search
+                use:focusSoon
+                placeholder={box.placeholder}
+                aria-label={box.placeholder}
+                value={menuQuery}
+                oninput={(e) => {
+                  menuQuery = e.currentTarget.value;
+                  resultActive = -1;
+                  openSub = null;
+                  popupOpen = null;
+                }}
+              />
+            </div>
+          {/if}
+          {#if box && menuQuery.trim()}
+            {#each results as r, ri (ri)}
+              <button
+                type="button"
+                class="row"
+                class:active={resultActive === ri}
+                class:disabled={r.disabled}
+                role="menuitem"
+                onpointerenter={() => (resultActive = ri)}
+                onclick={() => runResult(ri)}
+              >
+                <span class="check"></span>
+                <span class="label">{r.label}</span>
+                <span class="shortcut">{r.shortcut ?? ""}</span>
+                <span class="arrow"></span>
+              </button>
+            {:else}
+              <div class="none">No matches</div>
+            {/each}
+          {:else}
+            {#each shown(menu.items) as it, ii (ii)}
+              <div class="cell">{@render row(it, ii, false)}</div>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
@@ -327,6 +417,27 @@
 
   .slot {
     position: relative;
+  }
+
+  .search {
+    padding: 3px 6px 4px;
+  }
+
+  .search input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: var(--surface-0);
+    color: var(--text);
+    font: inherit;
+  }
+
+  .none {
+    padding: 4px 12px 6px 28px;
+    color: var(--text-faint);
   }
 
   .top {

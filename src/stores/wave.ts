@@ -164,5 +164,24 @@ export async function saveWaveFile(path: string | null, bitDepth: number | null 
   await waveHistory.clear(path ? "Saved As" : "Saved");
 }
 
+/**
+ * Live copies of files with unsaved Waveform editor edits, by the file's
+ * path: the session plays, exports and draws these in their place until
+ * the edits are saved or dropped (see src-tauri/src/commands/live.rs).
+ */
+export const liveCopies = writable<Record<string, { path: string; length: number }>>({});
+
+/** The same file, however its path is spelled. */
+export function samePath(a: string, b: string): boolean {
+  const n = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+  return a === b || n(a) === n(b);
+}
+
+/** The live copy standing in for `path`, if any. */
+export function liveCopyOf(copies: Record<string, { path: string; length: number }>, path: string): { path: string; length: number } | null {
+  for (const [k, v] of Object.entries(copies)) if (samePath(k, path)) return v;
+  return null;
+}
+
 /** The current spectral selection in the Waveform editor: boxes, lassos and brush strokes. Null when none. */
 export const spectralSelection = writable<readonly SpectralShape[] | null>(null);

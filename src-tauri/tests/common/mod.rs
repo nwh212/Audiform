@@ -119,6 +119,7 @@ pub fn clip() -> Clip {
         channel_mix: None,
         reversed: false,
         inverted: false,
+        invert_channel: None,
     }
 }
 
@@ -141,6 +142,7 @@ pub fn track() -> Track {
         solo: true,
         polarity_inverted: false,
         mono: false,
+        prerender: false,
         space: None,
         record_armed: true,
         monitor_input: false,

@@ -11,6 +11,7 @@
   or export, only through the speakers while playing or recording.
 -->
 <script lang="ts">
+  import { portal } from "../voice-chain/effect-window";
   import type { TempoDoc } from "../../stores/session";
   import { addChange, bpmText, editSegment, meterText, nearestBar, parseMeter, secondsToBeats, segmentAtSeconds, BPM_MAX, BPM_MIN } from "../../stores/tempo";
   import { METRONOME_SOUNDS, METRONOME_SUBDIVIDE, settings, type MetronomePrefs } from "../../stores/settings";
@@ -137,9 +138,10 @@
 
 {#if pop}
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="scrim" onclick={() => (pop = null)} oncontextmenu={(e) => { e.preventDefault(); pop = null; }}></div>
+  <div class="scrim" use:portal onclick={() => (pop = null)} oncontextmenu={(e) => { e.preventDefault(); pop = null; }}></div>
   <div
     class="met-pop"
+    use:portal
     role="dialog"
     aria-label="Metronome settings"
     tabindex="-1"
@@ -277,11 +279,11 @@
   .scrim {
     position: fixed;
     inset: 0;
-    z-index: 90;
+    z-index: 940;
   }
   .met-pop {
     position: fixed;
-    z-index: 91;
+    z-index: 941;
     display: grid;
     gap: 6px;
     width: 260px;

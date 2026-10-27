@@ -263,8 +263,21 @@ pub enum Request {
         title: String,
         #[serde(default, skip_serializing_if = "is_zero")]
         owner: u64,
+        /// Whether the effect is bypassed, for the window's power button.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        bypassed: bool,
     },
     CloseEditor,
+    /// The effect was bypassed or turned on in the editor: the window's
+    /// power button follows.
+    EditorBypassed {
+        bypassed: bool,
+    },
+    /// Hides the plug-in's window for a while (so the editor's close
+    /// prompt is seen), or shows it again.
+    HideEditor {
+        hidden: bool,
+    },
     /// Removes the selected plug-in from the process (others carry on).
     Unload,
     /// The session's tempo and time signature, told to the plug-in with
@@ -316,6 +329,10 @@ pub enum Message {
     },
     /// Event: the plug-in's window was closed.
     EditorClosed,
+    /// Event: the power button on the plug-in's window was clicked.
+    BypassPicked {
+        bypassed: bool,
+    },
     /// Event: the plug-in changed settings that are not controls (save
     /// its state to keep them).
     Dirty,
@@ -627,6 +644,7 @@ mod tests {
         let r = Request::OpenEditor {
             title: "Vocal".into(),
             owner: 0,
+            bypassed: false,
         };
         assert_eq!(
             serde_json::to_string(&r).unwrap(),

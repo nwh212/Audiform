@@ -88,6 +88,7 @@ describe("session files", () => {
     expect(opened).toEqual([["C:\\Ep 1.SESX", "a.wav"]]);
     expect(dropped).toEqual([["b.wav"]]);
     expect(isSessionFile("x.altaudio")).toBe(true);
+    expect(isSessionFile("x.audfrm")).toBe(true);
     expect(isSessionFile("x.wav")).toBe(false);
   });
 });

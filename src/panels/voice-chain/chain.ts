@@ -243,6 +243,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Time and Pitch": "#d86f9b",
   Stereo: "#4fc8b8",
   "Delay and Reverb": "#9d7cf0",
+  Vocal: "#ec6a92",
 };
 
 // --- Presets ---
@@ -558,6 +559,18 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
   chainP("Lower Pitch", "Processing", [
     fx("pitch_shift", { semitones: -2, cents: 0 }),
   ]),
+  chainP("Slapback Echo", "Delay", [
+    fx("echo", { time: 110, feedback: 8, tone: 5000, wet: 28, pingpong: 0 }),
+  ]),
+  chainP("Podcast Room Echo", "Delay", [
+    fx("echo", { time: 240, feedback: 25, tone: 4500, wet: 18, pingpong: 0 }),
+  ]),
+  chainP("Ping-Pong Echo", "Delay", [
+    fx("echo", { time: 375, feedback: 40, tone: 6000, wet: 30, pingpong: 1 }),
+  ]),
+  chainP("Long Dark Echo", "Delay", [
+    fx("echo", { time: 700, feedback: 55, tone: 2800, wet: 35, pingpong: 0 }),
+  ]),
   chainP("Remove Vocals", "Processing", [
     fx("center_extractor", { range: 4, center_freq: 1342, width: 6.3, center: -48 }),
   ]),
@@ -727,8 +740,8 @@ export function pluginMenuGroups(plugins: readonly MenuPlugin[]): { types: [stri
       m.set(k, [...(m.get(k) ?? []), p]);
     }
     return [...m.entries()]
-      .sort(([a], [b]) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)))
-      .map(([k, list]): [string, MenuPlugin[]] => [k, [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))]);
+      .sort(([a], [b]) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b, undefined, { sensitivity: "base" })))
+      .map(([k, list]): [string, MenuPlugin[]] => [k, [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }))]);
   };
   const type = (p: MenuPlugin) => {
     const parts = p.kind

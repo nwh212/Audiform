@@ -15,7 +15,10 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SCAN = ["src", "src-tauri/src", "src-tauri/tests", "scripts"];
 const EXTENSIONS = new Set([".rs", ".ts", ".js", ".mjs", ".svelte", ".css"]);
 const SKIP_DIRS = new Set(["node_modules", "target", "gen", "fixtures", "dist"]);
-const REQUIRED = ["SPDX-License-Identifier: GPL-3.0-or-later", "Copyright (c) "];
+// Code ported from LGPL projects (the DTS decoder, from FFmpeg) keeps its
+// LGPL-2.1-or-later license, which combines with GPLv3.
+const LICENSES = ["SPDX-License-Identifier: GPL-3.0-or-later", "SPDX-License-Identifier: LGPL-2.1-or-later"];
+const COPYRIGHT = "Copyright (c) ";
 
 /**
  * @param {string} dir
@@ -37,7 +40,7 @@ const missing = [];
 for (const top of SCAN) {
   for (const file of walk(join(ROOT, top))) {
     const head = readFileSync(file, "utf8").slice(0, 600);
-    if (!REQUIRED.every((line) => head.includes(line))) {
+    if (!LICENSES.some((line) => head.includes(line)) || !head.includes(COPYRIGHT)) {
       missing.push(relative(ROOT, file));
     }
   }

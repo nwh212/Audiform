@@ -15,7 +15,12 @@ describe("theme pointers", () => {
     expect(themedFor("text", "prism")).toMatch(/^url\(.+\) 10 10, text$/);
     expect(themedFor("col-resize", "aqua")).toMatch(/, col-resize$/);
     expect(themedFor("grabbing", "meadow")).toMatch(/, grabbing$/);
-    expect(themedFor("nwse-resize", "phosphor")).toMatch(/^url\(.+\) 16 16, nwse-resize$/);
+    expect(themedFor("nwse-resize", "phosphor")).toMatch(/^url\(.+\) 9 9, nwse-resize$/);
+  });
+
+  it("gives each pixel-art pointer its own hot spot", () => {
+    expect(themedFor("text", "phosphor")).toMatch(/\) 7 10, text$/);
+    expect(themedFor("ew-resize", "phosphor")).toMatch(/\) 11 5, ew-resize$/);
   });
 
   it("leaves other pointers and other themes alone", () => {

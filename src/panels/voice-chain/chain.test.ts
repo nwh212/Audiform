@@ -36,6 +36,7 @@ const KNOWN = new Set([
   "altaudio.hum_cut",
   "altaudio.dynamics",
   "altaudio.limiter",
+  "altaudio.echo",
   "altaudio.breath_gate",
   "altaudio.deesser",
   "altaudio.speech_leveler",

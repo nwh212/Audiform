@@ -6,7 +6,10 @@
   A MIDI track's lane: its clips over a bar and beat grid. Double-click
   empty space for a new one-bar clip; double-click a clip to edit its
   notes. Drag a clip to move it and its right edge to change its length;
-  both snap to beats. Drag a clip up or down onto another MIDI track to
+  both snap to beats. Alt-drag the right edge (or, with Stretch Handles on,
+  drag its top corner) to stretch the clip instead:
+  its notes spread out or squeeze together with it (quarter-beat steps;
+  Ctrl for none), as Alt-drag stretches an audio clip. Drag a clip up or down onto another MIDI track to
   move it there (Alt: a copy); its notes go along and that track's
   instrument plays them. Clips and notes are in beats, so they follow
   the session tempo.
@@ -14,7 +17,7 @@
 <script lang="ts">
   import { dragGain, gainText } from "./clip-gain";
   import type { MidiClipDoc, TempoDoc, TrackDoc } from "../../stores/session";
-  import { beatsToSamples, CHANNEL_COLORS, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted } from "./midi";
+  import { beatsToSamples, CHANNEL_COLORS, clipAtBeat, moveClips, newClip, pitchRange, resizeClip, samplesToBeats, snap, sorted, stretchClip } from "./midi";
   import { gridLines, xOf, type Viewport } from "./timeline";
 
   interface Props {
@@ -41,9 +44,11 @@
     onDragOver?: (trackId: string | null) => void;
     /** Highlighted as the place a dragged clip would land. */
     dropTarget?: boolean;
+    /** Stretch Handles on: the right edge's title-bar corner stretches without Alt. */
+    stretchHandles?: boolean;
   }
 
-  const { track, tempo, rate, view, width, height, color, selected, onSelect, onSetClips, onOpen, onMenu, onTransfer = () => {}, onDragOver = () => {}, dropTarget = false }: Props = $props();
+  const { track, tempo, rate, view, width, height, color, selected, onSelect, onSetClips, onOpen, onMenu, onTransfer = () => {}, onDragOver = () => {}, dropTarget = false, stretchHandles = false }: Props = $props();
 
   /** The MIDI track lane under a point, if any. */
   function midiTrackAt(x: number, y: number): string | null {
@@ -57,7 +62,8 @@
 
   /** A drag in progress: clips moving by `delta` beats, or one clip's new length. */
   let drag = $state<{ ids: Set<string>; delta: number } | null>(null);
-  let sizing = $state<{ id: string; length: number } | null>(null);
+  /** The right edge being dragged: changing the length, or stretching the notes with it (Alt). */
+  let sizing = $state<{ id: string; length: number; stretch: boolean } | null>(null);
   /** The level handle being dragged: the clip and its new level. */
   let leveling = $state<{ id: string; db: number } | null>(null);
   const levelOf = (c: MidiClipDoc) => (leveling?.id === c.id ? leveling.db : (c.gain_db ?? 0));
@@ -110,7 +116,10 @@
     const right = xOfBeat(hit.start + hit.length);
     const startX = e.clientX;
     if (right - x <= EDGE) {
-      sizing = { id: hit.id, length: hit.length };
+      // On the title bar with Stretch Handles on, or with Alt: stretch the notes too.
+      const title = (e.target as Element | null)?.closest(".clip")?.querySelector(".title")?.getBoundingClientRect();
+      const corner = stretchHandles && !!title && e.clientY <= title.bottom;
+      sizing = { id: hit.id, length: hit.length, stretch: e.altKey || corner };
     } else {
       const ids = e.shiftKey || e.ctrlKey || e.metaKey ? new Set([...selected, hit.id]) : selected.has(hit.id) ? new Set(selected) : new Set([hit.id]);
       onSelect([...ids]);
@@ -119,7 +128,13 @@
     let over: string | null = null;
     const move = (ev: PointerEvent) => {
       const beats = (ev.clientX - startX) / Math.max(1e-9, pxPerBeat);
-      if (sizing) sizing = { ...sizing, length: Math.max(0.25, snap(hit.length + beats, 1) || 1) };
+      if (sizing) {
+        // Alt pressed partway through the drag still makes it a stretch.
+        if (ev.altKey && !sizing.stretch) sizing = { ...sizing, stretch: true };
+        const raw = hit.length + beats;
+        const length = sizing.stretch ? Math.max(0.25, ev.ctrlKey || ev.metaKey ? raw : snap(raw, 0.25)) : Math.max(0.25, snap(raw, 1) || 1);
+        sizing = { ...sizing, length };
+      }
       if (drag) {
         drag = { ...drag, delta: snap(beats, 1) };
         // Over another MIDI track: it lights up as the place the clips land.
@@ -134,7 +149,10 @@
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
-      if (sizing && sizing.length !== hit.length) onSetClips(resizeClip(clips, sizing.id, sizing.length), "Clip Length");
+      if (sizing && sizing.length !== hit.length) {
+        if (sizing.stretch) onSetClips(stretchClip(clips, sizing.id, sizing.length), "Stretch MIDI Clip");
+        else onSetClips(resizeClip(clips, sizing.id, sizing.length), "Clip Length");
+      }
       if (drag && over) onTransfer([...drag.ids], drag.delta, over, ev.altKey);
       else if (drag && drag.delta !== 0) onSetClips(moveClips(clips, drag.ids, drag.delta), drag.ids.size > 1 ? "Move Clips" : "Move Clip");
       if (over) onDragOver(null);
@@ -170,15 +188,16 @@
   /** Bar and beat lines, following tempo and time signature changes. */
   const lines = $derived(gridLines(view, width, rate, tempo));
 
-  function noteBoxes(c: MidiClipDoc) {
+  /** Note boxes across the clip, as percents of `len` beats (the length shown while resizing). */
+  function noteBoxes(c: MidiClipDoc, len = c.length) {
     const [lo, hi] = pitchRange(c.notes);
     const span = Math.max(12, hi - lo + 1);
     const low = lo - Math.floor((span - (hi - lo + 1)) / 2);
     return c.notes
-      .filter((n) => n.start < c.length)
+      .filter((n) => n.start < Math.min(c.length, len))
       .map((n) => ({
-        x: (n.start / c.length) * 100,
-        w: Math.max(0.4, (Math.min(n.length, c.length - n.start) / c.length) * 100),
+        x: (n.start / len) * 100,
+        w: Math.max(0.4, (Math.min(n.length, Math.min(c.length, len) - n.start) / len) * 100),
         y: (1 - (n.pitch - low + 1) / span) * 100,
         h: 100 / span,
         // A note on another MIDI channel shows in that channel's color.
@@ -218,7 +237,7 @@
         <div class="title">{c.name}{c.muted ? " (muted)" : ""}</div>
         {#if height > 30}
           <svg class="notes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            {#each noteBoxes(c) as b, k (k)}
+            {#each noteBoxes(c, sizing?.id === c.id && !sizing.stretch ? sizing.length : c.length) as b, k (k)}
               <rect x={b.x} y={b.y} width={b.w} height={b.h} style:--clip-color={b.color} />
             {/each}
           </svg>
@@ -231,7 +250,8 @@
           </div>
           {#if db !== 0}<span class="lvltext">{gainText(db)}</span>{/if}
         {/if}
-        <div class="edge" title="Drag to change the clip's length"></div>
+        {#if stretchHandles}<div class="corner" aria-hidden="true"></div>{/if}
+        <div class="edge" title={stretchHandles ? "Drag to change the clip's length. Drag the top corner (or Alt-drag) to stretch it, notes and all." : "Drag to change the clip's length. Alt-drag to stretch it, notes and all."}></div>
       </div>
     {/if}
   {/each}
@@ -344,6 +364,17 @@
     bottom: 0;
     width: 6px;
     cursor: ew-resize;
+  }
+  .corner {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-top: 8px solid var(--text);
+    border-left: 8px solid transparent;
+    opacity: 0.7;
+    pointer-events: none;
   }
   .hint {
     position: absolute;

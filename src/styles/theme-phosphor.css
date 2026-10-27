@@ -212,3 +212,31 @@
 :root[data-theme="phosphor"] ::-webkit-scrollbar-thumb:hover {
   background: var(--p-case);
 }
+
+/* Nothing round on a pixel screen: square corners everywhere. */
+:root[data-theme="phosphor"] *,
+:root[data-theme="phosphor"] *::before,
+:root[data-theme="phosphor"] *::after {
+  border-radius: 0 !important;
+}
+
+/* Meters and bars light up in blocks, like segment displays. */
+:root[data-theme="phosphor"] :is(.levels .bar, .phase .legend .bar, .phase .track) {
+  position: relative;
+}
+:root[data-theme="phosphor"] :is(.levels .bar, .phase .legend .bar, .phase .track)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 4px, #020602 4px 6px);
+}
+:root[data-theme="phosphor"] .phase .mark {
+  width: 6px;
+  margin-left: -3px;
+  background: var(--accent);
+  box-shadow: 0 0 4px rgba(109, 255, 142, 0.7);
+}
+:root[data-theme="phosphor"] input[type="range"] {
+  accent-color: var(--text);
+}

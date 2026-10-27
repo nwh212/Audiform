@@ -34,6 +34,13 @@ describe("plug-in sync", () => {
     expect(ops).toEqual([{ op: "set_track", id: "k", changes: { instrument: { ...plug("i1"), params: { p0: 0.5 }, plugin_state: "SYNTH" } } }]);
   });
 
+  it("bypasses or turns on an effect from its window's power button", () => {
+    const ops = syncOps(doc, [ev("s2", { bypass: true })], new Map()) as { op: string; chain: { slots: { enabled: boolean }[] } }[];
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!.chain.slots[0]!.enabled).toBe(false);
+    expect(syncOps(doc, [ev("s2", { bypass: false })], new Map())).toEqual([]);
+  });
+
   it("makes no edit when nothing changed", () => {
     expect(syncOps(doc, [ev("s1", { edits: [["p0", 1]] })], new Map())).toEqual([]);
     expect(syncOps(doc, [ev("gone", { edits: [["p0", 0]] })], new Map())).toEqual([]);

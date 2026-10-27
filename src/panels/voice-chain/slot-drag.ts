@@ -22,9 +22,13 @@ import { addSlotAt, chainOf, moveSlotToIndex, pluginMenuGroups, type MenuPlugin 
 
 /** The same shape as the Editor's context menu items. */
 export type MenuItem =
-  | { kind: "item"; label: string; run: () => void; disabled?: boolean; reason?: string | null }
+  | { kind: "item"; label: string; run: () => void; disabled?: boolean; reason?: string | null; shortcut?: string }
   | { kind: "sub"; label: string; items: readonly MenuItem[]; disabled?: boolean }
-  | { kind: "sep" };
+  | { kind: "sep" }
+  | { kind: "search"; placeholder: string; find: (query: string) => readonly MenuItem[] };
+
+/** Sorts names the way a person reads them: ignoring case, numbers by value. */
+export const byLabel = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
 /** One string per chain, for the `data-slot-owner` attribute. */
 export function ownerKey(t: EffectTarget): string {
@@ -127,19 +131,47 @@ export function startSlotDrag(e: PointerEvent, onDrop: (to: SlotSpot) => void, o
 export const NO_VST2 = "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.";
 
 /**
- * The VST3 plug-ins found by a scan, as menu rows: by type, then by
- * maker, each list alphabetical. Empty when none were found.
+ * The VST3 plug-ins found by a scan, as menu rows: type, then maker,
+ * then the plug-ins, every list alphabetical. Empty when none were found.
  */
 export function vst3Items(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): MenuItem[] {
   const byId = new Set(catalog.map((e) => e.id));
   const installed = plugins.filter((p) => byId.has(p.effect));
   if (!installed.length) return [];
   const list = (ps: MenuPlugin[]): MenuItem[] => ps.map((p) => ({ kind: "item", label: p.name, run: () => pick(p.effect) }));
-  const { types, makers } = pluginMenuGroups(installed);
-  return [...types.map(([t, ps]): MenuItem => ({ kind: "sub", label: t, items: list(ps) })), { kind: "sep" }, ...makers.map(([m, ps]): MenuItem => ({ kind: "sub", label: m, items: list(ps) }))];
+  return pluginMenuGroups(installed).types.map(([t, ps]): MenuItem => ({
+    kind: "sub",
+    label: t,
+    items: pluginMenuGroups(ps).makers.map(([m, mine]): MenuItem => ({ kind: "sub", label: m, items: list(mine) })),
+  }));
 }
 
-/** The Add effect menu: built-in effects by family (alphabetical within each), then VST3 plug-ins by type and maker. */
+/**
+ * Finds effects and plug-ins by name (plug-ins by maker too) for a menu's search box:
+ * names starting with the text first, then the rest, each alphabetical.
+ * Each row shows where it lives (the effect family, or the maker).
+ */
+export function effectSearch(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): (query: string) => MenuItem[] {
+  const ids = new Set(catalog.map((e) => e.id));
+  const rows = [
+    ...catalog.filter((e) => !e.retired && !e.plugin).map((e) => ({ id: e.id, name: e.name, where: e.category, maker: "" })),
+    ...plugins.filter((p) => ids.has(p.effect)).map((p) => ({ id: p.effect, name: p.name, where: p.vendor.trim() || "VST3", maker: p.vendor.trim().toLowerCase() })),
+  ];
+  return (query) => {
+    const q = query.toLowerCase();
+    const hits = rows.filter((r) => r.name.toLowerCase().includes(q) || r.maker.includes(q));
+    const starts = (r: (typeof rows)[number]) => (r.name.toLowerCase().startsWith(q) ? 0 : 1);
+    return hits
+      .sort((a, b) => starts(a) - starts(b) || byLabel(a.name, b.name))
+      .slice(0, 60)
+      .map((r): MenuItem => ({ kind: "item", label: r.name, shortcut: r.where, run: () => pick(r.id) }));
+  };
+}
+
+/**
+ * The Add effect menu: a search box, the built-in effects by family
+ * (families and effects alphabetical), then VST3 plug-ins by type and maker.
+ */
 export function effectMenu(catalog: readonly EffectInfo[], plugins: readonly MenuPlugin[], pick: (id: string) => void): MenuItem[] {
   catalog = catalog.filter((e) => !e.retired);
   const categories = [...new Set(catalog.map((e) => e.category))];
@@ -147,10 +179,12 @@ export function effectMenu(catalog: readonly EffectInfo[], plugins: readonly Men
   const vst: MenuItem = vstRows.length
     ? { kind: "sub", label: "VST3", items: vstRows }
     : { kind: "item", label: "VST3", disabled: true, reason: "No VST3 plug-ins found yet. Scan for them in Effects > Plug-in Manager.", run: () => {} };
-  const byName = (a: EffectInfo, b: EffectInfo) => a.name.localeCompare(b.name, undefined, { numeric: true });
+  const byName = (a: EffectInfo, b: EffectInfo) => byLabel(a.name, b.name);
   return [
+    { kind: "search", placeholder: "Search effects and plug-ins", find: effectSearch(catalog, plugins, pick) },
     ...categories
       .filter((c) => !catalog.some((e) => e.category === c && e.plugin))
+      .sort(byLabel)
       .map((c): MenuItem => ({
         kind: "sub",
         label: c,

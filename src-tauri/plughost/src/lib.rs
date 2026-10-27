@@ -284,6 +284,8 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                 if !w.pump() {
                     l.window = None;
                     send(out, *id, &Message::EditorClosed);
+                } else if let Some(bypassed) = w.take_bypass() {
+                    send(out, *id, &Message::BypassPicked { bypassed });
                 }
             }
             let edits: Vec<Edit> = l
@@ -409,7 +411,14 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     },
                 ),
             },
-            ToMain::Request(id, Request::OpenEditor { title, owner }) => {
+            ToMain::Request(
+                id,
+                Request::OpenEditor {
+                    title,
+                    owner,
+                    bypassed,
+                },
+            ) => {
                 let Some(l) = loaded.get_mut(&id) else {
                     send(
                         out,
@@ -421,12 +430,14 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     continue;
                 };
                 if let Some(w) = l.window.as_mut() {
+                    w.set_bypassed(bypassed);
+                    w.hide(false);
                     w.raise();
                     send(out, id, &Message::Ok);
                     continue;
                 }
                 let opened = match l.plugin.controller.as_ref() {
-                    Some(c) => editor::open(c, &title, l.plugin.edits.clone(), owner),
+                    Some(c) => editor::open(c, &title, l.plugin.edits.clone(), owner, bypassed),
                     None => Err("This plug-in has no window of its own.".into()),
                 };
                 match opened {
@@ -436,6 +447,18 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                     }
                     Err(message) => send(out, id, &Message::Error { message }),
                 }
+            }
+            ToMain::Request(id, Request::EditorBypassed { bypassed }) => {
+                if let Some(w) = loaded.get_mut(&id).and_then(|l| l.window.as_mut()) {
+                    w.set_bypassed(bypassed);
+                }
+                send(out, id, &Message::Ok);
+            }
+            ToMain::Request(id, Request::HideEditor { hidden }) => {
+                if let Some(w) = loaded.get_mut(&id).and_then(|l| l.window.as_mut()) {
+                    w.hide(hidden);
+                }
+                send(out, id, &Message::Ok);
             }
             ToMain::Request(id, Request::CloseEditor) => {
                 if let Some(l) = loaded.get_mut(&id) {

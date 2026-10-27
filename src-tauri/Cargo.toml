@@ -4,7 +4,7 @@
 
 [package]
 name = "audiform"
-version = "0.3.0"
+version = "0.4.0"
 description = "Free, open-source multitrack audio editor for podcasters and voiceover."
 authors = ["The Audiform contributors", "The GeekCast Radio Network, LLC (Altered Audio Editor)"]
 license = "GPL-3.0-or-later"
@@ -23,6 +23,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # AAC export through the encoder built into the OS (see os-aac/).
 altered-os-aac = { path = "os-aac" }
+# Decoding through the decoders built into the OS, for HE-AAC, Dolby
+# Digital (Plus) and other codecs the app cannot read itself (see os-decode/).
+audiform-os-decode = { path = "os-decode" }
 tauri = { version = "2", features = [] }
 # VST3 plug-in hosting, run in a separate process (see plughost/).
 altered-plughost = { path = "plughost" }
@@ -164,3 +167,7 @@ opt-level = 3
 # vendor/opus-decoder/ALTERED-AUDIO.md.
 [patch.crates-io]
 opus-decoder = { path = "vendor/opus-decoder" }
+# symphonia-codec-aac 0.6.1 patched to open AAC with more than two channels
+# (5.1, 7.1); see vendor/symphonia-codec-aac/AUDIFORM.md.
+symphonia-codec-aac = { path = "vendor/symphonia-codec-aac" }
+symphonia-common = { path = "vendor/symphonia-common" }

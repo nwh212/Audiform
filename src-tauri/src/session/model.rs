@@ -536,6 +536,12 @@ pub struct Track {
     /// file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub mono: bool,
+    /// Pre-render: the track's clips through its Audio FX are rendered to
+    /// a file in the background, and playback and export use it instead
+    /// of running the effects live (see `engine::prerender`). Left out of
+    /// the file when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prerender: bool,
     /// 3D Space sessions: where the track sits in the room (in place of
     /// its pan). None sits at the front center.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -592,6 +598,7 @@ impl Track {
             solo: false,
             polarity_inverted: false,
             mono: false,
+            prerender: false,
             space: None,
             record_armed: false,
             monitor_input: false,
@@ -762,6 +769,37 @@ pub struct SpacePos {
     /// speakers, with what the sides share fed to the center, 0 to 1.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub spatialize: f64,
+    /// How Spatialize opens the sound out (see `SpatializeMode`).
+    #[serde(default, skip_serializing_if = "SpatializeMode::is_default")]
+    pub spatialize_mode: SpatializeMode,
+}
+
+/// The ways Spatialize opens a stereo sound out into the room. Our own
+/// methods, built from textbook upmix parts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpatializeMode {
+    /// What differs between the sides goes, delayed and decorrelated, to
+    /// the surround and height speakers (left ones in phase, right ones
+    /// inverted); what they share feeds the center.
+    #[default]
+    SideSpread,
+    /// The difference goes to the same speakers on a short delay without
+    /// smearing, as a passive surround decoder does: tight and punchy.
+    Matrix,
+    /// Decorrelated copies of the left side go to the left surround and
+    /// height speakers, of the right side to the right ones, in phase:
+    /// lush, for music and ambience.
+    Ambience,
+    /// Like Side Spread, but only to the height speakers, leaving the
+    /// surrounds clear (Side Spread in layouts without heights).
+    HeightLift,
+}
+
+impl SpatializeMode {
+    pub fn is_default(&self) -> bool {
+        *self == SpatializeMode::SideSpread
+    }
 }
 
 fn is_zero_f64(v: &f64) -> bool {
@@ -785,6 +823,7 @@ impl Default for SpacePos {
             lfe: 0.0,
             spread: 0.0,
             spatialize: 0.0,
+            spatialize_mode: SpatializeMode::SideSpread,
         }
     }
 }
@@ -805,6 +844,7 @@ impl SpacePos {
             lfe: c(self.lfe, 0.0, 1.0, 0.0),
             spread: c(self.spread, 0.0, 1.0, 0.0),
             spatialize: c(self.spatialize, 0.0, 1.0, 0.0),
+            spatialize_mode: self.spatialize_mode,
         }
     }
 }
@@ -884,6 +924,17 @@ pub struct Clip {
     /// Plays with its polarity flipped.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub inverted: bool,
+    /// Stereo clips: the one channel `inverted` flips. Both when missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invert_channel: Option<InvertChannel>,
+}
+
+/// One side of a stereo clip, for flipping only its polarity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InvertChannel {
+    Left,
+    Right,
 }
 
 /// A clip's Source Channels: one entry per channel of its file, in file order.
@@ -1349,6 +1400,7 @@ mod tests {
             lfe: 0.25,
             spread: 0.4,
             spatialize: 0.6,
+            spatialize_mode: SpatializeMode::Ambience,
         });
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains(r#""layout":"7.1.2""#));

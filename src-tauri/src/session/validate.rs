@@ -202,6 +202,7 @@ mod tests {
             channel_mix: None,
             reversed: false,
             inverted: false,
+            invert_channel: None,
         });
         s.media.push(media);
         s.tracks.push(track);

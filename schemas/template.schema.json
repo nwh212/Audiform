@@ -280,6 +280,17 @@
           "type": "string",
           "format": "uuid"
         },
+        "invert_channel": {
+          "description": "Stereo clips: the one channel `inverted` flips. Both when missing.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InvertChannel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "inverted": {
           "description": "Plays with its polarity flipped.",
           "type": "boolean"
@@ -799,6 +810,14 @@
           "type": "string",
           "const": "equal_power"
         }
+      ]
+    },
+    "InvertChannel": {
+      "description": "One side of a stereo clip, for flipping only its polarity.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right"
       ]
     },
     "Marker": {
@@ -1483,6 +1502,10 @@
           "type": "number",
           "format": "double"
         },
+        "spatialize_mode": {
+          "description": "How Spatialize opens the sound out (see `SpatializeMode`).",
+          "$ref": "#/$defs/SpatializeMode"
+        },
         "spread": {
           "description": "How much of it is spread through the room as a diffuse field\n(decorrelated copies on every speaker in use), 0 (none) to 1 (all).",
           "type": "number",
@@ -1511,6 +1534,31 @@
       "required": [
         "x",
         "y"
+      ]
+    },
+    "SpatializeMode": {
+      "description": "The ways Spatialize opens a stereo sound out into the room. Our own\nmethods, built from textbook upmix parts.",
+      "oneOf": [
+        {
+          "description": "What differs between the sides goes, delayed and decorrelated, to\nthe surround and height speakers (left ones in phase, right ones\ninverted); what they share feeds the center.",
+          "type": "string",
+          "const": "side_spread"
+        },
+        {
+          "description": "The difference goes to the same speakers on a short delay without\nsmearing, as a passive surround decoder does: tight and punchy.",
+          "type": "string",
+          "const": "matrix"
+        },
+        {
+          "description": "Decorrelated copies of the left side go to the left surround and\nheight speakers, of the right side to the right ones, in phase:\nlush, for music and ambience.",
+          "type": "string",
+          "const": "ambience"
+        },
+        {
+          "description": "Like Side Spread, but only to the height speakers, leaving the\nsurrounds clear (Side Spread in layouts without heights).",
+          "type": "string",
+          "const": "height_lift"
+        }
       ]
     },
     "StretchAdvanced": {
@@ -1742,6 +1790,10 @@
         },
         "polarity_inverted": {
           "description": "Flips the track's polarity (multiplies it by -1). Left out of the\nfile when off.",
+          "type": "boolean"
+        },
+        "prerender": {
+          "description": "Pre-render: the track's clips through its Audio FX are rendered to\na file in the background, and playback and export use it instead\nof running the effects live (see `engine::prerender`). Left out of\nthe file when off.",
           "type": "boolean"
         },
         "record_armed": {

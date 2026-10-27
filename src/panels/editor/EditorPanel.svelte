@@ -8,63 +8,62 @@
   management and zoom. Playback arrives in P2, clip editing in P3.
 -->
 <script lang="ts">
-  import MonoIcon from "../../app/MonoIcon.svelte";
   import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import { trackOp } from "../mixer/solo";
-  import { busChoices, busOp, MASTER_ID, newSend } from "../mixer/routing";
-  import SendList from "../mixer/SendList.svelte";
+  import { busOp, MASTER_ID } from "../mixer/routing";
   import { onDestroy, tick as nextFrame, untrack } from "svelte";
   import type { ActionRegistry } from "../../app/actions";
+  import { liveCopies, liveCopyOf } from "../../stores/wave";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import type { FileDropRouter } from "../../app/filedrop";
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
-  import { clipLength, isMidi, midiEnd, stretchOf, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import { clipLength, isMidi, midiEnd, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
   import PianoRollDialog from "./PianoRollDialog.svelte";
-  import { duplicateClips, newClip, replaceClip, transferClips } from "./midi";
-  import { clipReversePrepare, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginOpenWindow, pluginsRegistry, type EffectInfo } from "../../app/core";
-  import HeaderFx from "./HeaderFx.svelte";
-  import { rowTarget } from "../voice-chain/slot-drag";
-  import { pluginMenuGroups, type MenuPlugin } from "../voice-chain/chain";
-  import { effectWindowRequest } from "../voice-chain/effect-window";
-  import type { EffectSlotDoc, EnvelopeDoc, Op } from "../../stores/session";
+  import { replaceClip, transferClips } from "./midi";
+  import { transportAuditionClip, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginsRegistry, type EffectInfo } from "../../app/core";
+  import type { MenuPlugin } from "../voice-chain/chain";
+  import type { EnvelopeDoc, Op } from "../../stores/session";
   import { pluginsVersion } from "../../stores/plugins";
-  import { stretchTo } from "./stretch";
-  import { timeDisplayItems } from "./time-menu";
-  import { dragGain, gainBox, gainText } from "./clip-gain";
-  import { clipsAt, copyMoved, fadeClip, LockedError, MIN_CLIP, moveClips, nearest, previewTracks, snapTargets, splitClips, trimClip, withCrossfades,
+  import { dragGain, gainText } from "./clip-gain";
+  import { clipsAt, copyMoved, LockedError, moveClips, nearest, previewTracks, snapTargets, splitClips, withCrossfades,
     withLayers, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
-  import { addPoint, chipBox, chipLabel, envChange, envName, formatValue, fxChoices, fxLaneOf, fxParam, levelAt, movePoint, pointsOf, rangeOf, restValue, snapValue, valueToY, yToValue, type EnvKind } from "./envelope";
+  import { addPoint, envChange, envName, formatValue, fxLaneOf, fxParam, movePoint, pointsOf, rangeOf, snapValue, yToValue, type EnvKind } from "./envelope";
   import LaneCanvas from "./LaneCanvas.svelte";
   import ClipColorDialog from "../../app/ClipColorDialog.svelte";
   import { laneRows, moveRowOps } from "./rows";
-  import { monoCheck } from "../../stores/mono-check";
-  import { chainTarget } from "../../stores/chain-target";
-  import Dial from "./Dial.svelte";
-  import TrackMeter from "./TrackMeter.svelte";
   import { inputLevels, liveTakes, type LiveTakes } from "../../stores/record";
-  import { keepLast } from "../../app/settings/device-cache";
-  import { audioInputs, openSoundSettings, probeMedia, type AudioInput } from "../../app/core";
+  import { probeMedia } from "../../app/core";
   import { laneWidths } from "../time-info/time-info";
   import WaveformView from "./WaveformView.svelte";
   import TransportBar, { type ZoomKind } from "./TransportBar.svelte";
   import TempoStrip from "./TempoStrip.svelte";
   import MetronomeRow from "./MetronomeRow.svelte";
   import AutoLane from "./AutoLane.svelte";
-  import { AUTO_H, laneHeight, autoAt, autoChoices, autoMode, autoName, autoRange, autoRest, dropLane, isOrphan, newLane, nextTarget, putLane, setMode, shownLanes, targetKey, type AutoTarget } from "./automation";
-  import { setMetronomePrefs } from "../../stores/metronome";
-  import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
+  import { laneHeight, autoRange, autoRest, newLane, nextTarget, putLane, shownLanes, type AutoTarget } from "./automation";
   import type { Readable } from "svelte/store";
   import type { WaveFile } from "../../stores/wave";
   import OverviewStrip from "./OverviewStrip.svelte";
-  import { KIND_COLORS, markerAt, markerCss } from "../markers/markers";
-  import { quiet, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
-  import { channelNames } from "../space/space";
+  import { markerAt, markerCss } from "../markers/markers";
+  import type { MeterLevel, TransportState, TransportStore } from "../../stores/transport";
   import { appearanceTick } from "../../stores/appearance";
-  import { defaultTrackColor, trackHeight, formatIn, maxSppFor, rulerTicks, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
+  import { trackHeight, maxSppFor, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
+  import { busHeight, HEADER_W, trackColor } from "./editor-layout";
+  import { chipAt as hitChip, clipAt as hitClip, CURSORS, envBox, RAZOR_CURSOR, SNAP_PX, zoneAt as hitZone, type Gesture, type LaneGeometry } from "./lane-hit";
+  import { chipMenuItems, clipZoneItems, emptyLaneItems, rulerMenuItems, type MenuCtx } from "./lane-menus";
+  import { autoLaneItems, busItems as buildBusItems, midiClipItems as buildMidiClipItems, trackItems as buildTrackItems, type TrackMenuExtra } from "./track-menus";
+  import { drawRuler } from "./ruler-draw";
+  import { fadeDrag, gestureLabel, slipChange, stretchDrag, trimDrag } from "./clip-drag";
+  import EditorToolbar from "./EditorToolbar.svelte";
+  import HeaderViews from "./HeaderViews.svelte";
+  import StartScreen from "./StartScreen.svelte";
+  import TrackHeaders from "./TrackHeaders.svelte";
+  import TrackScrollbar from "./TrackScrollbar.svelte";
+  import LaneOverlays from "./LaneOverlays.svelte";
+  import { ghostItems, type DropGhost } from "./drop-ghost";
 
   interface Props {
     session: SessionStore;
@@ -84,7 +83,7 @@
     waveFile?: Readable<WaveFile | null>;
     waveTransport?: TransportStore;
     /** Waveform editor quick level: dB for the selection or whole file. */
-    onWaveLevel?: (db: number) => void;
+    onWaveLevel?: (db: number) => void | Promise<void>;
     /** Brings the Audio FX panel forward. */
     onShowChain?: () => void;
   }
@@ -121,9 +120,6 @@
     }),
   );
 
-  const HEADER_W = 214;
-  const RULER_H = 22;
-
   let doc = $state<SessionDoc | null>(null);
   $effect(() =>
     session.subscribe((d) => {
@@ -151,20 +147,11 @@
   );
   const run = (id: string) => void actions.run(id);
 
-  /** Nothing in the session yet and nothing chosen: show a start screen instead of six empty tracks. */
-  let startDismissed = $state(false);
-  // A new empty start (the last session closed) shows the start screen again.
-  let startFor: string | null = null;
-  $effect(() => {
-    const id = doc?.id ?? null;
-    if (id !== startFor) {
-      startFor = id;
-      startDismissed = false;
-    }
-  });
-  // Only the blank session the app opened with shows the start screen; a
-  // new or opened session, or any track or clip added, puts the tracks up.
-  const showStart = $derived(!startDismissed && doc != null && session.isScratch(doc));
+  // Only the blank session the app opened with shows the start screen
+  // (not six empty tracks); a new or opened session, or any track or
+  // clip added, puts the tracks up.
+  const showStart = $derived(doc != null && session.isScratch(doc));
+  let toolbarH = $state(0);
   const shown = $derived(listedTracks(doc?.tracks ?? []));
   const headerTracks = $derived(showStart ? [] : shown);
   const listedIds = $derived(new Set(shown.map((t) => t.id)));
@@ -176,12 +163,6 @@
   /** What the track headers show: the mix controls, or the output and sends. */
   /** What the headers show: mix controls (with input, output and sends as room allows) or the effects. */
   let headerView = $state<"mix" | "fx">("mix");
-  const busHeight = (b: BusDoc) => Math.max(72, b.height);
-  /** Header heights at which each extra row shows. */
-  const ROW_INPUT = 76;
-  const ROW_OUTPUT = 98;
-  const ROW_AUTO = 120;
-  const ROW_SENDS = 146;
   const can = (id: string) => {
     void tick;
     return actions.isEnabled(id);
@@ -189,6 +170,20 @@
   const tip = (label: string, id: string) => {
     const k = shortcutFor(id);
     return k ? `${label} (${k})` : label;
+  };
+
+  /** What the menu builders read and run. */
+  const menuCtx: MenuCtx = {
+    doc: () => doc,
+    ed: () => ed,
+    edit: (label, op) => session.edit(label, op, runner),
+    onError: (e) => onError(e),
+    run,
+    can,
+    has: (id) => actions.has(id),
+    reason: (id) => actions.reason(id),
+    isChecked: (id) => actions.isChecked(id),
+    shortcutFor: (id) => shortcutFor(id),
   };
 
   let lanesWidth = $state(800);
@@ -238,26 +233,6 @@
     }),
   );
 
-  /** Opens an effect from a header: a plug-in in its own window, anything else in the Audio FX chain. */
-  function openHeaderEffect(rowId: string, rowName: string, slot: EffectSlotDoc) {
-    const info = fxCatalog.find((e) => e.id === slot.effect);
-    if (info?.plugin && info.hasWindow) {
-      void pluginOpenWindow(slot, `${info.name} - ${rowName}`).catch(onError);
-      return;
-    }
-    editor.selectTrack(rowId);
-    onShowChain();
-    effectWindowRequest.set(slot.id);
-  }
-  function headerEdit(label: string, op: Op) {
-    void session.edit(label, op, runner).catch(onError);
-  }
-  /** Where a track's or bus's sound goes: the master or a bus. */
-  function setOutput(kind: "track" | "bus", id: string, value: string) {
-    const o = value === MASTER_ID ? { type: "master" as const } : { type: "bus" as const, bus_id: value };
-    headerEdit(kind === "bus" ? "Route Bus Output" : "Route Track Output", kind === "bus" ? busOp(doc, id, { output: o }) : trackOp(doc, id, { output: o }));
-  }
-  const outName = (o: { type: string; bus_id?: string } | undefined) => (o?.type === "bus" ? (doc?.buses?.find((b) => b.id === o.bus_id)?.name ?? "Missing bus") : "Master");
   let pianoRoll = $state<{ trackId: string; clipId: string } | null>(null);
   const tempo = $derived(doc ? tempoOf(doc) : { bpm: 120, beats_per_bar: 4 });
 
@@ -283,41 +258,6 @@
     void session.edit(label, { op: "set_midi_clips", track_id: track.id, clips }, runner).catch(onError);
   }
 
-  function setInstrument(track: TrackDoc, effect: string) {
-    if (!effect) {
-      setTrack(track, { clear_instrument: true }, "Remove Instrument");
-      return;
-    }
-    const slot = { id: crypto.randomUUID(), effect, enabled: true, params: {}, preset: null };
-    setTrack(track, { instrument: slot }, "Set Instrument");
-  }
-
-  /** The instrument picker: by type, then by maker, as in the Add effect menu. */
-  function openInstrumentMenu(e: MouseEvent, track: TrackDoc) {
-    const el = e.currentTarget as HTMLElement;
-    const r = (el.closest(".instrument") ?? el).getBoundingClientRect();
-    const current = track.instrument?.effect ?? "";
-    const pick = (effect: string) => () => setInstrument(track, effect);
-    const list = (ps: MenuPlugin[]): ContextItem[] => ps.map((p) => ({ kind: "item", label: p.name, checked: p.effect === current, run: pick(p.effect) }));
-    const { types, makers } = pluginMenuGroups(instruments);
-    const items: ContextItem[] = instruments.length
-      ? [
-          ...types.map(([t, ps]): ContextItem => ({ kind: "sub", label: t, items: list(ps) })),
-          { kind: "sep" },
-          ...makers.map(([m, ps]): ContextItem => ({ kind: "sub", label: m, items: list(ps) })),
-          { kind: "sep" },
-          { kind: "item", label: "No Instrument", disabled: !track.instrument, run: pick("") },
-        ]
-      : [{ kind: "item", label: "No instruments found. Scan in Effects > Plug-in Manager.", disabled: true, run: () => {} }];
-    menu = { x: r.left, y: r.bottom, items };
-  }
-
-  function openInstrument(track: TrackDoc) {
-    if (!track.instrument) return;
-    const name = instruments.find((i) => i.effect === track.instrument!.effect)?.name ?? "Instrument";
-    void pluginOpenWindow(track.instrument, `${name}: ${track.name}`).catch(onError);
-  }
-
   // The metronome's on/off (app settings, not the session): it shows its track while on.
   let metOn = $state(settings.current.metronome.on);
   $effect(() =>
@@ -332,80 +272,12 @@
   }
 
   function midiClipItems(track: TrackDoc, clip: MidiClipDoc | null, beat: number): ContextItem[] {
-    const clips = track.midi_clips ?? [];
-    const bounceTrack: ContextItem = {
-      kind: "item",
-      label: "Bounce Track to New Track",
-      disabled: clips.length === 0,
-      run: () => {
-        editor.selectTrack(track.id);
-        run("multitrack.bounce.track");
-      },
-    };
-    if (!clip) {
-      return [
-        {
-          kind: "item",
-          label: "New MIDI Clip Here",
-          run: () => {
-            const id = crypto.randomUUID();
-            setMidiClips(track, [...clips, newClip(id, beat, tempo)].sort((a, b) => a.start - b.start), "New MIDI Clip");
-            editor.selectClips([id], track.id);
-          },
-        },
-        { kind: "sep" },
-        bounceTrack,
-      ];
-    }
-    const ids = new Set(clips.filter((c) => ed.selectedClips.has(c.id)).map((c) => c.id));
-    if (!ids.size) ids.add(clip.id);
-    const many = ids.size > 1;
-    return [
-      { kind: "item", label: "Edit Notes...", run: () => (pianoRoll = { trackId: track.id, clipId: clip.id }) },
-      { kind: "sep" },
-      {
-        kind: "item",
-        label: many ? `Duplicate ${ids.size} Clips` : "Duplicate Clip",
-        run: () => {
-          const d = duplicateClips(clips, ids, () => crypto.randomUUID());
-          setMidiClips(track, d.clips, many ? "Duplicate Clips" : "Duplicate Clip");
-          editor.selectClips(d.added, track.id);
-        },
-      },
-      {
-        kind: "item",
-        label: clip.muted ? "Unmute Clip" : "Mute Clip",
-        run: () => setMidiClips(track, clips.map((c) => (ids.has(c.id) ? { ...c, muted: !clip.muted } : c)), clip.muted ? "Unmute Clip" : "Mute Clip"),
-      },
-      {
-        kind: "item",
-        label: "Rename Clip...",
-        run: () =>
-          void prompt("Rename Clip", "Name", clip.name).then((name) => {
-            if (name && name.trim() && name.trim() !== clip.name) setMidiClips(track, replaceClip(clips, { ...clip, name: name.trim() }), "Rename Clip");
-          }),
-      },
-      { kind: "sep" },
-      {
-        kind: "item",
-        label: many ? `Delete ${ids.size} Clips` : "Delete Clip",
-        shortcut: shortcutFor("edit.delete"),
-        run: () => {
-          setMidiClips(track, clips.filter((c) => !ids.has(c.id)), many ? "Delete Clips" : "Delete Clip");
-          editor.selectClips([], track.id);
-        },
-      },
-      { kind: "sep" },
-      {
-        kind: "item",
-        label: many ? `Bounce ${ids.size} Clips to New Track` : "Bounce Clip to New Track",
-        run: () => {
-          editor.selectClips([...ids], track.id);
-          run("multitrack.bounce.clips");
-        },
-      },
-      bounceTrack,
-    ];
+    return buildMidiClipItems(menuCtx, track, clip, beat, {
+      tempo: () => tempo,
+      setMidiClips,
+      openPianoRoll: (trackId, clipId) => (pianoRoll = { trackId, clipId }),
+      prompt: (t, l, v) => prompt(t, l, v),
+    });
   }
   let renaming = $state<string | null>(null);
   let dragTrack = $state<{ id: string; overIndex: number; y: number } | null>(null);
@@ -427,7 +299,17 @@
 
   // Following the playhead while playing is Follow Playhead's job (below):
   // it lets go when you move the view yourself.
-  const mediaMap = $derived(new Map((doc?.media ?? []).map((m) => [m.id, m])));
+  // Files with unsaved Waveform editor edits draw (and measure) as their live copies.
+  let liveFiles = $state<Record<string, { path: string; length: number }>>({});
+  $effect(() => liveCopies.subscribe((v) => (liveFiles = v)));
+  const mediaMap = $derived(
+    new Map(
+      (doc?.media ?? []).map((m) => {
+        const c = liveCopyOf(liveFiles, m.path);
+        return [m.id, c ? { ...m, path: c.path, length: c.length } : m];
+      }),
+    ),
+  );
   const contentEnd = $derived.by(() => {
     if (!doc) return 0;
     let end = midiEnd(doc, rate);
@@ -507,7 +389,7 @@
    * here (one after another from the pointer, on the track under it, or
    * on a new track below the last), with its name and length.
    */
-  let dropGhost = $state<{ top: number; height: number; newTrack: boolean; items: { name: string; x: number; w: number }[] } | null>(null);
+  let dropGhost = $state<DropGhost | null>(null);
   const probed = new Map<string, Promise<{ name: string; len: number } | null>>();
   let ghostSeq = 0;
   function probeLength(path: string): Promise<{ name: string; len: number } | null> {
@@ -536,19 +418,7 @@
     const height = row ? row.offsetHeight - TRACK_GAP : 60;
     void Promise.all(paths.map(probeLength)).then((infos) => {
       if (seq !== ghostSeq) return;
-      const start = dropSample(sample);
-      let pos = start;
-      const items = [];
-      const side = settings.current.dropMany === "tracks" && infos.filter(Boolean).length > 1;
-      for (const i of infos) {
-        if (!i) continue;
-        items.push({ name: i.name, x: xOf(pos, view), w: Math.max(4, i.len / view.spp) });
-        // Side by side, the ghost shows the first file; the rest start at the same time below.
-        if (side) break;
-        pos += i.len;
-      }
-      const more = side ? infos.filter(Boolean).length - 1 : 0;
-      if (more > 0) items[0]!.name = `${items[0]!.name} (+${more} on the tracks below)`;
+      const items = ghostItems(infos, dropSample(sample), view, settings.current.dropMany === "tracks");
       dropGhost = items.length ? { top, height, newTrack: !row, items } : null;
     });
   }
@@ -580,81 +450,7 @@
     void tick;
     const c = ruler;
     if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = lanesWidth;
-    c.width = Math.round(w * dpr);
-    c.height = Math.round(RULER_H * dpr);
-    c.style.width = `${w}px`;
-    c.style.height = `${RULER_H}px`;
-    const g = c.getContext("2d");
-    if (!g) return;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const cs = getComputedStyle(document.documentElement);
-    g.fillStyle = cs.getPropertyValue("--surface-2");
-    g.fillRect(0, 0, w, RULER_H);
-    g.fillStyle = cs.getPropertyValue("--text-dim");
-    g.strokeStyle = cs.getPropertyValue("--border-strong");
-    g.font = `10px ${cs.getPropertyValue("--font-ui")}`;
-    g.textBaseline = "top";
-    for (const t of ticksFor(view, w, rate, ed.timeFormat)) {
-      const x = Math.round(t.x) + 0.5;
-      g.beginPath();
-      g.moveTo(x, t.label ? 8 : 15);
-      g.lineTo(x, RULER_H);
-      g.stroke();
-      if (t.label) {
-        const text = ed.timeFormat === "time" || ed.timeFormat === "bars" ? t.label : formatIn(sampleAt(t.x, view), rate, ed.timeFormat);
-        g.fillText(text, x + 3, 2);
-      }
-    }
-    const sel = doc?.view.selection;
-    if (sel) {
-      const a = Math.max(0, xOf(sel.start, view));
-      const b = Math.min(w, xOf(sel.end, view));
-      if (b > a) {
-        g.fillStyle = "rgba(255, 255, 255, 0.16)";
-        g.fillRect(a, 0, b - a, RULER_H);
-      }
-    }
-    for (const m of shownMarkers) {
-      const mx = Math.round(xOf(m.position, view));
-      const color = m.color || cs.getPropertyValue(KIND_COLORS[m.kind]) || "#c8b040";
-      if (m.duration > 0) {
-        const ex = xOf(m.position + m.duration, view);
-        if (ex >= 0 && mx <= w) {
-          g.fillStyle = color;
-          g.globalAlpha = 0.35;
-          g.fillRect(Math.max(0, mx), 0, Math.min(w, ex) - Math.max(0, mx), 6);
-          g.globalAlpha = 1;
-        }
-      }
-      if (mx < -60 || mx > w + 6) continue;
-      g.fillStyle = color;
-      g.beginPath();
-      g.moveTo(mx, 0);
-      g.lineTo(mx + 6, 0);
-      g.lineTo(mx + 6, 6);
-      g.lineTo(mx, 10);
-      g.closePath();
-      g.fill();
-      g.fillRect(mx, 0, 1, RULER_H);
-      const tw = g.measureText(m.name).width;
-      g.fillStyle = cs.getPropertyValue("--surface-2");
-      g.fillRect(mx + 7, 0, tw + 4, 12);
-      g.fillStyle = cs.getPropertyValue("--text");
-      g.fillText(m.name, mx + 9, 1);
-    }
-    const px = xOf(playhead, view);
-    if (px >= -6 && px <= w + 6) {
-      g.fillStyle = cs.getPropertyValue("--playhead");
-      // Same pixel column as the line in the lanes, which fills [round(px), round(px) + 1].
-      const cx = Math.round(px) + 0.5;
-      g.beginPath();
-      g.moveTo(cx - 5, RULER_H - 8);
-      g.lineTo(cx + 5, RULER_H - 8);
-      g.lineTo(cx, RULER_H);
-      g.fill();
-    }
+    drawRuler(c, { width: lanesWidth, view, rate, timeFormat: ed.timeFormat, selection: doc?.view.selection, markers: shownMarkers, playhead });
   });
 
   /**
@@ -774,41 +570,7 @@
     const left = (e.currentTarget as HTMLElement).getBoundingClientRect().left;
     const hit = markerAt(doc.markers ?? [], e.clientX - left, (s) => xOf(s, view));
     const at = sampleAt(e.clientX - left, view);
-    const items: ContextItem[] = hit
-      ? [
-          { kind: "item", label: "Go to Marker", run: () => void transport.seek(hit.position) },
-          {
-            kind: "item",
-            label: "Rename Marker...",
-            run: async () => {
-              const name = await prompt("Rename Marker", "Name", hit.name);
-              if (name && name !== hit.name)
-                await session.edit("Rename Marker", { op: "set_markers", changes: [{ id: hit.id, name }] }, runner).catch(onError);
-            },
-          },
-          { kind: "item", label: "Delete Marker", run: () => void session.edit("Delete Marker", { op: "remove_markers", ids: [hit.id] }, runner).catch(onError) },
-        ]
-      : [
-          {
-            kind: "item",
-            label: "Add Cue Marker Here",
-            run: () => {
-              void transport.seek(at).then(() => run("edit.marker.cue"));
-            },
-          },
-          { kind: "item", label: "Add Range Marker", disabled: !can("edit.marker.range"), run: () => run("edit.marker.range") },
-          {
-            kind: "item",
-            label: "Add Tempo Change at Nearest Bar",
-            run: () => {
-              const bar = Math.max(1, nearestBar(tempo, secondsToBeats(tempo, at / rate)));
-              const r = addChange(tempo, bar, crypto.randomUUID());
-              if (r.tempo !== tempo) setTempoMap(r.tempo, "Add Tempo Change");
-            },
-          },
-          { kind: "sep" },
-          ...timeDisplayItems(),
-        ];
+    const items = rulerMenuItems(menuCtx, hit, at, { seek: (s) => transport.seek(s), prompt: (t, l, v) => prompt(t, l, v), tempo: () => tempo, rate: () => rate, setTempoMap });
     menu = { x: e.clientX, y: e.clientY, items };
   }
 
@@ -937,24 +699,12 @@
     }, 350);
   }
 
-  function clipAt(track: TrackDoc, x: number): ClipDoc | null {
-    for (let i = track.clips.length - 1; i >= 0; i--) {
-      const c = track.clips[i]!;
-      const x0 = xOf(c.start, view);
-      const x1 = xOf(c.start + clipLength(c, mediaMap.get(c.media_id), rate), view);
-      if (x >= x0 && x <= x1) return c;
-    }
-    return null;
-  }
+  /** What hit-testing measures against: the view, the files and the session rate. */
+  const geometry = (): LaneGeometry => ({ view, media: mediaMap, rate });
+  const clipAt = (track: TrackDoc, x: number) => hitClip(geometry(), track, x);
 
   // Clip gestures. A drag shows its result live through `preview` and
   // becomes one undoable edit when the button is released.
-  const EDGE_PX = 6;
-  const TITLE_H = 15;
-  const SNAP_PX = 8;
-  type Gesture = "move" | "trim-left" | "trim-right" | "stretch-left" | "stretch-right" | "fade-in" | "fade-out" | "env-line" | "env-point" | "gain";
-  /** Stretch handles: triangles this many pixels wide in a clip's top corners (see LaneCanvas). */
-  const STRETCH_PX = 11;
   let preview = $state<ClipChange[]>([]);
   /** While Alt-dragging a clip edge: the stretch it would get. */
   let stretchHint = $state<string | null>(null);
@@ -983,79 +733,9 @@
       live = v;
     }),
   );
-  /** A razor blade for the Razor tool; the hot spot is the blade's cutting point. */
-  const RAZOR_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g transform="rotate(-35 12 12)"><rect x="9" y="1" width="6" height="15" rx="1" fill="%23e8e8ee" stroke="%23111" stroke-width="1"/><path d="M12 3v11" stroke="%23111" stroke-width="1" stroke-dasharray="2 1.5"/><rect x="10" y="16" width="4" height="6" rx="1" fill="%23e5534b" stroke="%23111" stroke-width="1"/></g></svg>',
-  ).replace(/%2523/g, "%23")}") 4 22, crosshair`;
-  /** Edge trim cursors: a bracket with an arrow, pointing the way the edge moves out. */
-  const trimCursor = (left: boolean) =>
-    `url("data:image/svg+xml;utf8,${encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><g transform="${left ? "" : "translate(22 0) scale(-1 1)"}" stroke-linecap="square"><path d="M12 3h-3v16h3" fill="none" stroke="#111" stroke-width="3.6"/><path d="M12 3h-3v16h3" fill="none" stroke="#f2f2f5" stroke-width="1.6"/><path d="M20 11h-7M16 8l-3 3 3 3" fill="none" stroke="#111" stroke-width="3.4"/><path d="M20 11h-7M16 8l-3 3 3 3" fill="none" stroke="#f2f2f5" stroke-width="1.4"/></g></svg>`,
-    )}") ${left ? 9 : 13} 11, ${left ? "w-resize" : "e-resize"}`;
   const shownTracks = $derived(doc && preview.length > 0 ? previewTracks(doc, preview) : null);
-  const CURSORS: Record<Gesture, string> = {
-    move: "grab",
-    "trim-left": trimCursor(true),
-    "trim-right": trimCursor(false),
-    "stretch-left": "ew-resize",
-    "stretch-right": "ew-resize",
-    "fade-in": "ew-resize",
-    "fade-out": "ew-resize",
-    "env-line": "crosshair",
-    "env-point": "move",
-    gain: "ns-resize",
-  };
 
-  /** The y range the volume envelope uses inside a lane of `height` pixels. Matches LaneCanvas. */
-  const envBox = (height: number) => ({ top: 1 + 14 + 2, height: height - TRACK_GAP - 2 - 14 - 4 });
-
-  function zoneAt(track: TrackDoc, x: number, y: number): { kind: Gesture; clip: ClipDoc; index?: number; env?: EnvKind } | null {
-    const clip = clipAt(track, x);
-    if (!clip) return null;
-    const x0 = xOf(clip.start, view);
-    const x1 = xOf(clip.start + clipLength(clip, mediaMap.get(clip.media_id), rate), view);
-    const w = x1 - x0;
-    // Stretch handles fill the title bar's corners when they are shown.
-    if (ed.stretchHandles && y <= TITLE_H + 1 && w > 2 * STRETCH_PX + 4 && !clip.looped && !clip.locked) {
-      if (x - x0 <= STRETCH_PX) return { kind: "stretch-left", clip };
-      if (x1 - x <= STRETCH_PX) return { kind: "stretch-right", clip };
-    }
-    // The level handle in the bottom-left corner (see clip-gain.ts).
-    const gb = gainBox(x0, x1, trackHeight(track) - TRACK_GAP - 2, TITLE_H + 1);
-    if (gb && !clip.locked && x >= gb.x - 2 && x <= gb.x + gb.w + 2 && y >= gb.y - 2 && y <= gb.y + gb.h + 2) return { kind: "gain", clip };
-    // Fade handles sit just under the title bar (see LaneCanvas).
-    if (y > TITLE_H && y <= TITLE_H + 21 && w > 30) {
-      const hit = (hx: number) => Math.abs(x - Math.min(Math.max(hx, x0 + 8), x1 - 8)) <= 8;
-      if (hit(x0 + clip.fade_in.length / view.spp)) return { kind: "fade-in", clip };
-      if (hit(x1 - clip.fade_out.length / view.spp)) return { kind: "fade-out", clip };
-    }
-    if (y > TITLE_H && !clip.locked) {
-      const box = envBox(trackHeight(track));
-      const lane = fxLaneOf(clip, ed.fxLanes);
-      const kinds: EnvKind[] = [];
-      if (ed.showVolume) kinds.push("volume");
-      if (ed.showPan) kinds.push("pan");
-      if (ed.showFx && lane) kinds.push("fx");
-      // Points win over lines, so a point sitting on the other line stays reachable.
-      for (const env of kinds) {
-        const pts = pointsOf(clip, env, lane);
-        const range = rangeOf(env, clip, lane);
-        const hit = pts.findIndex(
-          (p) => Math.abs(xOf(clip.start + p.position, view) - x) <= 5 && Math.abs(valueToY(env, p.value, box.top, box.height, range) - y) <= 5,
-        );
-        if (hit >= 0) return { kind: "env-point", clip, index: hit, env };
-      }
-      for (const env of kinds) {
-        const pts = pointsOf(clip, env, lane);
-        const v = pts.length ? levelAt(pts, sampleAt(x, view) - clip.start) : restValue(env, clip, lane);
-        const lineY = valueToY(env, v, box.top, box.height, rangeOf(env, clip, lane));
-        if (Math.abs(lineY - y) <= 4) return { kind: "env-line", clip, env };
-      }
-    }
-    if (w > 16 && x - x0 <= EDGE_PX) return { kind: "trim-left", clip };
-    if (w > 16 && x1 - x <= EDGE_PX) return { kind: "trim-right", clip };
-    return { kind: "move", clip };
-  }
+  const zoneAt = (track: TrackDoc, x: number, y: number) => hitZone(geometry(), ed, track, x, y);
 
   function laneXY(e: MouseEvent, el: HTMLElement): { x: number; y: number } {
     const r = el.getBoundingClientRect();
@@ -1119,23 +799,11 @@
     if (!doc || clip.locked) return;
     e.preventDefault();
     const m = mediaMap.get(clip.media_id);
-    const sr = m?.sample_rate || rate;
-    const toSrc = (d: number) => Math.round((d * sr) / rate / stretchOf(clip));
     const x0 = e.clientX;
     const v = view;
     let change: ClipChange | null = null;
     const move = (ev: PointerEvent) => {
-      // Dragging right brings earlier audio into the clip.
-      const d = toSrc((ev.clientX - x0) * v.spp);
-      if (clip.looped) {
-        const region = Math.max(1, clip.source_out - clip.source_in);
-        const phase = (((clip.looped.phase - d) % region) + region) % region;
-        change = { id: clip.id, looped: { ...clip.looped, phase } };
-      } else {
-        const room = m && m.length > 0 ? m.length - clip.source_out : Infinity;
-        const shift = Math.max(-clip.source_in, Math.min(room, -d));
-        change = { id: clip.id, source_in: clip.source_in + shift, source_out: clip.source_out + shift };
-      }
+      change = slipChange(clip, m, rate, (ev.clientX - x0) * v.spp);
       preview = [change];
     };
     const up = () => {
@@ -1149,49 +817,10 @@
   }
 
   /** The envelope chip of the clip under (x, y), if the point is on it. */
-  function chipAt(track: TrackDoc, x: number, y: number): ClipDoc | null {
-    if (y > TITLE_H) return null;
-    const clip = clipAt(track, x);
-    if (!clip) return null;
-    const x0 = xOf(clip.start, view);
-    const x1 = xOf(clip.start + clipLength(clip, mediaMap.get(clip.media_id), rate), view);
-    const box = chipBox(x0, x1, chipLabel(ed.showVolume, ed.showPan, ed.showFx));
-    return box && x >= box.x && x <= box.x + box.w ? clip : null;
-  }
+  const chipAt = (track: TrackDoc, x: number, y: number) => hitChip(geometry(), ed, track, x, y);
 
   function openChipMenu(e: PointerEvent, clip: ClipDoc) {
-    const current = fxLaneOf(clip, ed.fxLanes);
-    const choices = fxChoices(clip);
-    const fx: ContextItem[] = choices.length
-      ? [
-          { kind: "item", label: "Hide Effect Envelopes", checked: !ed.showFx, run: () => editor.setShowFx(false) },
-          { kind: "sep" },
-          ...choices.map(
-            (c): ContextItem => ({
-              kind: "item",
-              label: c.label,
-              checked: ed.showFx && !!current && current.slot === c.lane.slot && current.param === c.lane.param,
-              run: () => editor.pickFxLane(clip.id, c.lane),
-            }),
-          ),
-        ]
-      : [{ kind: "item", label: "Add an effect to this clip's Audio FX chain first", disabled: true, run: () => {} }];
-    menu = {
-      x: e.clientX,
-      y: e.clientY + 8,
-      items: [
-        { kind: "item", label: "Volume", checked: ed.showVolume, run: () => run("view.env.volume") },
-        { kind: "item", label: "Pan", checked: ed.showPan, run: () => run("view.env.pan") },
-        { kind: "sub", label: "Effect Setting", items: fx },
-        { kind: "sep" },
-        { kind: "item", label: "Add/Remove Effects", run: () => run("window.panel.voice-chain") },
-        { kind: "sep" },
-        { kind: "item", label: "Chain Input Gain", disabled: true, reason: "Chain-level envelopes are not built yet", run: () => {} },
-        { kind: "item", label: "Chain Output Gain", disabled: true, reason: "Chain-level envelopes are not built yet", run: () => {} },
-        { kind: "item", label: "Chain Mix", disabled: true, reason: "Chain-level envelopes are not built yet", run: () => {} },
-        { kind: "item", label: "Chain Power", disabled: true, reason: "Chain-level envelopes are not built yet", run: () => {} },
-      ],
-    };
+    menu = { x: e.clientX, y: e.clientY + 8, items: chipMenuItems(menuCtx, clip) };
   }
 
   /** Double-click a clip: open its file in the Waveform editor. */
@@ -1436,6 +1065,32 @@
     window.addEventListener("pointerup", up, true);
   }
 
+  /**
+   * A clip's level handle is heard at once while dragged: playback scales
+   * that track over the clip as it plays, and the edit made on release
+   * takes over. Where playback cannot (a mix with buses), each step is
+   * an edit, heard a moment later, merged into one undo step.
+   */
+  let auditionFrame = 0;
+  let auditionEnd: ReturnType<typeof setTimeout> | undefined;
+  function auditionGain(trackId: string, clip: ClipDoc, db: number, end: number) {
+    clearTimeout(auditionEnd);
+    cancelAnimationFrame(auditionFrame);
+    auditionFrame = requestAnimationFrame(() => {
+      void transportAuditionClip(trackId, db, clip.start, end)
+        .then((heard) => {
+          if (!heard) void session.edit("Clip Level", { op: "set_clips", changes: [{ id: clip.id, gain_db: clip.gain_db + db }] }, runner).catch(onError);
+        })
+        .catch(() => {});
+    });
+  }
+  /** After the edit: playback has picked up the new level where it renders, so the audition can go. */
+  function endAudition(trackId: string) {
+    cancelAnimationFrame(auditionFrame);
+    clearTimeout(auditionEnd);
+    auditionEnd = setTimeout(() => void transportAuditionClip(trackId, 0, 0, 0).catch(() => {}), 1500);
+  }
+
   function startGesture(e: PointerEvent, d0: SessionDoc, track: TrackDoc, gesture: Gesture, clip: ClipDoc) {
     // A stretch handle works like Alt on the clip's edge.
     const handle = gesture === "stretch-left" || gesture === "stretch-right";
@@ -1464,6 +1119,7 @@
         changes = [{ id: clip.id, gain_db: db }];
         preview = changes;
         envTip = { x: ev.clientX, y: ev.clientY, text: db === 0 ? "0.0 dB" : gainText(db) };
+        auditionGain(track.id, clip, db - clip.gain_db, end);
         return;
       }
       // The timeline may have scrolled under the drag (see the timer below), so add what it moved.
@@ -1478,43 +1134,18 @@
         // Alt held: the drop makes copies and leaves the originals.
         stretchHint = ev.altKey ? (ids.length > 1 ? `Copy ${ids.length} clips` : "Copy") : null;
       } else if (stretching) {
-        const m = mediaMap.get(clip.media_id);
-        let edge = (kind === "trim-left" ? clip.start : end) + dx;
-        if (tol > 0) edge = nearest(edge, targets, tol) ?? edge;
-        edge = Math.round(edge);
-        const left = kind === "trim-left" ? Math.max(0, Math.min(edge, end - MIN_CLIP)) : clip.start;
-        const right = kind === "trim-right" ? Math.max(clip.start + MIN_CLIP, edge) : end;
-        const r = stretchTo(clip, m, rate, right - left, clip.stretch?.keep_pitch ?? true);
-        changes = r ? [left !== clip.start ? { ...r.change, start: left } : r.change] : [];
-        stretchHint = r ? `Stretch ${Math.round(r.ratio * 1000) / 10}%${r.limited ? " (limit)" : ""}` : null;
+        const r = stretchDrag(clip, mediaMap.get(clip.media_id), rate, kind === "trim-left" ? "left" : "right", end, dx, targets, tol);
+        changes = r.changes;
+        stretchHint = r.hint;
       } else if (kind === "trim-left" || kind === "trim-right") {
-        const side = kind === "trim-left" ? "left" : "right";
-        const c = trimClip(d0, clip, side, dx, targets, tol);
-        changes = c ? [c] : [];
-        if (c && ids.length > 1) {
-          // The grabbed clip snaps; the rest follow by the same amount, each within its own limits.
-          const moved = { ...clip, ...c } as ClipDoc;
-          const by = side === "left" ? moved.start - clip.start : moved.start + clipLength(moved, mediaMap.get(clip.media_id), rate) - end;
-          for (const t of d0.tracks)
-            for (const other of t.clips) {
-              if (other.id === clip.id || !ids.includes(other.id)) continue;
-              const o = trimClip(d0, other, side, by);
-              if (o) changes.push(o);
-            }
-        }
+        changes = trimDrag(d0, clip, kind === "trim-left" ? "left" : "right", dx, targets, tol, ids, mediaMap.get(clip.media_id), rate, end);
         if (ed.autoCrossfade) changes = withCrossfades(d0, changes);
       } else {
-        // Across sets the fade's length; up and down bends its curve (-100 to 100).
-        const which = kind === "fade-in" ? "in" : "out";
+        // Across sets the fade's length; up and down bends its curve.
         const at = sampleAt(ev.clientX - lanesEl!.getBoundingClientRect().left, view);
-        const was = which === "in" ? clip.fade_in : clip.fade_out;
-        const across = Math.abs(ev.clientX - startX) >= 3;
-        const bend = Math.max(-1, Math.min(1, Math.round(((was.curve ?? 0) - (ev.clientY - startY) / 80) * 100) / 100));
-        const c = across ? fadeClip(d0, clip, which, which === "in" ? at - clip.start : end - at) : null;
-        const fade = { ...was, ...(c ? (which === "in" ? c.fade_in : c.fade_out) : {}), curve: Math.abs(bend) < 0.02 ? 0 : bend };
-        changes = fade.length > 0 ? [which === "in" ? { id: clip.id, fade_in: fade } : { id: clip.id, fade_out: fade }] : [];
-        const skew = Math.round(fade.curve * 100);
-        envTip = { x: ev.clientX, y: ev.clientY, text: `${which === "in" ? "Fade in" : "Fade out"} ${(fade.length / rate).toFixed(2)} s, ${fade.shape === "cosine" ? "curve" : "straight"} ${skew > 0 ? "+" : ""}${skew}` };
+        const r = fadeDrag(d0, clip, kind === "fade-in" ? "in" : "out", at, end, Math.abs(ev.clientX - startX) >= 3, ev.clientY - startY, rate);
+        changes = r.changes;
+        envTip = { x: ev.clientX, y: ev.clientY, text: r.tip };
       }
       preview = changes;
     };
@@ -1549,338 +1180,43 @@
           .catch(onError);
         return;
       }
-      const label = kind === "gain"
-        ? "Clip Level"
-        : stretching
-        ? "Stretch Clip"
-        : kind === "move"
-          ? ids.length > 1
-            ? `Move ${ids.length} Clips`
-            : "Move Clip"
-          : kind === "fade-in"
-            ? "Fade In"
-            : kind === "fade-out"
-              ? "Fade Out"
-              : changes.length > 1
-                ? `Trim ${changes.length} Clips`
-                : "Trim Clip";
-      void session.edit(label, { op: "set_clips", changes }, runner).catch(onError);
+      const label = gestureLabel(kind, stretching, ids.length, changes);
+      void session
+        .edit(label, { op: "set_clips", changes }, runner)
+        .catch(onError)
+        .finally(() => kind === "gain" && endAudition(track.id));
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
   }
 
-  /** Reverse and Invert for the selected clips: toggles that leave the files alone. */
-  function clipFlipItems(): ContextItem[] {
-    const found = (doc?.tracks ?? []).flatMap((t) => t.clips).filter((c) => ed.selectedClips.has(c.id));
-    if (!found.length) return [];
-    const allRev = found.every((c) => c.reversed);
-    const allInv = found.every((c) => c.inverted);
-    const reverse = async () => {
-      const on = !allRev;
-      if (on) {
-        const paths = [...new Set(found.map((c) => doc?.media.find((m) => m.id === c.media_id)?.path).filter((p): p is string => !!p))];
-        await Promise.all(paths.map((p) => clipReversePrepare(p)));
-      }
-      // The region flips with it: positions count from the file's end while reversed.
-      const flip = (c: ClipDoc) => {
-        const len = doc?.media.find((m) => m.id === c.media_id)?.length ?? c.source_out;
-        return { source_in: Math.max(0, len - c.source_out), source_out: Math.max(0, len - c.source_in) };
-      };
-      await session.edit(on ? "Reverse Clip" : "Play Clip Forwards", { op: "set_clips", changes: found.filter((c) => !!c.reversed !== on).map((c) => ({ id: c.id, reversed: on, ...flip(c) })) }, runner);
-    };
-    return [
-      { kind: "sep" },
-      { kind: "item", label: "Reverse", checked: allRev, run: () => void reverse().catch(onError) },
-      { kind: "item", label: "Invert Polarity", checked: allInv, run: () => void session.edit(allInv ? "Polarity Back" : "Invert Polarity", { op: "set_clips", changes: found.map((c) => ({ id: c.id, inverted: !allInv })) }, runner).catch(onError) },
-      { kind: "sep" },
-    ];
-  }
-
-  /** Fade shapes for a fade handle's menu: straight or curved, each bent by dragging the handle up or down. */
-  const FADE_SHAPES = [
-    ["linear", "Straight"],
-    ["cosine", "Curve"],
-  ] as const;
-
   function onLaneMenu(e: MouseEvent, track: TrackDoc) {
     e.preventDefault();
     e.stopPropagation();
-    const items: ContextItem[] = [];
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const z = zoneAt(track, e.clientX - r.left, e.clientY - r.top);
     if (!z) {
       // Empty space in a lane: the session-wide menu. Keep any chosen clips, but make this the chosen track.
       editor.selectClips(ed.selectedClips, track.id);
-      menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems() };
+      menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems(menuCtx) };
       return;
     }
-    if (z && (z.kind === "env-point" || z.kind === "env-line")) {
-      const clip = z.clip;
-      const env = z.env ?? "volume";
-      const fxLane = env === "fx" ? fxLaneOf(clip, ed.fxLanes) : null;
-      const name = envName(env, clip, fxLane);
-      const pts = pointsOf(clip, env, fxLane);
-      const setPts = (label: string, next: typeof pts) =>
-        void session.edit(label, { op: "set_clips", changes: [envChange(clip, env, next, fxLane)] }, runner).catch(onError);
-      if (z.kind === "env-point" && z.index !== undefined) {
-        const idx = z.index;
-        items.push({ kind: "item", label: `Delete ${name} Point`, run: () => setPts(`Delete ${name} Point`, pts.filter((_, k) => k !== idx)) });
-      }
-      items.push({ kind: "item", label: `Reset ${name} Envelope`, disabled: pts.length === 0, run: () => setPts(`Reset ${name} Envelope`, []) }, { kind: "sep" });
-    }
-    if (z.kind === "fade-in" || z.kind === "fade-out") {
-      const which = z.kind === "fade-in" ? "fade_in" : "fade_out";
-      const word = z.kind === "fade-in" ? "Fade In" : "Fade Out";
-      // The clip under the pointer, and the other selected clips with it.
-      const ids = ed.selectedClips.has(z.clip.id) ? [...ed.selectedClips] : [z.clip.id];
-      const clips = (doc?.tracks ?? []).flatMap((t) => t.clips).filter((c) => ids.includes(c.id));
-      const current = z.clip[which].shape;
-      const setShape = (shape: string, label: string) =>
-        void session.edit(`${word} Shape: ${label}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], shape } })) }, runner).catch(onError);
-      for (const [shape, label] of FADE_SHAPES) items.push({ kind: "item", label, checked: current === shape || (shape === "linear" && current !== "cosine"), run: () => setShape(shape, label) });
-      const bent = clips.some((c) => (c[which].curve ?? 0) !== 0);
-      items.push({ kind: "item", label: `Skew: ${Math.round((z.clip[which].curve ?? 0) * 100)} (drag the handle up or down)`, disabled: true, run: () => {} });
-      items.push({ kind: "item", label: "Reset Skew", disabled: !bent, run: () => void session.edit(`${word} Skew`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], curve: 0 } })) }, runner).catch(onError) });
-      items.push(
-        { kind: "sep" },
-        { kind: "item", label: `Remove ${word}`, disabled: clips.every((c) => c[which].length === 0), run: () => void session.edit(`Remove ${word}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], length: 0 } })) }, runner).catch(onError) },
-      );
-      menu = { x: e.clientX, y: e.clientY, items };
-      return;
-    }
-    if (ed.selectedClips.size > 0) {
-      const act = (label: string, id: string): ContextItem => ({ kind: "item", label, shortcut: shortcutFor(id), disabled: !can(id), run: () => run(id) });
-      items.push(
-        act("Split at Playhead", "clip.split"),
-        act("Trim Start to Playhead", "clip.trim.start"),
-        act("Trim End to Playhead", "clip.trim.end"),
-        { kind: "sep" },
-        act(actions.isChecked("clip.mute") ? "Unmute Clip" : "Mute Clip", "clip.mute"),
-        act(actions.isChecked("clip.lock") ? "Unlock Position" : "Lock Position", "clip.lock"),
-        act("Clip Gain...", "clip.gain"),
-        act("Clip Color...", "clip.color"),
-        ...clipFlipItems(),
-        act("Group Clips", "clip.group"),
-        act("Ungroup Clips", "clip.ungroup"),
-        {
-          kind: "sub",
-          label: "Audio Type",
-          items: [
-            { ...(act("Dialogue", "clip.type.dialogue") as Extract<ContextItem, { kind: "item" }>), checked: actions.isChecked("clip.type.dialogue") === true },
-            { ...(act("Music", "clip.type.music") as Extract<ContextItem, { kind: "item" }>), checked: actions.isChecked("clip.type.music") === true },
-            { ...(act("Sound Effects", "clip.type.sfx") as Extract<ContextItem, { kind: "item" }>), checked: actions.isChecked("clip.type.sfx") === true },
-            { ...(act("Ambience", "clip.type.ambience") as Extract<ContextItem, { kind: "item" }>), checked: actions.isChecked("clip.type.ambience") === true },
-            { kind: "sep" },
-            act("None", "clip.type.none"),
-          ],
-        },
-        act("Time Stretch...", "clip.stretch"),
-        act("Stretch and Pitch...", "clip.properties"),
-        act(actions.isChecked("clip.fade-in") ? "Remove Fade In" : "Fade In", "clip.fade-in"),
-        act(actions.isChecked("clip.fade-out") ? "Remove Fade Out" : "Fade Out", "clip.fade-out"),
-        { kind: "sep" },
-        { kind: "item", label: ed.selectedClips.size > 1 ? `Delete ${ed.selectedClips.size} Clips` : "Delete Clip", shortcut: shortcutFor("edit.delete"), run: () => run("edit.delete") },
-        { kind: "item", label: "Show in Files Panel", disabled: !can("clip.reveal"), run: () => run("clip.reveal") },
-        { kind: "sep" },
-      );
-    }
-    items.push(...trackItems(track));
+    const items = clipZoneItems(menuCtx, z);
+    // A fade handle's menu stands alone; elsewhere the track's entries follow.
+    if (z.kind !== "fade-in" && z.kind !== "fade-out") items.push(...trackItems(track));
     menu = { x: e.clientX, y: e.clientY, items };
   }
 
-  /** The right-click menu for empty space in a lane. Every entry runs an app action, so it stays in step with the menu bar. */
-  function emptyLaneItems(): ContextItem[] {
-    const act = (label: string, id: string): ContextItem => {
-      const ok = can(id);
-      return {
-        kind: "item",
-        label,
-        shortcut: shortcutFor(id),
-        disabled: !ok,
-        reason: ok ? null : actions.has(id) ? actions.reason(id) : "Not built yet.",
-        run: () => run(id),
-      };
-    };
-    const off = (label: string, reason: string): ContextItem => ({ kind: "item", label, disabled: true, reason, run: () => {} });
-    const sub = (label: string, items: ContextItem[], reason?: string): ContextItem => ({ kind: "sub", label, items, ...(reason ? { disabled: true, reason } : {}) });
-    const sep: ContextItem = { kind: "sep" };
-    return [
-      act("Paste", "edit.paste"),
-      sep,
-      sub("Ripple Delete", [
-        act("Selected Clips", "edit.ripple.clips"),
-        act("Time Selection in Selected Clips", "edit.ripple.time-clips"),
-        act("Time Selection in Selected Track", "edit.ripple.time-track"),
-        act("Time Selection in All Tracks", "edit.ripple.time-all"),
-        act("Gap Between Clips", "edit.ripple.gap"),
-      ]),
-      sub("Select", [
-        act("Select All", "edit.select-all"),
-        act("Deselect All", "edit.deselect"),
-        sep,
-        act("All Clips in Track", "edit.select-track-clips"),
-        act("Next Clip in Selected Track", "edit.select-next-clip"),
-        act("Clips to End of Track", "edit.select-clips-track-end"),
-        sep,
-        act("Clips to Start of Session", "edit.select-clips-session-start"),
-        act("Clips to End of Session", "edit.select-clips-session-end"),
-        sub("Clips of Audio Type", [
-          act("Dialogue", "edit.select-type.dialogue"),
-          act("Music", "edit.select-type.music"),
-          act("Sound Effects", "edit.select-type.sfx"),
-          act("Ambience", "edit.select-type.ambience"),
-        ]),
-        sep,
-        act("Select Current View Time", "edit.select-view-time"),
-        act("Select All Time", "edit.select-all-time"),
-        act("Select Time Around Selected Clips", "edit.select-time-around-clips"),
-        act("Clear Time Selection", "edit.clear-time-selection"),
-      ]),
-      sub("Groups", [
-        act("Group Clips", "clip.group"),
-        act("Suspend Groups", "clip.group-suspend"),
-        act("Remove Focus Clip from Group", "clip.group-remove-focus"),
-        act("Ungroup Selected Clips", "clip.ungroup"),
-      ]),
-      sep,
-      sub("Track", [
-        act("Add Mono Audio Track", "multitrack.add.mono"),
-        act("Add Stereo Audio Track", "multitrack.add.stereo"),
-        act("Add MIDI Track", "multitrack.add.midi"),
-        act("Add Tracks...", "multitrack.add-tracks"),
-        off("Add 5.1 Audio Track", "Surround tracks are not planned."),
-        sep,
-        act("Add Mono Bus Track", "multitrack.add.bus-mono"),
-        act("Add Stereo Bus Track", "multitrack.add.bus"),
-        off("Add 5.1 Bus Track", "Surround tracks are not planned."),
-        sep,
-        act("Delete Empty Tracks", "multitrack.delete-empty"),
-        sep,
-        act("Delete Selected Track", "multitrack.delete-track"),
-        act("Duplicate Selected Track", "multitrack.duplicate-track"),
-      ]),
-      sub("Track Visibility", [
-        act("Hide Selected Track", "multitrack.vis.hide-selected"),
-        act("Show All Tracks", "multitrack.vis.show-all"),
-        sep,
-        act("Show Only Tracks with Clips", "multitrack.vis.only-clips"),
-        act("Show Only Tracks with Clips within Time Selection", "multitrack.vis.only-selection"),
-        act("Show Only Tracks with Clips at Playhead", "multitrack.vis.only-playhead"),
-        sep,
-        off("Show Only Bus Tracks", "Not built yet: bus tracks always show below the audio tracks."),
-        off("Load and Save Visibility Presets", "Not built yet."),
-      ]),
-      sub("Insert", [
-        act("Files at Playhead...", "multitrack.insert-files"),
-        act("Files as Tracks...", "multitrack.insert-tracks"),
-        act("Selected Files as Tracks", "multitrack.insert-selected-tracks"),
-        sep,
-        act("Silence...", "multitrack.insert-silence"),
-      ]),
-      sub("Marker", [
-        act("Add Cue Marker", "edit.marker.cue"),
-        act("Add Subclip Marker", "edit.marker.subclip"),
-        act("Add CD Track Marker", "edit.marker.cd-track"),
-        act("Add Cart Timer Marker", "edit.marker.cart"),
-        act("Add Range Marker", "edit.marker.range"),
-        act("Add Chapter Marker", "edit.marker.chapter"),
-        act("Add Ad Slot", "edit.marker.ad-slot"),
-        act("Add Social Clip", "edit.marker.social"),
-      ]),
-      sep,
-      sub("Mixdown Session to New File", [
-        act("Entire Session", "multitrack.mixdown.all"),
-        act("Time Selection", "multitrack.mixdown.selection"),
-        act("Selected Clips", "multitrack.mixdown.clips"),
-      ]),
-      sub("Export Mixdown", [act("Entire Session...", "file.export.mixdown"), act("Time Selection...", "file.export.selection")]),
-      sub("Bounce to New Track", [
-        act("Selected Track", "multitrack.bounce.track"),
-        act("Time Selection", "multitrack.bounce.selection"),
-        act("Selected Clips in Time Selection", "multitrack.bounce.clips-selection"),
-        act("Selected Clips Only", "multitrack.bounce.clips"),
-      ]),
-      sep,
-      act("Session Properties...", "multitrack.properties"),
-    ];
-  }
-
-  /** Output and send choices for a track's right-click menu. */
-  function routingItems(track: TrackDoc): ContextItem[] {
-    if (!doc) return [];
-    const choices = busChoices(doc, track.id);
-    const sends = track.sends ?? [];
-    const out = track.output ?? { type: "master" as const };
-    const none = (doc.buses?.length ?? 0) === 0 ? "Add a bus first: Multitrack > Add > Bus Track." : "No bus can take this track without feeding back into it.";
-    return [
-      {
-        kind: "sub",
-        label: "Output To",
-        items: [
-          { kind: "item", label: "Master", checked: out.type === "master", run: () => setTrack(track, { output: { type: "master" } }, "Route Track Output") },
-          ...choices.map((b): ContextItem => ({ kind: "item", label: b.name, checked: out.type === "bus" && out.bus_id === b.id, run: () => setTrack(track, { output: { type: "bus", bus_id: b.id } }, "Route Track Output") })),
-        ],
-      },
-      {
-        kind: "sub",
-        label: "Add Send To",
-        disabled: choices.length === 0,
-        reason: choices.length === 0 ? none : null,
-        items: choices.map((b): ContextItem => ({
-          kind: "item",
-          label: b.name,
-          run: () => {
-            // Tall enough to show the send in the header.
-            const ops: Op[] = [{ op: "set_sends", owner: track.id, sends: [...sends, newSend(b.id, crypto.randomUUID())] }];
-            if (!track.collapsed && track.height < ROW_SENDS + 24) ops.push({ op: "set_track", id: track.id, changes: { height: ROW_SENDS + 24 } } as Op);
-            void session.edit("Add Send", ops.length === 1 ? ops[0]! : { op: "batch", ops }, runner).catch(onError);
-            headerView = "mix";
-          },
-        })),
-      },
-    ];
-  }
-
-  function busItems(b: BusDoc): ContextItem[] {
-    return [
-      { kind: "item", label: "Rename Bus", run: () => (renaming = b.id) },
-      { kind: "item", label: "Bus Color...", run: () => (colorFor = { kind: "bus", id: b.id, current: b.color }) },
-      { kind: "item", label: "Delete Bus", run: () => void session.edit("Delete Bus", { op: "remove_bus", id: b.id }, runner).catch(onError) },
-      { kind: "sep" },
-      { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
-    ];
-  }
-
-  function setBus(b: BusDoc, changes: Record<string, unknown>, label: string) {
-    void session.edit(label, busOp(doc, b.id, changes), runner).catch(onError);
-  }
-
-  function commitBusRename(b: BusDoc, value: string) {
-    renaming = null;
-    const v = value.trim();
-    if (v && v !== b.name) setBus(b, { name: v }, "Rename Bus");
-  }
-
-  function trackItems(track: TrackDoc): ContextItem[] {
-    return [
-      { kind: "item", label: "Select All Clips on Track", disabled: track.clips.length === 0, run: () => editor.selectClips(withGroups(doc!, track.clips.map((c) => c.id)), track.id) },
-      { kind: "sep" },
-      { kind: "item", label: "Rename Track", run: () => (renaming = track.id) },
-      { kind: "item", label: track.show_automation ? "Hide Automation Lanes" : "Show Automation Lanes", run: () => toggleLanes(track) },
-      { kind: "item", label: "Track Color...", run: () => (colorFor = { kind: "track", id: track.id, current: track.color ?? null }) },
-      { kind: "item", label: "Duplicate Track", run: () => { editor.selectTrack(track.id); run("multitrack.duplicate-track"); } },
-      { kind: "item", label: "Bounce Track to New Track", disabled: track.clips.length === 0 && (track.midi_clips ?? []).length === 0, run: () => { editor.selectTrack(track.id); run("multitrack.bounce.track"); } },
-      { kind: "item", label: "Delete Track", run: () => { editor.selectTrack(track.id); run("multitrack.delete-track"); } },
-      { kind: "sep" },
-      { kind: "item", label: "Add Mono Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.mono"); } },
-      { kind: "item", label: "Add Stereo Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.stereo"); } },
-      { kind: "item", label: "Add MIDI Track", run: () => { editor.selectTrack(track.id); run("multitrack.add.midi"); } },
-      { kind: "item", label: "Add Bus Track", run: () => run("multitrack.add.bus") },
-      { kind: "sep" },
-      ...routingItems(track),
-    ];
-  }
+  /** What the track and bus menus change in the editor itself. */
+  const rowMenuExtra: TrackMenuExtra = {
+    rename: (id) => (renaming = id),
+    pickColor: (target) => (colorFor = target),
+    toggleLanes,
+    setTrack,
+    showMix: () => (headerView = "mix"),
+  };
+  const trackItems = (track: TrackDoc) => buildTrackItems(menuCtx, track, rowMenuExtra);
+  const busItems = (b: BusDoc) => buildBusItems(menuCtx, b, rowMenuExtra);
 
   function setTrack(track: TrackDoc, changes: TrackChanges, label: string) {
     void session.edit(label, trackOp(doc, track.id, changes as Record<string, unknown>), runner).catch(onError);
@@ -1928,67 +1264,8 @@
     void session.edit("Add Automation Lane", ops.length === 1 ? ops[0]! : { op: "batch", ops }, runner).catch(onError);
   }
 
-  /** Points a lane at another setting. Its points are kept only when the value range is the same kind. */
-  function pickTarget(track: TrackDoc, lane: EnvelopeDoc, key: string) {
-    const c = autoChoices(track, fxCatalog, !!doc?.space).find((x) => targetKey(x.target) === key);
-    if (!c || targetKey(c.target) === targetKey(lane.target)) return;
-    const same = c.target.type === lane.target.type && c.target.type !== "effect_param";
-    setLanes(track, putLane(track, { ...lane, target: c.target, points: same ? lane.points : [] }), `Automate ${c.label}`);
-  }
-
   function laneItems(track: TrackDoc, lane: EnvelopeDoc, index: number): ContextItem[] {
-    const name = autoName(track, fxCatalog, lane.target);
-    const at = (v: number) => putLane(track, { ...lane, points: lane.points.filter((_, k) => k !== v) });
-    return [
-      { kind: "item", label: "Delete Point", disabled: index < 0, run: () => setLanes(track, at(index), "Delete Automation Point") },
-      {
-        kind: "item",
-        label: "Add Point at Playhead",
-        run: () => {
-          const v = lane.points.length ? autoAt(lane.points, playhead, autoRest(track, fxCatalog, lane.target)) : autoRest(track, fxCatalog, lane.target);
-          const pts = lane.points.filter((p) => p.position !== Math.round(playhead)).concat({ position: Math.max(0, Math.round(playhead)), value: v, curve: "linear" as const });
-          pts.sort((a, b) => a.position - b.position);
-          setLanes(track, putLane(track, { ...lane, points: pts }), "Add Automation Point");
-        },
-      },
-      {
-        kind: "item",
-        label: "Delete Points in Time Selection",
-        disabled: !doc?.view.selection || !lane.points.some((p) => p.position >= doc!.view.selection!.start && p.position <= doc!.view.selection!.end),
-        run: () => {
-          const sel = doc?.view.selection;
-          if (!sel) return;
-          setLanes(track, putLane(track, { ...lane, points: lane.points.filter((p) => p.position < sel.start || p.position > sel.end) }), "Delete Automation Points");
-        },
-      },
-      { kind: "item", label: `Clear ${name} Lane`, disabled: lane.points.length === 0, run: () => setLanes(track, putLane(track, { ...lane, points: [] }), "Clear Automation Lane") },
-      { kind: "sep" },
-      { kind: "item", label: lane.enabled ? "Turn Lane Off" : "Turn Lane On", disabled: !lane.id, run: () => setLanes(track, putLane(track, { ...lane, enabled: !lane.enabled }), lane.enabled ? "Automation Lane Off" : "Automation Lane On") },
-      { kind: "item", label: "Add Lane", disabled: !nextTarget(track, fxCatalog, !!doc?.space), run: () => addLane(track) },
-      { kind: "item", label: "Remove Lane", disabled: !lane.id, run: () => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane") },
-      { kind: "item", label: "Hide Automation Lanes", run: () => toggleLanes(track) },
-    ];
-  }
-
-  const formatDb = (v: number) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
-  const formatPan = (p: number) => (Math.round(p) === 0 ? "C" : p < 0 ? `L${Math.round(-p)}` : `R${Math.round(p)}`);
-
-  function setValue(track: TrackDoc, key: "volume_db" | "pan", value: number) {
-    const label = key === "volume_db" ? "Track Volume" : "Track Pan";
-    void session.edit(label, { op: "set_track", id: track.id, changes: { [key]: value } }, runner).catch(onError);
-  }
-
-  function commitRename(track: TrackDoc, value: string) {
-    renaming = null;
-    const v = value.trim();
-    if (v && v !== track.name) setTrack(track, { name: v }, "Rename Track");
-  }
-
-  // Track reordering by dragging the header.
-  function onHeaderPointer(e: PointerEvent, track: TrackDoc) {
-    // Controls work as controls; only the rest of the header picks up and drags the track.
-    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, select, textarea, label, a")) return;
-    startRowDrag(e, track.id, "Move Track");
+    return autoLaneItems(menuCtx, track, lane, index, { fxCatalog: () => fxCatalog, playhead: () => playhead, setLanes, addLane: (t) => addLane(t), toggleLanes });
   }
 
   /** Drags a track or bus row (by its header or grab strip) to a new place among all rows. */
@@ -2033,56 +1310,8 @@
     window.addEventListener("pointerup", up, true);
   }
 
-  function setMasterVolume(db: number) {
-    void session.edit("Master Volume", { op: "set_master_volume", volume_db: db }, runner).catch(onError);
-  }
-
   // Length the overview strip scrolls over.
   const total = $derived(Math.max(contentEnd * 1.1, view.scroll + lanesWidth * view.spp, rate * 60));
-
-  /** The track's input as shown on its picker. */
-  function inputLabel(track: TrackDoc): string {
-    if (track.input === "none") return "None";
-    if (track.input) return track.input;
-    return track.channels === "mono" ? "Default Mono Input" : "Default Stereo Input";
-  }
-
-  /** Input picker: default, None, then Mono and Stereo submenus, each grouped by device. */
-  async function openInputMenu(e: MouseEvent, track: TrackDoc) {
-    e.stopPropagation();
-    const x = e.clientX;
-    const y = e.clientY;
-    let inputs: AudioInput[] = [];
-    try {
-      inputs = keepLast("in:track", await audioInputs()).list;
-    } catch {
-      inputs = [];
-    }
-    const pick = (value: string | null, label: string): ContextItem => ({
-      kind: "item",
-      label,
-      checked: (track.input ?? null) === value,
-      run: () => setTrack(track, { input: value }, "Track Input"),
-    });
-    const items: ContextItem[] = [pick(null, track.channels === "mono" ? "Default Mono Input" : "Default Stereo Input"), pick("none", "None"), { kind: "sep" }];
-    if (inputs.length === 0) items.push({ kind: "item", label: "No audio inputs found", run: () => {}, disabled: true });
-    // Grouped as Mono and Stereo, then by device, so a system with many
-    // devices stays readable. The stored value is unchanged.
-    const mono: ContextItem[] = [];
-    const stereo: ContextItem[] = [];
-    for (const d of inputs) {
-      const m: ContextItem[] = [];
-      for (let c = 1; c <= d.channels; c++) m.push({ ...pick(`Mono: ${d.name} ${c}`, `Channel ${c}`) });
-      if (m.length) mono.push({ kind: "sub", label: d.name, items: m });
-      const st: ContextItem[] = [];
-      for (let c = 1; c + 1 <= d.channels; c += 2) st.push(pick(`Stereo: ${d.name} ${c}-${c + 1}`, `Channels ${c}-${c + 1}`));
-      if (st.length) stereo.push({ kind: "sub", label: d.name, items: st });
-    }
-    if (mono.length) items.push({ kind: "sub", label: "Mono", items: mono });
-    if (stereo.length) items.push({ kind: "sub", label: "Stereo", items: stereo });
-    items.push({ kind: "sep" }, { kind: "item", label: "Audio Hardware...", run: () => void openSoundSettings().catch(onError) });
-    menu = { x, y, items };
-  }
 
   /** Waveform display scale in the lanes. View only: playback is unchanged. */
   let ampZoom = $state(1);
@@ -2097,7 +1326,6 @@
   // Track scrollbar.
   let scrollerH = $state(0);
   let rowsH = $state(1);
-  let vbarH = $state(0);
   let scrollTop = $state(0);
   function syncVbar() {
     scrollTop = scroller?.scrollTop ?? 0;
@@ -2167,17 +1395,6 @@
   let heightPreview = $state(1);
   /** The one height every open track takes while an end of the track scrollbar is dragged. */
   let uniformPreview = $state<number | null>(null);
-
-  /** Over the track scrollbar: a resize cursor near the thumb's ends. */
-  function onVbarHover(e: PointerEvent) {
-    const el = e.currentTarget as HTMLElement;
-    const bar = el.getBoundingClientRect();
-    const scale = rowsH / Math.max(1, bar.height);
-    const top = bar.top + scrollTop / scale;
-    const bottom = top + scrollerH / scale;
-    const near = Math.abs(e.clientY - top) < 7 || Math.abs(e.clientY - bottom) < 7;
-    el.style.cursor = near ? "ns-resize" : "pointer";
-  }
 
   /** Double-click the track scrollbar: every open track the same height, all fitting the view. */
   function fitAllTracks() {
@@ -2249,12 +1466,6 @@
     return () => offs.forEach((off) => off());
   });
 
-  /** A track's color for its header strip: its own color, or the palette by row. */
-  function trackColor(c: string | null | undefined, row: number): string {
-    const v = c ?? defaultTrackColor(row);
-    return v.startsWith("--") ? `var(${v})` : v;
-  }
-
   onDestroy(() => {
     menu = null;
   });
@@ -2265,14 +1476,7 @@
   <WaveformView {wave} file={wf} transport={waveTransport} {peaks} {actions} {shortcutFor} onLevel={onWaveLevel} />
 {:else}
 <section class="editor" aria-label="Multitrack" data-area="multitrack">
-  <div class="toolbar">
-    <button type="button" class="tool text" title={tip("Add Mono Track", "multitrack.add.mono")} onclick={() => run("multitrack.add.mono")}>+ Mono</button>
-    <button type="button" class="tool text" title={tip("Add Stereo Track", "multitrack.add.stereo")} onclick={() => run("multitrack.add.stereo")}>+ Stereo</button>
-    <button type="button" class="tool text" title={tip("Add MIDI Track", "multitrack.add.midi")} onclick={() => run("multitrack.add.midi")}>+ MIDI</button>
-    <button type="button" class="tool text" title={tip("Add Bus Track", "multitrack.add.bus")} onclick={() => run("multitrack.add.bus")}>+ Bus</button>
-    <span class="spacer"></span>
-    {#if doc}<span class="rate" title="Session sample rate">{(rate / 1000).toLocaleString("en-US")} kHz</span>{/if}
-  </div>
+  <EditorToolbar {rate} hasDoc={!!doc} {run} {tip} bind:height={toolbarH} />
 
   <div class="overview-row">
     <div class="corner" style:width="{HEADER_W}px"></div>
@@ -2293,72 +1497,7 @@
 
   <div class="ruler-row">
     <div class="corner header-views" style:width="{HEADER_W}px">
-      <!-- What the track headers show. Only the mix controls exist so far; the
-           other views arrive with recording (P4) and effects (P5). -->
-      {#if ed.selectedClips.size > 1}<span class="selcount" aria-live="polite">{ed.selectedClips.size} clips selected</span>{/if}
-      <div class="views" role="radiogroup" aria-label="Track header view">
-        <button type="button" class="view" class:on={headerView === "mix"} role="radio" aria-checked={headerView === "mix"} title="Mix: volume, pan, mute, solo and arm, then input, output and sends as the track gets taller" onclick={() => (headerView = "mix")}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2v12M8 2v12M12 2v12" stroke="currentColor" stroke-width="1" opacity="0.6" /><rect x="2.5" y="8" width="3" height="2" fill="currentColor" /><rect x="6.5" y="4.5" width="3" height="2" fill="currentColor" /><rect x="10.5" y="10" width="3" height="2" fill="currentColor" /></svg>
-        </button>
-        <button type="button" class="view" role="radio" aria-checked="false" disabled title="Inputs and Outputs: arrives with recording (P4)">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
-        </button>
-        <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's Audio FX chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1.5" y="12" font-size="10" font-style="italic" font-family="serif" fill="currentColor">fx</text></svg>
-        </button>
-        <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the Audio FX chain (P5)">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="7" width="2.5" height="7" fill="currentColor" /><rect x="6.75" y="3" width="2.5" height="11" fill="currentColor" /><rect x="11.5" y="9" width="2.5" height="5" fill="currentColor" /></svg>
-        </button>
-      </div>
-      <div class="toggles" role="group" aria-label="Timeline options">
-        <button
-          type="button"
-          class="view"
-          class:on={metOn}
-          title="Metronome: a click on every beat while playing and recording, on its own track at the top (never in an export)"
-          aria-label="Metronome"
-          aria-pressed={metOn}
-          onclick={() => setMetronomePrefs({ on: !metOn })}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2h4l3 12H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><path d="M8 11l3.5-6" stroke="currentColor" stroke-width="1.3" /></svg>
-        </button>
-        <button
-          type="button"
-          class="view"
-          class:on={ed.followPlayhead}
-          title="Follow Playhead: keep the playhead in view during playback"
-          aria-label="Follow playhead"
-          aria-pressed={ed.followPlayhead}
-          onclick={() => editor.setFollowPlayhead(!ed.followPlayhead)}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12" stroke="currentColor" stroke-width="1.3" /><path d="M1.5 8h4M3.5 6l2 2-2 2M14.5 8h-4M12.5 6l-2 2 2 2" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
-        </button>
-        <button
-          type="button"
-          class="view"
-          class:on={ed.stretchHandles}
-          title="Stretch Handles: each clip shows a triangle in its top corners; drag one to stretch the clip (no Alt needed)"
-          aria-label="Stretch handles"
-          aria-pressed={ed.stretchHandles}
-          onclick={() => editor.setStretchHandles(!ed.stretchHandles)}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 9V6.2M8 9l2 1.4M6.5 2h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-        </button>
-        <button
-          type="button"
-          class="view"
-          class:on={ed.snap.on}
-          title="Snapping: clips and selections snap to clips, the playhead and markers"
-          aria-label="Snapping"
-          aria-pressed={ed.snap.on}
-          onclick={() => editor.setSnap({ on: !ed.snap.on })}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v6a4 4 0 0 0 8 0v-6" fill="none" stroke="currentColor" stroke-width="2.4" /><path d="M2.8 3.5h2.4M10.8 3.5h2.4" stroke="var(--surface-2)" stroke-width="1.2" /></svg>
-        </button>
-        <button type="button" class="view" title={tip("Add Cue Marker", "edit.marker.cue")} aria-label="Add cue marker" disabled={!doc} onclick={() => run("edit.marker.cue")}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h6v6l-3 3-3-3z" fill="currentColor" /><path d="M8 11v3.5" stroke="currentColor" stroke-width="1.3" /></svg>
-        </button>
-      </div>
+      <HeaderViews {ed} bind:headerView {metOn} hasDoc={!!doc} {run} {tip} />
     </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="ruler-wrap">
@@ -2378,26 +1517,10 @@
     </div>
   {/if}
 
-  <div class="vwrap">
   {#if showStart}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="start"
-      oncontextmenu={(e) => {
-        e.preventDefault();
-        menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems() };
-      }}
-    >
-      <p class="start-title">Nothing open</p>
-      <p class="start-sub">Open a session or an audio file, or start a new session.</p>
-      <div class="start-buttons">
-        <button type="button" onclick={() => { startDismissed = true; run("file.new-session"); }}>New Session...</button>
-        <button type="button" onclick={() => run("file.open")}>Open...</button>
-        <button type="button" onclick={() => run("file.import-files")}>Import Files...</button>
-        <button type="button" onclick={() => (startDismissed = true)}>Use an Empty Session</button>
-      </div>
-    </div>
+    <StartScreen top={toolbarH} onMenu={(e) => (menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems(menuCtx) })} />
   {/if}
+  <div class="vwrap">
   <div
     class="scroller"
     bind:this={scroller}
@@ -2407,382 +1530,45 @@
     oncontextmenu={(e) => {
       // Space below the last track gets the session menu too.
       e.preventDefault();
-      menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems() };
+      menu = { x: e.clientX, y: e.clientY, items: emptyLaneItems(menuCtx) };
     }}
   >
     <div class="rows" bind:clientHeight={rowsH}>
-      <div class="headers" style:width="{HEADER_W}px">
-        {#each headerRows as row (row.id)}
-          {#if row.kind === "track"}
-          {@const track = row.track}
-          {@const i = row.i}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            class="header"
-            class:alt={i % 2 === 1}
-            class:selected={ed.selectedTrack === track.id}
-            class:fx={$chainTarget === track.id}
-            style:--track-color={trackColor(track.color, i)}
-            data-header={track.id}
-            data-row={track.id}
-            style:height="{shownHeight(track)}px"
-            onpointerdown={(e) => onHeaderPointer(e, track)}
-            oncontextmenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              menu = { x: e.clientX, y: e.clientY, items: trackItems(track) };
-            }}
-          >
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="grab" title="Click to select the track (its effects show in the Audio FX chain). Drag to move it up or down." onpointerdown={(e) => onHeaderPointer(e, track)}></div>
-            {#if $chainTarget === track.id}<span class="fx-tag" title="The Audio FX chain is showing this track's effects">FX</span>{/if}
-            <div class="line">
-              <button
-                type="button"
-                class="fold"
-                class:folded={!!track.collapsed}
-                title={track.collapsed ? "Expand track" : "Collapse track to its name"}
-                aria-label={track.collapsed ? "Expand track" : "Collapse track"}
-                aria-expanded={!track.collapsed}
-                onclick={() => setTrack(track, { collapsed: !track.collapsed }, track.collapsed ? "Expand Track" : "Collapse Track")}
-              >
-                <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
-              </button>
-              {#if renaming === track.id}
-                <!-- svelte-ignore a11y_autofocus -->
-                <input
-                  class="rename"
-                  type="text"
-                  value={track.name}
-                  autofocus
-                  onblur={(e) => commitRename(track, e.currentTarget.value)}
-                  onkeydown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") commitRename(track, e.currentTarget.value);
-                    if (e.key === "Escape") renaming = null;
-                  }}
-                />
-              {:else}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <span class="name" title="Double-click to rename" ondblclick={() => (renaming = track.id)}>{track.name}</span>
-              {/if}
-              <button type="button" class="ms" class:on={track.muted} title="Mute" aria-pressed={track.muted} onclick={() => setTrack(track, { muted: !track.muted }, track.muted ? "Unmute Track" : "Mute Track")}>M</button>
-              <button type="button" class="ms solo" class:on={track.solo} title="Solo" aria-pressed={track.solo} onclick={() => setTrack(track, { solo: !track.solo }, track.solo ? "Unsolo Track" : "Solo Track")}>S</button>
-              {#if !isMidi(track)}
-              <button type="button" class="ms rec" class:on={track.record_armed} title="Arm for recording: Record records this track's input" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
-              <button
-                type="button"
-                class="ms mon"
-                class:on={!!track.monitor_input}
-                title="Monitor Input: hear this track's input through the speakers while it is armed. Use headphones: speakers feed back into the mic."
-                aria-pressed={!!track.monitor_input}
-                onclick={() => setTrack(track, { monitor_input: !track.monitor_input }, "Monitor Input")}
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
-              </button>
-              {/if}
-              <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
-            </div>
-            {#if !track.collapsed && headerView === "fx" && doc}
-              <HeaderFx
-                {doc}
-                target={rowTarget(track.id, false)}
-                chain={track.effects}
-                catalog={fxCatalog}
-                plugins={fxPlugins}
-                onEdit={headerEdit}
-                onOpen={(slot) => openHeaderEffect(track.id, track.name, slot)}
-                onMenu={(x, y, items) => (menu = { x, y, items: items as ContextItem[] })}
-              />
-            {/if}
-            {#if !track.collapsed && headerView === "mix"}
-            <div class="line">
-              <Dial
-                value={track.volume_db}
-                min={-60}
-                max={12}
-                step={0.1}
-                origin={0}
-                label="Volume"
-                icon="volume"
-                format={(v) => `${formatDb(v)}`}
-                onChange={(v) => setValue(track, "volume_db", v)}
-              />
-              {#if doc?.space}
-                <button
-                  type="button"
-                  class="ms space3d"
-                  title="3D Space session: this track plays at a spot in the room instead of a pan. Click to place it in the 3D Space panel."
-                  onclick={() => {
-                    editor.selectTrack(track.id);
-                    run("multitrack.space");
-                  }}>3D</button
-                >
-              {:else}
-                <Dial value={track.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setValue(track, "pan", v)} />
-              {/if}
-              <button
-                type="button"
-                class="ms pol"
-                class:on={!!track.polarity_inverted}
-                title="Invert Polarity: flips the track's waveform, to fix a mic wired backwards or two mics fighting each other"
-                aria-pressed={!!track.polarity_inverted}
-                onclick={() => setTrack(track, { polarity_inverted: !track.polarity_inverted }, "Invert Polarity")}
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M3.5 13.5l9-11" stroke="currentColor" stroke-width="1.3" /></svg>
-              </button>
-            </div>
-            {/if}
-            {#if !track.collapsed && isMidi(track)}
-              {@const inst = track.instrument ? instruments.find((x) => x.effect === track.instrument!.effect) : null}
-              <div class="line">
-<div class="instrument">
-                  <button
-                    type="button"
-                    class="inst-name"
-                    title={inst ? `Open ${inst.name}. The arrow changes the instrument.` : track.instrument ? "This instrument is not installed (or not scanned yet). Effects > Plug-in Manager." : "The VST3 instrument that plays this track's notes. Grouped by type and by maker."}
-                    onclick={(e) => (inst ? openInstrument(track) : openInstrumentMenu(e, track))}
-                  >{inst ? `${inst.name}${inst.vendor ? ` (${inst.vendor})` : ""}` : track.instrument ? "Missing instrument" : instruments.length ? "No instrument" : "No instruments found"}</button>
-                  <button type="button" class="chev" aria-haspopup="menu" title="Change the instrument" aria-label="Change the instrument" onclick={(e) => openInstrumentMenu(e, track)}>▾</button>
-                </div>
-              </div>
-            {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_INPUT && !isMidi(track)}
-              <div class="line">
-                <button type="button" class="pick" title="The input this track records from" onclick={(e) => void openInputMenu(e, track)}>
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
-                  <span>{inputLabel(track)}</span>
-                  <span class="chev" aria-hidden="true">&rsaquo;</span>
-                </button>
-              </div>
-            {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_OUTPUT && doc}
-              {@const out = track.output ?? { type: "master" }}
-              <div class="line">
-                <label class="pick outpick" title="Where this track's sound goes after its fader: the master or a bus">
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
-                  <select aria-label="{track.name} output" value={out.type === "bus" ? out.bus_id : MASTER_ID} onchange={(e) => setOutput("track", track.id, e.currentTarget.value)}>
-                    <option value={MASTER_ID}>Master</option>
-                    {#each busChoices(doc, track.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
-                    {#if out.type === "bus" && !busChoices(doc, track.id).some((bc) => out.type === "bus" && bc.id === out.bus_id)}<option value={out.bus_id}>{outName(out)}</option>{/if}
-                  </select>
-                </label>
-                {#if shownHeight(track) < ROW_AUTO}{@render lanesToggle(track)}{/if}
-              </div>
-            {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_AUTO}
-              <div class="line">
-                <select
-                  class="auto"
-                  value={autoMode(track)}
-                  title="Automation mode. Read plays the track's automation lanes; Off plays none of them (the fader, pan and effects hold still). Write, Latch and Touch (recording moves while playing) are not built yet."
-                  onchange={(e) => setLanes(track, setMode(track, e.currentTarget.value === "off" ? "off" : "read"), "Automation Mode")}
-                >
-                  <option value="off" disabled={(track.envelopes?.length ?? 0) === 0}>Off</option>
-                  <option value="read">Read</option>
-                  <option value="write" disabled>Write (not built yet)</option>
-                  <option value="latch" disabled>Latch (not built yet)</option>
-                  <option value="touch" disabled>Touch (not built yet)</option>
-                </select>
-                {@render lanesToggle(track)}
-              </div>
-            {/if}
-            {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_SENDS && doc}
-              <div class="sendview">
-                <SendList {doc} {session} {runner} {onError} kind="track" id={track.id} name={track.name} output={track.output ?? { type: "master" }} sends={track.sends ?? []} noOutput />
-              </div>
-            {/if}
-            {#if !track.collapsed}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div class="resize" title="Drag to change the track height" onpointerdown={(e) => startResize(e, track)}></div>
-            {/if}
-            <!-- Level meter: the input while armed, otherwise playback. -->
-            <TrackMeter levels={meterOf(track)} armed={track.record_armed} onClear={() => transport.clearOver(track.id)} />
-          </div>
-          {#if track.show_automation && !track.collapsed}
-            {@const lanes = shownLanes(track)}
-            {#each lanes as lane, k (lane.id || "new")}
-              {@const choices = autoChoices(track, fxCatalog, !!doc?.space)}
-              {@const taken = (c: (typeof choices)[number]) => targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}
-              <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{liveLaneH(lane)}px">
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div class="lane-edge" title="Drag to make this lane taller or shorter" onpointerdown={(e) => resizeLane(e, track, lane)}></div>
-                <div class="line">
-                  <select
-                    class="auto-pick"
-                    value={targetKey(lane.target)}
-                    title="The setting this lane moves"
-                    onchange={(e) => pickTarget(track, lane, e.currentTarget.value)}
-                  >
-                    {#if isOrphan(track, fxCatalog, lane.target)}<option value={targetKey(lane.target)}>Removed effect</option>{/if}
-                    {#each choices.filter((c) => !c.group) as c (targetKey(c.target))}
-                      <option value={targetKey(c.target)} disabled={taken(c)}>{c.label}</option>
-                    {/each}
-                    <!-- Each effect (plug-ins too), with its controls under it. -->
-                    {#each [...new Set(choices.flatMap((c) => (c.group ? [c.group] : [])))] as g (g)}
-                      <optgroup label={g.slice(0, g.lastIndexOf("#"))}>
-                        {#each choices.filter((c) => c.group === g) as c (targetKey(c.target))}
-                          <option value={targetKey(c.target)} disabled={taken(c)}>{c.name}</option>
-                        {/each}
-                      </optgroup>
-                    {/each}
-                  </select>
-                </div>
-                <div class="line">
-                  <button
-                    type="button"
-                    class="ms wide"
-                    class:on={lane.enabled}
-                    title={lane.enabled ? "This lane plays (Read). Click to turn it off and hold the setting still." : "This lane is off. Click to play it."}
-                    aria-pressed={lane.enabled}
-                    disabled={!lane.id}
-                    onclick={() => setLanes(track, putLane(track, { ...lane, enabled: !lane.enabled }), lane.enabled ? "Automation Lane Off" : "Automation Lane On")}
-                  >{lane.enabled ? "Read" : "Off"}</button>
-                  <span class="auto-count">{lane.points.length === 0 ? "Click the lane to add points" : `${lane.points.length} point${lane.points.length === 1 ? "" : "s"}`}</span>
-                  {#if k === lanes.length - 1}
-                    <button type="button" class="ms" title="Add a lane for another setting" disabled={!nextTarget(track, fxCatalog, !!doc?.space)} onclick={() => addLane(track)}>+</button>
-                  {/if}
-                  <button type="button" class="ms" title="Remove this lane and its points" disabled={!lane.id} onclick={() => setLanes(track, dropLane(track, lane.id), "Remove Automation Lane")}>×</button>
-                </div>
-              </div>
-            {/each}
-          {/if}
-          {:else}
-          {@const b = row.bus}
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div
-            class="header bus"
-            class:selected={ed.selectedTrack === b.id}
-            class:fx={$chainTarget === b.id}
-            style:--track-color={b.color ? trackColor(b.color, 0) : "var(--clip-3)"}
-            style:height="{busHeight(b)}px"
-            data-bus-header={b.id}
-            data-row={b.id}
-            onclick={() => editor.selectTrack(b.id)}
-            oncontextmenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              menu = { x: e.clientX, y: e.clientY, items: busItems(b) };
-            }}
-          >
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="grab" title="Drag to move the bus up or down" onpointerdown={(e) => startRowDrag(e, b.id, "Move Bus")}></div>
-            <div class="line">
-              <span class="bus-tag" title="Bus track: sums the tracks routed or sent to it, then runs its own Audio FX chain and fader">BUS</span>
-              {#if renaming === b.id}
-                <!-- svelte-ignore a11y_autofocus -->
-                <input
-                  class="rename"
-                  type="text"
-                  value={b.name}
-                  autofocus
-                  onblur={(e) => commitBusRename(b, e.currentTarget.value)}
-                  onkeydown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") commitBusRename(b, e.currentTarget.value);
-                    if (e.key === "Escape") renaming = null;
-                  }}
-                />
-              {:else}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <span class="name" title="Double-click to rename" ondblclick={() => (renaming = b.id)}>{b.name}</span>
-              {/if}
-              <button type="button" class="ms" class:on={b.muted} title="Mute" aria-pressed={b.muted} onclick={() => setBus(b, { muted: !b.muted }, b.muted ? "Unmute Bus" : "Mute Bus")}>M</button>
-              <button type="button" class="ms solo" class:on={b.solo} title="Solo: plays this bus and everything feeding it" aria-pressed={b.solo} onclick={() => setBus(b, { solo: !b.solo }, b.solo ? "Unsolo Bus" : "Solo Bus")}>S</button>
-            </div>
-            {#if headerView === "mix"}
-              <div class="line">
-                <Dial value={b.volume_db} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={(v) => setBus(b, { volume_db: v }, "Bus Volume")} />
-                <Dial value={b.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setBus(b, { pan: v }, "Bus Pan")} />
-                <button type="button" class="ms mono" class:on={!!b.mono} title="Mono: folds this bus's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!b.mono} onclick={() => setBus(b, { mono: !b.mono }, b.mono ? "Bus Stereo" : "Bus Mono")}><MonoIcon /></button>
-              </div>
-              {#if busHeight(b) >= ROW_OUTPUT - 8 && doc}
-                <div class="line">
-                  <label class="pick outpick" title="Where this bus's sound goes after its fader: the master or another bus">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
-                    <select aria-label="{b.name} output" value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
-                      <option value={MASTER_ID}>Master</option>
-                      {#each busChoices(doc, b.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
-                    </select>
-                  </label>
-                </div>
-              {/if}
-              {#if busHeight(b) >= ROW_SENDS - 30 && doc}
-                <div class="sendview">
-                  <SendList {doc} {session} {runner} {onError} kind="bus" id={b.id} name={b.name} output={b.output} sends={b.sends} noOutput />
-                </div>
-              {/if}
-            {:else if doc}
-              <HeaderFx
-                {doc}
-                target={rowTarget(b.id, true)}
-                chain={b.effects}
-                catalog={fxCatalog}
-                plugins={fxPlugins}
-                onEdit={headerEdit}
-                onOpen={(slot) => openHeaderEffect(b.id, b.name, slot)}
-                onMenu={(x, y, items) => (menu = { x, y, items: items as ContextItem[] })}
-              />
-            {/if}
-            <TrackMeter levels={meterOf(b as unknown as TrackDoc)} armed={false} onClear={() => transport.clearOver(b.id)} />
-          </div>
-          {/if}
-        {/each}
-        {#if doc && !showStart}
-          {@const mfx = doc.master?.effects?.slots.filter((x) => x.enabled).length ?? 0}
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div
-            class="header master"
-            class:selected={ed.selectedTrack === MASTER_ID}
-            class:fx={$chainTarget === MASTER_ID}
-            style:height="72px"
-            title="Master: every track and bus ends here. Click to show its Audio FX chain."
-            onclick={() => editor.selectTrack(MASTER_ID)}
-            oncontextmenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <div class="line">
-              <span class="bus-tag">OUT</span>
-              <span class="name">Master</span>
-              <button type="button" class="ms fx" class:on={mfx > 0} title={mfx > 0 ? `Master Audio FX: ${mfx} effect${mfx === 1 ? "" : "s"}. Click to edit.` : "Master Audio FX: empty. Click to add effects."} onclick={() => editor.selectTrack(MASTER_ID)}>fx</button>
-            </div>
-            <div class="line">
-              <Dial value={doc.master?.volume_db ?? 0} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={setMasterVolume} />
-              <button type="button" class="ms mono check" class:on={$monoCheck} title="Mono check: hear the whole mix folded to mono, to check how it holds up. Listening only: exports are not changed (to write a mono file, pick Mono in Export)." aria-pressed={$monoCheck} onclick={(e) => { e.stopPropagation(); void monoCheck.toggle().catch(onError); }}><MonoIcon /></button>
-            </div>
-            {#if doc.space && channelNames(doc.space.layout).length > 2}
-              {@const names = channelNames(doc.space.layout)}
-              <TrackMeter levels={tp?.bed?.length === names.length ? tp.bed : names.map(() => quiet())} {names} armed={false} onClear={() => transport.clearOver()} />
-            {:else}
-              <TrackMeter levels={tp?.master ?? null} armed={false} onClear={() => transport.clearOver()} />
-            {/if}
-          </div>
-        {/if}
-      </div>
+      <TrackHeaders
+        rows={headerRows}
+        showMaster={!showStart}
+        {doc}
+        {session}
+        {runner}
+        {transport}
+        {tp}
+        {ed}
+        {headerView}
+        {renaming}
+        {instruments}
+        {fxCatalog}
+        {fxPlugins}
+        {onError}
+        {run}
+        {onShowChain}
+        onMenu={(x, y, items) => (menu = { x, y, items })}
+        onRename={(id) => (renaming = id)}
+        trackMenu={trackItems}
+        busMenu={busItems}
+        {shownHeight}
+        {liveLaneH}
+        {meterOf}
+        {setTrack}
+        {setLanes}
+        {toggleLanes}
+        addLane={(t) => addLane(t)}
+        {startRowDrag}
+        {startResize}
+        {resizeLane}
+      />
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="lanes" class:dropping bind:this={lanesEl} bind:clientWidth={lanesWidth} onpointerleave={() => (razor = null)}>
-        {#if stretchHint}<div class="stretch-hint" aria-live="polite">{stretchHint}</div>{/if}
-        {#if dropGhost && dropping}
-          {#each dropGhost.items as g, k (k)}
-            <div class="drop-ghost" style:left="{g.x}px" style:width="{g.w}px" style:top="{dropGhost.top + 1}px" style:height="{dropGhost.height - 2}px">
-              <span>{g.name}{dropGhost.newTrack && k === 0 ? " (new track)" : ""}</span>
-            </div>
-          {/each}
-        {/if}
-        {#if selBox}
-          <div class="selBox" style:left="{selBox.x}px" style:top="{selBox.y}px" style:width="{selBox.w}px" style:height="{selBox.h}px"></div>
-        {/if}
-        {#if razor && ed.tool === "razor"}
-          {@const row = razor.trackId ? lanesEl?.querySelector<HTMLElement>(`[data-track="${razor.trackId}"]`) : null}
-          <div
-            class="razor"
-            style:left="{razor.x}px"
-            style:top="{row ? row.offsetTop : 0}px"
-            style:height={row ? `${row.offsetHeight}px` : "100%"}
-          ></div>
-        {/if}
+        <LaneOverlays {stretchHint} {dropGhost} {dropping} {selBox} razor={ed.tool === "razor" ? razor : null} {lanesEl} />
         {#if doc}
           {#each laneList as row (row.id)}
             {#if row.kind === "track" && isMidi(row.track)}
@@ -2798,6 +1584,7 @@
                 color={trackColor(track.color, row.i)}
                 selected={ed.selectedClips}
                 onSelect={(ids) => editor.selectClips(ids, track.id)}
+                stretchHandles={ed.stretchHandles}
                 onSetClips={(clips, label) => setMidiClips(track, clips, label)}
                 onOpen={(clipId) => (pianoRoll = { trackId: track.id, clipId })}
                 onMenu={(e, clip, beat) => (menu = { x: e.clientX, y: e.clientY, items: midiClipItems(track, clip, beat) })}
@@ -2835,7 +1622,7 @@
                 trackSelected={ed.selectedTrack === track.id}
                 index={i}
                 {ampZoom}
-                liveTake={live && live.waves[track.id] ? { at: live.at, rate: live.rate, wave: live.waves[track.id]!, tick: live.tick } : null}
+                liveTake={live && live.waves[track.id] ? { at: live.starts?.[track.id] ?? live.at, rate: live.rate, wave: live.waves[track.id]!, tick: live.tick } : null}
                 {peaks}
                 {peakTick}
                 showVolume={ed.showVolume}
@@ -2899,20 +1686,16 @@
       <div class="insert" style:top="{dragTrack.y}px"></div>
     {/if}
   </div>
-  <!-- Track scrollbar: each track's color, the visible part as the thumb.
-       Drag the thumb to scroll; drag its ends to make every track taller or shorter. -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="vbar" bind:clientHeight={vbarH} onpointerdown={onVbarPointer} onpointermove={onVbarHover} ondblclick={fitAllTracks} onwheel={onVbarWheel} title="Drag to scroll the tracks. Drag the thumb's ends, or use the mouse wheel here, to zoom: every track the same height. Double-click to fit them all.">
-    {#each shown as track, i (track.id)}
-      <div class="vseg" style:height="{((shownHeight(track) + lanesHeight(track)) / Math.max(1, rowsH)) * 100}%" style:background={trackColor(track.color, i)}></div>
-    {/each}
-    {#if rowsH > 0}
-      <div class="vthumb" style:top="{(scrollTop / rowsH) * 100}%" style:height="{(scrollerH / rowsH) * 100}%">
-        <span class="vend top"></span>
-        <span class="vend bottom"></span>
-      </div>
-    {/if}
-  </div>
+  <TrackScrollbar
+    tracks={shown}
+    segHeight={(t) => shownHeight(t) + lanesHeight(t)}
+    {rowsH}
+    {scrollTop}
+    {scrollerH}
+    onPointer={onVbarPointer}
+    onDouble={fitAllTracks}
+    onWheel={onVbarWheel}
+  />
   </div>
 
   <TransportBar
@@ -2928,20 +1711,6 @@
   />
 </section>
 {/if}
-
-{#snippet lanesToggle(track: TrackDoc)}
-<button
-  type="button"
-  class="ms autos"
-  class:on={!!track.show_automation}
-  class:has={(track.envelopes?.length ?? 0) > 0}
-  title={track.show_automation ? "Hide automation lanes" : (track.envelopes?.length ?? 0) > 0 ? `Show automation lanes (${track.envelopes!.length})` : "Show automation lanes: draw volume, pan or effect settings over time"}
-  aria-pressed={!!track.show_automation}
-  onclick={() => toggleLanes(track)}
->
-  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 11.5L5 6l4 3.5 5.5-6" fill="none" stroke="currentColor" stroke-width="1.4" /><circle cx="5" cy="6" r="1.4" fill="currentColor" /><circle cx="9" cy="9.5" r="1.4" fill="currentColor" /></svg>
-</button>
-{/snippet}
 
 {#snippet autoLanes(track: TrackDoc, i: number)}
   {#if track.show_automation && !track.collapsed}
@@ -3027,51 +1796,13 @@
   /* A column: the strips above and below keep their height and only the
      tracks stretch, however many strips (metronome, tempo) show. */
   .editor {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
     background: var(--surface-0);
   }
-
-  .toolbar {
-    display: flex;
-    gap: 2px;
-    align-items: center;
-    padding: 3px 6px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-1);
-  }
-
-  .tool {
-    display: grid;
-    place-items: center;
-    min-width: 22px;
-    height: 20px;
-    padding: 0 4px;
-    border: 1px solid transparent;
-    border-radius: 2px;
-    background: none;
-    color: var(--text-dim);
-    font: inherit;
-    font-size: var(--font-size-small);
-  }
-
-
-  .tool:hover:not(:disabled) {
-    border-color: var(--border-strong);
-    color: var(--text);
-  }
-
-  .tool:disabled {
-    opacity: 0.4;
-  }
-
-
-  .spacer {
-    flex: 1;
-  }
-
 
   .overview-row,
   .ruler-row {
@@ -3122,89 +1853,6 @@
   .header-views {
     gap: 6px;
     padding: 0 4px;
-  }
-
-  .views {
-    display: flex;
-    gap: 1px;
-  }
-
-  .view {
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 18px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 2px;
-    background: none;
-    color: var(--text-dim);
-  }
-
-  .view svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .view.on {
-    border-color: var(--accent);
-    color: var(--text);
-  }
-
-  .view:disabled {
-    opacity: 0.35;
-  }
-
-  .toggles {
-    display: flex;
-    gap: 1px;
-    margin-left: auto;
-  }
-
-  .instrument {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    height: 20px;
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    background: var(--surface-2);
-  }
-
-  .instrument button {
-    height: 100%;
-    padding: 0 4px;
-    border: 0;
-    border-radius: 0;
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: var(--font-size-small);
-  }
-
-  .instrument button:hover {
-    background: var(--surface-3, var(--surface-1));
-  }
-
-  .instrument .inst-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .instrument .chev {
-    flex: none;
-    border-left: 1px solid var(--border);
-  }
-
-  .toolbar .rate {
-    padding: 0 4px;
-    color: var(--text-faint);
-    font-size: var(--font-size-small);
-    white-space: nowrap;
   }
 
   .ruler-wrap {
@@ -3265,43 +1913,6 @@
     min-height: 0;
   }
 
-  .start {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    display: grid;
-    place-content: center;
-    gap: 10px;
-    justify-items: center;
-    background: var(--surface-0);
-    text-align: center;
-  }
-
-  .start-title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .start-sub {
-    margin: 0;
-    color: var(--text-dim);
-  }
-
-  .start-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-  }
-
-  .selcount {
-    font-size: 11px;
-    color: var(--text-dim, #a0a0a8);
-    white-space: nowrap;
-    padding: 0 6px;
-  }
-
   .scroller {
     position: relative;
     flex: 1;
@@ -3316,393 +1927,15 @@
     display: none;
   }
 
-  .vbar {
-    position: relative;
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    width: 14px;
-    border-left: 1px solid var(--border);
-    background: var(--surface-0);
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .vseg {
-    flex: none;
-    margin: 0 3px;
-    opacity: 0.55;
-    border-bottom: 1px solid var(--surface-0);
-  }
-
-  .vthumb {
-    position: absolute;
-    right: 0;
-    left: 0;
-    box-sizing: border-box;
-    border: 1px solid #b4b4bc;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    pointer-events: none;
-  }
-
-  /* Grips on the thumb's ends: drag them to zoom vertically. */
-  .vend {
-    position: absolute;
-    left: 1px;
-    right: 1px;
-    height: 5px;
-    border-radius: 2px;
-    background: repeating-linear-gradient(180deg, #d0d0d6 0 1px, transparent 1px 2px);
-    opacity: 0.85;
-  }
-
-  .vend.top {
-    top: 1px;
-  }
-
-  .vend.bottom {
-    bottom: 1px;
-  }
-
   .rows {
     display: flex;
     min-height: 100%;
   }
 
-  .headers {
-    flex: none;
-    border-right: 3px solid var(--track-gap);
-    background: var(--track-gap);
-  }
-
-  .header {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 3px 24px 3px 14px;
-    border-left: 0;
-    border-bottom: 3px solid var(--track-gap);
-    box-sizing: border-box;
-    position: relative;
-    overflow: hidden;
-    background: var(--header-a);
-    cursor: grab;
-    user-select: none;
-  }
-
-  .resize {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 2;
-    height: 6px;
-    cursor: ns-resize;
-  }
-
-  .resize:hover {
-    background: color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-
-  .header.alt {
-    background: var(--header-b);
-  }
-
-  .header.selected {
-    background: var(--lane-selected);
-  }
-
-  /* The row whose effects the Audio FX chain shows. */
-  .header.fx::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--accent);
-    border-left-width: 3px;
-    pointer-events: none;
-  }
-
-  /* On the grab strip, written sideways, so it never covers a control. */
-  .fx-tag {
-    position: absolute;
-    bottom: 3px;
-    left: 0;
-    z-index: 2;
-    width: 10px;
-    padding: 2px 0;
-    background: var(--accent);
-    color: #fff;
-    font-size: 8px;
-    font-weight: 700;
-    line-height: 10px;
-    text-align: center;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    pointer-events: none;
-  }
-
-  .header.selected .name {
-    color: var(--selected-text, #fff);
-    font-weight: 600;
-  }
-
-  .line {
-    display: flex;
-    gap: 3px;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .rename {
-    flex: 1;
-    min-width: 0;
-    height: 18px;
-    padding: 0 4px;
-    border: 1px solid var(--accent);
-    background: var(--surface-0);
-    color: var(--text);
-    font: inherit;
-  }
-
-
-  .ms {
-    width: 20px;
-    height: 18px;
-    padding: 0;
-    border: 1px solid var(--border-strong);
-    border-radius: 2px;
-    background: var(--surface-3);
-    color: var(--text-dim);
-    font: inherit;
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .ms.on {
-    background: var(--accent-dim);
-    color: #fff;
-  }
-
-  .ms.autos {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .ms.autos svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .ms.autos.has:not(.on) {
-    color: var(--accent);
-  }
-
-  .ms.wide {
-    width: auto;
-    padding: 0 6px;
-  }
-
-  .lane-edge {
-    position: absolute;
-    right: 0;
-    bottom: -3px;
-    left: 0;
-    z-index: 2;
-    height: 6px;
-    cursor: ns-resize;
-  }
-  .lane-edge:hover {
-    background: color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-  .header.auto-head {
-    position: relative;
-    justify-content: center;
-    padding-left: 22px;
-    background: color-mix(in srgb, var(--header-a) 88%, var(--track-color) 12%);
-    cursor: default;
-  }
-
-  .auto-pick {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-size-small);
-  }
-
-  .auto-count {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-faint);
-    font-size: var(--font-size-small);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .ms.space3d {
-    width: 30px;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent);
-  }
-
-  .ms.solo.on {
-    background: var(--clip-5);
-    color: #111;
-  }
-
-  .ms.rec.on {
-    background: var(--danger);
-    color: #fff;
-  }
-
-  .ms svg {
-    width: 12px;
-    height: 12px;
-    vertical-align: middle;
-  }
-
-  .ms.mon.on {
-    background: var(--clip-1);
-    color: #fff;
-  }
-
-  .ms.pol {
-    margin-left: auto;
-  }
-
-  .ms.pol.on {
-    background: var(--clip-4);
-    color: #fff;
-  }
-
-  .fold {
-    display: grid;
-    flex: none;
-    place-items: center;
-    width: 14px;
-    height: 16px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text-dim);
-  }
-
-  .fold svg {
-    width: 10px;
-    height: 10px;
-    transition: transform 0.1s;
-  }
-
-  .fold.folded svg {
-    transform: rotate(-90deg);
-  }
-
-  .fold:hover {
-    color: var(--text);
-  }
-
-  .pick,
-  .auto {
-    flex: 1;
-    min-width: 0;
-    height: 18px;
-    border: 1px solid var(--border-strong);
-    border-radius: 2px;
-    background: var(--surface-1);
-    color: var(--text);
-    font: inherit;
-    font-size: var(--font-size-small);
-  }
-
-  .pick {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    padding: 0 4px;
-    text-align: left;
-  }
-
-  .pick:hover {
-    border-color: var(--accent);
-  }
-
-  .pick svg {
-    flex: none;
-    width: 12px;
-    height: 12px;
-    color: var(--text-dim);
-  }
-
-  .pick span:not(.chev) {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .chev {
-    color: var(--text-dim);
-  }
-
-  .auto {
-    height: 20px;
-    padding: 0 2px;
-    line-height: 18px;
-  }
-
-  .auto:disabled {
-    color: var(--text-dim);
-    opacity: 0.7;
-  }
-
-
-
-
   .lanes {
     position: relative;
     flex: 1;
     min-width: 0;
-  }
-
-  .stretch-hint {
-    position: absolute;
-    top: 4px;
-    right: 8px;
-    z-index: 6;
-    padding: 2px 6px;
-    border: 1px solid var(--border-strong);
-    border-radius: 2px;
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 11px;
-    pointer-events: none;
-  }
-
-  .selBox {
-    position: absolute;
-    z-index: 4;
-    border: 1px dashed rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.05);
-    pointer-events: none;
-  }
-
-  .razor {
-    position: absolute;
-    z-index: 3;
-    width: 0;
-    border-left: 1px dashed var(--danger);
-    pointer-events: none;
   }
 
   .lanes.dropping {
@@ -3713,29 +1946,6 @@
 
   .lane {
     cursor: default;
-  }
-
-  /* Where dragged-in files would land. */
-  .drop-ghost {
-    position: absolute;
-    z-index: 5;
-    box-sizing: border-box;
-    overflow: hidden;
-    border: 1px dashed var(--accent);
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    pointer-events: none;
-  }
-
-  .drop-ghost span {
-    display: block;
-    padding: 1px 4px;
-    overflow: hidden;
-    background: color-mix(in srgb, var(--accent) 55%, transparent);
-    color: #fff;
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .bus-lane {
@@ -3755,122 +1965,8 @@
     background-color: color-mix(in srgb, var(--accent) 6%, transparent);
   }
 
-  /* A slim bar in the track's color. Pointing at it widens it and shows
-     grip dots, so it reads as the place to drag the track from. The hit
-     area stays 10 px wide either way. */
-  .grab {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 1;
-    width: 10px;
-    cursor: grab;
-  }
-
-  .grab::before {
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 4px;
-    background: var(--track-color, var(--border-strong));
-    transition: width 0.12s ease;
-  }
-
-  .grab::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 3px;
-    width: 4px;
-    height: 22px;
-    transform: translateY(-50%);
-    background-image: radial-gradient(circle, rgba(0, 0, 0, 0.5) 1.1px, transparent 1.4px);
-    background-size: 4px 5.5px;
-    opacity: 0;
-    transition: opacity 0.12s ease;
-  }
-
-  .grab:hover::before,
-  .grab:active::before {
-    width: 10px;
-  }
-
-  .grab:hover::after,
-  .grab:active::after {
-    opacity: 1;
-  }
-
-  .grab:active {
-    cursor: grabbing;
-  }
-
-  .header.master {
-    border-left: 10px solid var(--accent);
-    padding-left: 4px;
-    background: color-mix(in srgb, var(--header-a) 80%, var(--accent) 20%);
-    cursor: default;
-  }
-
-  .ms.mono {
-    width: auto;
-    padding: 0 3px;
-    font-size: 8px;
-    letter-spacing: 0.03em;
-  }
-
-  .ms.mono.short {
-    width: 20px;
-    padding: 0;
-  }
-
-  .ms.mono.check.on {
-    background: var(--clip-5);
-    color: #111;
-  }
-
-  .ms.fx {
-    font-style: italic;
-  }
-
   .master-lane {
     background: color-mix(in srgb, var(--accent) 5%, transparent);
-  }
-
-  .header.bus {
-    background: color-mix(in srgb, var(--header-a) 82%, var(--clip-3) 18%);
-    cursor: default;
-  }
-
-  .bus-tag {
-    flex: none;
-    padding: 0 3px;
-    border-radius: 2px;
-    background: var(--surface-3);
-    color: var(--text-dim);
-    font-size: 8px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-
-  .outpick {
-    position: relative;
-  }
-  .outpick select {
-    flex: 1;
-    min-width: 0;
-    height: 16px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-  }
-
-  .sendview {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
   }
 
   .below {

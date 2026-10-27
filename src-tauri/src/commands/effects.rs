@@ -134,10 +134,19 @@ pub fn shaped_noise_curves(
     Ok(NoiseCurves { print, threshold })
 }
 
+/// The Vox Strip's Tone curve, in dB at `points` frequencies.
+#[tauri::command]
+pub fn vox_tone_curve(slot: EffectSlot, points: usize) -> Result<Vec<[f64; 2]>, String> {
+    use crate::dsp::effects::{info, vocal, Params};
+    let i = info(vocal::VOCAL).ok_or("Unknown effect.")?;
+    let p = Params::resolve(&i, &slot.params);
+    Ok(vocal::tone_curve(&p, points.clamp(2, 400)))
+}
+
 /// An effect's own meter (gain reduction in dB, output in dBFS), for
 /// windows that draw one. None until the effect has been built.
 #[tauri::command]
-pub fn effect_meter(slot: crate::session::model::Id) -> Option<[f32; 2]> {
+pub fn effect_meter(slot: crate::session::model::Id) -> Option<[f32; 3]> {
     crate::dsp::meters::read(slot)
 }
 

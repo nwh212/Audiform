@@ -294,6 +294,17 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// New clip levels while playing (see `plan::clip_gains`).
+    pub fn set_clip_gains(&mut self, gains: &[(Id, f32)]) {
+        for t in &mut self.plan.tracks {
+            for c in &mut t.clips {
+                if let Some((_, g)) = gains.iter().find(|(id, _)| *id == c.id) {
+                    c.gain = *g;
+                }
+            }
+        }
+    }
+
     pub fn new(plan: Plan, start_frame: u64) -> Self {
         let n = plan.tracks.len();
         Self {

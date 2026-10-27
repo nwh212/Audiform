@@ -253,7 +253,7 @@ pub async fn plugin_open_window(
         let host = instance::host_for(&slot, rate)
             .ok_or("The plug-in is not installed or would not start.")?;
         let mut h = host.lock().map_err(|e| e.to_string())?;
-        h.open_window(&title, owner)
+        h.open_window(&title, owner, !slot.enabled)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -281,6 +281,25 @@ pub fn plugin_close_window(slot_id: Id) {
             h.close_window();
         }
     }
+}
+
+/// The effect was bypassed or turned on: its window's power button follows.
+#[tauri::command]
+pub async fn plugin_show_bypassed(slot_id: Id, bypassed: bool) {
+    let _ = spawn_blocking(move || {
+        if let Some(h) = instance::running(slot_id) {
+            if let Ok(mut h) = h.lock() {
+                h.show_bypassed(bypassed);
+            }
+        }
+    })
+    .await;
+}
+
+/// Hides every plug-in window while the close prompt shows, or shows them again.
+#[tauri::command]
+pub async fn plugin_hide_windows(hidden: bool) {
+    let _ = spawn_blocking(move || instance::hide_windows(hidden)).await;
 }
 
 #[derive(Debug, Clone, Serialize)]

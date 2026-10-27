@@ -262,10 +262,11 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audiform"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "altered-os-aac",
  "altered-plughost",
+ "audiform-os-decode",
  "audioadapter-buffers",
  "chrono",
  "cpal",
@@ -293,6 +294,13 @@ dependencies = [
  "url",
  "uuid",
  "zip",
+]
+
+[[package]]
+name = "audiform-os-decode"
+version = "0.1.0"
+dependencies = [
+ "windows",
 ]
 
 [[package]]
@@ -4001,8 +4009,6 @@ dependencies = [
 [[package]]
 name = "symphonia-codec-aac"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5bf8e39552d34a3c4c98333370e62f48c92456d2e814f273b5c3ad7c4a5f45c"
 dependencies = [
  "lazy_static",
  "log",
@@ -4055,8 +4061,6 @@ dependencies = [
 [[package]]
 name = "symphonia-common"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2acc3fcc18ec9b8cdd48614e259c4cf0d27b71d41e5d9b120b42c5adab12d7c4"
 dependencies = [
  "log",
  "symphonia-core",

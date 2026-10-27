@@ -70,7 +70,7 @@ A few antivirus scanners may flag the installer with a low-confidence guess. Tha
 
 **Linux and macOS (experimental).** Releases also carry a Linux AppImage and `.deb`, and a macOS `.dmg` for Apple silicon Macs. They are built from the same source but not tested much yet, so reports are welcome. The macOS app is not notarized: the first time, right-click it and choose Open. AAC export works on Windows only for now.
 
-Early versions are pre-releases. Expect rough edges and keep backups of your recordings.
+Audiform is young (version 0.x). Expect rough edges and keep backups of your recordings.
 
 **Coming from Altered Audio Editor?** Audiform opens the same session, template, library and shortcut files, and the first time it starts it copies your Altered Audio Editor settings (preferences, shortcuts, workspaces, plug-in list). Both apps can be installed side by side.
 
@@ -89,7 +89,7 @@ Early versions are pre-releases. Expect rough edges and keep backups of your rec
 
 - **Multitrack editing:** move, razor, slip and time-selection tools; trim, split, merge, loop and copy clips; fades and crossfades; clip volume and pan envelopes; markers; ripple delete.
 - **Waveform editor:** open any file on its own to cut, silence, amplify and fade it, try an Audio FX chain on it as a live preview and apply it to the selection or the whole file (undoable), then save it in place as WAV, FLAC or MP3, or as a new file.
-- **Opens what call recorders export:** WAV (including 8-bit and ADPCM), FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Ogg FLAC and Opus. Insert Files as Tracks puts each speaker's file on its own track, straight from the downloaded zip.
+- **Opens what call recorders export:** WAV (including 8-bit and ADPCM), FLAC, MP3, AAC/M4A (stereo, 5.1 and 7.1), ALAC, Ogg Vorbis, Ogg FLAC and Opus. On Windows, M4A and MP4 files in HE-AAC, Dolby Digital or Dolby Digital Plus (as Dolby Atmos music comes) open through the decoders built into Windows. Insert Files as Tracks puts each speaker's file on its own track, straight from the downloaded zip.
 - **Spectrum and pitch views:** see frequencies over time, select an unwanted sound (a whistle, a buzz, a chair squeak) with a box, lasso or brush and reduce, remove or repair just that, leaving the voice under it alone. Spot Repair fills a painted click or cough from the audio around it.
 - **Audio drivers:** the system driver everywhere, and ASIO on Windows (release builds), with every input channel of an interface pickable per track.
 - **Recording:** arm tracks, pick each one's input, and record them to their own files while the session plays. Punch in over a time selection with pre-roll, and set a latency offset so takes line up. On Windows, a "System audio" input records what the computer plays, such as a call, next to your mics.
@@ -124,7 +124,7 @@ Audiform is free. If it helps you, please support the people it is built on: [pa
 
 Bug fixes and features are welcome through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**For Altered Audio Editor:** everything in Audiform is also offered to The GeekCast Radio Network, LLC under the terms of its [Contributor License Agreement](CLA.md), so any change here can be merged into Altered Audio Editor. Audiform stays a GitHub fork of it to make that easy. Report security problems privately as described in [SECURITY.md](SECURITY.md).
+Contributions are released under GPL v3.0 or later, the same license as the rest of Audiform, and contributors agree to the [contributor license agreement](CLA.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
 
 Thanks to Steve Phillips and The GeekCast Radio Network for Altered Audio Editor, and to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 

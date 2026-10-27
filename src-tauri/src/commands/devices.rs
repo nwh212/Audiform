@@ -21,6 +21,27 @@ pub struct AudioInput {
     pub is_default: bool,
 }
 
+/// An ASIO driver opens for one program at a time, so right after the
+/// app starts (an update restarts it while the old copy is still letting
+/// go), or after a plug-in that crashed, a lookup can come back empty even
+/// though the drivers are installed. In that one case ask again a few
+/// times before giving up. The system driver is never retried.
+fn retry_if_empty<T>(asio: Option<bool>, mut look: impl FnMut() -> Vec<T>) -> Vec<T> {
+    let mut found = look();
+    let want = asio.unwrap_or_else(crate::engine::host::asio) && crate::engine::host::ASIO_BUILT;
+    if !found.is_empty() || !want || crate::engine::host::asio_drivers().is_empty() {
+        return found;
+    }
+    for _ in 0..4 {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        found = look();
+        if !found.is_empty() {
+            break;
+        }
+    }
+    found
+}
+
 fn list(asio: Option<bool>) -> Vec<AudioInput> {
     let host = crate::engine::host::host_for(asio.unwrap_or_else(crate::engine::host::asio));
     let default = host
@@ -98,7 +119,7 @@ fn outputs(asio: Option<bool>) -> Vec<AudioOutput> {
 /// The speakers and headphones available now, the system default first.
 #[tauri::command]
 pub async fn audio_outputs(asio: Option<bool>) -> Result<Vec<AudioOutput>, String> {
-    spawn_blocking(move || outputs(asio))
+    spawn_blocking(move || retry_if_empty(asio, || outputs(asio)))
         .await
         .map_err(|e| e.to_string())
 }
@@ -158,7 +179,7 @@ pub fn set_audio_driver(asio: bool) {
 /// The audio inputs available now. Empty when there are none.
 #[tauri::command]
 pub async fn audio_inputs(asio: Option<bool>) -> Result<Vec<AudioInput>, String> {
-    spawn_blocking(move || list(asio))
+    spawn_blocking(move || retry_if_empty(asio, || list(asio)))
         .await
         .map_err(|e| e.to_string())
 }
@@ -190,4 +211,31 @@ pub fn open_sound_settings() -> Result<(), String> {
         }
     }
     Err("Could not open the system's sound settings.".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_system_driver_is_looked_up_once() {
+        let mut calls = 0;
+        let found: Vec<u8> = retry_if_empty(Some(false), || {
+            calls += 1;
+            Vec::new()
+        });
+        assert!(found.is_empty());
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn a_list_that_has_items_is_not_asked_for_again() {
+        let mut calls = 0;
+        let found = retry_if_empty(Some(true), || {
+            calls += 1;
+            vec![1u8]
+        });
+        assert_eq!(found, vec![1]);
+        assert_eq!(calls, 1);
+    }
 }

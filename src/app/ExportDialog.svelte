@@ -20,6 +20,8 @@
     addToFiles: boolean;
     /** Write chapter markers into the file (MP3 and FLAC). */
     chapters: boolean;
+    /** A loudness target to bring the file to (an id from Check Loudness); "" leaves it as mixed. */
+    normalize: string;
     /** 3D Space sessions: a speaker layout ("5.1", "7.1.4"...) or "binaural". */
     speakers?: string;
   }
@@ -38,6 +40,7 @@
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat, estimateBytes, extensionOf } from "./output-format";
   import { SPACE_LAYOUTS, type SpaceLayout } from "../stores/session";
+  import { targetsFor } from "./loudness";
   import { LAYOUT_NAMES } from "../panels/space/space";
 
   interface Props {
@@ -69,6 +72,7 @@
   $effect(() => {
     if (multi && s.format.kind !== "wav") s.format = { ...s.format, kind: "wav" };
   });
+  const targets = targetsFor();
   const ext = $derived(extensionOf(s.format.kind));
   const summary = $derived(describeFormat(s.format, source));
   const size = $derived.by(() => {
@@ -155,6 +159,13 @@
       <p class="summary">
         <strong>{summary}</strong>{#if size}<span>&nbsp;· about {size}</span>{/if}
       </p>
+      <label class="line" title="Measures the mix first, then raises or lowers the whole file by one fixed amount to reach the target. Peaks stay under the target's limit, so a mix with high peaks can end up a little quieter than the target. The session itself is not changed. Mono targets are measured when the session mixes to mono.">
+        <span>Loudness</span>
+        <select bind:value={s.normalize} disabled={multi}>
+          <option value="">Leave as mixed</option>
+          {#each targets as t (t.id)}<option value={t.id}>Bring to {t.name}</option>{/each}
+        </select>
+      </label>
     </section>
 
     <section class="options">

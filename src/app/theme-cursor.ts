@@ -37,18 +37,53 @@ interface PointerSet {
   nesw: string;
   grab: string;
   grabbing: string;
-  /** Hot spot, x and y in pixels. */
-  hot: number;
+  /** Hot spot in pixels: one value for x and y on every picture, or x and y per picture. */
+  hot: number | Record<Kind, [number, number]>;
 }
 
-const GLASS: PointerSet = { text: glassText, ew: glassEw, ns: glassNs, nwse: glassNwse, nesw: glassNesw, grab: glassGrab, grabbing: glassGrabbing, hot: 10 };
-const PHOSPHOR: PointerSet = { text: pxText, ew: pxEw, ns: pxNs, nwse: pxNwse, nesw: pxNesw, grab: pxGrab, grabbing: pxGrabbing, hot: 16 };
+type Kind = "text" | "ew" | "ns" | "nwse" | "nesw" | "grab" | "grabbing";
+
+const GLASS: PointerSet = {
+  text: glassText,
+  ew: glassEw,
+  ns: glassNs,
+  nwse: glassNwse,
+  nesw: glassNesw,
+  grab: glassGrab,
+  grabbing: glassGrabbing,
+  hot: 10,
+};
+const PHOSPHOR: PointerSet = {
+  text: pxText,
+  ew: pxEw,
+  ns: pxNs,
+  nwse: pxNwse,
+  nesw: pxNesw,
+  grab: pxGrab,
+  grabbing: pxGrabbing,
+  // Pixel art at 2 screen pixels per cell, so each picture has its own middle.
+  hot: {
+    text: [7, 10],
+    ew: [11, 5],
+    ns: [5, 11],
+    nwse: [9, 9],
+    nesw: [9, 9],
+    grab: [10, 9],
+    grabbing: [10, 7],
+  },
+};
 
 /** Themes with their own pointers. */
-const SETS: Record<string, PointerSet> = { meadow: GLASS, aqua: GLASS, moonlight: GLASS, prism: GLASS, phosphor: PHOSPHOR };
+const SETS: Record<string, PointerSet> = {
+  meadow: GLASS,
+  aqua: GLASS,
+  moonlight: GLASS,
+  prism: GLASS,
+  phosphor: PHOSPHOR,
+};
 
 /** Which picture stands in for each standard pointer. */
-const KIND: Record<string, keyof Omit<PointerSet, "hot">> = {
+const KIND: Record<string, Kind> = {
   text: "text",
   "vertical-text": "text",
   "ew-resize": "ew",
@@ -80,7 +115,10 @@ export function themedFor(cursor: string, theme: string): string | null {
   const set = SETS[theme];
   const kw = keywordOf(cursor);
   const kind = KIND[kw];
-  return set && kind ? `url("${set[kind]}") ${set.hot} ${set.hot}, ${kw}` : null;
+  if (!set || !kind) return null;
+  const [x, y] =
+    typeof set.hot === "number" ? [set.hot, set.hot] : set.hot[kind];
+  return `url("${set[kind]}") ${x} ${y}, ${kw}`;
 }
 
 /** Starts watching. Returns a function that stops and puts everything back. */
@@ -88,7 +126,10 @@ export function watchThemeCursor(): () => void {
   let pending: Element | null = null;
   let frame = 0;
   /** What each element had inline before a swap (code may set pointers inline). */
-  const original = new WeakMap<HTMLElement, { value: string; priority: string }>();
+  const original = new WeakMap<
+    HTMLElement,
+    { value: string; priority: string }
+  >();
   /** The swap last put on each element, to tell it from a change made since by code. */
   const ours = new WeakMap<HTMLElement, string>();
   const touched = new Set<HTMLElement>();
@@ -117,7 +158,11 @@ export function watchThemeCursor(): () => void {
     // What the element asks for, without our own swap in the way. If code
     // changed its pointer since the swap, that change is the new original.
     const inline = el.style.getPropertyValue("cursor");
-    if (ours.get(el) !== inline) original.set(el, { value: inline, priority: el.style.getPropertyPriority("cursor") });
+    if (ours.get(el) !== inline)
+      original.set(el, {
+        value: inline,
+        priority: el.style.getPropertyPriority("cursor"),
+      });
     else putBack(el);
     const swap = themedFor(getComputedStyle(el).cursor, theme);
     if (swap) {

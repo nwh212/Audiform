@@ -189,6 +189,5 @@ jobs:
           if [ -f NO-ASIO.txt ]; then echo "::warning::The ASIO build failed; the Windows installer has no ASIO."; rm NO-ASIO.txt; fi
           sha256sum * > SHA256SUMS.txt
           ls -la
-          pre=""
-          case "$tag" in v0.*) pre="--prerelease" ;; esac
-          gh release create "$tag" --draft $pre --title "Audiform $tag" --generate-notes ./*
+          # Every release, 0.x included, is a full release that becomes Latest when published.
+          gh release create "$tag" --draft --title "Audiform $tag" --generate-notes ./*

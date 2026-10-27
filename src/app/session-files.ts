@@ -87,7 +87,7 @@ export { isBlank } from "../stores/session";
 export function displayName(path: string | null, doc: SessionDoc | null): string {
   if (path) {
     const base = path.split(/[\\/]/).pop() ?? path;
-    return base.replace(/\.altaudio$/i, "");
+    return base.replace(/\.(audfrm|altaudio)$/i, "");
   }
   return doc?.name ?? "Untitled Session";
 }
@@ -370,12 +370,12 @@ export class SessionFiles {
   }
 }
 
-const AUDIO_EXTENSIONS = new Set(["wav", "wave", "aif", "aiff", "aifc", "mp3", "flac", "m4a", "mp4", "aac", "ogg", "oga", "opus"]);
+const AUDIO_EXTENSIONS = new Set(["wav", "wave", "aif", "aiff", "aifc", "mp3", "flac", "m4a", "mp4", "aac", "ogg", "oga", "opus", "mogg"]);
 
 export interface OpenPlan {
-  /** Session to open (.altaudio). Only the first one picked is opened. */
+  /** Session to open (.audfrm, or an older .altaudio). Only the first one picked is opened. */
   session: string | null;
-  /** .sesx session to import, when no .altaudio was picked. */
+  /** .sesx session to import, when no Audiform session was picked. */
   sesx: string | null;
   audio: string[];
   /** Picked files that are not opened: extra sessions and unknown types. */
@@ -388,7 +388,7 @@ export function planOpen(paths: readonly string[]): OpenPlan {
   const ext = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
   for (const p of paths) {
     const e = ext(p);
-    if (e === "altaudio" && !plan.session) plan.session = p;
+    if ((e === "audfrm" || e === "altaudio") && !plan.session) plan.session = p;
     else if (e === "sesx" && !plan.sesx) plan.sesx = p;
     else if (AUDIO_EXTENSIONS.has(e)) plan.audio.push(p);
     else plan.skipped.push(p);

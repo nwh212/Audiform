@@ -11,13 +11,22 @@
 //! enveloping sound instead of one phantom point between them.
 //!
 //! Spread sends part of a source through one, to every speaker of the
-//! layers in use. Spatialize takes what differs between a stereo source's
-//! sides (left minus right) through another, to the surround and height
-//! speakers (left ones in phase, right ones inverted), and feeds what the
-//! sides share to the center. Our own method, built from textbook parts.
+//! layers in use. Spatialize opens a stereo source out into the room in
+//! one of four ways (`SpatializeMode`), each feeding what the sides share
+//! to the center:
+//! - Side Spread: what differs between the sides (left minus right),
+//!   decorrelated, to the surround and height speakers, left ones in
+//!   phase and right ones inverted.
+//! - Matrix: the same difference on a short plain delay, as a passive
+//!   surround decoder does.
+//! - Ambience: decorrelated copies of the left side to the left speakers
+//!   and of the right side to the right ones, all in phase.
+//! - Height Lift: Side Spread to the height speakers only.
+//!
+//! Our own methods, built from textbook parts.
 
 use crate::dsp::space::speakers;
-use crate::session::model::SpaceLayout;
+use crate::session::model::{SpaceLayout, SpatializeMode};
 
 /// Copies a decorrelator makes.
 pub const TAPS: usize = 4;
@@ -108,6 +117,55 @@ impl Decorrelator {
     }
 }
 
+/// A plain delay of one signal.
+pub struct Delay {
+    buf: Vec<f32>,
+    at: usize,
+}
+
+impl Delay {
+    pub fn new(len: usize) -> Self {
+        Self {
+            buf: vec![0.0; len.max(1)],
+            at: 0,
+        }
+    }
+
+    pub fn run(&mut self, x: f32) -> f32 {
+        let d = self.buf[self.at];
+        self.buf[self.at] = x;
+        self.at = (self.at + 1) % self.buf.len();
+        d
+    }
+}
+
+/// Everything one track or bus needs for Spread and Spatialize, made up
+/// front so playing never allocates.
+pub struct Diffuser {
+    /// Spread's copies of the shared sound.
+    pub spread: Decorrelator,
+    /// Side Spread and Height Lift: copies of the difference.
+    pub side: Decorrelator,
+    /// Ambience: copies of each side.
+    pub left: Decorrelator,
+    pub right: Decorrelator,
+    /// Matrix: the difference, 12 ms late.
+    pub delay: Delay,
+}
+
+impl Diffuser {
+    /// `k` varies the delays from one track to the next.
+    pub fn new(rate: u32, k: usize) -> Self {
+        Self {
+            spread: Decorrelator::new(rate, k % 2),
+            side: Decorrelator::new(rate, 1 - k % 2),
+            left: Decorrelator::new(rate, 2 + k % 2),
+            right: Decorrelator::new(rate, 3 - k % 2),
+            delay: Delay::new((rate as usize * 12) / 1000),
+        }
+    }
+}
+
 /// What Spread and Spatialize send to each speaker, worked out from a spot.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
@@ -122,6 +180,8 @@ pub struct Field {
     pub fold: Vec<[f32; 2]>,
     /// What the direct (placed) sound keeps, so the total stays as loud.
     pub direct: f32,
+    /// How Spatialize opens the sound out.
+    pub mode: SpatializeMode,
     /// Something to add: Spread, Spatialize, or both.
     pub on: bool,
     pub spreads: bool,
@@ -129,8 +189,16 @@ pub struct Field {
 }
 
 /// The field for a source at height `z` with `spread` and `spatialize`
-/// (0 to 1 each). Spatialize applies only to stereo sources.
-pub fn field(layout: SpaceLayout, z: f32, spread: f32, spatialize: f32, stereo: bool) -> Field {
+/// (0 to 1 each), Spatialize done the `mode` way. Spatialize applies only
+/// to stereo sources.
+pub fn field(
+    layout: SpaceLayout,
+    z: f32,
+    spread: f32,
+    spatialize: f32,
+    mode: SpatializeMode,
+    stereo: bool,
+) -> Field {
     let sp = speakers(layout);
     let n = sp.len();
     let spread = spread.clamp(0.0, 1.0);
@@ -156,6 +224,7 @@ pub fn field(layout: SpaceLayout, z: f32, spread: f32, spatialize: f32, stereo: 
         center: None,
         fold,
         direct: 1.0,
+        mode,
         on: spread > 0.0 || spat > 0.0,
         spreads: spread > 0.0,
         sides: spat > 0.0,
@@ -179,12 +248,18 @@ pub fn field(layout: SpaceLayout, z: f32, spread: f32, spatialize: f32, stereo: 
         f.direct *= (1.0 - spread).sqrt();
     }
     if spat > 0.0 {
-        // The side sound to every speaker not in the front row, left ones in
-        // phase and right ones inverted; the center ones stay out of it.
+        // The side sound to every speaker not in the front row (Height Lift:
+        // the height speakers only, when there are any), left ones in phase
+        // and right ones inverted (Ambience: in phase, as each side feeds
+        // its own); the center ones stay out of it.
+        let heights_only = mode == SpatializeMode::HeightLift && has_top;
         let w: Vec<f32> = sp
             .iter()
             .map(|s| match s.at {
-                Some(a) if a[1] < 0.5 || a[2] > 0.5 => {
+                Some(a)
+                    if (heights_only && a[2] > 0.5)
+                        || (!heights_only && (a[1] < 0.5 || a[2] > 0.5)) =>
+                {
                     if a[0] < -0.1 {
                         1.0
                     } else if a[0] > 0.1 {
@@ -246,20 +321,90 @@ mod tests {
     }
 
     #[test]
+    fn each_spatialize_method_feeds_its_own_speakers() {
+        use SpatializeMode as M;
+        let l = SpaceLayout::Surround714;
+        let sp = speakers(l);
+        let height = |i: usize| sp[i].at.is_some_and(|a| a[2] > 0.5);
+        // Height Lift: only the height speakers get the side sound.
+        let f = field(l, 0.0, 0.0, 1.0, M::HeightLift, true);
+        assert!(f
+            .side
+            .iter()
+            .enumerate()
+            .all(|(i, v)| *v == 0.0 || height(i)));
+        assert!(f
+            .side
+            .iter()
+            .enumerate()
+            .any(|(i, v)| *v != 0.0 && height(i)));
+        // Side Spread reaches the surrounds as well.
+        let f = field(l, 0.0, 0.0, 1.0, M::SideSpread, true);
+        assert!(f
+            .side
+            .iter()
+            .enumerate()
+            .any(|(i, v)| *v != 0.0 && !height(i)));
+        // Without heights, Height Lift falls back to the surrounds.
+        let f = field(SpaceLayout::Surround51, 0.0, 0.0, 1.0, M::HeightLift, true);
+        assert!(f.side[4] > 0.0 && f.side[5] < 0.0);
+        // Every method keeps the center feed and tells the engine which it is.
+        for m in [M::SideSpread, M::Matrix, M::Ambience, M::HeightLift] {
+            let f = field(l, 0.0, 0.0, 1.0, m, true);
+            assert_eq!(f.mode, m);
+            assert!(f.center.is_some());
+        }
+    }
+
+    #[test]
+    fn the_matrix_delay_is_a_plain_delay() {
+        let mut d = Delay::new(3);
+        let out: Vec<f32> = [1.0, 2.0, 3.0, 4.0, 5.0]
+            .iter()
+            .map(|v| d.run(*v))
+            .collect();
+        assert_eq!(out, vec![0.0, 0.0, 0.0, 1.0, 2.0]);
+    }
+
+    #[test]
     fn fields_keep_power_and_spread_where_they_should() {
-        let f = field(SpaceLayout::Surround714, 0.0, 1.0, 0.0, false);
+        let f = field(
+            SpaceLayout::Surround714,
+            0.0,
+            1.0,
+            0.0,
+            SpatializeMode::SideSpread,
+            false,
+        );
         let p: f32 = f.spread.iter().map(|v| v * v).sum();
         assert!((p - 1.0).abs() < 1e-4, "{p}");
         assert_eq!(f.direct, 0.0);
         // At ear level the height speakers stay out of it; the LFE always does.
         assert_eq!(f.spread[8], 0.0);
         assert_eq!(f.spread[3], 0.0);
-        let f = field(SpaceLayout::Surround51, 0.0, 0.0, 1.0, true);
+        let f = field(
+            SpaceLayout::Surround51,
+            0.0,
+            0.0,
+            1.0,
+            SpatializeMode::SideSpread,
+            true,
+        );
         // Rear left in phase, rear right inverted, front pair out of it, center fed.
         assert!(f.side[4] > 0.0 && f.side[5] < 0.0);
         assert_eq!(f.side[0], 0.0);
         assert_eq!(f.center.map(|c| c.0), Some(2));
         // Mono sources have no sides to spatialize.
-        assert!(!field(SpaceLayout::Surround51, 0.0, 0.0, 1.0, false).on);
+        assert!(
+            !field(
+                SpaceLayout::Surround51,
+                0.0,
+                0.0,
+                1.0,
+                SpatializeMode::SideSpread,
+                false
+            )
+            .on
+        );
     }
 }

@@ -29,7 +29,8 @@
   import { timeDisplayItems } from "./time-menu";
   import { levelAt, pointsOf } from "./envelope";
   import { fit, formatIn, peakRange, pickLevel, rulerTicks, ticksFor, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
-  import { mediaFrames } from "../../app/core";
+  import { mediaFrames, transportAuditionLevel } from "../../app/core";
+  import { dragGain, gainText } from "./clip-gain";
   import TransportBar from "./TransportBar.svelte";
   import SpectrumView from "./SpectrumView.svelte";
 
@@ -41,7 +42,7 @@
     actions: ActionRegistry;
     shortcutFor?: (id: string) => string | undefined;
     /** Applies a level change in dB to the selection, or the whole file. */
-    onLevel: (db: number) => void;
+    onLevel: (db: number) => void | Promise<void>;
   }
 
   const { wave, file, transport, peaks, actions, shortcutFor = () => undefined, onLevel }: Props = $props();
@@ -133,7 +134,8 @@
       if (v.playhead !== undefined) followHeld = false;
       else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) followHeld = true;
     }
-    const maxScroll = Math.max(0, total - width * (v.spp ?? view.spp) * 0.5);
+    // The view never runs past the end of the file.
+    const maxScroll = Math.max(0, total - width * (v.spp ?? view.spp));
     wave.setView({
       ...doc.view,
       samples_per_pixel: v.spp ?? doc.view.samples_per_pixel,
@@ -155,7 +157,7 @@
     const untouched = fittedFor === key && doc.view.samples_per_pixel === fittedSpp && doc.view.scroll === 0;
     if (fittedFor === key && !(untouched && width !== fittedWidth)) return;
     fittedFor = key;
-    const f = fit(total, width);
+    const f = fit(total, width, 1);
     fittedSpp = f.spp;
     fittedWidth = width;
     setView({ spp: f.spp, scroll: 0 });
@@ -177,7 +179,7 @@
   });
 
   /** Farthest zoom out: the whole file fills the view, with no empty time after it. */
-  const outermost = () => fit(total, width).spp;
+  const outermost = () => fit(total, width, 1).spp;
 
   /** The view's zoom commands, used by the Zoom actions while this editor shows. */
   export function zoom(kind: "in" | "out" | "full" | "selection" | "amp-in" | "amp-out"): void {
@@ -185,7 +187,7 @@
     if (kind === "amp-in") ampZoom = Math.min(16, ampZoom * 2);
     else if (kind === "amp-out") ampZoom = Math.max(1, ampZoom / 2);
     else if (kind === "full") {
-      const f = fit(total, width);
+      const f = fit(total, width, 1);
       setView({ spp: f.spp, scroll: 0 });
     } else if (kind === "selection" && selection) {
       const f = fit(selection.end - selection.start, width);
@@ -348,7 +350,7 @@
           const hc = Math.min(ch, have.channels - 1);
           const at = (f: number) => {
             const rel = ((f - clip.source_in) * rate) / srcRate;
-            const v = (have.data[(f - have.start) * have.channels + hc] ?? 0) * pieceGain(clip, rel, len) * ampZoom;
+            const v = (have.data[(f - have.start) * have.channels + hc] ?? 0) * pieceGain(clip, rel, len) * ampZoom * hud(clip.start + rel);
             return [xOf(clip.start + rel, view), mid - Math.max(-1, Math.min(1, v)) * half] as const;
           };
           g.beginPath();
@@ -382,7 +384,7 @@
         if (clip.looped && region > 0) into = (((into + clip.looped.phase) % region) + region) % region;
         const s0 = clip.source_in + into;
         const s1 = Math.min(clip.source_out, s0 + framesPerPx);
-        const k = pieceGain(clip, rel, len) * ampZoom;
+        const k = pieceGain(clip, rel, len) * ampZoom * hud(clip.start + rel);
         for (let ch = 0; ch < channels; ch++) {
           const top = ch * laneH;
           const mid = top + laneH / 2;
@@ -683,27 +685,47 @@
     window.addEventListener("pointerup", up, true);
   }
 
-  // Quick level: drag left or right, release to apply.
+  // Quick level: drag left or right, release to apply. While dragging, the
+  // waveform shows the new level and playback plays it at once.
   let level = $state(0);
   let levelDrag = $state(false);
+  let levelTip = $state<{ x: number; y: number; text: string } | null>(null);
+  /** The quick level's gain at file sample `t` while it is being dragged (1 elsewhere). */
+  function hud(t: number): number {
+    if (!levelDrag || level === 0) return 1;
+    if (selection && (t < selection.start || t >= selection.end)) return 1;
+    return Math.pow(10, level / 20);
+  }
+  let auditionFrame = 0;
+  function audition(db: number) {
+    cancelAnimationFrame(auditionFrame);
+    auditionFrame = requestAnimationFrame(() => {
+      const sel = doc?.view.selection;
+      void transportAuditionLevel(db, sel ? sel.start : 0, sel ? sel.end : 0).catch(() => {});
+    });
+  }
   function onLevelPointer(e: PointerEvent) {
     e.preventDefault();
     const x0 = e.clientX;
     const y0 = e.clientY;
     levelDrag = true;
+    // The same feel as a clip's level handle in the Multitrack: right or
+    // up turns it up, Shift for fine steps, the level beside the pointer.
     const move = (ev: PointerEvent) => {
-      const step = ev.shiftKey ? 0.02 : 0.1;
-      // Right or up turns it up; left or down turns it down.
-      const d = ev.clientX - x0 - (ev.clientY - y0);
-      level = Math.round(Math.max(-30, Math.min(20, d * step)) * 10) / 10;
+      level = dragGain(0, ev.clientX - x0, ev.clientY - y0, ev.shiftKey);
+      levelTip = { x: ev.clientX, y: ev.clientY, text: level === 0 ? "0.0 dB" : gainText(level) };
+      audition(level);
     };
     const up = () => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       levelDrag = false;
+      levelTip = null;
       const db = level;
       level = 0;
-      if (db !== 0) onLevel(db);
+      cancelAnimationFrame(auditionFrame);
+      // The edit takes over from the audition once it is made.
+      void Promise.resolve(db !== 0 ? onLevel(db) : undefined).finally(() => void transportAuditionLevel(0, 0, 0).catch(() => {}));
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
@@ -762,8 +784,6 @@
         title={tip("Show Spectrum: frequencies over time under the waveform, for selecting and removing sounds", "view.spectrum")}
         onclick={() => run("view.spectrum")}>Spectrum</button
       >
-      <button type="button" class="tool text" title={tip("Save", "file.save")} onclick={() => run("file.save")}>Save</button>
-      <button type="button" class="tool text" title={tip("Close File", "file.close")} onclick={() => run("file.close")}>Close</button>
     {:else}
       <span class="info">Waveform editor</span>
     {/if}
@@ -788,10 +808,13 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="hud" class:active={levelDrag} onpointerdown={onLevelPointer} title="Drag right or up to turn the selection (or the whole file) up, left or down to turn it down. Release to apply. Shift for fine steps.">
         <span class="knob">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M8 8l{3.5 * Math.sin((level / 30) * 2.4)} {-3.5 * Math.cos((level / 30) * 2.4)}" stroke="currentColor" stroke-width="1.6" /></svg>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M8 8l{3.5 * Math.sin(Math.max(-1, Math.min(1, level / 24)) * 2.4)} {-3.5 * Math.cos(Math.max(-1, Math.min(1, level / 24)) * 2.4)}" stroke="currentColor" stroke-width="1.6" /></svg>
         </span>
         <span class="val">{level > 0 ? "+" : ""}{level.toFixed(1)} dB</span>
       </div>
+      {#if levelTip}
+        <div class="level-tip" style:left="{levelTip.x}px" style:top="{levelTip.y}px">{levelTip.text}</div>
+      {/if}
       {#if channels > 1}
         {#each chNames as label, ch (ch)}
           {@const name = channels === 2 ? (ch === 0 ? "left" : "right") : label}
@@ -1010,6 +1033,20 @@
     user-select: none;
   }
 
+  /* The level beside the pointer while dragging, as on a clip's level handle. */
+  .level-tip {
+    position: fixed;
+    z-index: 4000;
+    padding: 2px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: var(--surface-3);
+    color: var(--value);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
   .hud.active {
     border-color: var(--accent);
     color: var(--text);

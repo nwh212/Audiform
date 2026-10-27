@@ -59,7 +59,7 @@
     "multitrack.add.bus": ["Alt+B"],
     "multitrack.add-tracks": ["Shift+A"],
     "multitrack.delete-empty": ["Shift+E"],
-    "multitrack.delete-track": ["Ctrl+Alt+Backspace"],
+    "multitrack.delete-track": ["Shift+Delete"],
     "clip.group": ["Ctrl+G"],
     "clip.group-suspend": ["Ctrl+Shift+G"],
     "edit.ripple.clips": ["Shift+Backspace"],

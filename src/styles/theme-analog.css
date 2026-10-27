@@ -1,0 +1,354 @@
+/*
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Analog theme (Settings > Appearance > Theme, data-theme="analog"):
+  the app as a rack of studio equipment. Each panel is a charcoal
+  faceplate with a screw in every corner, set in walnut cheeks. The menu
+  bar and status bar are brushed aluminum rails with engraved lettering.
+  Keys are chunky console buttons that light amber when on, the clock is
+  a glowing orange readout, and meters light up as LED ladders. Clips
+  wear the colors of old tape boxes.
+*/
+
+:root[data-theme="analog"] {
+  color-scheme: dark;
+
+  /* Faceplates: charcoal anodized metal. */
+  --surface-0: #0c0c0d;
+  --surface-1: #121213;
+  --surface-2: #171718;
+  --menu-bg: #1b1b1c;
+  --surface-3: #212123;
+  --border: #29292b;
+  --border-strong: #3d3d40;
+
+  /* Silk-screened lettering: warm off-white, then greys. */
+  --text: #ece4d2;
+  --text-dim: #b3aa96;
+  --text-faint: #7d7668;
+
+  /* Lamp amber for what is on; a red tape-head line for the playhead. */
+  --accent: #ffb547;
+  --accent-dim: #9a6420;
+  --playhead: #ff5a36;
+  --value: #ffc977;
+  --gutter: #3a2416;
+  --danger: #ff4b3a;
+  --selected-text: #1a1206;
+
+  --lane-a: #121213;
+  --lane-b: #161617;
+  --lane-selected: #2a2620;
+  --track-gap: #070708;
+  --header-a: #19191a;
+  --header-b: #1e1e20;
+
+  /* Tape-box colors: cream, oxblood, mustard, olive, teal, rust, slate. */
+  --clip-1: #d9c79a;
+  --clip-2: #a33a32;
+  --clip-3: #d1a03a;
+  --clip-4: #7f8a3f;
+  --clip-5: #3f8a86;
+  --clip-6: #c2632f;
+  --clip-7: #5f7891;
+  --clip-body-alpha: 0.22;
+  --clip-wave-tone: 0.55;
+  --clip-gloss: 0;
+
+  --font-ui: "Bahnschrift", "DIN Alternate", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  /* Theme parts. */
+  --a-alu-1: #d7d6d0;
+  --a-alu-2: #b9b8b1;
+  --a-alu-3: #9b9a93;
+  --a-engrave: #2b2a26;
+  --a-walnut-1: #4a2c1a;
+  --a-walnut-2: #5e3a22;
+  --a-walnut-3: #3a2214;
+  --a-screw: radial-gradient(circle at 40% 35%, #e8e6df 0 1.2px, #9d9b93 2px, #55534c 3.2px, transparent 3.8px);
+  --a-lamp: 0 0 6px rgba(255, 181, 71, 0.75), 0 0 1px rgba(255, 220, 160, 0.9);
+
+  --spectrum-low: #1d0f08;
+  --spectrum-high: #ffe3a8;
+  --phase-low: #d18a2c;
+  --phase-high: #fff0c8;
+}
+
+/* Walnut behind everything: the cheeks of the rack show in the gaps between panels. */
+:root[data-theme="analog"] {
+  --a-walnut:
+    /* A satin oil finish: soft light across the boards. */
+    linear-gradient(180deg, rgba(255, 220, 180, 0.08), rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.16)) fixed,
+    url("../assets/themes/walnut.svg") 0 0 / 900px 420px fixed,
+    #4a2a18;
+}
+/* Walnut behind everything, fixed to the window so the grain runs on
+   unbroken through every gap between faceplates. */
+:root[data-theme="analog"] body,
+:root[data-theme="analog"] .dockview-theme-altaudio {
+  background: var(--a-walnut);
+}
+:root[data-theme="analog"] .dockview-theme-altaudio :is(.dv-split-view-container, .dv-view-container, .dv-view, .dv-sash-container, .dv-grid-view, .dv-dockview, .dv-branch-node) {
+  background: transparent;
+}
+
+/* Brushed aluminum rails: menu bar, tool strip, status bar. */
+:root[data-theme="analog"] :is(header.top, .menubar, .strip, footer.status) {
+  background:
+    /* Sheen: brushed metal throws soft bands of light across the grain. */
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.22) 18%, rgba(255, 255, 255, 0) 34%, rgba(0, 0, 0, 0.06) 52%, rgba(255, 255, 255, 0.16) 71%, rgba(255, 255, 255, 0) 88%),
+    linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 40%, rgba(0, 0, 0, 0.12)),
+    url("../assets/themes/brushed.svg") 0 0 / 1200px 120px,
+    var(--a-alu-2);
+  color: var(--a-engrave);
+  border-color: #6f6e68;
+}
+:root[data-theme="analog"] :is(.menubar .top, footer.status *) {
+  color: var(--a-engrave);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+:root[data-theme="analog"] .menubar .top {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+:root[data-theme="analog"] :is(.menubar .top:hover, .menubar .top.open) {
+  background: var(--a-engrave);
+  color: var(--accent);
+  text-shadow: none;
+}
+
+/* Tabs: engraved labels on the faceplate's top edge. */
+:root[data-theme="analog"] .dockview-theme-altaudio {
+  --dv-tabs-and-actions-container-background-color: #1a1a18;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-2);
+  --dv-inactivegroup-visiblepanel-tab-background-color: #1f1f1c;
+  --dv-activegroup-hiddenpanel-tab-background-color: #1a1a18;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #1a1a18;
+  --dv-activegroup-visiblepanel-tab-color: var(--accent);
+  --dv-activegroup-hiddenpanel-tab-color: var(--text-faint);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-faint);
+  --dv-tab-divider-color: #0d0d0c;
+  --dv-active-sash-color: var(--accent-dim);
+  --dv-drag-over-background-color: rgba(255, 181, 71, 0.12);
+}
+:root[data-theme="analog"] .dockview-theme-altaudio .dv-tab {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+
+/* Each panel is a faceplate: a metal edge, a screw in every corner. */
+:root[data-theme="analog"] .dockview-theme-altaudio .dv-groupview {
+  position: relative;
+  /* The walnut behind shows through a clear border: cheeks around every faceplate. */
+  border: 7px solid transparent;
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px #000,
+    inset 0 0 0 4px #141415,
+    0 2px 8px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+:root[data-theme="analog"] .dockview-theme-altaudio .dv-groupview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background:
+    var(--a-screw) left 3px top 3px / 9px 9px no-repeat,
+    var(--a-screw) right 3px top 3px / 9px 9px no-repeat,
+    var(--a-screw) left 3px bottom 3px / 9px 9px no-repeat,
+    var(--a-screw) right 3px bottom 3px / 9px 9px no-repeat;
+}
+
+/* Tab rows stay clear of the screws. */
+:root[data-theme="analog"] .dockview-theme-altaudio .dv-tabs-and-actions-container {
+  padding: 0 13px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 2px),
+    #1a1a18;
+}
+
+/* Console keys: raised dark caps that light amber when on. */
+:root[data-theme="analog"] :is(.strip, .bar:has(> .transport)) :is(button, .tool) {
+  background: linear-gradient(#3c3b37, #2a2926 60%, #1f1e1b);
+  color: var(--text);
+  border: 1px solid #0c0c0b;
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="analog"] :is(.strip, .bar:has(> .transport)) :is(button, .tool):active:not(:disabled) {
+  border-bottom-width: 1px;
+  transform: translateY(2px);
+}
+:root[data-theme="analog"] :is(.strip, .bar:has(> .transport)) :is(.tool.on, button.on, .view.on) {
+  background: linear-gradient(#ffcf7a, #ffb547 55%, #d98a1e);
+  color: #2a1a04;
+  box-shadow: var(--a-lamp), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+:root[data-theme="analog"] .bar:has(> .transport) .transport .tool.rec.on {
+  background: linear-gradient(#ff8a70, #ff4b3a 55%, #b8261a);
+  color: #2a0704;
+  box-shadow: 0 0 8px rgba(255, 75, 58, 0.8);
+}
+
+/* The clock: an orange glowing readout behind smoked glass. */
+:root[data-theme="analog"] .bar .clock {
+  background: linear-gradient(#120804, #1d0d05);
+  color: #ff9c3a;
+  border: 2px solid #0a0a09;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-shadow: 0 0 6px rgba(255, 140, 40, 0.9), 0 0 14px rgba(255, 110, 20, 0.45);
+  letter-spacing: 0.06em;
+}
+
+/* Text fields and lists: recessed black wells. */
+:root[data-theme="analog"] :is(input[type="text"], input[type="number"], input[type="search"], input:not([type]), textarea, select) {
+  background: #121210;
+  color: var(--text);
+  border: 1px solid #0a0a09;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  border-radius: 2px;
+}
+:root[data-theme="analog"] :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--accent);
+}
+:root[data-theme="analog"] :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected) {
+  background: var(--accent);
+  color: var(--selected-text);
+}
+:root[data-theme="analog"] :is(.menubar .dropdown, .context) {
+  background: #242421;
+  border: 1px solid #0b0b0a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="analog"] :is(.dialog, [role="dialog"]) {
+  border: 1px solid #0b0b0a;
+  box-shadow: 0 0 0 4px #2b2a26, 0 0 0 5px #0b0b0a, 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="analog"] ::selection {
+  background: var(--accent);
+  color: var(--selected-text);
+}
+
+/* Scroll bars: aluminum faders in a dark slot. */
+:root[data-theme="analog"] ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+:root[data-theme="analog"] ::-webkit-scrollbar-track {
+  background: #0f0f0e;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.9);
+}
+:root[data-theme="analog"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, var(--a-alu-3), var(--a-alu-1) 45%, var(--a-alu-2));
+  border: 2px solid #0f0f0e;
+  border-radius: 3px;
+}
+:root[data-theme="analog"] ::-webkit-scrollbar-thumb:horizontal {
+  background: linear-gradient(var(--a-alu-1), var(--a-alu-2) 55%, var(--a-alu-3));
+}
+
+/* Meters light up as LED ladders: green, then amber, then red at the top. */
+:root[data-theme="analog"] :is(.levels .bar, .phase .legend .bar, .phase .track) {
+  position: relative;
+}
+:root[data-theme="analog"] :is(.levels .bar, .phase .legend .bar, .phase .track)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 5px, rgba(10, 10, 9, 0.9) 5px 7px);
+}
+:root[data-theme="analog"] .phase .mark {
+  background: var(--accent);
+  box-shadow: var(--a-lamp);
+}
+
+/* Transport keys: clear colored plastic caps, lit from inside. They glow
+   while pressed, and stay lit while what they start is running. */
+:root[data-theme="analog"] .bar .transport .tool {
+  --cap: 200, 205, 210;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.04) 45%, rgba(0, 0, 0, 0.18)),
+    rgba(var(--cap), 0.28);
+  color: rgb(var(--cap));
+  border: 1px solid rgba(var(--cap), 0.55);
+  border-bottom: 3px solid rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 6px rgba(var(--cap), 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: none;
+  transition: box-shadow 0.08s, background 0.08s, color 0.08s;
+}
+:root[data-theme="analog"] .bar .transport .tool[aria-label="Stop"] {
+  --cap: 225, 228, 232;
+}
+:root[data-theme="analog"] .bar .transport .tool.play {
+  --cap: 70, 220, 110;
+}
+:root[data-theme="analog"] .bar .transport .tool:is([aria-label="Go to start"], [aria-label="Go to end"], [aria-label="Rewind"], [aria-label="Fast forward"]) {
+  --cap: 90, 170, 255;
+}
+:root[data-theme="analog"] .bar .transport .tool.rec {
+  --cap: 255, 70, 55;
+}
+:root[data-theme="analog"] .bar .transport .tool:is([aria-label="Loop playback"], [aria-label="Skip selection"]) {
+  --cap: 255, 180, 60;
+}
+/* Pressed or running: the cap lights up from inside. */
+:root[data-theme="analog"] .bar .transport .tool:is(:active:not(:disabled), .on),
+:root[data-theme="analog"] .bar .transport .tool.rec.on {
+  background:
+    radial-gradient(ellipse at 50% 60%, rgba(255, 255, 255, 0.75), rgba(var(--cap), 0.9) 55%, rgba(var(--cap), 0.65)),
+    rgb(var(--cap));
+  color: #fff;
+  border-color: rgba(var(--cap), 0.9);
+  box-shadow:
+    0 0 10px rgba(var(--cap), 0.85),
+    0 0 22px rgba(var(--cap), 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+}
+:root[data-theme="analog"] .bar .transport .tool:active:not(:disabled) {
+  border-bottom-width: 1px;
+  transform: translateY(2px);
+}
+
+/* Matte black plastic: a fine grit and a soft, unpolished sheen from
+   above over every faceplate, never in the way of the mouse. */
+:root[data-theme="analog"] .dockview-theme-altaudio .dv-groupview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 30%),
+    url("../assets/themes/matte.svg") 0 0 / 160px 160px;
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+}
+/* Keys and fields in the same matte plastic: no gloss, a soft edge catching the light. */
+:root[data-theme="analog"] :is(.strip, .bar:has(> .transport)) :is(button, .tool):not(.transport .tool) {
+  background:
+    url("../assets/themes/matte.svg") 0 0 / 160px 160px,
+    linear-gradient(#2a2a2c, #19191b 60%, #121214);
+  background-blend-mode: soft-light, normal;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="analog"] :is(.strip, .bar:has(> .transport)) :is(.tool.on, button.on, .view.on):not(.transport .tool) {
+  background: linear-gradient(#ffcf7a, #ffb547 55%, #d98a1e);
+  box-shadow: var(--a-lamp), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}

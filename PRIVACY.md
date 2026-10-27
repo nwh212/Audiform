@@ -12,7 +12,7 @@ Audiform, like Altered Audio Editor it is based on, has no accounts, no sign-in,
 
 Everything the app saves stays in folders on your own computer:
 
-- Sessions (`.altaudio`) and libraries wherever you save them.
+- Sessions (`.audfrm`, or `.altaudio` from older versions) and libraries wherever you save them.
 - Settings, keyboard shortcuts, workspaces, autosaves and the waveform cache in the app's own config, data and cache folders.
 
 ## The only time the app touches the web

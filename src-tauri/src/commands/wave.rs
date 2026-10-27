@@ -736,7 +736,7 @@ pub async fn wave_save(
 
 /// Writes a multichannel file's edit list to a WAV with every channel,
 /// a few seconds at a time, at `depth` bits (32 is float).
-fn save_multichannel(
+pub(crate) fn save_multichannel(
     session: &Session,
     path: &Path,
     depth: u16,

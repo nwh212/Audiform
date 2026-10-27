@@ -791,7 +791,66 @@ impl IEditControllerTrait for GainController {
     }
 
     unsafe fn createView(&self, _name: *const c_char) -> *mut IPlugView {
-        ptr::null_mut()
+        // An empty window of a fixed size, only when a test asks for one
+        // (the host tests expect no window otherwise).
+        if std::env::var_os("ALTERED_TESTPLUG_VIEW").is_none() {
+            return ptr::null_mut();
+        }
+        ComWrapper::new(TestView {})
+            .to_com_ptr::<IPlugView>()
+            .map_or(ptr::null_mut(), |v| v.into_raw())
+    }
+}
+
+/// A window that draws nothing, for testing the host's window around it.
+struct TestView {}
+
+impl Class for TestView {
+    type Interfaces = (IPlugView,);
+}
+
+impl IPlugViewTrait for TestView {
+    unsafe fn isPlatformTypeSupported(&self, _t: FIDString) -> tresult {
+        kResultTrue
+    }
+    unsafe fn attached(&self, _parent: *mut c_void, _t: FIDString) -> tresult {
+        kResultOk
+    }
+    unsafe fn removed(&self) -> tresult {
+        kResultOk
+    }
+    unsafe fn onWheel(&self, _d: f32) -> tresult {
+        kResultFalse
+    }
+    unsafe fn onKeyDown(&self, _k: char16, _c: int16, _m: int16) -> tresult {
+        kResultFalse
+    }
+    unsafe fn onKeyUp(&self, _k: char16, _c: int16, _m: int16) -> tresult {
+        kResultFalse
+    }
+    unsafe fn getSize(&self, size: *mut ViewRect) -> tresult {
+        *size = ViewRect {
+            left: 0,
+            top: 0,
+            right: 420,
+            bottom: 220,
+        };
+        kResultOk
+    }
+    unsafe fn onSize(&self, _s: *mut ViewRect) -> tresult {
+        kResultOk
+    }
+    unsafe fn onFocus(&self, _f: TBool) -> tresult {
+        kResultOk
+    }
+    unsafe fn setFrame(&self, _f: *mut IPlugFrame) -> tresult {
+        kResultOk
+    }
+    unsafe fn canResize(&self) -> tresult {
+        kResultFalse
+    }
+    unsafe fn checkSizeConstraint(&self, _r: *mut ViewRect) -> tresult {
+        kResultOk
     }
 }
 

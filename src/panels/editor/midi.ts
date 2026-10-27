@@ -120,6 +120,21 @@ export function resizeClip(clips: MidiClipDoc[], id: string, length: number, min
   return clips.map((c) => (c.id === id ? { ...c, length: Math.max(min, length) } : c));
 }
 
+/**
+ * Stretches clip `id` to `length` beats, notes and all: every note's
+ * start and length scale by the same amount, so the part plays slower
+ * (longer) or faster (shorter) at the same tempo, with no audio to
+ * stretch. Pitches, velocities and channels stay as they are.
+ */
+export function stretchClip(clips: MidiClipDoc[], id: string, length: number, min = 0.25): MidiClipDoc[] {
+  return clips.map((c) => {
+    if (c.id !== id || c.length <= 0) return c;
+    const next = Math.max(min, length);
+    const k = next / c.length;
+    return { ...c, length: next, notes: c.notes.map((n) => ({ ...n, start: n.start * k, length: Math.max(1 / 64, n.length * k) })) };
+  });
+}
+
 export function removeClips(clips: MidiClipDoc[], ids: ReadonlySet<string>): MidiClipDoc[] {
   return clips.filter((c) => !ids.has(c.id));
 }

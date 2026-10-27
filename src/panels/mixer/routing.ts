@@ -110,14 +110,48 @@ export function removeSend(sends: SendDoc[], id: string): SendDoc[] {
   return sends.filter((s) => s.id !== id);
 }
 
-/** Bus changes as one op. With exclusive solo on, soloing a bus unsolos every other track and bus. */
+/** Tracks and buses whose output reaches bus `id`, directly or through other buses. Sends are left out. */
+export function feeders(doc: SessionDoc, id: string): { tracks: string[]; buses: string[] } {
+  const tracks: string[] = [];
+  const buses: string[] = [];
+  const stack = [id];
+  const seen = new Set<string>([id]);
+  while (stack.length) {
+    const to = stack.pop()!;
+    for (const t of doc.tracks) if (t.output?.type === "bus" && t.output.bus_id === to) tracks.push(t.id);
+    for (const b of doc.buses ?? []) {
+      if (b.output?.type !== "bus" || b.output.bus_id !== to || seen.has(b.id)) continue;
+      seen.add(b.id);
+      buses.push(b.id);
+      stack.push(b.id);
+    }
+  }
+  return { tracks, buses };
+}
+
+/**
+ * Bus changes as one op. Soloing or unsoloing a bus does the same to every
+ * track and bus feeding it. With exclusive solo on, soloing a bus also
+ * unsolos every other track and bus.
+ */
 export function busOp(doc: SessionDoc | null, id: string, changes: Record<string, unknown>, exclusive = settings.current.soloExclusive): Op {
   const op = { op: "set_bus", id, changes } as Op;
-  if (!exclusive || changes.solo !== true || !doc) return op;
-  const ops: Op[] = [
-    op,
-    ...doc.tracks.filter((t) => t.solo).map((t) => ({ op: "set_track", id: t.id, changes: { solo: false } }) as Op),
-    ...(doc.buses ?? []).filter((b) => b.id !== id && b.solo).map((b) => ({ op: "set_bus", id: b.id, changes: { solo: false } }) as Op),
-  ];
+  if (typeof changes.solo !== "boolean" || !doc) return op;
+  const solo = changes.solo;
+  const feed = feeders(doc, id);
+  const ft = new Set(feed.tracks);
+  const fb = new Set(feed.buses);
+  const ops: Op[] = [op];
+  for (const t of doc.tracks) {
+    if (ft.has(t.id)) {
+      if (t.solo !== solo) ops.push({ op: "set_track", id: t.id, changes: { solo } } as Op);
+    } else if (solo && exclusive && t.solo) ops.push({ op: "set_track", id: t.id, changes: { solo: false } } as Op);
+  }
+  for (const b of doc.buses ?? []) {
+    if (b.id === id) continue;
+    if (fb.has(b.id)) {
+      if (b.solo !== solo) ops.push({ op: "set_bus", id: b.id, changes: { solo } } as Op);
+    } else if (solo && exclusive && b.solo) ops.push({ op: "set_bus", id: b.id, changes: { solo: false } } as Op);
+  }
   return ops.length === 1 ? op : { op: "batch", ops };
 }

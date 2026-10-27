@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { BusDoc, EffectChainDoc, SessionDoc, TrackDoc } from "../../stores/session";
-import { busChoices, busOp, isRouted, keyChoices, MASTER_ID, newSend, outputName, reaches, removeSend, setSend } from "./routing";
+import { busChoices, busOp, feeders, isRouted, keyChoices, MASTER_ID, newSend, outputName, reaches, removeSend, setSend } from "./routing";
 
 const chain = (sidechain?: string): EffectChainDoc => ({
   enabled: true,
@@ -70,6 +70,41 @@ describe("routing choices", () => {
         { op: "set_bus", id: "b", changes: { solo: true } },
         { op: "set_track", id: "a", changes: { solo: false } },
         { op: "set_bus", id: "c", changes: { solo: false } },
+      ],
+    });
+  });
+
+  it("solos and unsolos the tracks and buses feeding a bus", () => {
+    // a -> sub -> b; c -> b; d sends only.
+    const d = session(
+      [track("a", { output: { type: "bus", bus_id: "sub" } }), track("c", { output: { type: "bus", bus_id: "b" } }), track("d", { sends: [newSend("b", "x")] }), track("e", { solo: true })],
+      [bus("b"), bus("sub", { output: { type: "bus", bus_id: "b" } })],
+    );
+    expect(feeders(d, "b")).toEqual({ tracks: ["c", "a"], buses: ["sub"] });
+    expect(busOp(d, "b", { solo: true }, false)).toEqual({
+      op: "batch",
+      ops: [
+        { op: "set_bus", id: "b", changes: { solo: true } },
+        { op: "set_track", id: "a", changes: { solo: true } },
+        { op: "set_track", id: "c", changes: { solo: true } },
+        { op: "set_bus", id: "sub", changes: { solo: true } },
+      ],
+    });
+    // Exclusive: the feeders stay, the unrelated soloed track goes.
+    const ex = busOp(d, "b", { solo: true }, true) as { ops: unknown[] };
+    expect(ex.ops).toContainEqual({ op: "set_track", id: "e", changes: { solo: false } });
+    expect(ex.ops).not.toContainEqual({ op: "set_track", id: "a", changes: { solo: false } });
+    const on = session(
+      d.tracks.map((t) => ({ ...t, solo: t.id !== "d" })),
+      (d.buses ?? []).map((b) => ({ ...b, solo: true })),
+    );
+    expect(busOp(on, "b", { solo: false }, true)).toEqual({
+      op: "batch",
+      ops: [
+        { op: "set_bus", id: "b", changes: { solo: false } },
+        { op: "set_track", id: "a", changes: { solo: false } },
+        { op: "set_track", id: "c", changes: { solo: false } },
+        { op: "set_bus", id: "sub", changes: { solo: false } },
       ],
     });
   });

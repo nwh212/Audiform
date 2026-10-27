@@ -24,7 +24,18 @@ use super::document::{self, DocumentError};
 use super::model::{Id, MediaRef, Session};
 
 /// Session file extension, without the dot.
-pub const EXTENSION: &str = "altaudio";
+pub const EXTENSION: &str = "audfrm";
+
+/// Sessions saved before 0.4 (and by Altered Audio Editor): opened as
+/// before, saved again as `EXTENSION`. Same contents, only the name moved.
+pub const OLD_EXTENSION: &str = "altaudio";
+
+/// True for a file name ending in either session extension.
+pub fn is_session_path(p: &Path) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION) || e.eq_ignore_ascii_case(OLD_EXTENSION))
+}
 
 /// Saves `session` to `path`. `extra_media` adds files listed in the
 /// Files panel that no clip uses yet, so they come back on open.
@@ -217,7 +228,13 @@ pub fn find_recoverable(dir: &Path) -> Vec<Recoverable> {
         if note.owner_pid.is_some_and(|pid| owner_is_running(dir, pid)) {
             continue;
         }
-        let file = p.with_extension(EXTENSION);
+        let new = p.with_extension(EXTENSION);
+        // Autosaves made before the extension changed.
+        let file = if new.is_file() {
+            new
+        } else {
+            p.with_extension(OLD_EXTENSION)
+        };
         if file.is_file() {
             out.push(Recoverable {
                 autosave: file,

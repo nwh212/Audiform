@@ -21,7 +21,7 @@
   import { channelNames } from "../space/space";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
-  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { effectsCatalog, learnNoisePrint, onPrerenderChanged, prerenderStatus, type PrerenderStatus, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
@@ -29,6 +29,7 @@
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
   import { keyChoices, MASTER_ID } from "../mixer/routing";
+  import { trackOp } from "../mixer/solo";
   import { defaultTrackColor } from "../editor/timeline";
   import type { EffectChainDoc, EffectSlotDoc, EffectTarget, SessionDoc, SessionStore } from "../../stores/session";
   import {
@@ -70,6 +71,8 @@
   import NoiseShapeGraph from "./NoiseShapeGraph.svelte";
   import TubePanel from "./TubePanel.svelte";
   import AmpPanel from "./AmpPanel.svelte";
+  import VoxStripPanel from "./VoxStripPanel.svelte";
+  import WidthPanel from "./WidthPanel.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, type WindowBox } from "./effect-window";
@@ -332,6 +335,42 @@
     window.addEventListener("pointerup", up);
   }
 
+  // Pre-render: the track's clips and Audio FX rendered ahead, so heavy
+  // plug-ins rest. The core renders again whenever the sound changes.
+  let prerenders = $state<PrerenderStatus[]>([]);
+  const canPrerender = $derived(onTrackTab && !!track && !bus && !onMaster);
+  const prerenderState = $derived(track?.prerender ? (prerenders.find((p) => p.trackId === track.id)?.state ?? "waiting") : null);
+  function loadPrerenders() {
+    prerenderStatus()
+      .then((p) => (prerenders = p))
+      .catch(() => (prerenders = []));
+  }
+  $effect(() => {
+    void doc;
+    untrack(loadPrerenders);
+  });
+  $effect(() => {
+    let stop: (() => void) | undefined;
+    let gone = false;
+    onPrerenderChanged(loadPrerenders)
+      .then((f) => (gone ? f() : (stop = f)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  });
+  function togglePrerender() {
+    if (!track) return;
+    const on = !track.prerender;
+    void session.edit(on ? "Pre-render Track" : "Stop Pre-rendering Track", trackOp(doc, track.id, { prerender: on }), runner).catch(onError);
+  }
+  const PRERENDER_TIP: Record<string, string> = {
+    rendering: "Pre-render on: rendering the track's clips and effects now. The live track plays until the render is ready.",
+    ready: "Pre-render on: playback and export use the rendered track, so its effects rest. Any change to clips or effects renders again. Click to turn off.",
+    waiting: "Pre-render on: waiting to render. Click to turn off.",
+  };
+
   function commit(what: string, next: EffectChainDoc | null) {
     if (!target) return;
     if (!next) {
@@ -558,7 +597,7 @@
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
   const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
-  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model"]);
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -628,6 +667,20 @@
         >
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
         </button>
+        {#if canPrerender}
+          <button
+            type="button"
+            class="prerender"
+            class:on={!!track?.prerender}
+            class:busy={prerenderState === "rendering"}
+            title={prerenderState ? PRERENDER_TIP[prerenderState] : "Pre-render: render this track's clips and effects ahead, so heavy plug-ins rest during playback. Renders again after any change."}
+            aria-pressed={!!track?.prerender}
+            onclick={togglePrerender}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h1.5M5 5v6M8 3v10M11 6v4" stroke="currentColor" stroke-width="1.4" fill="none" /><rect x="12.5" y="3" width="2" height="10" fill="currentColor" /></svg>
+            <span>{prerenderState === "rendering" ? "Rendering…" : "Pre-render"}</span>
+          </button>
+        {/if}
         <select
           class="grow"
           aria-label="Presets"
@@ -643,7 +696,7 @@
               {#each userPresets as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
             </optgroup>
           {/if}
-          {#each ["Voice chains", "Breath gates", "Processing", "Repair", "EQ"] as g (g)}
+          {#each ["Voice chains", "Breath gates", "Processing", "Delay", "Repair", "EQ"] as g (g)}
             <optgroup label={g === "Voice chains" ? "Voice chains (replace the chain)" : `${g} (add one effect)`}>
               {#each BUILTIN_PRESETS.filter((p) => p.group === g) as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
             </optgroup>
@@ -737,10 +790,11 @@
             {/if}
             <button type="button" class="mini" title={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} aria-label={info?.plugin && info.hasWindow ? "Open the plug-in's window" : "Open its settings"} onclick={() => openSlot(s)}>⚙</button>
             <button type="button" class="mini" title="Remove" aria-label="Remove" onclick={() => commit(`Remove ${info?.name ?? "Effect"}`, removeSlot(chain, s.id))}>✕</button>
+            <button type="button" class="mini arrow" title="Effect menu" aria-label="Effect menu for slot {i + 1}" aria-haspopup="menu" onclick={(e) => openSlotArrow(e, s, i)}>▸</button>
           {:else}
+            <!-- One wide button: it opens the same menu the row's arrow did. -->
             <button type="button" class="add" class:quiet={i !== chain.slots.length && i > 0 && !rows[i - 1]} aria-haspopup="menu" title="Add an effect in slot {i + 1}" onclick={(e) => openAddMenu(e, i)}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
           {/if}
-          <button type="button" class="mini arrow" title="Effect menu" aria-label="Effect menu for slot {i + 1}" aria-haspopup="menu" onclick={(e) => openSlotArrow(e, s ?? undefined, i)}>▸</button>
         </li>
       {/each}
     </ol>
@@ -786,6 +840,10 @@
           />
         {:else if winSlot.effect === "altaudio.opto_leveler" || winSlot.effect === "altaudio.tube_preamp"}
           <TubePanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+        {:else if winSlot.effect === "altaudio.stereo_width"}
+          <WidthPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+        {:else if winSlot.effect === "altaudio.vox_strip"}
+          <VoxStripPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
         {:else if winSlot.effect === "altaudio.amp_model"}
           <AmpPanel
             slot={winSlot}
@@ -1025,6 +1083,31 @@
   .power.on {
     color: var(--accent);
   }
+  .prerender {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    height: 22px;
+    padding: 0 6px;
+    align-items: center;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .prerender.on {
+    color: var(--accent);
+  }
+  .prerender.busy svg {
+    animation: prerender-pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes prerender-pulse {
+    to {
+      opacity: 0.35;
+    }
+  }
+  .prerender svg {
+    width: 14px;
+    height: 14px;
+  }
   .power svg {
     width: 14px;
     height: 14px;
@@ -1159,6 +1242,12 @@
     }
     &:has(:global(.ns)) {
       width: 660px;
+    }
+    &:has(:global(.width)) {
+      width: min(560px, 96vw);
+    }
+    &:has(:global(.vox)) {
+      width: min(860px, 96vw);
     }
     &:has(:global(.tube)),
     &:has(:global(.amp)) {

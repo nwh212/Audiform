@@ -67,6 +67,11 @@ export function syncOps(doc: SessionDoc, events: PluginEvents[], states: Readonl
     byTarget.set(k, cur);
   };
   for (const e of events) {
+    // The power button on its window: the same switch as on its rack row.
+    if (e.bypass != null) {
+      const enabled = !e.bypass;
+      touch(e.slotId, (s) => (s.enabled === enabled ? s : { ...s, enabled }));
+    }
     if (e.edits.length > 0) {
       touch(e.slotId, (s) => {
         const params = { ...s.params };
@@ -96,8 +101,8 @@ export interface PluginSyncDeps {
   doc: () => SessionDoc | null;
   events: () => Promise<PluginEvents[]>;
   state: (slotId: string) => Promise<string | null>;
-  /** Applies the edits as one undoable step. */
-  commit: (ops: Op[]) => Promise<void>;
+  /** Applies the edits as one undoable step, under `label` ("Plug-in Settings" when not given). */
+  commit: (ops: Op[], label?: string) => Promise<void>;
   /** A plug-in stopped (crashed or hung); it is bypassed. */
   onStopped: (slot: EffectSlotDoc, why: string) => void;
   /** A plug-in's look-ahead changed: playback must re-align. */
@@ -140,9 +145,21 @@ export class PluginSync {
         }
       }
       if (events.some((e) => e.latencyChanged)) this.deps.onLatency();
+      // Bypass clicks on plug-in windows are their own undo steps.
+      const flips = events.filter((e) => e.bypass != null).map((e) => ({ ...e, edits: [] }));
+      const before = this.deps.doc();
+      if (flips.length && before) {
+        const ops = syncOps(before, flips, new Map());
+        const off = flips.every((e) => e.bypass);
+        if (ops.length) await this.deps.commit(ops, off ? "Bypass Effect" : "Turn On Effect");
+      }
       const now = this.deps.doc();
       if (!now) return;
-      const ops = syncOps(now, events, states);
+      const ops = syncOps(
+        now,
+        events.map((e) => ({ ...e, bypass: null })),
+        states,
+      );
       if (ops.length) await this.deps.commit(ops);
     } finally {
       this.busy = false;

@@ -6,7 +6,6 @@
 //! rate, channels and exact length. The first packet is decoded so a
 //! file we cannot play is caught at import, not later on the timeline.
 
-use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -14,7 +13,6 @@ use symphonia::core::codecs::audio::{AudioCodecParameters, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
-use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Duration, TimeBase};
 use thiserror::Error;
@@ -86,10 +84,195 @@ pub fn probe(path: &Path) -> Result<AudioInfo, ProbeError> {
         return Err(ProbeError::UnsupportedType);
     }
 
-    let file = File::open(path)?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    // A WAV holding a DTS stream (or a raw .dts file) is described by
+    // what the stream holds, not by its 16-bit stereo wrapper.
+    if let Some(dts) = super::dts::sniff(path) {
+        return Ok(AudioInfo {
+            path: path.to_path_buf(),
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            format: if dts.in_wav {
+                "WAV".into()
+            } else {
+                "DTS".into()
+            },
+            codec: "DTS".into(),
+            sample_rate: dts.sample_rate,
+            channels: dts.channels() as u16,
+            length: dts.length(),
+            bit_depth: None,
+            file_size: meta.len(),
+        });
+    }
+
+    match probe_symphonia(path, &meta).map_err(|e| name_hidden_codec(path, e)) {
+        Err(e @ (ProbeError::UnsupportedCodec(_) | ProbeError::UnknownFormat)) => {
+            probe_os(path, &meta).unwrap_or(Err(explain(e)))
+        }
+        other => other,
+    }
+}
+
+/// Codecs Symphonia names only by number, and what to call them.
+const CODEC_NAMES: &[(&str, &str)] = &[
+    ("0x1008", "Dolby Digital (AC-3)"),
+    ("0x1009", "Dolby Digital Plus (E-AC-3)"),
+];
+
+/// MP4 audio entries Symphonia skips without a word, so a file of them
+/// reads as having no audio at all.
+const MP4_CODECS: &[(&[u8; 4], &str)] = &[
+    (b"ac-4", AC4),
+    (b"mha1", "MPEG-H 3D Audio"),
+    (b"mha2", "MPEG-H 3D Audio"),
+    (b"mhm1", "MPEG-H 3D Audio"),
+    (b"mhm2", "MPEG-H 3D Audio"),
+];
+
+const AC4: &str = "Dolby AC-4";
+
+/// When Symphonia finds no audio, names the codec of an MP4 or M4A audio
+/// track it skipped (Dolby AC-4, as Dolby Atmos music is now sold), so
+/// the system decoders get a try and the error says what the file holds.
+pub(super) fn name_hidden_codec(path: &Path, e: ProbeError) -> ProbeError {
+    if !matches!(e, ProbeError::NoAudio) {
+        return e;
+    }
+    mp4_sample_entries(path)
+        .into_iter()
+        .find_map(|t| MP4_CODECS.iter().find(|(c, _)| **c == t))
+        .map_or(e, |(_, name)| ProbeError::UnsupportedCodec((*name).into()))
+}
+
+/// The sample entry types of an MP4 file's tracks (moov, trak, mdia,
+/// minf, stbl, stsd). Empty for anything else.
+fn mp4_sample_entries(path: &Path) -> Vec<[u8; 4]> {
+    use std::io::{Read, Seek, SeekFrom};
+    fn walk(f: &mut std::fs::File, start: u64, end: u64, out: &mut Vec<[u8; 4]>, depth: u32) {
+        let mut at = start;
+        while at + 8 <= end && depth < 8 && out.len() < 16 {
+            let mut head = [0u8; 16];
+            if f.seek(SeekFrom::Start(at)).is_err() || f.read_exact(&mut head[..8]).is_err() {
+                return;
+            }
+            let mut size = u64::from(u32::from_be_bytes([head[0], head[1], head[2], head[3]]));
+            let kind = [head[4], head[5], head[6], head[7]];
+            let mut body = at + 8;
+            if size == 1 {
+                if f.read_exact(&mut head[8..16]).is_err() {
+                    return;
+                }
+                size = u64::from_be_bytes(head[8..16].try_into().unwrap_or_default());
+                body += 8;
+            } else if size == 0 {
+                size = end - at;
+            }
+            if size < body - at || at + size > end {
+                return;
+            }
+            match &kind {
+                b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" => {
+                    walk(f, body, at + size, out, depth + 1)
+                }
+                // Version and flags, the entry count, then the entries.
+                b"stsd" => walk(f, body + 8, at + size, out, 8.min(depth + 1)),
+                _ if depth >= 6 => out.push(kind),
+                _ => {}
+            }
+            at += size;
+        }
+    }
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let Ok(len) = f.metadata().map(|m| m.len()) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    walk(&mut f, 0, len, &mut out, 0);
+    out
+}
+
+/// Names a refused codec plainly, and says when Windows could open it.
+fn explain(e: ProbeError) -> ProbeError {
+    let ProbeError::UnsupportedCodec(what) = e else {
+        return e;
+    };
+    let what = CODEC_NAMES
+        .iter()
+        .find(|(id, _)| what.starts_with(id))
+        .map(|(_, name)| (*name).to_string())
+        .unwrap_or(what);
+    if audiform_os_decode::AVAILABLE {
+        if what == AC4 {
+            // Windows decodes it only with Dolby's own decoder added.
+            return ProbeError::UnsupportedCodec(format!(
+                "{what}. Windows opens it once Dolby's AC-4 decoder is installed (it comes with Dolby Access and on many PCs with Dolby Atmos)"
+            ));
+        }
+        ProbeError::UnsupportedCodec(what)
+    } else {
+        ProbeError::UnsupportedCodec(format!("{what}. {}", audiform_os_decode::UNAVAILABLE))
+    }
+}
+
+/// Describes a file through the decoders built into the system, for what
+/// Symphonia cannot read. None where there are none.
+fn probe_os(path: &Path, meta: &std::fs::Metadata) -> Option<Result<AudioInfo, ProbeError>> {
+    if !audiform_os_decode::AVAILABLE {
+        return None;
+    }
+    let mut os = audiform_os_decode::OsReader::open(path).ok()?;
+    let info = os.info().clone();
+    // Without a stated length, count it by decoding.
+    let length = match info.frames {
+        Some(n) => n,
+        None => {
+            let mut n = 0u64;
+            let mut buf = Vec::new();
+            loop {
+                buf.clear();
+                match os.read(&mut buf) {
+                    Ok(true) => n += (buf.len() / info.channels.max(1)) as u64,
+                    Ok(false) => break,
+                    Err(e) => return Some(Err(ProbeError::Damaged(e))),
+                }
+            }
+            n
+        }
+    };
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    Some(Ok(AudioInfo {
+        path: path.to_path_buf(),
+        name: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        format: if ext.is_empty() {
+            info.codec.clone()
+        } else {
+            ext
+        },
+        codec: info.codec,
+        sample_rate: info.sample_rate,
+        channels: u16::try_from(info.channels).unwrap_or(u16::MAX),
+        length,
+        bit_depth: None,
+        file_size: meta.len(),
+    }))
+}
+
+/// Describes a file through Symphonia.
+fn probe_symphonia(path: &Path, meta: &std::fs::Metadata) -> Result<AudioInfo, ProbeError> {
+    let (mss, ext) = super::source::open(path)?;
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = ext.as_deref() {
         hint.with_extension(ext);
     }
 
@@ -167,7 +350,12 @@ pub fn probe(path: &Path) -> Result<AudioInfo, ProbeError> {
     let channels = channels.filter(|c| *c > 0).ok_or(ProbeError::NoAudio)?;
     let time_base = track.time_base;
 
-    let length = match (track.num_frames, track.duration) {
+    // A fragmented MP4 (as most download tools save M4A) states a length
+    // of 0 in its header: the real length is only known by counting.
+    let length = match (
+        track.num_frames.filter(|n| *n > 0),
+        track.duration.filter(|d| d.get() > 0),
+    ) {
         (Some(n), _) => n,
         (None, Some(d)) => to_frames(d.get(), time_base, sample_rate),
         (None, None) => {
@@ -279,6 +467,38 @@ fn codec_label(short_name: &str, bits: Option<u32>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_an_ac4_track_symphonia_skips() {
+        fn mp4box(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+            let mut b = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+            b.extend_from_slice(kind);
+            b.extend_from_slice(body);
+            b
+        }
+        let entry = mp4box(b"ac-4", &[0; 28]);
+        let mut stsd = vec![0, 0, 0, 0, 0, 0, 0, 1];
+        stsd.extend(entry);
+        let mut tree = mp4box(b"stsd", &stsd);
+        for k in [b"stbl", b"minf", b"mdia", b"trak", b"moov"] {
+            tree = mp4box(k, &tree);
+        }
+        let mut file = mp4box(b"ftyp", b"mp42\0\0\0\x01mp42");
+        file.extend(tree);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("atmos.m4a");
+        std::fs::write(&path, &file).unwrap();
+        assert_eq!(mp4_sample_entries(&path), vec![*b"ac-4"]);
+        assert!(matches!(
+            name_hidden_codec(&path, ProbeError::NoAudio),
+            ProbeError::UnsupportedCodec(n) if n == AC4
+        ));
+        // Other errors pass through.
+        assert!(matches!(
+            name_hidden_codec(&path, ProbeError::UnknownFormat),
+            ProbeError::UnknownFormat
+        ));
+    }
 
     #[test]
     fn labels_containers() {

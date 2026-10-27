@@ -13,11 +13,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::session::model::Id;
 
-/// Two readings: gain reduction in dB (0 or more) and output level in dBFS.
+/// Gain reduction in dB (0 or more), output level in dBFS, and one more
+/// reading an effect may use (de-essing in dB for the Vox Strip).
 #[derive(Debug, Default)]
 pub struct SlotMeter {
     gr: AtomicU32,
     out: AtomicU32,
+    aux: AtomicU32,
 }
 
 impl SlotMeter {
@@ -26,10 +28,15 @@ impl SlotMeter {
         self.gr.store(gr_db.to_bits(), Ordering::Relaxed);
         self.out.store(out_db.to_bits(), Ordering::Relaxed);
     }
-    pub fn read(&self) -> [f32; 2] {
+    #[inline]
+    pub fn store_aux(&self, v: f32) {
+        self.aux.store(v.to_bits(), Ordering::Relaxed);
+    }
+    pub fn read(&self) -> [f32; 3] {
         [
             f32::from_bits(self.gr.load(Ordering::Relaxed)),
             f32::from_bits(self.out.load(Ordering::Relaxed)),
+            f32::from_bits(self.aux.load(Ordering::Relaxed)),
         ]
     }
 }
@@ -52,6 +59,6 @@ pub fn for_slot(id: Id) -> Arc<SlotMeter> {
 }
 
 /// The latest readings for a slot, if it has a meter.
-pub fn read(id: Id) -> Option<[f32; 2]> {
+pub fn read(id: Id) -> Option<[f32; 3]> {
     table().lock().ok()?.get(&id).map(|m| m.read())
 }

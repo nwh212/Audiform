@@ -21,6 +21,7 @@
   choices are kept in the settings, for every file and session.
 -->
 <script lang="ts">
+  import ContextMenu from "../../app/ContextMenu.svelte";
   import { onDestroy } from "svelte";
   import { scopePhase, scopePhaseAt, type ScopeSignal } from "../../app/core";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
@@ -56,6 +57,13 @@
   /** Pictures a second, at most. */
   const fps = $derived(prefs.fps);
   const a = $derived(prefs.a);
+  // The readouts and settings under the wheel: hidden by choice (right-click)
+  // or when the panel is too small for them, leaving just the wheel.
+  let panelH = $state(0);
+  let panelW = $state(0);
+  const roomy = $derived(panelH === 0 || (panelH >= 300 && panelW >= 220));
+  const details = $derived(prefs.details && roomy);
+  let menu = $state<{ x: number; y: number } | null>(null);
   const b = $derived(prefs.b);
   function setPref(change: Partial<PhaseWheelPrefs>) {
     const c = settings.current;
@@ -66,6 +74,11 @@
   /** The theme's own low and high colors, or the built-in ones. */
   const themeLow = $derived((void looks, themeColor("--phase-low") || PHASE_LOW));
   const themeHigh = $derived((void looks, themeColor("--phase-high") || PHASE_HIGH));
+  /** Phosphor: drawn coarse and blown up, like a low-resolution screen. */
+  const pixel = $derived((void looks, typeof document !== "undefined" && document.documentElement.dataset.theme === "phosphor"));
+  /** Screen pixels per drawn pixel in that look. */
+  const PIXEL = 3;
+  let labelSide = $state(0);
   /** 64 colors from the low end to the high end, so drawing never works one out per dot. */
   const palette = $derived.by(() => {
     const low = hexToRgb(appColors.phaseLow || themeLow) ?? hexToRgb(PHASE_LOW)!;
@@ -192,7 +205,8 @@
     const c = canvas;
     if (!c) return;
     const side = Math.max(60, Math.min(box.w, box.h));
-    const dpr = window.devicePixelRatio || 1;
+    labelSide = side;
+    const dpr = pixel ? 1 / PIXEL : window.devicePixelRatio || 1;
     if (c.width !== Math.round(side * dpr)) {
       c.width = Math.round(side * dpr);
       c.height = Math.round(side * dpr);
@@ -208,8 +222,8 @@
     g.fillStyle = `rgba(10, 10, 12, ${fade})`;
     g.fillRect(0, 0, side, side);
     // Rings and axes.
-    g.strokeStyle = "rgba(255, 255, 255, 0.10)";
-    g.lineWidth = 1;
+    g.strokeStyle = pixel ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.10)";
+    g.lineWidth = pixel ? PIXEL : 1;
     for (const f of [0.25, 0.5, 0.75]) {
       g.beginPath();
       g.arc(mid, mid, R * f, 0, Math.PI * 2);
@@ -222,20 +236,24 @@
     g.lineTo(mid, mid + R);
     g.stroke();
     g.strokeStyle = css("--accent", "#3fa9f5");
-    g.lineWidth = 1.5;
+    g.lineWidth = pixel ? PIXEL : 1.5;
     g.beginPath();
     g.arc(mid, mid, R, 0, Math.PI * 2);
     g.stroke();
-    g.fillStyle = "rgba(255, 255, 255, 0.55)";
-    g.font = "10px system-ui, sans-serif";
-    g.textAlign = "center";
-    g.fillText("in phase", mid, 11);
-    g.fillText("opposite", mid, side - 4);
-    // Inside the ring, just above the axis, so they never fall off the edge.
-    g.textAlign = "right";
-    g.fillText("+90°", mid + R - 4, mid - 4);
-    g.textAlign = "left";
-    g.fillText("-90°", mid - R + 4, mid - 4);
+    // Labels: on the canvas, or (in the pixel look, where they would come
+    // out unreadable) as text over it.
+    if (!pixel) {
+      g.fillStyle = "rgba(255, 255, 255, 0.55)";
+      g.font = "10px system-ui, sans-serif";
+      g.textAlign = "center";
+      g.fillText("in phase", mid, 11);
+      g.fillText("opposite", mid, side - 4);
+      // Inside the ring, just above the axis, so they never fall off the edge.
+      g.textAlign = "right";
+      g.fillText("+90°", mid + R - 4, mid - 4);
+      g.textAlign = "left";
+      g.fillText("-90°", mid - R + 4, mid - 4);
+    }
     // The dots: distance from the center is the frequency, the angle from
     // straight up (clockwise) the phase, color the frequency, brightness
     // the level and steadiness, size the level. Plain blending, so dots
@@ -251,16 +269,22 @@
       const y = mid - r * Math.cos(ph);
       const [cr, cg, cb] = palette[Math.max(0, Math.min(63, Math.round(pitch * 63)))]!;
       g.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${Math.min(0.85, (0.15 + 1.1 * level) * (0.5 + 0.5 * coherence))})`;
-      g.beginPath();
-      g.arc(x, y, 1.2 + 2.4 * level, 0, Math.PI * 2);
-      g.fill();
+      if (pixel) {
+        // Square dots on the coarse grid.
+        const d = Math.max(1, Math.round((1.2 + 2.4 * level) / PIXEL)) * PIXEL;
+        g.fillRect(Math.round(x / PIXEL) * PIXEL - d / 2, Math.round(y / PIXEL) * PIXEL - d / 2, d, d);
+      } else {
+        g.beginPath();
+        g.arc(x, y, 1.2 + 2.4 * level, 0, Math.PI * 2);
+        g.fill();
+      }
     }
   }
 
   const corrText = $derived(`${correlation >= 0 ? "+" : ""}${correlation.toFixed(2)}`);
 </script>
 
-<section class="phase" aria-label="Phase Wheel">
+<section class="phase" aria-label="Phase Wheel" bind:clientHeight={panelH} bind:clientWidth={panelW}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="wheel"
@@ -268,13 +292,22 @@
     bind:clientHeight={box.h}
     oncontextmenu={(e) => {
       e.preventDefault();
-      colorPop = { x: e.clientX, y: e.clientY };
+      menu = { x: e.clientX, y: e.clientY };
     }}
-    title="Right-click for the colors"
+    title="Right-click for the colors and to show or hide the readouts and settings"
   >
-    <canvas bind:this={canvas} aria-label="Phase of each frequency between the two signals"></canvas>
+    <canvas bind:this={canvas} class:pixel aria-label="Phase of each frequency between the two signals"></canvas>
+    {#if pixel && labelSide}
+      <div class="labels" style:width="{labelSide}px" style:height="{labelSide}px" aria-hidden="true">
+        <span style:top="2px" style:left="50%" style:transform="translateX(-50%)">in phase</span>
+        <span style:bottom="0" style:left="50%" style:transform="translateX(-50%)">opposite</span>
+        <span style:top="calc(50% - 16px)" style:left="22px">-90°</span>
+        <span style:top="calc(50% - 16px)" style:right="22px">+90°</span>
+      </div>
+    {/if}
     {#if !playing}<span class="idle">Stopped: the audio at the playhead.</span>{/if}
   </div>
+  {#if details}
   <div class="legend" title="Dot colors by frequency. Right-click the wheel to change them.">
     <span class="lab">20 Hz</span>
     <span class="bar" style:background={legend}></span>
@@ -302,7 +335,25 @@
     </label>
   </div>
   <p class="note">The app plays in stereo, so the choices are left, right, mid and side.</p>
+  {/if}
 </section>
+
+{#if menu}
+  <ContextMenu
+    x={menu.x}
+    y={menu.y}
+    items={[
+      {
+        kind: "item",
+        label: roomy ? "Show Readouts and Settings" : "Show Readouts and Settings (hidden while the panel is small)",
+        checked: prefs.details,
+        run: () => setPref({ details: !prefs.details }),
+      },
+      { kind: "item", label: "Colors...", run: () => (colorPop = menu ? { x: menu.x, y: menu.y } : null) },
+    ]}
+    onClose={() => (menu = null)}
+  />
+{/if}
 
 {#if colorPop}
   <ColorPairPopover
@@ -343,6 +394,19 @@
   canvas {
     border-radius: 4px;
     background: #0a0a0c;
+  }
+  canvas.pixel {
+    image-rendering: pixelated;
+  }
+  .labels {
+    position: absolute;
+    pointer-events: none;
+  }
+  .labels span {
+    position: absolute;
+    color: var(--text-dim);
+    font-size: 11px;
+    white-space: nowrap;
   }
   .idle {
     position: absolute;

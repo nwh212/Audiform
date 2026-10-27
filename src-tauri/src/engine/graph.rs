@@ -132,6 +132,7 @@ impl Place {
             pos.z as f32,
             pos.spread as f32,
             pos.spatialize as f32,
+            pos.spatialize_mode,
             stereo,
         );
         // The placed sound gives up what Spread and Spatialize take.
@@ -357,8 +358,8 @@ struct Strip {
     peak: [f32; 2],
     /// Its volume, pan and effect settings moving over the timeline.
     auto: Option<super::automation::StripAuto>,
-    /// 3D Space sessions: the decorrelators for Spread and Spatialize.
-    diffuse: Option<Box<[crate::dsp::diffuse::Decorrelator; 2]>>,
+    /// 3D Space sessions: the decorrelators and delay for Spread and Spatialize.
+    diffuse: Option<Box<crate::dsp::diffuse::Diffuser>>,
 }
 
 /// Peaks since the last read, 0 to 1 (and above on overs).
@@ -535,10 +536,7 @@ impl Graph {
         if s.space.is_some() {
             // Made here, so playing never allocates them.
             for (k, st) in tracks.iter_mut().chain(buses.iter_mut()).enumerate() {
-                st.diffuse = Some(Box::new([
-                    crate::dsp::diffuse::Decorrelator::new(rate, k % 2),
-                    crate::dsp::diffuse::Decorrelator::new(rate, 1 - k % 2),
-                ]));
+                st.diffuse = Some(Box::new(crate::dsp::diffuse::Diffuser::new(rate, k)));
             }
         }
         // 3D Space sessions: the master chain runs on the speakers.
@@ -1019,17 +1017,45 @@ impl Graph {
                         // and folded to stereo for listening.
                         if let (Some(fl), Some(dc)) = (p.field.as_ref(), st.diffuse.as_deref_mut())
                         {
-                            let [da, ds] = dc;
+                            use crate::session::model::SpatializeMode as M;
                             let bed_n = if make_bed { nb } else { 0 };
                             for (k, v) in scratch.as_chunks::<2>().0.iter().enumerate() {
                                 let mid = 0.5 * (v[0] + v[1]);
                                 let side = 0.5 * (v[0] - v[1]);
-                                let a = if fl.spreads { da.run(mid) } else { [0.0; 4] };
-                                let b = if fl.sides { ds.run(side) } else { [0.0; 4] };
+                                let a = if fl.spreads {
+                                    dc.spread.run(mid)
+                                } else {
+                                    [0.0; 4]
+                                };
+                                // Spatialize's signal for each speaker: per tap, and for
+                                // Ambience per side (the weight's sign says which side).
+                                let (b, bl, br, plain) = if !fl.sides {
+                                    ([0.0; 4], [0.0; 4], [0.0; 4], 0.0)
+                                } else {
+                                    match fl.mode {
+                                        M::SideSpread | M::HeightLift => {
+                                            (dc.side.run(side), [0.0; 4], [0.0; 4], 0.0)
+                                        }
+                                        M::Matrix => {
+                                            ([0.0; 4], [0.0; 4], [0.0; 4], dc.delay.run(side))
+                                        }
+                                        M::Ambience => {
+                                            ([0.0; 4], dc.left.run(v[0]), dc.right.run(v[1]), 0.0)
+                                        }
+                                    }
+                                };
                                 let (mut ol, mut or) = (0.0f32, 0.0f32);
                                 for c in 0..fl.spread.len() {
                                     let tap = c % crate::dsp::diffuse::TAPS;
-                                    let mut e = a[tap] * fl.spread[c] + b[tap] * fl.side[c];
+                                    let w = fl.side[c];
+                                    let sp = match fl.mode {
+                                        M::Ambience if w > 0.0 => bl[tap] * w,
+                                        M::Ambience if w < 0.0 => br[tap] * -w,
+                                        M::Ambience => 0.0,
+                                        M::Matrix => plain * w,
+                                        _ => b[tap] * w,
+                                    };
+                                    let mut e = a[tap] * fl.spread[c] + sp;
                                     if let Some((_, g)) = fl.center.filter(|x| x.0 == c) {
                                         e += mid * g;
                                     }
@@ -1282,6 +1308,11 @@ pub struct Mix {
 }
 
 impl Mix {
+    /// New clip levels while playing.
+    pub fn set_clip_gains(&mut self, gains: &[(Id, f32)]) {
+        self.renderer.set_clip_gains(gains);
+    }
+
     /// `renderer` must start at the timeline frame the mix should start
     /// at. The graph is primed with its lead first, which reads that
     /// many frames further on.

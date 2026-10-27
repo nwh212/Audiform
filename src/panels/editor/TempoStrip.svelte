@@ -12,6 +12,7 @@
   import type { TempoDoc } from "../../stores/session";
   import { addChange, barStart, beatsToSeconds, bpmText, meterText, moveChange, nearestBar, parseMeter, removeChange, secondsToBeats, segments, editSegment, BPM_MAX, BPM_MIN, type TempoSegment } from "../../stores/tempo";
   import type { Viewport } from "./timeline";
+  import { portal } from "../voice-chain/effect-window";
   import type { ContextItem } from "../../app/ContextMenu.svelte";
 
   interface Props {
@@ -32,7 +33,8 @@
   let strip = $state<HTMLDivElement | null>(null);
   /** A flag being dragged, and the bar it would land on. */
   let drag = $state<{ id: string; bar: number } | null>(null);
-  let editing = $state<{ seg: TempoSegment; x: number; bpm: string; meter: string } | null>(null);
+  /** The change being typed into; `x`, `y` are window coordinates. */
+  let editing = $state<{ seg: TempoSegment; x: number; y: number; bpm: string; meter: string } | null>(null);
 
   /** The bar (from 1) nearest the pointer, counted as if change `id` were not there. */
   function barNear(clientX: number, id: string | null): number {
@@ -74,7 +76,10 @@
   }
 
   function openEdit(seg: TempoSegment, x: number) {
-    editing = { seg, x: Math.max(0, Math.min(width - 190, x)), bpm: bpmText(seg.bpm), meter: meterText(seg) };
+    // Placed over the whole window (see `portal`), so no panel draws over it.
+    const box = strip?.getBoundingClientRect();
+    const left = (box?.left ?? 0) + Math.max(0, Math.min(width - 190, x));
+    editing = { seg, x: Math.min(left, window.innerWidth - 240), y: (box?.top ?? 0) + 17, bpm: bpmText(seg.bpm), meter: meterText(seg) };
   }
 
   function applyEdit() {
@@ -155,7 +160,9 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="edit"
+      use:portal
       style:left="{ed.x}px"
+      style:top="{ed.y}px"
       ondblclick={(e) => e.stopPropagation()}
       onpointerdown={(e) => e.stopPropagation()}
       onkeydown={(e) => {
@@ -209,9 +216,8 @@
     color: var(--text-dim);
   }
   .edit {
-    position: absolute;
-    top: 17px;
-    z-index: 20;
+    position: fixed;
+    z-index: 950;
     display: flex;
     gap: 6px;
     align-items: center;

@@ -52,6 +52,7 @@ pub fn jump_for(session: &Session, mode: Option<PlayMode>) -> Option<Jump> {
 /// Plays from `from` (session samples), or from the playhead.
 #[tauri::command]
 pub fn transport_play(
+    app: tauri::AppHandle,
     transport: State<'_, Transport>,
     preview: State<'_, PreviewPlayer>,
     open: State<'_, OpenSession>,
@@ -63,7 +64,13 @@ pub fn transport_play(
     playing.set(super::wave::PlayingDoc::Session);
     let s = open.0.lock().map_err(|e| e.to_string())?;
     let at = from.unwrap_or(s.session.view.playhead);
-    transport.play(&s.session, at, jump_for(&s.session, mode))
+    // Picks up renders made while the session was elsewhere (a Waveform edit).
+    super::prerender::refresh(&app, &s.session);
+    transport.play(
+        &super::live::heard(&s.session),
+        at,
+        jump_for(&s.session, mode),
+    )
 }
 
 /// Stops and returns where playback was, in session samples.
@@ -87,4 +94,36 @@ pub fn transport_set_metronome(settings: crate::engine::metronome::Settings) {
 #[tauri::command]
 pub fn transport_status(transport: State<'_, Transport>) -> TransportStatus {
     transport.status()
+}
+
+/// Hears a level change (in dB) over `start..end` of what is playing (or
+/// everything when `end` is 0) at once, while a level control is being
+/// dragged. 0 dB ends it. Nothing is edited.
+#[tauri::command]
+pub fn transport_audition_level(transport: State<'_, Transport>, db: f64, start: u64, end: u64) {
+    let gain = if db == 0.0 {
+        1.0
+    } else {
+        10f32.powf(db as f32 / 20.0)
+    };
+    transport.audition(gain, start, if end == 0 { u64::MAX } else { end });
+}
+
+/// Hears a clip's level change (in dB, against its level now) on its
+/// track only, over `start..end` of the timeline, while its handle is
+/// dragged. 0 dB ends it. Nothing is edited. False when playback cannot
+/// do this (stopped, or a routed mix): edits are heard instead.
+#[tauri::command]
+pub fn transport_audition_clip(
+    transport: State<'_, Transport>,
+    track_id: crate::session::model::Id,
+    db: f64,
+    start: u64,
+    end: u64,
+) -> bool {
+    if db == 0.0 {
+        transport.audition(1.0, 0, 0);
+        return true;
+    }
+    transport.audition_track(track_id, 10f32.powf(db as f32 / 20.0), start, end)
 }

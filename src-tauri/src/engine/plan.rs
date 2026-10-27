@@ -21,8 +21,8 @@ use std::path::PathBuf;
 
 use crate::dsp::effects::chain_hash;
 use crate::session::model::{
-    Clip, EffectChain, EffectSlot, EnvelopeTarget, Fade, FadeShape, Id, Session, Tempo, Track,
-    TrackKind,
+    Clip, EffectChain, EffectSlot, EnvelopeTarget, Fade, FadeShape, Id, InvertChannel, Session,
+    Tempo, Track, TrackKind,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,6 +37,9 @@ pub struct ClipPlan {
     pub source_start: f64,
     /// Linear clip gain. 0 when the clip is muted.
     pub gain: f32,
+    /// Per-channel polarity: -1 on a side flipped on its own (a stereo
+    /// clip inverted on one channel), else 1.
+    pub flip: [f32; 2],
     /// Fade lengths in output frames.
     pub fade_in: u64,
     pub fade_out: u64,
@@ -205,6 +208,7 @@ impl ClipPlan {
             len,
             source_start,
             gain: 1.0,
+            flip: [1.0, 1.0],
             fade_in: 0,
             fade_out: 0,
             fade_in_shape: (FadeShape::Linear, 0.0),
@@ -232,6 +236,7 @@ impl ClipPlan {
             && self.pan.is_empty()
             && self.loop_len == 0
             && self.covers.is_empty()
+            && self.flip == [1.0, 1.0]
     }
 
     /// Looped clips: a short dip on both sides of each seam inside the
@@ -274,12 +279,12 @@ impl ClipPlan {
     pub fn gains_at(&self, rel: u64) -> [f32; 2] {
         let g = self.gain_at(rel);
         if self.pan.is_empty() {
-            return [g, g];
+            return [g * self.flip[0], g * self.flip[1]];
         }
         let pan = (interpolate(&self.pan, rel) / 100.0).clamp(-1.0, 1.0);
         let left = if pan > 0.0 { 1.0 - pan } else { 1.0 };
         let right = if pan < 0.0 { 1.0 + pan } else { 1.0 };
-        [g * left, g * right]
+        [g * left * self.flip[0], g * right * self.flip[1]]
     }
 
     /// Gain at `rel`, a frame offset from the clip's start.
@@ -535,15 +540,11 @@ pub fn build(session: &Session, out_rate: u32) -> Plan {
                         len,
                         // A reversed clip's region is kept in the reversed copy's terms.
                         source_start: c.source_in as f64 / f64::from(src_rate),
-                        gain: if c.muted {
-                            0.0
-                        } else {
-                            let g = 10f64.powf(c.gain_db.clamp(-96.0, 24.0) / 20.0) as f32;
-                            if c.inverted {
-                                -g
-                            } else {
-                                g
-                            }
+                        gain: clip_gain(c),
+                        flip: match (c.inverted, c.invert_channel) {
+                            (true, Some(InvertChannel::Left)) => [-1.0, 1.0],
+                            (true, Some(InvertChannel::Right)) => [1.0, -1.0],
+                            _ => [1.0, 1.0],
                         },
                         fade_in: fade(c.fade_in.length),
                         fade_out: fade(c.fade_out.length),
@@ -637,7 +638,9 @@ fn envelope_hash(c: &Clip) -> u64 {
         h = h.wrapping_mul(0x100_0000_01b3);
     };
     // Reversed or inverted changes what plays too.
-    mix(u64::from(c.reversed) | u64::from(c.inverted) << 1);
+    mix(u64::from(c.reversed)
+        | u64::from(c.inverted) << 1
+        | (c.invert_channel.map_or(0, |s| s as u64 + 1)) << 2);
     // A stretch changes what plays where, so it is part of the shape too.
     if let Some(st) = c.stretch {
         mix(0x5354_5243);
@@ -842,6 +845,30 @@ fn midi_hash(session: &Session) -> u64 {
     h
 }
 
+/// Each audio clip's gain as playback applies it: its level, flipped when
+/// inverted, nothing when muted. Sent to a running playback when only
+/// levels changed, so a level drag is heard without a restart.
+pub fn clip_gains(session: &Session) -> Vec<(Id, f32)> {
+    session
+        .tracks
+        .iter()
+        .flat_map(|t| t.clips.iter())
+        .map(|c| (c.id, clip_gain(c)))
+        .collect()
+}
+
+fn clip_gain(c: &Clip) -> f32 {
+    if c.muted {
+        return 0.0;
+    }
+    let g = 10f64.powf(c.gain_db.clamp(-96.0, 24.0) / 20.0) as f32;
+    if c.inverted && c.invert_channel.is_none() {
+        -g
+    } else {
+        g
+    }
+}
+
 fn clip_layout(session: &Session) -> Vec<(Id, Vec<ClipKey>)> {
     session
         .tracks
@@ -852,11 +879,9 @@ fn clip_layout(session: &Session) -> Vec<(Id, Vec<ClipKey>)> {
                 t.clips
                     .iter()
                     .map(|c| {
-                        let gain = if c.muted {
-                            f64::NEG_INFINITY
-                        } else {
-                            c.gain_db
-                        };
+                        // The clip's level is not part of the layout: it
+                        // changes while playing (see `clip_gains`). Muting is.
+                        let gain = if c.muted { f64::NEG_INFINITY } else { 0.0 };
                         (
                             c.id,
                             c.media_id,
@@ -1031,5 +1056,21 @@ mod tests {
         );
         c.gain = 0.5;
         assert_eq!(c.gains_at(1_000), [0.0, 0.5], "clip gain still applies");
+    }
+}
+
+#[cfg(test)]
+mod invert_tests {
+    use super::*;
+
+    #[test]
+    fn one_side_of_a_stereo_clip_can_be_flipped() {
+        let mut c = ClipPlan::plain(Id::nil(), "x.wav".into(), 0, 100, 0.0);
+        c.flip = [-1.0, 1.0];
+        assert!(!c.is_flat());
+        let [l, r] = c.gains_at(10);
+        // Folded to mono, left and right now cancel.
+        assert_eq!((l, r), (-1.0, 1.0));
+        assert_eq!(l + r, 0.0);
     }
 }

@@ -25,6 +25,9 @@ use std::time::{Duration, Instant};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
 use rtrb::{Consumer, Producer, RingBuffer};
+
+use crate::dsp::effects::ChainProcessor;
+use crate::session::model::EffectChain;
 use serde::{Deserialize, Serialize};
 
 /// One thing to record: usually an armed track.
@@ -42,6 +45,10 @@ pub struct RecordTarget {
     /// Also play this input through the speakers.
     #[serde(default)]
     pub monitor: bool,
+    /// The track's Voice Chain. With `monitor`, the player hears the
+    /// built-in effects in it, as they were when monitoring started.
+    #[serde(default)]
+    pub chain: Option<EffectChain>,
 }
 
 /// A finished take.
@@ -53,6 +60,10 @@ pub struct Take {
     pub channels: u16,
     /// Frames written.
     pub length: u64,
+    /// Frames into the recording at which this take began: 0 for a track
+    /// armed from the start, later for one armed while recording.
+    #[serde(default)]
+    pub start: u64,
 }
 
 /// Which device and which of its channels (0-based) a target records.
@@ -106,11 +117,15 @@ pub fn route(input: Option<&str>, take_channels: u16) -> Option<Route> {
 
 /// Writes one device's interleaved input to each take's file.
 pub struct TakeWriter {
+    dir: PathBuf,
+    rate: u32,
     takes: Vec<(
         Take,
         Vec<usize>,
         hound::WavWriter<std::io::BufWriter<std::fs::File>>,
     )>,
+    /// Takes already closed (their track was disarmed while recording).
+    done: Vec<Take>,
     device_channels: usize,
 }
 
@@ -122,33 +137,58 @@ impl TakeWriter {
         device_channels: usize,
     ) -> Result<Self, String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        let mut takes = Vec::new();
-        for (t, chans) in targets {
-            let channels = chans.len().clamp(1, 2) as u16;
-            let path = crate::export::mixdown::unique_path(dir, &t.name, "wav");
-            let spec = hound::WavSpec {
-                channels,
-                sample_rate: rate,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
-            };
-            let w = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
-            takes.push((
-                Take {
-                    key: t.key.clone(),
-                    path,
-                    sample_rate: rate,
-                    channels,
-                    length: 0,
-                },
-                chans.clone(),
-                w,
-            ));
-        }
-        Ok(Self {
-            takes,
+        let mut w = Self {
+            dir: dir.to_path_buf(),
+            rate,
+            takes: Vec::new(),
+            done: Vec::new(),
             device_channels: device_channels.max(1),
-        })
+        };
+        for (t, chans) in targets {
+            w.add(t, chans, 0)?;
+        }
+        Ok(w)
+    }
+
+    /// Starts a take for `target`, `start` frames into the recording. Each
+    /// target gets its own file, even when several share an input.
+    pub fn add(&mut self, t: &RecordTarget, chans: &[usize], start: u64) -> Result<(), String> {
+        let channels = chans.len().clamp(1, 2) as u16;
+        let path = crate::export::mixdown::unique_path(&self.dir, &t.name, "wav");
+        let spec = hound::WavSpec {
+            channels,
+            sample_rate: self.rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let w = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
+        self.takes.push((
+            Take {
+                key: t.key.clone(),
+                path,
+                sample_rate: self.rate,
+                channels,
+                length: 0,
+                start,
+            },
+            chans.to_vec(),
+            w,
+        ));
+        Ok(())
+    }
+
+    /// Ends the take for `key`, if this device is recording it.
+    pub fn close(&mut self, key: &str) -> Result<(), String> {
+        while let Some(i) = self.takes.iter().position(|(t, _, _)| t.key == key) {
+            let (take, _, w) = self.takes.remove(i);
+            w.finalize().map_err(|e| e.to_string())?;
+            self.done.push(take);
+        }
+        Ok(())
+    }
+
+    pub fn is_recording(&self, key: &str) -> bool {
+        self.takes.iter().any(|(t, _, _)| t.key == key)
     }
 
     /// Writes whole frames from `interleaved`. Channels the device does
@@ -168,7 +208,7 @@ impl TakeWriter {
     }
 
     pub fn finish(self) -> Result<Vec<Take>, String> {
-        let mut out = Vec::new();
+        let mut out = self.done;
         for (take, _, w) in self.takes {
             w.finalize().map_err(|e| e.to_string())?;
             out.push(take);
@@ -226,6 +266,20 @@ impl LiveTap {
         }
     }
 
+    pub fn add(&mut self, t: &RecordTarget, c: &[usize]) {
+        self.taps.push(Tap {
+            key: t.key.clone(),
+            chans: c.iter().copied().take(2).collect(),
+            lo: vec![f32::MAX; c.len().min(2)],
+            hi: vec![f32::MIN; c.len().min(2)],
+            count: 0,
+        });
+    }
+
+    pub fn remove(&mut self, key: &str) {
+        self.taps.retain(|t| t.key != key);
+    }
+
     /// Adds whole frames; finished blocks and peaks go into `live`.
     pub fn push(&mut self, interleaved: &[f32], live: &mut HashMap<String, Live>) {
         let n = self.device_channels;
@@ -254,32 +308,61 @@ impl LiveTap {
     }
 }
 
+/// The chain a monitored track's player hears: the track's own built-in
+/// effects. A VST3 plug-in is left out, since it runs in another process
+/// and its delay would be heard, and so is an effect that listens to
+/// another track.
+fn monitor_chain(chain: Option<&EffectChain>, rate: u32) -> Option<ChainProcessor> {
+    let mut c = chain?.clone();
+    c.slots
+        .retain(|s| !crate::plugins::is_plugin(&s.effect) && s.sidechain.is_none());
+    ChainProcessor::new(&c, rate)
+}
+
 /// Mixes the monitored targets' channels to stereo for the speakers. A
-/// mono target goes to both sides; a stereo one keeps its sides.
+/// mono target goes to both sides; a stereo one keeps its sides. A target
+/// with a Voice Chain is heard through its built-in effects.
 pub struct MonitorMix {
     picks: Vec<Vec<usize>>,
+    chains: Vec<Option<ChainProcessor>>,
     device_channels: usize,
+    side: Vec<f32>,
+    sum: Vec<f32>,
 }
 
 impl MonitorMix {
     /// None when no target asks to be monitored.
-    pub fn new(targets: &[(RecordTarget, Vec<usize>)], device_channels: usize) -> Option<Self> {
-        let picks: Vec<Vec<usize>> = targets
+    pub fn new(
+        targets: &[(RecordTarget, Vec<usize>)],
+        device_channels: usize,
+        rate: u32,
+    ) -> Option<Self> {
+        let monitored: Vec<&(RecordTarget, Vec<usize>)> = targets
             .iter()
             .filter(|(t, c)| t.monitor && !c.is_empty())
-            .map(|(_, c)| c.clone())
+            .collect();
+        let picks: Vec<Vec<usize>> = monitored.iter().map(|(_, c)| c.clone()).collect();
+        let chains = monitored
+            .iter()
+            .map(|(t, _)| monitor_chain(t.chain.as_ref(), rate))
             .collect();
         (!picks.is_empty()).then_some(Self {
             picks,
+            chains,
             device_channels: device_channels.max(1),
+            side: Vec::new(),
+            sum: Vec::new(),
         })
     }
 
     /// Appends one stereo frame (left, right) per whole input frame.
-    pub fn mix(&self, interleaved: &[f32], out: &mut Vec<f32>) {
-        for frame in interleaved.chunks_exact(self.device_channels) {
-            let (mut l, mut r) = (0f32, 0f32);
-            for chans in &self.picks {
+    pub fn mix(&mut self, interleaved: &[f32], out: &mut Vec<f32>) {
+        let frames = interleaved.len() / self.device_channels;
+        self.sum.clear();
+        self.sum.resize(frames * 2, 0.0);
+        for (chans, chain) in self.picks.iter().zip(self.chains.iter_mut()) {
+            self.side.clear();
+            for frame in interleaved.chunks_exact(self.device_channels) {
                 let at = |i: usize| {
                     chans
                         .get(i)
@@ -288,16 +371,21 @@ impl MonitorMix {
                         .unwrap_or(0.0)
                 };
                 if chans.len() == 1 {
-                    l += at(0);
-                    r += at(0);
+                    self.side.push(at(0));
+                    self.side.push(at(0));
                 } else {
-                    l += at(0);
-                    r += at(1);
+                    self.side.push(at(0));
+                    self.side.push(at(1));
                 }
             }
-            out.push(l.clamp(-1.0, 1.0));
-            out.push(r.clamp(-1.0, 1.0));
+            if let Some(c) = chain {
+                c.process(&mut self.side);
+            }
+            for (s, v) in self.sum.iter_mut().zip(&self.side) {
+                *s += *v;
+            }
         }
+        out.extend(self.sum.iter().map(|v| v.clamp(-1.0, 1.0)));
     }
 }
 
@@ -323,6 +411,19 @@ struct Running {
     /// False when only metering armed inputs.
     writing: bool,
     threads: Vec<JoinHandle<Result<Vec<Take>, String>>>,
+    /// Each open device and the line to its thread, for tracks armed or
+    /// disarmed while recording.
+    devices: Vec<(Option<String>, mpsc::Sender<Cmd>)>,
+    dir: Option<PathBuf>,
+    started: Instant,
+    /// Whether a device thread keeps the recording's clock yet.
+    clock: bool,
+}
+
+/// A change to what a running device thread records.
+enum Cmd {
+    Add(RecordTarget, Vec<usize>),
+    Remove(String),
 }
 
 /// One input device and the targets (with their channels) it feeds.
@@ -372,6 +473,7 @@ impl Recorder {
             None => {}
         }
         let writing = dir.is_some();
+        let asked = !targets.is_empty();
         // Group targets by device.
         let mut groups: Vec<DeviceGroup> = Vec::new();
         for t in targets {
@@ -383,7 +485,9 @@ impl Recorder {
                 None => groups.push((r.device, vec![(t, r.channels)])),
             }
         }
-        if groups.is_empty() {
+        // Recording may start with nothing armed: tracks armed later start
+        // their takes then. Metering needs something to meter.
+        if groups.is_empty() && (asked || !writing) {
             return Err("No armed track has an input. Pick one on the track's input menu.".into());
         }
         let shared = Arc::new(Shared {
@@ -395,40 +499,56 @@ impl Recorder {
             peak: AtomicU32::new(0),
             overruns: AtomicU64::new(0),
         });
-        let mut threads = Vec::new();
-        for (i, (device, list)) in groups.into_iter().enumerate() {
-            let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
-            let s = shared.clone();
-            let dir = dir.clone();
-            let first = i == 0;
-            let handle = thread::Builder::new()
-                .name("record".into())
-                .spawn(move || run(device, list, dir, s, first, ready_tx))
-                .map_err(|e| e.to_string())?;
-            match ready_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(Ok(())) => threads.push(handle),
-                Ok(Err(e)) => {
-                    shared.stop.store(true, Ordering::SeqCst);
-                    let _ = handle.join();
-                    for t in threads {
-                        let _ = t.join();
-                    }
-                    return Err(e);
+        let started = Instant::now();
+        let mut running = Running {
+            shared: shared.clone(),
+            writing,
+            threads: Vec::new(),
+            devices: Vec::new(),
+            dir: dir.clone(),
+            started,
+            clock: false,
+        };
+        for (device, list) in groups {
+            if let Err(e) = spawn_device(&mut running, device, list, false) {
+                shared.stop.store(true, Ordering::SeqCst);
+                for t in running.threads {
+                    let _ = t.join();
                 }
-                Err(_) => {
-                    shared.stop.store(true, Ordering::SeqCst);
-                    for t in threads {
-                        let _ = t.join();
-                    }
-                    return Err("The audio input did not respond.".into());
-                }
+                return Err(e);
             }
         }
-        *cur = Some(Running {
-            shared,
-            writing,
-            threads,
-        });
+        *cur = Some(running);
+        Ok(())
+    }
+
+    /// While recording, starts a take for a track armed just now, from
+    /// this moment. Opens its input if no other track is using it.
+    pub fn add(&self, target: RecordTarget) -> Result<(), String> {
+        let mut cur = self.current.lock().map_err(|e| e.to_string())?;
+        let Some(r) = cur.as_mut().filter(|r| r.writing) else {
+            return Err("Not recording.".into());
+        };
+        let Some(route) = route(target.input.as_deref(), target.channels) else {
+            return Ok(());
+        };
+        if let Some((_, tx)) = r.devices.iter().find(|(d, _)| *d == route.device) {
+            return tx
+                .send(Cmd::Add(target, route.channels))
+                .map_err(|_| "The recording input stopped.".to_string());
+        }
+        spawn_device(r, route.device, vec![(target, route.channels)], true)
+    }
+
+    /// While recording, ends the take of a track disarmed just now. The
+    /// take is kept and placed when recording stops.
+    pub fn remove(&self, key: &str) -> Result<(), String> {
+        let cur = self.current.lock().map_err(|e| e.to_string())?;
+        if let Some(r) = cur.as_ref().filter(|r| r.writing) {
+            for (_, tx) in &r.devices {
+                let _ = tx.send(Cmd::Remove(key.to_string()));
+            }
+        }
         Ok(())
     }
 
@@ -496,16 +616,61 @@ impl Recorder {
             .lock()
             .map(|mut m| std::mem::take(&mut *m))
             .unwrap_or_default();
+        // Before any input is open (recording started with nothing
+        // armed), time is counted by the clock.
+        let seconds = if r.clock {
+            r.shared.frames.load(Ordering::Relaxed) as f64 / f64::from(rate)
+        } else {
+            r.started.elapsed().as_secs_f64()
+        };
         RecordStatus {
             recording: r.writing,
             monitoring: !r.writing,
-            rate,
+            rate: if r.clock { rate } else { 0 },
             live,
-            seconds: r.shared.frames.load(Ordering::Relaxed) as f64 / f64::from(rate),
+            seconds,
             peak: f32::from_bits(r.shared.peak.swap(0, Ordering::Relaxed)),
             overruns: r.shared.overruns.load(Ordering::Relaxed),
             monitor_note: r.shared.monitor_note.lock().ok().and_then(|n| n.clone()),
         }
+    }
+}
+
+/// Opens one input device on its own thread for `list`, and waits until it
+/// runs. `late` for a device opened while recording: its takes start
+/// where the recording has got to.
+fn spawn_device(
+    r: &mut Running,
+    device: Option<String>,
+    list: Vec<(RecordTarget, Vec<usize>)>,
+    late: bool,
+) -> Result<(), String> {
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
+    let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
+    let s = r.shared.clone();
+    let dir = r.dir.clone();
+    // The first device opened keeps the recording's clock.
+    let first = !r.clock;
+    let since = if late { Some(r.started) } else { None };
+    let dev = device.clone();
+    let handle = thread::Builder::new()
+        .name("record".into())
+        .spawn(move || run(dev, list, dir, s, first, since, cmd_rx, ready_tx))
+        .map_err(|e| e.to_string())?;
+    match ready_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(())) => {
+            r.threads.push(handle);
+            r.devices.push((device, cmd_tx));
+            if first {
+                r.clock = true;
+            }
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            let _ = handle.join();
+            Err(e)
+        }
+        Err(_) => Err("The audio input did not respond.".into()),
     }
 }
 
@@ -560,12 +725,15 @@ fn silence_to_add(elapsed_frames: u64, got_frames: u64, rate: u32) -> u64 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
     device: Option<String>,
     targets: Vec<(RecordTarget, Vec<usize>)>,
     dir: Option<PathBuf>,
     shared: Arc<Shared>,
     first: bool,
+    since: Option<Instant>,
+    commands: mpsc::Receiver<Cmd>,
     ready: mpsc::Sender<Result<(), String>>,
 ) -> Result<Vec<Take>, String> {
     let fail = |e: String| {
@@ -589,9 +757,18 @@ fn run(
     let config: StreamConfig = supported.config();
     let rate = config.sample_rate;
     let channels = usize::from(config.channels);
+    // A device opened while recording starts where the recording is.
+    let base = since.map_or(0, |t| (t.elapsed().as_secs_f64() * f64::from(rate)) as u64);
     let mut writer = match dir {
-        Some(d) => match TakeWriter::create(&d, &targets, rate, channels) {
-            Ok(w) => Some(w),
+        Some(d) => match TakeWriter::create(&d, &[], rate, channels) {
+            Ok(mut w) => {
+                for (t, c) in &targets {
+                    if let Err(e) = w.add(t, c, base) {
+                        return fail(format!("Could not create the recording file: {e}"));
+                    }
+                }
+                Some(w)
+            }
             Err(e) => return fail(format!("Could not create the recording file: {e}")),
         },
         None => None,
@@ -612,19 +789,23 @@ fn run(
     };
     if first {
         shared.rate.store(rate, Ordering::Relaxed);
+        shared.frames.store(base, Ordering::Relaxed);
     }
     let _ = ready.send(Ok(()));
 
     // Input monitoring. A system-audio take is already what the speakers
     // play, so it is never sent back to them.
-    let mix = if loopback {
+    let mut mix = if loopback {
         None
     } else {
-        MonitorMix::new(&targets, channels)
+        MonitorMix::new(&targets, channels, rate)
     };
+    // An ASIO driver opens for one program at a time, so ASIO monitoring
+    // plays on the input's own driver.
+    let input_name = dev.description().ok().map(|d| d.name().to_string());
     let mut monitor: Option<(Producer<f32>, cpal::Stream)> = None;
     if mix.is_some() {
-        match open_monitor(rate) {
+        match open_monitor(rate, input_name.as_deref()) {
             Ok(v) => monitor = Some(v),
             Err(e) => {
                 if let Ok(mut n) = shared.monitor_note.lock() {
@@ -663,7 +844,7 @@ fn run(
             if let Ok(mut live) = shared.live.lock() {
                 tap.push(&block[..n], &mut live);
             }
-            if let (Some(m), Some((p, _))) = (mix.as_ref(), monitor.as_mut()) {
+            if let (Some(m), Some((p, _))) = (mix.as_mut(), monitor.as_mut()) {
                 mixed.clear();
                 m.mix(&block[..n], &mut mixed);
                 let queued = p.buffer().capacity() - p.slots();
@@ -687,6 +868,33 @@ fn run(
             Err(e) => {
                 result = Err(e);
                 break;
+            }
+        }
+        // Tracks armed or disarmed while recording.
+        while let Ok(cmd) = commands.try_recv() {
+            match cmd {
+                Cmd::Add(t, c) => {
+                    if let Some(w) = writer.as_mut() {
+                        if !w.is_recording(&t.key) {
+                            if let Err(e) = w.add(&t, &c, base + got) {
+                                if let Ok(mut n) = shared.monitor_note.lock() {
+                                    *n = Some(format!("Could not start recording {}: {e}", t.name));
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                    tap.remove(&t.key);
+                    tap.add(&t, &c);
+                }
+                Cmd::Remove(key) => {
+                    if let Some(w) = writer.as_mut() {
+                        if let Err(e) = w.close(&key) {
+                            result = Err(e);
+                        }
+                    }
+                    tap.remove(&key);
+                }
             }
         }
         if loopback {
@@ -726,9 +934,24 @@ fn run(
 
 /// Opens the default output at the input's rate for monitoring. Returns
 /// the ring that feeds it (stereo frames) and the running stream.
-fn open_monitor(rate: u32) -> Result<(Producer<f32>, cpal::Stream), String> {
+fn open_monitor(
+    rate: u32,
+    input_name: Option<&str>,
+) -> Result<(Producer<f32>, cpal::Stream), String> {
     let host = crate::engine::host::host();
-    let dev = super::output::output_device(&host)
+    // With ASIO, the output of the driver the input is on; the output picked
+    // in Settings may belong to another driver, which cannot be opened too.
+    let same_driver = if crate::engine::host::asio() {
+        input_name.and_then(|n| {
+            host.output_devices()
+                .ok()?
+                .find(|d| d.description().ok().is_some_and(|x| x.name() == n))
+        })
+    } else {
+        None
+    };
+    let dev = same_driver
+        .or_else(|| super::output::output_device(&host))
         .ok_or("Input monitoring needs an output: no speakers or headphones found.")?;
     let mut best: Option<cpal::SupportedStreamConfig> = None;
     for c in dev.supported_output_configs().map_err(|e| e.to_string())? {
@@ -886,17 +1109,19 @@ mod tests {
             channels: 1,
             name: key.into(),
             monitor,
+            chain: None,
         };
-        assert!(MonitorMix::new(&[(mk("a", false), vec![0])], 3).is_none());
+        assert!(MonitorMix::new(&[(mk("a", false), vec![0])], 3, 48_000).is_none());
         // Device has 3 channels: a mono mic on 0 (monitored), a stereo pair
         // on 1-2 (monitored), and nothing else.
-        let m = MonitorMix::new(
+        let mut m = MonitorMix::new(
             &[
                 (mk("mic", true), vec![0]),
                 (mk("pair", true), vec![1, 2]),
                 (mk("quiet", false), vec![0]),
             ],
             3,
+            48_000,
         )
         .unwrap();
         let mut out = Vec::new();
@@ -907,6 +1132,27 @@ mod tests {
     }
 
     #[test]
+    fn monitor_applies_the_tracks_built_in_effects() {
+        let chain = EffectChain {
+            output_gain_db: -6.0206,
+            ..EffectChain::default()
+        };
+        let target = RecordTarget {
+            key: "mic".into(),
+            input: None,
+            channels: 1,
+            name: "mic".into(),
+            monitor: true,
+            chain: Some(chain),
+        };
+        let mut m = MonitorMix::new(&[(target, vec![0])], 1, 48_000).unwrap();
+        let mut out = Vec::new();
+        m.mix(&[0.8, 0.8], &mut out);
+        assert_eq!(out.len(), 4);
+        assert!((out[0] - 0.4).abs() < 1e-3 && (out[1] - 0.4).abs() < 1e-3);
+    }
+
+    #[test]
     fn live_tap_measures_each_target() {
         let mk = |key: &str| RecordTarget {
             key: key.into(),
@@ -914,6 +1160,7 @@ mod tests {
             channels: 1,
             name: key.into(),
             monitor: false,
+            chain: None,
         };
         let mut tap = LiveTap::new(&[(mk("a"), vec![0]), (mk("b"), vec![1])], 2);
         let mut live = HashMap::new();
@@ -938,6 +1185,7 @@ mod tests {
             channels: 1,
             name: key.into(),
             monitor: false,
+            chain: None,
         };
         let mut w = TakeWriter::create(
             dir.path(),
@@ -970,6 +1218,36 @@ mod tests {
         assert_eq!(read(&takes[2]), vec![0.1, -0.1, 0.2, -0.2, 0.3, -0.3]);
         assert_eq!(read(&takes[3]), vec![0.0, 0.0, 0.0]);
         assert_eq!(takes[2].channels, 2);
+    }
+
+    #[test]
+    fn tracks_armed_while_recording_get_their_own_takes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mk = |key: &str| RecordTarget {
+            key: key.into(),
+            input: None,
+            channels: 1,
+            name: "Track".into(),
+            monitor: false,
+            chain: None,
+        };
+        let mut w = TakeWriter::create(dir.path(), &[], 48_000, 1).unwrap();
+        w.push(&[0.1, 0.2]).unwrap();
+        // Two tracks armed on the same input after two frames.
+        w.add(&mk("a"), &[0], 2).unwrap();
+        w.add(&mk("b"), &[0], 2).unwrap();
+        w.push(&[0.3, 0.4]).unwrap();
+        // One disarmed; the other keeps going.
+        w.close("a").unwrap();
+        assert!(!w.is_recording("a"));
+        w.push(&[0.5]).unwrap();
+        let takes = w.finish().unwrap();
+        assert_eq!(takes.len(), 2);
+        let a = takes.iter().find(|t| t.key == "a").unwrap();
+        let b = takes.iter().find(|t| t.key == "b").unwrap();
+        assert_ne!(a.path, b.path, "separate files for the same source");
+        assert_eq!((a.start, a.length), (2, 2));
+        assert_eq!((b.start, b.length), (2, 3));
     }
 
     #[test]

@@ -9,7 +9,7 @@
  * view's sums.
  */
 
-import { DEFAULT_SPACE_POS, type SpaceDoc, type SpaceLayout, type SpacePosDoc } from "../../stores/session";
+import { DEFAULT_SPACE_POS, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
 
 export interface SpeakerSpot {
   name: string;
@@ -71,8 +71,17 @@ export function tidyPos(p: Partial<SpacePosDoc> | null | undefined): SpacePosDoc
     lfe: c(p?.lfe, 0, 1, 0),
     spread: c(p?.spread, 0, 1, 0),
     spatialize: c(p?.spatialize, 0, 1, 0),
+    ...(p?.spatialize_mode && p.spatialize_mode !== "side_spread" && SPATIALIZE_MODES.some((m) => m.id === p.spatialize_mode) ? { spatialize_mode: p.spatialize_mode } : {}),
   };
 }
+
+/** The Spatialize methods, as the 3D Space panel lists them. */
+export const SPATIALIZE_MODES: { id: SpatializeMode; label: string; tip: string }[] = [
+  { id: "side_spread", label: "Side Spread", tip: "What differs between left and right goes, smeared in time, to the surround and height speakers; what they share feeds the center. Wide and smooth." },
+  { id: "matrix", label: "Matrix", tip: "The difference goes to the same speakers on a short plain delay, as a passive surround decoder does. Tight and punchy; folds back to stereo cleanly." },
+  { id: "ambience", label: "Ambience", tip: "Smeared copies of the left side go to the left surround and height speakers, of the right side to the right ones. Lush and enveloping, for music and room sound." },
+  { id: "height_lift", label: "Height Lift", tip: "Like Side Spread, but only to the height speakers, keeping the surrounds clear. Layouts without heights use Side Spread." },
+];
 
 /** The room view: room units (-1 to 1) to pixels in a square `size` across, front at the top, with a margin. */
 export function toView(x: number, y: number, size: number): [number, number] {

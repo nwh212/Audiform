@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+  <!-- Audiform Analog theme: the fine grit of matte black plastic, as a faint light-and-dark speckle. -->
+  <filter id="n" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="9" stitchTiles="stitch"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.1 -0.5"/>
+  </filter>
+  <rect width="100%" height="100%" filter="url(#n)"/>
+</svg>

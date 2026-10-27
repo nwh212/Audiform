@@ -143,6 +143,8 @@ export class LiveWave {
 export interface LiveTakes {
   /** Session sample where the takes start. */
   at: number;
+  /** Session sample where a track armed while recording began, by track id. */
+  starts?: Record<string, number>;
   /** Device sample rate. */
   rate: number;
   /** Per track id (or "wave" for the Waveform editor). */

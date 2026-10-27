@@ -43,7 +43,7 @@ export class FileDropRouter {
 
   /**
    * `sessions`, when set, takes any drop that includes a session file
-   * (.altaudio or .sesx), wherever it lands, with all the dropped paths.
+   * (.audfrm, .altaudio or .sesx), wherever it lands, with all the dropped paths.
    */
   constructor(
     private readonly fallback: (paths: string[]) => void,
@@ -179,5 +179,5 @@ export async function bindNativeFileDrop(router: FileDropRouter): Promise<() => 
 
 /** A session file the app opens: our own or a .sesx. */
 export function isSessionFile(path: string): boolean {
-  return /\.(altaudio|sesx)$/i.test(path);
+  return /\.(audfrm|altaudio|sesx)$/i.test(path);
 }

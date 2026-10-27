@@ -151,6 +151,7 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
                         lfe: 0.0,
                         spread: 0.0,
                         spatialize: 0.0,
+                        spatialize_mode: Default::default(),
                     });
                 }
             }

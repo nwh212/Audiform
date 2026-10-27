@@ -11,6 +11,7 @@ import "./styles/tokens.css";
 import "./styles/dock-theme.css";
 import "./styles/theme-aero.css";
 import "./styles/theme-phosphor.css";
+import "./styles/theme-analog.css";
 import App from "./app/App.svelte";
 import { installNativeMenuBlock } from "./app/native-menu";
 

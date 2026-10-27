@@ -5,13 +5,17 @@
 
   Right-click menu. Opens at the pointer, stays on screen, closes on
   Escape, outside click, or after an item runs. Typing letters jumps to
-  the first row in the open list that starts with them.
+  the first row in the open list that starts with them. A list that
+  starts with a search row shows a search box instead: what is typed
+  there lists the matching rows from anywhere in the menu.
 -->
 <script lang="ts" module>
   export type ContextItem =
     | { kind: "item"; label: string; run: () => void; disabled?: boolean; shortcut?: string | undefined; checked?: boolean; reason?: string | null | undefined }
     | { kind: "sub"; label: string; items: readonly ContextItem[]; disabled?: boolean; reason?: string | null | undefined }
-    | { kind: "sep" };
+    | { kind: "sep" }
+    /** A search box at the top of the menu (first row only); `find` lists the rows matching the text typed. */
+    | { kind: "search"; placeholder: string; find: (query: string) => readonly ContextItem[] };
 </script>
 
 <script lang="ts">
@@ -35,17 +39,28 @@
    * submenu is open with nothing highlighted yet.
    */
   let trail = $state<number[]>([]);
+  /** What is typed in the search box, if the menu has one. */
+  let query = $state("");
+  let searchBox = $state<HTMLInputElement | null>(null);
+  /** The top list: the menu's rows, or the search row and what it found. */
+  const root = $derived.by((): readonly ContextItem[] => {
+    const s = items[0];
+    if (s?.kind !== "search" || !query.trim()) return items;
+    const found = s.find(query.trim());
+    return [s, ...(found.length ? found : [{ kind: "item", label: "No matches", disabled: true, run: () => {} } as ContextItem])];
+  });
 
   $effect(() => {
     if (!menu) return;
     const r = menu.getBoundingClientRect();
     left = Math.max(0, Math.min(x, window.innerWidth - r.width - 2));
     top = Math.max(0, Math.min(y, window.innerHeight - r.height - 2));
-    menu.focus();
+    if (searchBox) searchBox.focus();
+    else menu.focus();
   });
 
   function levelItems(depth: number): readonly ContextItem[] {
-    let list: readonly ContextItem[] = items;
+    let list: readonly ContextItem[] = root;
     for (let d = 0; d < depth; d++) {
       const it = list[trail[d] ?? -1];
       if (!it || it.kind !== "sub") return [];
@@ -54,7 +69,7 @@
     return list;
   }
 
-  const usable = (it: ContextItem) => it.kind !== "sep" && !it.disabled;
+  const usable = (it: ContextItem) => it.kind !== "sep" && it.kind !== "search" && !it.disabled;
 
   /**
    * The trail when the pointer is on a disabled row at `depth`: nothing
@@ -106,9 +121,24 @@
     e.stopPropagation();
     const depth = trail.length === 0 ? 0 : trail.length - 1;
     const here = levelItems(depth)[trail[depth] ?? -1];
-    if (isTypingKey(e)) {
+    if (e.target === searchBox) {
+      // Typing goes into the box; the arrows, Enter and Escape still work the list.
+      if (e.key === "Escape" && query) {
+        e.preventDefault();
+        query = "";
+        trail = [];
+        return;
+      }
+      if (e.key === "Enter" && trail.length <= 1 && (trail[0] ?? -1) < 0) {
+        e.preventDefault();
+        const first = root.find(usable);
+        if (first) choose(first);
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) return;
+    } else if (isTypingKey(e)) {
       const list = levelItems(depth);
-      const to = jump.next(e.key, list.map((it) => (usable(it) && it.kind !== "sep" ? it.label : null)), trail[depth] ?? -1);
+      const to = jump.next(e.key, list.map((it) => (usable(it) && it.kind !== "sep" && it.kind !== "search" ? it.label : null)), trail[depth] ?? -1);
       if (to !== null) {
         e.preventDefault();
         trail = [...trail.slice(0, depth), to];
@@ -197,7 +227,24 @@
 
 {#snippet list(rows: readonly ContextItem[], depth: number)}
   {#each rows as it, i (i)}
-    {#if it.kind === "sep"}
+    {#if it.kind === "search"}
+      {#if depth === 0}
+        <div class="search">
+          <input
+            type="search"
+            spellcheck="false"
+            placeholder={it.placeholder}
+            aria-label={it.placeholder}
+            bind:this={searchBox}
+            value={query}
+            oninput={(e) => {
+              query = e.currentTarget.value;
+              trail = [];
+            }}
+          />
+        </div>
+      {/if}
+    {:else if it.kind === "sep"}
       <div class="sep" role="separator"></div>
     {:else if it.kind === "sub"}
       <div class="row">
@@ -253,7 +300,7 @@
   onscroll={() => scrolled(0)}
   oncontextmenu={(e) => e.preventDefault()}
 >
-  {@render list(items, 0)}
+  {@render list(root, 0)}
 </div>
 
 <style>
@@ -270,6 +317,26 @@
 
   .row {
     position: relative;
+  }
+
+  .search {
+    position: sticky;
+    top: -3px;
+    z-index: 1;
+    padding: 3px 6px 4px;
+    background: inherit;
+  }
+
+  .search input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: var(--surface-0);
+    color: var(--text);
+    font: inherit;
   }
 
   .context.sub {

@@ -24,6 +24,7 @@ import {
   setVelocity,
   snap,
   snapDown,
+  stretchClip,
 } from "./midi";
 import type { MidiClipDoc, NoteDoc } from "../../stores/session";
 
@@ -157,5 +158,40 @@ describe("note tools", () => {
     const h = humanize(notes, new Set([0, 1]), 0.1, () => 0);
     expect(h.map((x) => x.start)).toEqual([0, 0.9, 2]);
     expect(setChannel(notes, new Set([2]), 20)[2]!.channel).toBe(15);
+  });
+});
+
+describe("stretching a MIDI clip", () => {
+  const clip = (): MidiClipDoc =>
+    ({
+      id: "c",
+      name: "Riff",
+      start: 4,
+      length: 4,
+      notes: [
+        { pitch: 60, velocity: 100, start: 0, length: 1 },
+        { pitch: 64, velocity: 90, start: 2, length: 0.5, channel: 3 },
+      ],
+    }) as MidiClipDoc;
+
+  it("spreads the notes out with a longer clip, keeping pitch, velocity and channel", () => {
+    const [c] = stretchClip([clip()], "c", 8);
+    expect(c!.length).toBe(8);
+    expect(c!.start).toBe(4);
+    expect(c!.notes.map((n) => [n.start, n.length])).toEqual([
+      [0, 2],
+      [4, 1],
+    ]);
+    expect(c!.notes[1]).toMatchObject({ pitch: 64, velocity: 90, channel: 3 });
+  });
+
+  it("squeezes them together with a shorter one, and leaves other clips alone", () => {
+    const other = { ...clip(), id: "d" };
+    const out = stretchClip([clip(), other], "c", 2);
+    expect(out[0]!.notes.map((n) => [n.start, n.length])).toEqual([
+      [0, 0.5],
+      [1, 0.25],
+    ]);
+    expect(out[1]).toBe(other);
   });
 });

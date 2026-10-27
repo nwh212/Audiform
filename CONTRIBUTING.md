@@ -27,11 +27,9 @@ Audiform is maintained by Broman ([nwh212](https://github.com/nwh212)), who revi
 - **Keyboard shortcuts** are not added or changed without the maintainer's approval.
 - **Audio code:** nothing in the audio callback may allocate, lock or wait. Ask in the issue if unsure.
 
-## Giving back to Altered Audio Editor
+## License of contributions
 
-Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor) by Steve Phillips and The GeekCast Radio Network, LLC, and it stays easy for them to take anything from Audiform. So that they can merge it, everything contributed to Audiform is also offered to The GeekCast Radio Network, LLC under the terms of Altered Audio Editor's [Contributor License Agreement](CLA.md). By opening a pull request here, you agree to that. In short: you keep the copyright on your work, it is released under GPL v3.0 or later, and The GeekCast Radio Network, LLC may use it in Altered Audio Editor under the terms of that agreement.
-
-To keep changes easy to carry over: one feature per commit, the same folder layout, and a line in `docs/decisions.md` for each choice.
+Everything contributed to Audiform is released under GPL v3.0 or later, like the rest of the project. You keep the copyright on your work. Contributors also sign the [contributor license agreement](CLA.md), which lets the maintainer use contributions under other terms too. You agree to it by checking the box in your pull request.
 
 ## Reporting bugs
 

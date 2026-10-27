@@ -188,6 +188,8 @@ describe("menu model", () => {
       "tool.time",
       "file.check-loudness",
       "fx.loudness-match",
+      "fx.add.vox_strip",
+      "fx.add.stereo_width",
       "fx.add.dynamics",
       "fx.add.limiter",
       "fx.add.breath_gate",
@@ -215,6 +217,7 @@ describe("menu model", () => {
       "fx.add.pitch_shift",
       "fx.add.center_extractor",
       "fx.add.convolution_reverb",
+      "fx.add.echo",
       "multitrack.return-on-stop",
       "fx.firewall",
       "clip.nudge-left",
@@ -290,6 +293,8 @@ describe("menu model", () => {
       "edit.snap.playhead",
       "clip.trim.selection",
       "view.zoom-selection",
+      "clip.split-channels",
+      "fx.capture-noise-print",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

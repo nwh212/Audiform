@@ -1639,3 +1639,158 @@ Several requests compared behavior to another editor; per the guardrails they ar
 - **Grab hands for the themes:** the open and closed hand shown when dragging a panel or window by its title are glass in the scene themes. Phosphor gets its own set of square-pixel green pointers (arrow, I-beam, resize arrows, hands), in the look of early screen pointers. `src/app/theme-cursor.ts` (was glass-cursor.ts) holds one pointer set per theme.
 - **Switching a channel off in the Waveform editor also silences it in playback.** The channels still on play as before (a stereo file with Left off plays Right on the right only). The file is not changed; the switch only affects what edits reach and what you hear.
 - **Keyboard Shortcuts dialog:** a key press it cannot read as a shortcut is now shown (its key and physical key names), so a shortcut that does nothing on one machine can be diagnosed.
+
+## 2026-10-27: 0.x releases are full releases
+
+- **Asked for by the project lead.** The release workflow no longer marks `v0.` versions as pre-releases, so each published release shows as Latest on the repository page. The README still says the app is young and to keep backups.
+
+## 2026-10-27: Waveform editor tidy-ups
+
+- **No Save and Close buttons on the file's header bar** (the Spectrum button stays). Save and Close stay in the File menu with their shortcuts.
+- **Removing a file from the Files panel closes it in the Waveform editor** (asking first when it has unsaved edits). This covers Remove from Session and Remove Unused Files; switching sessions does not close it.
+- **The 3D Space panel shows only a short note in the Waveform editor:** a single file has no room to place tracks in. Worded as "surround and height sound" so no branded term is used.
+- **The Waveform editor fits the file exactly:** zoom to fit no longer adds 5% of room past the end (a 6:20 file showed to 6:39), and scrolling stops at the end of the file. The multitrack view keeps its room at the end, where clips are still being placed.
+
+## 2026-10-27: Effect menus: alphabetical, VST3 by type then maker, search
+
+- **Every effect list is alphabetical:** the built-in families and the effects in each, in the Audio FX Add list and the Effects menu; plug-in types, makers and names (ignoring case).
+- **VST3 is type, then maker, then plug-in** (Effects > VST3 > Reverb > Maker > Plug-in), in both places. The separate list of makers under the types is gone.
+- **A search box tops the Add effect list and the Effects menu.** Typing lists matching effects and plug-ins by name (plug-ins by maker too), names that start with the text first, each with its family or maker beside it. Enter adds the first (or highlighted) one; Escape clears the box, then closes. In the Effects menu the box has the cursor as soon as the menu opens, so typing searches straight away (this replaces type-to-jump in that one menu).
+- **Fixed:** since right-click menus moved to the end of the page, clicking a plug-in in Effects > VST3 counted as a click outside the menu bar and closed the list before the plug-in was added.
+
+## 2026-10-27: Pass Through to Speakers, Spatialize methods
+
+- **Multichannel clips in a stereo session fold down to left and right** (fronts straight, center and surrounds 3 dB down, LFE left out), as before. In a 3D Space session they pass through to the speakers by default: L to L, C to C, and so on.
+- **Pass Through to Speakers is now on the clip's right-click menu** in 3D Space sessions (a check mark, for any clip of more than one channel), and Properties > Source Channels calls it that too. Off, the clip is placed in the room like any other. A channel the session's layout lacks (heights or wides in a 5.1 session, say) folds into the speakers nearest where it would stand; a missing LFE is left out, as in any fold-down.
+- **Spatialize has a Method** under its slider, four ways to open a stereo sound into the room, each our own, built from textbook upmix parts, and each feeding what the sides share to the center: Side Spread (the one before, and the default), Matrix (the side difference on a short plain delay, as a passive surround decoder does), Ambience (decorrelated copies of each side to that side's surround and height speakers, in phase), and Height Lift (Side Spread to the height speakers only; Side Spread in layouts without heights). Saved per spot as `spatialize_mode`; older sessions read as Side Spread.
+
+## 2026-10-27: Unsaved Waveform edits heard in the session
+
+- **Edits in the Waveform editor reach the session before they are saved.** A moment after each edit to a file the session uses (reverse, cuts, gain, effects applied, anything), the edit list is rendered to a live copy in the app's cache folder (32-bit float WAV, the file's own channels), and the session plays, follows, exports, bounces and draws that copy in the file's place. Saving, undoing back to the saved state or closing the file drops the copy, and the session hears the file itself again. The file on disk is untouched until Save, as before; the session's own record of its media never changes (the swap is made on a copy of the session each time it plays or exports, `src-tauri/src/commands/live.rs`).
+- **One render at a time;** edits made while one renders get one more render after it, so the session always ends up with the latest edit. Untitled files (never saved anywhere) are left out.
+- **Not covered yet:** a session clip set to Reverse plays the reversed copy of the original file, not of the live copy; the overview strip above the lanes still draws the original.
+
+## 2026-10-27: Delete Track shortcut, Phosphor tweaks, Files toolbar
+
+- **Delete Track is Shift+Delete** (approved by the project lead). Ctrl+Alt+Backspace never reached the app on the lead's Windows machine, even after reading the physical key; Shift+Delete needs no Ctrl+Alt (which Windows treats as AltGr) and already means "delete outright" on Windows. Shift+Delete was free.
+- **Phosphor pointers are 60% of their old size** (20 px, like the glass ones), still square pixels.
+- **Phosphor's Phase Wheel looks like a low-resolution screen:** drawn at a third of the resolution and blown up without smoothing, square dots, stair-stepped rings, labels as text over it so they stay readable. Phosphor also drops rounded corners everywhere and shows the level meters and the Phase Wheel's bars as lit blocks.
+- **The Files panel toolbar loses its Import Files and Import Folder buttons.** Both stay in the File menu and the Files panel's right-click menu.
+
+## 2026-10-27: Sessions save as .audfrm
+
+- **Asked for by the project lead:** stop saving `.altaudio`. Saving as `.sesx` was considered and left out: that format cannot hold most of what an Audiform session does (3D Space, MIDI and instruments, buses and sends, automation of effects, clip stretch), so it stays an import and an export copy only.
+- **New extension `.audfrm`, same contents.** Only the name changed: the file is the same versioned JSON, so nothing needs migrating. `.altaudio` files (from earlier versions and from Altered Audio Editor) still open from File > Open, Open Recent, drag and drop and the Files panel; saving one writes an `.audfrm` beside it and leaves the `.altaudio` file as it was. Autosaves and backups use `.audfrm`; autosaves left by an older version are still offered for recovery.
+- **Merge-back note:** this is a fork-only change. Altered Audio Editor keeps `.altaudio`; it can read `.audfrm` files after a rename, as the contents match.
+
+## 2026-10-27: MOGG files; DTS not yet
+
+- **Ogg (Vorbis and Opus) already opened.** Now **MOGG** opens too: the multitrack Ogg files rhythm games ship. A MOGG is an Ogg Vorbis stream, often with many channels, behind a small header that gives a version and where the Ogg data starts; the reader skips the header and decodes the stream like any Ogg file, every channel kept (`src-tauri/src/codecs/source.rs`). Only unencrypted MOGG files (version 10) can be opened; encrypted ones are refused with that reason in the Files panel. Audiform does not break their encryption.
+- **DTS is not added.** The decoding library Audiform uses has no DTS decoder, there is no complete open-source DTS decoder in Rust, and the codec is covered by licensing that a free app should not ship around. A later option, if wanted: when the user has installed a converter themselves (such as FFmpeg), offer to convert DTS files with it to WAV on import. Not built until the lead asks.
+
+## 2026-10-27: Stretching MIDI clips
+
+- **Alt-drag a MIDI clip's right edge to stretch it,** as Alt-drag stretches an audio clip: every note's position and length scale with the clip, so the part plays slower (longer) or faster (shorter) at the same tempo, with nothing to interpolate. Pitch, velocity, channel and pan stay. It snaps to quarter beats; Ctrl drags freely. A plain drag still changes the length without touching the notes. One undoable step, "Stretch MIDI Clip".
+
+## 2026-10-27: Slow time stretch: attacks stay tight and on time
+
+- **The problem:** stretching longer sounded worse than shortening. Measured on a click train, a 3x stretch put more than half of each click's energy outside 6 ms of its peak: attacks came out smeared or doubled (a flam), because each was read by several overlapping frames that the output spreads further apart.
+- **Hit planning (stretching longer only):** the stretcher scans a little ahead of what it plays for sudden rises in level. Around each hit, reading slows a touch before it, runs at the input's own speed across one frame's length, and slows again after, so the hit plays once, at its natural speed, landing exactly at its stretched time; overall timing and length stay exact. Measured: at 3x, about 1% of a click's energy smears (was 58%), and clicks land within 2 ms of where they should (tested in `dsp/stretch.rs`).
+- **More overlap when stretching longer** (an eighth of a frame between frames instead of a quarter), to smooth the warble on held sounds.
+- **Pitch Shift (the effect)** keeps the old behavior, as it must hold a fixed delay to stay in time with the other tracks.
+- Shortening is unchanged; it already sounded right.
+
+## 2026-10-27: Pre-render a track
+
+Requested as a copy of another editor's soft-commit button. Restated as behavior: a per-track switch that renders the track's clips (or MIDI notes through its instrument) and its Audio FX in the background, and then plays that render in place of the live effects, so heavy plug-ins rest. Any change to what shapes the sound before the fader starts a new render; the live track plays until it is ready.
+
+- The switch is the track's `prerender` field, set through `set_track`, so turning it on or off is one undoable step. It is left out of files when off.
+- What stays live after the render: fader, pan, mono, polarity, sends, output, volume and pan automation and the 3D Space spot. Effect automation is part of the render.
+- Renders are named after a fingerprint of the track's clips, notes, instrument, effects, effect automation, the files used, the tempo and the sample rate, and kept in the app's cache folder (`prerender/`, the 24 newest). Going back to an earlier state (an undo) reuses its render at once.
+- Playback, bounce and every export use the render once it is ready.
+- The button is on the Track Effects tab of the effects rack, beside the chain power switch, with its own icon (bars into a solid block). Its pointer tip says whether it is rendering, ready or waiting.
+- Plug-in settings changed in a plug-in's own window start a new render when they reach the session (on save, or when the window closes).
+
+## 2026-10-27: DTS decoding
+
+Earlier today DTS was declined. The project lead asked again: a 5.1 DTS WAV opened as loud stereo noise. Built:
+
+- WAV files whose audio data is a DTS stream (16-bit or 14-bit words, either byte order), and raw `.dts` files, are recognised by their sync words (at least 3 frames in a row for a WAV, so ordinary PCM is never mistaken for DTS) and open with their real channels and rate.
+- The decoder is a Rust port of the DTS core decoder in FFmpeg's libavcodec (LGPL-2.1-or-later, compatible with our GPL-3.0-or-later; credited in ATTRIBUTION.md). The lead asked for this port directly, which covers the rule about asking before porting more than a single algorithm. Only the fixed-point core and the 6.1 back-center extension are ported; 96 kHz, extended channel sets and lossless extensions are not, and such streams play their core.
+- Its output is identical to FFmpeg's bit-exact decode on our test streams.
+- Channels come out in the app's multichannel WAV order (L, R, C, LFE, Ls, Rs). A single surround channel plays from both sides at -3 dB.
+- The patents on the DTS core format date from the 1990s and have expired.
+
+## 2026-10-27: Vox Strip (a vocal chain in one effect)
+
+Requested as a copy of another company's vocal channel-strip plug-in. Restated as behavior: one effect holding a whole vocal chain in four modules (dynamics, tone, effects, space), each with a power switch, a choice of styles, one or two main controls and a trim, with input and output gain and meters. Name, styles, processing and window design are our own (a graphite faceplate with numbered modules in signal order, all in the theme accent color; an earlier version gave each module its own color and was changed for looking too close to the reference).
+
+- Dynamics: styles Smooth + Fast (slow leveler into a fast peak catcher), Clean, Warm (adds tube color). Comp and De-ess are one-knob controls; the de-esser is split-band (only the top is turned down) and has an absolute threshold that drops as De-ess goes up, takes off up to 24 dB with a complementary split (only the top moves), and goes easier on bright vowels than on real "s" sounds. Gain reduction and de-essing have meters.
+- Tone: Low, Mid, High voiced by style (Clean, Vintage, Modern), plus Air and a Low Cut switch, with a curve display from the core.
+- Air does three things, which is why it does not sound like a treble boost: a very wide shelf that keeps rising to the top of the range; an exciter that makes new harmonics from the 3 to 7 kHz presence band and keeps only those above about 9 kHz; and ducking of both while sibilance is loud. Tests check that Air creates content at 10 kHz from a 5 kHz tone and that it gives a sibilant sound less lift than a voiced one.
+- Effects: Chorus, Doubler, Saturate, Radio, Widen, with one Amount.
+- Space: Plate, Room, Hall, Chamber (an 8-line feedback delay network), Slap and Tape Echo, with Reverb and Delay amounts; delay times are note values at a tempo, and a Sync button takes the session tempo.
+- Effect meters now carry a third reading for the de-esser.
+
+## 2026-10-27: Analog theme
+
+A theme that dresses the app as studio equipment (Settings > Appearance > Theme > Analog): matte black plastic faceplates (a fine grit and a soft, unpolished sheen) with a screw in each corner, set in oiled walnut (dark chocolate grain with arched figure and pores, drawn as an SVG texture), brushed aluminum rails (hairline streaks and sheen bands) for the menu bar, tool strip and status bar with engraved capitals, console keys that light amber when on, transport keys as clear colored plastic caps (white stop, green play, blue moves, red record, amber loop) that glow from inside while pressed or running, an orange glowing clock readout, LED-ladder meters, tape-box clip colors and a red tape-head playhead. Our own design; no particular piece of gear is copied.
+
+## 2026-10-27: Stereo Width
+
+Requested with a picture of another editor's stereo expander. Restated as behavior: an effect with two controls, Center Pan (where what both sides share sits, left to right) and Width (0% mono, 100% as is, up to 300%), done in mid and side with an equal-power pan for the center. Our own window: two long sliders over numbered scales with words under them (Left, Center, Right; Mono, As is, Wide) and a value box each. In Effects > Stereo.
+
+## 2026-10-27: More M4A files open
+
+Reported: M4A files did not open. Stereo AAC, ALAC, FLAC, MP3 and Opus in M4A already did; these did not:
+
+- AAC with more than two channels (5.1, 7.1). The AAC decoder decoded every channel element but refused any layout over two channels. A patched copy in `src-tauri/vendor/symphonia-codec-aac` lifts that and writes each channel to its speaker (AAC carries center, front pair, surround pairs, LFE; the output follows speaker order). Layouts given by a program config element (channel configuration 0, as some encoders write for side-surround 5.1) are read by the patched `symphonia-common`, and elements are matched by kind and tag. Channel configuration 7 reads as 7.1 with side and rear pairs, as 7.1 AAC is made and read today. Tests decode 5.1 and 7.1 files with a different tone on each speaker.
+- Fragmented M4A (as most download tools save it) showed a length of 0: its header states none. The length is now counted.
+- HE-AAC, Dolby Digital (AC-3) and Dolby Digital Plus (E-AC-3). Dolby Atmos music in M4A and MP4 is Dolby Digital Plus with extra object data. There is no open decoder we can ship for these, so they go to the decoders built into Windows (Media Foundation), through a new small crate `src-tauri/os-decode` that holds the `unsafe` calls (the app crate forbids them), the same way AAC export uses the Windows encoder. Each open file gets its own worker thread owning the system objects. The reader and the Files panel fall back to it only when our own decoders refuse a file. Atmos files open as their 5.1 or 7.1 bed, which carries the whole mix; the height objects need a Dolby Atmos renderer, which the Windows decoder does not apply. HE-AAC was decoded as its core only before (half the bandwidth); it is now refused so Windows decodes it fully. On Linux and macOS these files show an error that names the codec.
+
+
+## 2026-10-27: Arming tracks while recording
+
+- Record no longer arms the selected track when nothing is armed. The session plays and records nothing until a track is armed.
+- Arming a track while recording starts its take from that moment; disarming it ends that take. The take is kept and placed where it began when recording stops. A track armed again during the same recording gets a second take.
+- Every armed track records its own file, even when several share one input. The recorder opens an input for a late-armed track if no other track is using it.
+- Asked for by the project lead.
+
+## 2026-10-27: Dolby AC-4 in M4A
+
+- Dolby Atmos music is now often sold as Dolby AC-4 in M4A. Symphonia skips an AC-4 track without a word, so such a file read as having no audio. The reader now looks at the file's track entries when Symphonia finds no audio, names AC-4 (and MPEG-H 3D Audio), and hands the file to the Windows decoders.
+- No open-source AC-4 decoder exists to ship. Windows decodes AC-4 only with Dolby's own decoder installed (it comes with Dolby Access and on many PCs with Dolby Atmos). Without it, the error names the codec and says so.
+
+## 2026-10-27: Plug-in windows get an Audiform strip; close prompts come first
+
+- Every plug-in window now has a thin strip along its bottom with a power button and the app's name. The button is the same switch as the power button on the effect's rack row: clicking either bypasses or turns on the effect, as one undoable step, and the other follows (undo and redo too). The plug-in draws in a child window above the strip. Waveform editor chains are not synced yet.
+- Each plug-in window keeps its own state. Before, plug-ins sharing one host process shared a "closed" flag, so closing one window could close the others.
+- Closing Audiform with plug-in windows open: plug-in windows belong to the main window and always sit above it, so they covered the unsaved-changes prompt. They are now hidden while the prompts show and come back if the user stays.
+- The test plug-in has an empty window when `ALTERED_TESTPLUG_VIEW` is set, used to check the strip under Wine (its usual tests expect no window).
+- Asked for by the project lead.
+
+## 2026-10-27: A clip's level is heard as its handle moves
+
+- Playback renders about half a second ahead, so a clip level edit made while dragging was heard late, and felt like it only applied on release. While a clip's level handle is dragged, the output now scales that clip's track over the clip as it plays, the same way the Waveform editor's level is heard at once. The edit is made once, on release; the output keeps the new level only for audio rendered before the edit, so there is no jump. A mix with buses or sends plays as one stream, so there each step is an edit and is heard a moment later, as before.
+- The Waveform editor's floating level now drags like a clip's level handle: the same speed and range, Shift for fine steps, and the level beside the pointer.
+- Asked for by the project lead.
+
+## 2026-10-27: The start screen matches the Waveform editor's empty screen
+
+- Audiform opens to a quiet screen under the Multitrack toolbar: "No session is open in the Multitrack editor." and one line on how to start, the same look as the Waveform editor with no file open. The buttons (New Session, Open, Import Files, Use an Empty Session) are gone; the File menu, the Files panel, dropping files and the toolbar's add-track buttons all start work, and the screen goes as soon as anything is added.
+- Asked for by the project lead.
+
+## 2026-10-27: Audiform is its own project; contributions are GPL only
+
+- Audiform no longer keeps itself easy to merge into Altered Audio Editor. File formats, ids and folder layout follow Audiform's needs; compatibility with Altered Audio Editor stays only where users gain from it (opening its sessions, carrying over its settings).
+- Contributions to Audiform are released under GPL v3.0 or later and nothing more. Audiform has no contributor license agreement, and `CLA.md` (Altered Audio Editor's agreement) is removed from this repository. Agreements already made stand for the work they covered.
+- (A GPL v3.0 section 7(b) credit term was added to `NOTICE.md` the same day and taken out again by the project lead: Audiform adds no terms of its own to the GPL.)
+- Full credit to Altered Audio Editor and its authors stays as before (README, About, Help, NOTICE.md).
+- Decided by the project lead.
+
+## 2026-10-27: Features brought in from Altered Audio Editor 0.4 to 0.5
+
+- Brought in under GPL v3.0 or later and credited in `ATTRIBUTION.md`: Delay and Echo with four presets, Split Channels to Tracks, Capture Noise Print (Shift+P, already in the approved shortcut table), export at a loudness target, hearing a monitored track's built-in effects, ASIO monitoring on the input's own driver, and ASIO device lists asked again when they come back empty.
+- Already in Audiform: Hide All Effect Windows, MIDI clips in selection exports, plug-ins started once per export.
+- Left out: the in-app updater (it needs Audiform's own signing key and release setup first; the plan in this file from 2026-10-14 stands) and the Music Mode toggle (Audiform shows music tools by default).
+- A track armed while recording is not monitored until the next take (the monitor mix is set when recording starts).

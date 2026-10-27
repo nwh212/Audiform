@@ -61,18 +61,28 @@ export function punchStopAfter(p: RecordPlan, rate: number): number | null {
 
 /**
  * Where a take of `length` source frames at `takeRate` lands: its clip
- * start and source range. Null when nothing usable is left.
+ * start and source range. `startFrames` is how far into the recording
+ * the take began (a track armed while recording). Null when nothing
+ * usable is left.
  */
-export function placeTake(p: RecordPlan, take: { length: number; sampleRate: number }, sessionRate: number, offsetMs: number): { start: number; sourceIn: number; sourceOut: number } | null {
+export function placeTake(
+  p: RecordPlan,
+  take: { length: number; sampleRate: number; startFrames?: number },
+  sessionRate: number,
+  offsetMs: number,
+): { start: number; sourceIn: number; sourceOut: number } | null {
   const toSrc = (s: number) => Math.round((s * take.sampleRate) / sessionRate);
   const offset = Math.round((offsetMs / 1000) * take.sampleRate);
-  let start = p.at;
+  // Where this take's first frame sits in the session.
+  const at = p.at + Math.round(((take.startFrames ?? 0) * sessionRate) / take.sampleRate);
+  let start = at;
   let sourceIn = offset;
   let sourceOut = take.length;
   if (p.punch) {
-    start = p.punch.start;
-    sourceIn = offset + toSrc(p.punch.start - p.at);
-    sourceOut = Math.min(take.length, sourceIn + toSrc(p.punch.end - p.punch.start));
+    if (at >= p.punch.end) return null;
+    start = Math.max(p.punch.start, at);
+    sourceIn = offset + toSrc(start - at);
+    sourceOut = Math.min(take.length, offset + toSrc(p.punch.end - at));
   }
   return sourceOut > sourceIn ? { start, sourceIn, sourceOut } : null;
 }

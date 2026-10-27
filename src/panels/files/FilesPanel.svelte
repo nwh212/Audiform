@@ -190,7 +190,7 @@
   }
 
   function onListKey(e: KeyboardEvent) {
-    // Plain Delete or Backspace only: chords such as Ctrl+Alt+Backspace (Delete Track) pass on.
+    // Plain Delete or Backspace only: chords such as Shift+Delete (Delete Track) pass on.
     if (pickedSession && (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -403,32 +403,6 @@
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path d="M1.5 8h1.5l1-3 1.5 6 1.5-6 1 3h1" fill="none" stroke="currentColor" stroke-width="1.2" />
         <path d="M12.5 4.5v6M9.5 7.5h6" stroke="currentColor" stroke-width="1.4" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="tool"
-      title={tip("Import Files", "file.import-files")}
-      aria-label="Import Files"
-      disabled={!can("file.import-files")}
-      onclick={() => run("file.import-files")}
-    >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M3 1.5h6l4 4v9H3z" fill="none" stroke="currentColor" />
-        <path d="M8 7v5M5.5 9.5h5" stroke="currentColor" stroke-width="1.4" />
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="tool"
-      title={tip("Import Folder", "file.import-folder")}
-      aria-label="Import Folder"
-      disabled={!can("file.import-folder")}
-      onclick={() => run("file.import-folder")}
-    >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M1.5 3.5h5l1.5 1.5h6.5v8h-13z" fill="none" stroke="currentColor" />
-        <path d="M8 7v4.5M5.75 9.25h4.5" stroke="currentColor" stroke-width="1.4" />
       </svg>
     </button>
     <button

@@ -1,7 +1,7 @@
 {
   "name": "audiform",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Free, open-source multitrack audio editor. Based on Altered Audio Editor by The GCRN.",
   "license": "GPL-3.0-or-later",
   "author": "The Audiform contributors (based on Altered Audio Editor by The GeekCast Radio Network, LLC)",

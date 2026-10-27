@@ -2,7 +2,7 @@
 
 Audiform is built on Altered Audio Editor, which is made by **Steve Phillips** and **The GeekCast Radio Network, LLC**. Their work is the foundation of everything here.
 
-Everyone listed below has agreed to the [Contributor License Agreement](CLA.md), so their work is released under GPL v3.0 or later and can go back into Altered Audio Editor.
+Everyone listed below released their work under GPL v3.0 or later.
 
 ## Audiform
 

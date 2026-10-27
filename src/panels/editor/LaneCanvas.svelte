@@ -316,7 +316,8 @@
               const [a0, a1] = [Math.max(s0, clip.source_in), Math.min(s1, clip.source_out)];
               const [lo0, hi0] = clip.reversed ? peakRange(level, ch, k, fileLen - a1, fileLen - a0) : peakRange(level, ch, k, a0, a1);
               // Inverted: drawn upside down.
-              const [lo, hi] = clip.inverted ? [-hi0, -lo0] : [lo0, hi0];
+              const flipped = clip.inverted && (!clip.invert_channel || clip.invert_channel === "both" || (ch === 2 && (clip.invert_channel === "left" ? k === 0 : k === 1)));
+              const [lo, hi] = flipped ? [-hi0, -lo0] : [lo0, hi0];
               const mid = body.top + laneH * (k + 0.5);
               const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom * clipLevel));
               const y0 = mid - amp(hi) * (laneH / 2 - 1);

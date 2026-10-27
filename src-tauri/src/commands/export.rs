@@ -182,7 +182,9 @@ pub async fn export_mixdown(
     path: PathBuf,
     request: MixdownRequest,
 ) -> Result<MixdownResult, String> {
-    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    // Files with unsaved Waveform editor edits export as they sound.
+    let session =
+        super::live::heard(&open.0.lock().map_err(|e| e.to_string())?.session).into_owned();
     let flag = cancel.0.clone();
     flag.store(false, Ordering::Relaxed);
     spawn_blocking(move || {
@@ -220,7 +222,9 @@ pub async fn export_merge(
     name: String,
     mut request: MixdownRequest,
 ) -> Result<MergeResult, String> {
-    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    // Files with unsaved Waveform editor edits export as they sound.
+    let session =
+        super::live::heard(&open.0.lock().map_err(|e| e.to_string())?.session).into_owned();
     let flag = cancel.0.clone();
     flag.store(false, Ordering::Relaxed);
     request.clip_only = true;
@@ -257,7 +261,9 @@ pub async fn export_bounce(
     name: String,
     mut request: MixdownRequest,
 ) -> Result<MergeResult, String> {
-    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    // Files with unsaved Waveform editor edits export as they sound.
+    let session =
+        super::live::heard(&open.0.lock().map_err(|e| e.to_string())?.session).into_owned();
     let flag = cancel.0.clone();
     flag.store(false, Ordering::Relaxed);
     request.bit_depth = Some(32);
@@ -311,7 +317,9 @@ pub async fn loudness_check(
     cancel: State<'_, ExportCancel>,
     request: MixdownRequest,
 ) -> Result<LoudnessReport, String> {
-    let session = open.0.lock().map_err(|e| e.to_string())?.session.clone();
+    // Files with unsaved Waveform editor edits export as they sound.
+    let session =
+        super::live::heard(&open.0.lock().map_err(|e| e.to_string())?.session).into_owned();
     let flag = cancel.0.clone();
     flag.store(false, Ordering::Relaxed);
     spawn_blocking(move || {

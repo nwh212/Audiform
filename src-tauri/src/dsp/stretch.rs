@@ -21,6 +21,18 @@
 //! - **Stereo:** the phase change is worked out once, on the sum of the
 //!   channels (or their difference, where that is louder), and applied
 //!   to both, so the stereo image stays put.
+//! - **Attacks when slowing down:** stretched longer, an attack would be
+//!   read by several overlapping frames that the output spreads further
+//!   apart, so it comes out smeared or doubled (a flam). The input is
+//!   scanned a little ahead for sudden rises in level; around each one,
+//!   reading slows a touch before the hit, runs at the input's own speed
+//!   for one frame's length across it, and slows again after, so the hit
+//!   plays once, at its natural speed, exactly where the stretch puts it.
+//!   The total length and the timing of everything else stay exact.
+//! - **Overlap:** frames are placed an eighth of a frame apart when the
+//!   sound is made longer (a quarter when shorter). Slowing down is where
+//!   a vocoder warbles and sounds "phasey"; twice as many overlapping
+//!   frames average that out.
 //!
 //! The output starts in step with the input: frames before the start
 //! read the input mirrored, so the clip starts at full level.
@@ -51,7 +63,8 @@ pub struct Stretcher {
     /// Output length over input length.
     ratio: f64,
     n: usize,
-    /// Output spacing of frames (a quarter frame).
+    /// Output spacing of frames: an eighth of a frame when stretching
+    /// longer, a quarter when shorter.
     hop: usize,
     win: Vec<f32>,
     fwd: Arc<dyn RealToComplex<f32>>,
@@ -62,7 +75,8 @@ pub struct Stretcher {
     base: usize,
     ended: bool,
     flushed: bool,
-    /// The next frame's number (they start at -1).
+    /// The next frame's number (they start below 0, so the first output
+    /// sample gets every frame that overlaps it).
     frame: i64,
     /// Where the last frame was taken from (input frame), for the phase step.
     prev_center: i64,
@@ -81,7 +95,20 @@ pub struct Stretcher {
     mag: Vec<f32>,
     phase: Vec<f32>,
     peaks: Vec<usize>,
+    /// Slowing down: hits found ahead in the input (input frames), the
+    /// next input frame to scan, and the running level of recent blocks.
+    hits: std::collections::VecDeque<i64>,
+    scan_at: usize,
+    scan_avg: f32,
+    /// Output frames over which reading eases off before and after a hit.
+    ease: f64,
+    /// Whether hits are planned for (off for live effects that must keep
+    /// a fixed delay; see `fixed_delay`).
+    plan_hits: bool,
 }
+
+/// Input frames per block when scanning for hits.
+const HIT_BLOCK: usize = 64;
 
 impl Stretcher {
     /// `ratio` above 1 makes the audio longer (slower), below 1 shorter.
@@ -93,13 +120,15 @@ impl Stretcher {
     /// with several notes at once, shorter a single voice.
     pub fn with_frame(ratio: f64, rate: u32, frame_seconds: f64) -> Self {
         let n = fft_size(rate, frame_seconds);
-        let hop = n / 4;
+        let hop = if ratio > 1.0 { n / 8 } else { n / 4 };
+        // The first frame that reaches the output's first sample.
+        let first_frame = 1 - (n / (2 * hop)) as i64;
         let mut planner = RealFftPlanner::<f32>::new();
         let fwd = planner.plan_fft_forward(n);
         let inv = planner.plan_fft_inverse(n);
         let scratch = vec![Complex32::default(); fwd.get_scratch_len().max(inv.get_scratch_len())];
-        // Periodic Hann, used going in and coming out: at a quarter-frame
-        // spacing the squares add up to 1.5 everywhere.
+        // Periodic Hann, used going in and coming out: the squares add up
+        // to the same everywhere at a quarter or eighth frame spacing.
         let win = (0..n)
             .map(|i| (0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / n as f64).cos()) as f32)
             .collect();
@@ -117,7 +146,7 @@ impl Stretcher {
             base: 0,
             ended: false,
             flushed: false,
-            frame: -1,
+            frame: first_frame,
             prev_center: 0,
             first: true,
             prev_phase: vec![0.0; bins],
@@ -125,7 +154,7 @@ impl Stretcher {
             prev_mag: vec![0.0; bins],
             flux_avg: 0.0,
             ola: vec![0.0; n * 2],
-            ola_at: -(3 * hop as i64),
+            ola_at: first_frame * hop as i64 - (n / 2) as i64,
             time: [vec![0.0; n], vec![0.0; n]],
             spec: [
                 vec![Complex32::default(); bins],
@@ -134,7 +163,25 @@ impl Stretcher {
             mag: vec![0.0; bins],
             phase: vec![0.0; bins],
             peaks: Vec::with_capacity(bins / 2),
+            hits: std::collections::VecDeque::new(),
+            scan_at: 0,
+            scan_avg: 0.0,
+            // Reading never drops below a quarter of its stretched pace.
+            ease: {
+                let r = ratio.clamp(0.125, 8.0);
+                (n as f64 / 2.0 * (1.0 - 1.0 / r) * r / 0.75)
+                    .ceil()
+                    .max(1.0)
+            },
+            plan_hits: true,
         }
+    }
+
+    /// For a live effect that reports a fixed delay (Pitch Shift): no
+    /// looking ahead for hits, so the delay stays half a frame.
+    pub fn fixed_delay(mut self) -> Self {
+        self.plan_hits = false;
+        self
     }
 
     /// Adds stereo interleaved input.
@@ -169,7 +216,84 @@ impl Stretcher {
         if k < 0 {
             out
         } else {
-            (out as f64 / self.ratio).round() as i64
+            (out as f64 / self.ratio + self.hit_shift(out as f64)).round() as i64
+        }
+    }
+
+    /// How far reading is moved from the plain stretch at output frame
+    /// `o`, around the hits found (0 away from them). Through a hit's
+    /// frame-length window reading runs at the input's own speed with the
+    /// hit landing at its stretched time; on either side it eases there
+    /// and back over `ease` output frames, always moving forward.
+    fn hit_shift(&self, o: f64) -> f64 {
+        let r = self.ratio;
+        let half = self.n as f64 / 2.0;
+        let a = half * (1.0 - 1.0 / r);
+        for &t in &self.hits {
+            let at = t as f64 * r;
+            if o < at - half - self.ease {
+                break;
+            }
+            if o <= at - half {
+                return -a * (o - (at - half - self.ease)) / self.ease;
+            }
+            if o <= at + half {
+                return (o - at) * (1.0 - 1.0 / r);
+            }
+            if o <= at + half + self.ease {
+                return a * (1.0 - (o - (at + half)) / self.ease);
+            }
+        }
+        0.0
+    }
+
+    /// Input frames to have in hand beyond a frame's middle before placing
+    /// it: half a frame, and when slowing down enough to see hits coming.
+    fn lookahead(&self) -> i64 {
+        let half = (self.n / 2) as i64;
+        if self.ratio > 1.0 && self.plan_hits {
+            half + ((self.n as f64 / 2.0 + self.ease) / self.ratio).ceil() as i64
+                + 2 * HIT_BLOCK as i64
+        } else {
+            half
+        }
+    }
+
+    /// Slowing down: scans new input for sudden rises in level (hits),
+    /// spaced so their eased windows never overlap, and forgets hits the
+    /// output has passed.
+    fn scan_hits(&mut self, out_now: f64) {
+        if self.ratio <= 1.0 || !self.plan_hits {
+            return;
+        }
+        let r = self.ratio;
+        let half = self.n as f64 / 2.0;
+        let gap = ((self.n as f64 + 2.0 * self.ease) / r).ceil() as i64;
+        let floor = 1e-6 * HIT_BLOCK as f32;
+        while self.scan_at + HIT_BLOCK <= self.end() {
+            let from = self.scan_at as i64;
+            let e: f32 = (0..HIT_BLOCK as i64)
+                .map(|j| {
+                    let v = self.at(from + j, 0) + self.at(from + j, 1);
+                    v * v
+                })
+                .sum();
+            let t = from + (HIT_BLOCK / 2) as i64;
+            let last = self.hits.back().copied().unwrap_or(i64::MIN / 2);
+            // Too close to the output already to ease into: left alone.
+            let reachable = t as f64 * r - half - self.ease > out_now + 2.0 * self.hop as f64;
+            if e > 6.0 * self.scan_avg + floor && t - last > gap && reachable {
+                self.hits.push_back(t);
+            }
+            self.scan_avg = 0.9 * self.scan_avg + 0.1 * e;
+            self.scan_at += HIT_BLOCK;
+        }
+        while let Some(&t) = self.hits.front() {
+            if t as f64 * r + half + self.ease < out_now {
+                self.hits.pop_front();
+            } else {
+                break;
+            }
         }
     }
 
@@ -185,8 +309,9 @@ impl Stretcher {
                     return;
                 }
             }
+            self.scan_hits((self.frame * self.hop as i64) as f64);
             let c = self.center(self.frame);
-            if !self.ended && c + (self.n / 2) as i64 > self.end() as i64 {
+            if !self.ended && c + self.lookahead() > self.end() as i64 {
                 return;
             }
             self.analyse_and_place(c);
@@ -301,7 +426,8 @@ impl Stretcher {
         self.first = false;
 
         // Both channels turned by the reference's change: their relation stays.
-        let scale = 1.0 / (n as f32 * 1.5);
+        // Hann squared over frames `hop` apart adds up to 3/8 of a frame per hop.
+        let scale = 1.0 / (n as f32 * 0.375 * (n / self.hop) as f32);
         for ch in 0..2 {
             for k in 0..bins {
                 let turn = self.out_phase[k] - self.phase[k];
@@ -394,6 +520,84 @@ mod tests {
                 let rms = (chunk.iter().map(|v| v * v).sum::<f32>() / chunk.len() as f32).sqrt();
                 assert!((rms - 0.3536).abs() < 0.02, "ratio {ratio}: rms {rms}");
             }
+        }
+    }
+
+    /// For a slow-stretched click train: the share of the clicks' energy
+    /// that lands outside 6 ms of each click's peak (how far attacks
+    /// smear), and the furthest a click lands from its stretched time (ms).
+    fn click_smear(ratio: f64) -> (f32, f32) {
+        let rate = 48_000;
+        let secs = 2.0;
+        let n = (rate as f64 * secs) as usize;
+        let every = rate as usize / 2;
+        let mut input = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let tone = (i as f32 * 220.0 * std::f32::consts::TAU / rate as f32).sin() * 0.002;
+            let k = i % every;
+            // A 2 ms decaying burst, like a drum hit.
+            let hit = if (every / 2..every / 2 + 96).contains(&k) {
+                let t = (k - every / 2) as f32;
+                0.9 * (-t / 24.0).exp() * if k.is_multiple_of(2) { 1.0 } else { -1.0 }
+            } else {
+                0.0
+            };
+            input.extend_from_slice(&[tone + hit, tone + hit]);
+        }
+        let out = run(&input, ratio, rate);
+        let left: Vec<f32> = out.iter().step_by(2).map(|v| v * v).collect();
+        let span = (every as f64 * ratio) as usize;
+        let near = (0.006 * rate as f32) as usize;
+        let (mut inside, mut all, mut late) = (0.0f32, 0.0f32, 0.0f32);
+        for c in 1..3 {
+            let seg = &left[c * span..((c + 1) * span).min(left.len())];
+            let peak = seg
+                .iter()
+                .enumerate()
+                .fold((0, 0.0f32), |a, (i, v)| if *v > a.1 { (i, *v) } else { a })
+                .0;
+            let want = ((c * every + every / 2) as f64 * ratio) as i64 - (c * span) as i64;
+            late = late.max((peak as i64 - want).abs() as f32 * 1000.0 / rate as f32);
+            for (i, v) in seg.iter().enumerate() {
+                all += v;
+                if i + near >= peak && i <= peak + near {
+                    inside += v;
+                }
+            }
+        }
+        (1.0 - inside / all, late)
+    }
+
+    #[test]
+    fn slow_stretches_keep_attacks_tight() {
+        // Before the hits were found ahead, a click stretched 3x put more
+        // than half its energy outside 6 ms of its peak (a flam).
+        for ratio in [1.5, 2.0, 3.0] {
+            let (smear, off) = click_smear(ratio);
+            assert!(smear < 0.05, "ratio {ratio}: {smear} of a hit smeared");
+            assert!(off < 2.0, "ratio {ratio}: a hit landed {off} ms off");
+        }
+    }
+
+    #[test]
+    fn slow_stretches_stay_steady_on_a_chord() {
+        // Slowing down is where a vocoder warbles: the level of a held
+        // chord should stay even at two and a half times as long.
+        let rate = 48_000;
+        let a = sine(330.0, rate, 1.5);
+        let b = sine(415.3, rate, 1.5);
+        let input: Vec<f32> = a.iter().zip(&b).map(|(x, y)| (x + y) * 0.5).collect();
+        for ratio in [2.0, 2.5, 3.0] {
+            let out = run(&input, ratio, rate);
+            let left: Vec<f32> = out.iter().step_by(2).copied().collect();
+            let rms = |s: &[f32]| (s.iter().map(|v| v * v).sum::<f32>() / s.len() as f32).sqrt();
+            let body = &left[9_600..left.len() - 9_600];
+            let whole = rms(body);
+            let worst = body
+                .chunks(2_400)
+                .map(|c| (rms(c) - whole).abs() / whole)
+                .fold(0.0f32, f32::max);
+            assert!(worst < 0.15, "ratio {ratio}: level wanders {worst}");
         }
     }
 

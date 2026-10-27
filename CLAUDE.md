@@ -8,7 +8,9 @@ Audiform is a free, open-source audio editor, a fork of Altered Audio Editor by 
 - The project lead is Broman (GitHub `nwh212`). Wherever this file says "project lead" or "maintainer", that is who decides for Audiform.
 - Give Altered Audio Editor and its authors full, generous credit (README, About, Help > Based on Altered Audio Editor, NOTICE.md). Keep every existing file's GCRN copyright line; new files name the Audiform contributors.
 - Never use the Altered Audio Editor name or logo as Audiform's own (see TRADEMARKS.md); only to say what Audiform is based on. Problem reports go to Audiform, not to the original project.
-- Stay easy to merge back: keep the file formats, ids and folder layout compatible, one feature per commit, decisions logged in `docs/decisions.md`. Everything here is offered to The GCRN under its CLA.
+- Audiform is its own project. File formats, ids and folder layout follow what Audiform needs. One feature per commit, decisions logged in `docs/decisions.md`.
+- Audiform keeps opening Altered Audio Editor's sessions (`.altaudio`, and its `.sesx` exports) and carrying over its settings for as long as that is feasible. When its format changes, add reading support for the new version where practical; when it no longer is, say so in `docs/decisions.md` and tell the project lead.
+- Contributions are released under GPL v3.0 or later. Outside contributors also agree to CLA.md, which gives the maintainer (Broman) the right to use their contributions under other terms too. Do not merge an outside pull request without the agreement box checked.
 
 This is not a clone of any commercial product. It is a purpose-built tool shaped by long podcast production experience. The editing model follows common professional audio workflows that any experienced editor will recognize. The design, naming, code, and podcast-specific features are original.
 
@@ -27,7 +29,7 @@ Also read CLAUDE.local.md if present: it holds private notes and the naming map.
 
 `docs/decisions.md` records what was built and why. Later-phase features get data model fields (scaffolding) before their code. If a task pulls toward a later phase, say so before building it.
 
-P1 exit gate (kept as a regression check): open a real `.sesx`, see its tracks and clips in the multitrack view, save it as `.altaudio`, close, reopen, and everything (layout, libraries, clip positions) is intact.
+P1 exit gate (kept as a regression check): open a real `.sesx`, see its tracks and clips in the multitrack view, save it as `.audfrm`, close, reopen, and everything (layout, libraries, clip positions) is intact.
 
 ### P1 task order
 
@@ -256,7 +258,7 @@ Approved 2026-10-23 (the right-click menu rework; disabled items hold their chor
 | --- | --- |
 | Add stereo audio track, add bus track (P5) | Alt+A, Alt+B |
 | Add Tracks, Delete Empty Tracks | Shift+A, Shift+E |
-| Delete Selected Track | Ctrl+Alt+Backspace |
+| Delete Selected Track | Shift+Delete (was Ctrl+Alt+Backspace, which Windows did not pass on; changed by the project lead 2026-10-27) |
 | Group Clips, Suspend Groups (not built) | Ctrl+G, Ctrl+Shift+G |
 | Ripple delete: selected clips, time selection in selected clips (not built), time selection in all tracks | Shift+Backspace, Alt+Backspace, Ctrl+Shift+Backspace |
 | Deselect All, next clip in selected track, clips to end of track, clear time selection | Ctrl+Shift+A, Period, Ctrl+Alt+T, G |
@@ -282,7 +284,7 @@ These rules exist because reproducing the exact visual expression of a commercia
 
 **Before adding any feature:** if the description says "like X in another product" or "match X from another product," stop and reframe it as a functional description. Log the reframe in `/docs/decisions.md`.
 
-**Interoperability:** the app imports `.sesx` multitrack session files and can export a copy of a session as `.sesx` (File > Export). Our own save format stays `.altaudio`. Format identifiers inside those files are read as data only and never shown as our own names.
+**Interoperability:** the app imports `.sesx` multitrack session files and can export a copy of a session as `.sesx` (File > Export). Our own save format is `.audfrm` (decided by the project lead 2026-10-27; the same JSON as the older `.altaudio`, which still opens and saves again as `.audfrm`). Format identifiers inside those files are read as data only and never shown as our own names.
 
 ## Privacy (non-negotiable)
 
@@ -364,7 +366,7 @@ Rules:
 
 - Rust: `cargo fmt`, `cargo clippy -- -D warnings`, unit tests beside code, integration tests in `/src-tauri/tests`.
 - TypeScript: strict mode, `svelte-check` clean, Vitest for logic.
-- Every source file starts with the GPLv3 header naming The GeekCast Radio Network, LLC.
+- Every source file starts with the GPLv3 header. Files from Altered Audio Editor keep `Copyright (c) The GeekCast Radio Network, LLC.`; new files say `Copyright (c) The Audiform contributors.` A new file that takes code moved out of a file with the GeekCast Radio Network line keeps that line too, above the Audiform one.
 - Small commits, one task per branch, conventional commit messages.
 - Log every architecture decision in `/docs/decisions.md` with date and reason.
 - UI copy, docs, and comments: plain, short sentences, no em dashes, no other products' feature names.

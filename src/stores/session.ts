@@ -7,7 +7,7 @@
  * edits are sent as ops (see src-tauri/src/session/ops.rs) and the core
  * returns the new session plus the op that undoes the edit.
  *
- * Field names match the `.altaudio` file format (snake_case).
+ * Field names match the session file format (snake_case; `.audfrm`, formerly `.altaudio`).
  */
 
 import { DEFAULT_TEMPO, beatsToSeconds, type TempoDoc } from "./tempo";
@@ -142,6 +142,8 @@ export interface ClipDoc {
   reversed?: boolean;
   /** Plays with its polarity flipped. */
   inverted?: boolean;
+  /** Stereo clips: the one side the flip covers ("both" in an edit means both). */
+  invert_channel?: "left" | "right" | "both" | null;
   effects?: EffectChainDoc;
   [key: string]: unknown;
 }
@@ -236,6 +238,8 @@ export interface TrackDoc {
   record_armed: boolean;
   /** Missing in files where it is off. */
   polarity_inverted?: boolean;
+  /** Pre-render: the track's clips through its Audio FX play from a file rendered in the background. */
+  prerender?: boolean;
   /** Folded to mono after its Audio FX chain. Missing in files where it is off. */
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
@@ -300,6 +304,8 @@ export interface SpaceDoc {
 }
 /** A spot in the room: x left -1 to right 1, y back -1 to front 1, z floor 0 to ceiling 1. */
 /** A setting of a spot in the room that automation can move. */
+/** The ways Spatialize opens a stereo sound out into the room. */
+export type SpatializeMode = "side_spread" | "matrix" | "ambience" | "height_lift";
 export type SpaceParam = "x" | "y" | "z" | "size" | "width" | "rotation" | "lfe" | "spread" | "spatialize";
 
 export interface SpacePosDoc {
@@ -318,6 +324,8 @@ export interface SpacePosDoc {
   spread?: number;
   /** Stereo sources: how much of the difference between the sides goes to the surrounds and heights, 0 to 1. */
   spatialize?: number;
+  /** How Spatialize opens the sound out (Side Spread when missing). */
+  spatialize_mode?: SpatializeMode;
 }
 export const DEFAULT_SPACE_POS: SpacePosDoc = { x: 0, y: 1, z: 0, size: 0, width: 1, rotation: 0, lfe: 0, spread: 0, spatialize: 0 };
 
@@ -444,6 +452,8 @@ export interface ClipChange {
   clear_channel_mix?: boolean;
   reversed?: boolean;
   inverted?: boolean;
+  /** Stereo clips: the one side the flip covers ("both" in an edit means both). */
+  invert_channel?: "left" | "right" | "both" | null;
   /** Place in the track's stacking order after the change: 0 is the bottom; past the end is the top. */
   layer?: number;
 }
@@ -466,6 +476,7 @@ export interface TrackChanges {
   color?: string | null;
   volume_db?: number;
   pan?: number;
+  prerender?: boolean;
   polarity_inverted?: boolean;
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
@@ -712,8 +723,16 @@ export class SessionStore {
   }
 
   edit(label: string, op: Op, runner: CommandRunner): Promise<void> {
-    return runner.execute(new OpCommand(this, op, label));
+    const cmd = new OpCommand(this, op, label);
+    const key = mergeKey(op);
+    if (key) this.newest.set(key, cmd);
+    return runner.execute(cmd);
   }
+
+  /** The newest fader-style edit made for each setting (see `mergeKey`). */
+  readonly newest = new Map<string, unknown>();
+  /** When each fader-style setting last reached the core. */
+  readonly lastSent = new Map<string, number>();
 
   /** Applies an op directly. For commands only. */
   async apply(op: Op): Promise<Op> {
@@ -750,6 +769,12 @@ export class SessionStore {
 /** Track settings a fader-style drag changes many times in a row. */
 function mergeKey(op: Op): string | null {
   if (op.op === "set_master_volume") return "master";
+  // A clip's level handle dragged.
+  if (op.op === "set_clips" && op.changes.length === 1) {
+    const c = op.changes[0]!;
+    const keys = Object.keys(c).filter((k) => k !== "id");
+    if (keys.length === 1 && keys[0] === "gain_db") return `clipgain:${c.id}`;
+  }
   if (op.op === "set_sends") return `sends:${op.owner}`;
   if (op.op !== "set_track" && op.op !== "set_bus") return null;
   const keys = Object.keys(op.changes);
@@ -760,6 +785,8 @@ function mergeKey(op: Op): string | null {
 
 class OpCommand implements Command {
   private inverse: Op | null = null;
+  /** Run once already: a redo always applies. */
+  private ran = false;
 
   constructor(
     private readonly store: SessionStore,
@@ -790,6 +817,23 @@ class OpCommand implements Command {
   }
 
   async do(): Promise<void> {
+    // A fader dragged quickly makes edits faster than the core can take
+    // them. Once the drag is under way, an edit already replaced by a
+    // newer one for the same setting is skipped (it merges into the same
+    // undo step anyway), so the sound keeps up with the hand.
+    const key = mergeKey(this.op);
+    if (key) {
+      const sent = this.store.lastSent.get(key);
+      const newer = this.store.newest.get(key);
+      if (!this.ran && newer !== undefined && newer !== this && sent !== undefined && Date.now() - sent < 2000) {
+        this.ran = true;
+        this.inverse = null;
+        return;
+      }
+      this.store.lastSent.set(key, Date.now());
+      if (this.store.newest.get(key) === this) this.store.newest.delete(key);
+    }
+    this.ran = true;
     this.inverse = await this.store.apply(this.op);
   }
 

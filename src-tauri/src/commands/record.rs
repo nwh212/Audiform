@@ -50,6 +50,18 @@ pub fn record_monitor(
     recorder.start(targets, None)
 }
 
+/// While recording, starts a take for a track armed just now.
+#[tauri::command]
+pub fn record_add(recorder: State<'_, Recorder>, target: RecordTarget) -> Result<(), String> {
+    recorder.add(target)
+}
+
+/// While recording, ends the take of a track disarmed just now.
+#[tauri::command]
+pub fn record_remove(recorder: State<'_, Recorder>, key: String) -> Result<(), String> {
+    recorder.remove(&key)
+}
+
 /// Stops recording and returns the takes.
 #[tauri::command]
 pub fn record_stop(recorder: State<'_, Recorder>) -> Result<Vec<Take>, String> {

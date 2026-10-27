@@ -68,3 +68,25 @@ describe("SessionStore", () => {
     expect(store.current?.tracks[0]?.volume_db).toBe(-3.5);
   });
 });
+
+describe("fader drags", () => {
+  it("skip steps a newer one replaced, and still end on the last value", async () => {
+    const { store, stack, volume } = setup();
+    let calls = 0;
+    const apply = store.apply.bind(store);
+    store.apply = async (op) => {
+      calls++;
+      return apply(op);
+    };
+    // Edits made faster than the core answers: all queued at once.
+    const all = [-1, -2, -3, -4, -5].map((v) => store.edit("Track Volume", { op: "set_track", id: "t", changes: { volume_db: v } }, stack));
+    await Promise.all(all);
+    expect(volume()).toBe(-5);
+    expect(calls).toBeLessThan(5);
+    expect(stack.current.entries).toHaveLength(1);
+    await stack.undo();
+    expect(volume()).toBe(0);
+    await stack.redo();
+    expect(volume()).toBe(-5);
+  });
+});

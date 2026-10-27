@@ -245,3 +245,103 @@ mod alignment {
         assert_eq!(at, 2_205);
     }
 }
+
+/// Decodes a whole file at its own channel count and returns each
+/// channel's pitch in Hz, counted from upward zero crossings.
+fn channel_pitches(name: &str) -> Vec<f64> {
+    use audiform_lib::codecs::AudioReader;
+    let r = AudioReader::open(&media(name), 0, None).unwrap_or_else(|e| panic!("{name}: {e}"));
+    let ch = r.source_channels();
+    let mut r = AudioReader::open(&media(name), ch, None).unwrap();
+    let (mut all, mut out) = (Vec::new(), Vec::new());
+    while r.read_into(&mut out).unwrap() {
+        all.append(&mut out);
+    }
+    let rate = f64::from(r.source_rate());
+    let frames = all.len() / ch;
+    // Skip the encoder's lead-in and tail.
+    let (a, b) = (frames / 8, frames - frames / 8);
+    (0..ch)
+        .map(|c| {
+            let ups = (a + 1..b)
+                .filter(|&f| all[(f - 1) * ch + c] <= 0.0 && all[f * ch + c] > 0.0)
+                .count();
+            ups as f64 * rate / (b - a) as f64
+        })
+        .collect()
+}
+
+fn assert_pitches(name: &str, want: &[f64]) {
+    let got = channel_pitches(name);
+    assert_eq!(got.len(), want.len(), "{name}: {got:?}");
+    for (g, w) in got.iter().zip(want) {
+        assert!(
+            (g - w).abs() <= w * 0.05 + 5.0,
+            "{name}: {got:?}, want {want:?}"
+        );
+    }
+}
+
+// The surround files carry a different tone on each speaker: front left
+// 200 Hz, front right 300, center 400, LFE 50, rear left 600, rear right
+// 700 (and in 7.1, side left 800, side right 900). Channels come out in
+// that order.
+
+#[test]
+fn aac_5_1() {
+    let i = info("surround_51.m4a");
+    assert_eq!((i.codec.as_str(), i.channels), ("AAC", 6));
+    assert_about_half_second(&i, 0.05);
+    assert_pitches(
+        "surround_51.m4a",
+        &[200.0, 300.0, 400.0, 50.0, 600.0, 700.0],
+    );
+}
+
+#[test]
+fn aac_7_1() {
+    let i = info("surround_71.m4a");
+    assert_eq!((i.codec.as_str(), i.channels), ("AAC", 8));
+    assert_pitches(
+        "surround_71.m4a",
+        &[200.0, 300.0, 400.0, 50.0, 600.0, 700.0, 800.0, 900.0],
+    );
+}
+
+/// Most download tools save M4A as fragmented MP4, whose header gives no
+/// length.
+#[test]
+fn fragmented_m4a_has_its_length() {
+    let i = info("fragmented.m4a");
+    assert_eq!((i.codec.as_str(), i.channels), ("AAC", 2));
+    assert_about_half_second(&i, 0.05);
+}
+
+/// Dolby Digital and Dolby Digital Plus (the codec of Dolby Atmos music in
+/// M4A) open through the decoder built into Windows. Elsewhere the error
+/// names the codec.
+#[test]
+fn dolby_digital_in_m4a() {
+    for name in ["dolby_digital_51.m4a", "dolby_digital_plus_51.m4a"] {
+        if cfg!(windows) {
+            // Some Windows editions (Server, N) come without these decoders.
+            let i = match probe(&media(name)) {
+                Ok(i) => i,
+                Err(e) => {
+                    eprintln!("{name}: skipped, this system cannot decode it ({e})");
+                    continue;
+                }
+            };
+            assert_eq!(i.channels, 6, "{name}");
+            assert_about_half_second(&i, 0.1);
+            assert_pitches(name, &[200.0, 300.0, 400.0, 50.0, 600.0, 700.0]);
+        } else {
+            match probe(&media(name)) {
+                Err(ProbeError::UnsupportedCodec(what)) => {
+                    assert!(what.starts_with("Dolby Digital"), "{name}: {what}")
+                }
+                other => panic!("{name}: {other:?}"),
+            }
+        }
+    }
+}

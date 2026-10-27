@@ -41,3 +41,18 @@ export function formatPan(p: number): string {
   const r = Math.round(p);
   return r === 0 ? "C" : r < 0 ? `L${-r}` : `R${r}`;
 }
+
+/**
+ * A typed dial value: a number ("-6", "-6 dB", "+3"), "-inf" for the
+ * lowest, or a pan ("C", "L30", "R30"). Null when it cannot be read.
+ */
+export function parseDialValue(text: string, min: number): number | null {
+  const t = text.trim().toUpperCase().replace(/\s*DB$/, "");
+  if (t === "") return null;
+  if (t === "C") return 0;
+  if (/^-?INF/.test(t)) return min;
+  const pan = /^([LR])\s*(\d+(?:\.\d+)?)$/.exec(t);
+  if (pan) return (pan[1] === "L" ? -1 : 1) * Number(pan[2]);
+  const v = Number(t.replace(/^\+/, ""));
+  return Number.isFinite(v) ? v : null;
+}

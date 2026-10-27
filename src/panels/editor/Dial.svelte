@@ -4,9 +4,13 @@
   This file is part of Audiform, based on Altered Audio Editor.
 
   A small round dial with its value beside it. Drag up or right to raise
-  it, down or left to lower it; Shift for fine steps; double-click resets.
+  it, down or left to lower it; Shift for fine steps; double-click the
+  dial to reset it, or double-click the number to type a value.
 -->
 <script lang="ts">
+  import { tick as nextTick } from "svelte";
+  import { parseDialValue } from "../mixer/fader";
+
   interface Props {
     value: number;
     min: number;
@@ -43,8 +47,32 @@
   });
   const tick = $derived(point(a, 4.5));
 
+  // Typing a value: the number turns into a box while editing.
+  let editing = $state(false);
+  let text = $state("");
+  let box = $state<HTMLInputElement | null>(null);
+  async function startEdit(e: MouseEvent) {
+    e.stopPropagation();
+    text = format(value).replace(/\s*dB$/i, "");
+    editing = true;
+    await nextTick();
+    box?.focus();
+    box?.select();
+  }
+  function finishEdit(keep: boolean) {
+    if (!editing) return;
+    editing = false;
+    if (!keep) return;
+    const v = parseDialValue(text, min);
+    if (v === null) return;
+    const clamped = Math.min(max, Math.max(min, v));
+    if (clamped !== value) onChange(clamped);
+  }
+
   function drag(e: PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || editing) return;
+    // The number is for typing: a press there waits for the double-click.
+    if ((e.target as Element).closest(".val")) return;
     e.preventDefault();
     e.stopPropagation();
     const el = e.currentTarget as HTMLElement;
@@ -76,9 +104,11 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <span
   class="dial"
-  title="{label}. Drag up or right to raise, Shift for fine steps, double-click to reset."
+  title="{label}. Drag the dial up or right to raise, Shift for fine steps; double-click the dial to reset, or the number to type a value."
   onpointerdown={drag}
-  ondblclick={() => onChange(origin)}
+  ondblclick={(e) => {
+    if (!(e.target as Element).closest(".val")) onChange(origin);
+  }}
 >
   {#if icon === "volume"}
     <svg class="sym" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 9.5h1.5M3.5 8h1.5M6 6h1.5M8.5 4h1.5" stroke="currentColor" stroke-width="1" /><path d="M1 10v1.5M3.5 9v2.5M6 7.5v4M8.5 5.5v6M11 3v8.5" stroke="currentColor" stroke-width="1.2" /></svg>
@@ -91,7 +121,24 @@
     {#if arc}<path d={arc} fill="none" stroke="var(--value)" stroke-width="1.6" />{/if}
     <line x1="8" y1="8" x2={tick[0]} y2={tick[1]} stroke="var(--text)" stroke-width="1.5" stroke-linecap="round" />
   </svg>
-  <span class="val">{format(value)}</span>
+  {#if editing}
+    <input
+      class="val edit"
+      bind:this={box}
+      bind:value={text}
+      aria-label={label}
+      onkeydown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") finishEdit(true);
+        else if (e.key === "Escape") finishEdit(false);
+      }}
+      onblur={() => finishEdit(true)}
+      onpointerdown={(e) => e.stopPropagation()}
+    />
+  {:else}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span class="val" ondblclick={startEdit}>{format(value)}</span>
+  {/if}
 </span>
 
 <style>
@@ -122,9 +169,18 @@
 
   .val {
     min-width: 34px;
+    cursor: text;
     color: var(--value);
     font-family: var(--font-mono);
     font-size: 11px;
     white-space: nowrap;
+  }
+  .val.edit {
+    width: 42px;
+    padding: 0 2px;
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    background: var(--surface-0);
+    outline: none;
   }
 </style>

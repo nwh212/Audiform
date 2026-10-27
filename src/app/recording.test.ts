@@ -17,6 +17,17 @@ describe("recording placement", () => {
     const p = recordPlan(0, null, RECORD_DEFAULTS, R);
     expect(placeTake(p, { length: 48_000, sampleRate: R }, R, 10)).toEqual({ start: 0, sourceIn: 480, sourceOut: 48_000 });
   });
+
+  it("places a take armed while recording where it began", () => {
+    const p = { at: 48_000, punch: null };
+    // Began 1 s (44.1 kHz frames) into a 48 kHz session's recording.
+    expect(placeTake(p, { length: 44_100, sampleRate: 44_100, startFrames: 44_100 }, R, 0)).toEqual({ start: 96_000, sourceIn: 0, sourceOut: 44_100 });
+    // Inside a punch-in: starts where it began, stops at the punch end.
+    const q = { at: 0, punch: { start: 48_000, end: 144_000 } };
+    expect(placeTake(q, { length: 192_000, sampleRate: R, startFrames: 96_000 }, R, 0)).toEqual({ start: 96_000, sourceIn: 0, sourceOut: 48_000 });
+    // Armed after the punch ended: nothing to place.
+    expect(placeTake(q, { length: 1_000, sampleRate: R, startFrames: 150_000 }, R, 0)).toBeNull();
+  });
   it("punches in with pre-roll and keeps only the selection", () => {
     const sel = { start: 10 * R, end: 14 * R };
     const p = recordPlan(0, sel, RECORD_DEFAULTS, R);

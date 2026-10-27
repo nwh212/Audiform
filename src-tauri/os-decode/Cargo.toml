@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) The Audiform contributors.
+# This file is part of Audiform, based on Altered Audio Editor.
+
+[package]
+name = "audiform-os-decode"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Audio decoding for Audiform through the operating system's own decoders."
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }

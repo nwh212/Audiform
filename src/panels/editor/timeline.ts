@@ -57,11 +57,14 @@ export function zoomAround(
   return { spp, scroll: Math.max(0, anchor - anchorX * spp) };
 }
 
-/** Fits `length` samples into `width` pixels with a little room at the end. */
-export function fit(length: number, width: number): Viewport {
+/**
+ * Fits `length` samples into `width` pixels, with a little room at the end
+ * (`room` 1.05 is 5% more; 1 fits exactly, as for a single file).
+ */
+export function fit(length: number, width: number, room = 1.05): Viewport {
   if (length <= 0 || width <= 0) return { spp: 1024, scroll: 0 };
   return {
-    spp: Math.min(MAX_SPP, Math.max(MIN_SPP, (length * 1.05) / width)),
+    spp: Math.min(MAX_SPP, Math.max(MIN_SPP, (length * room) / width)),
     scroll: 0,
   };
 }

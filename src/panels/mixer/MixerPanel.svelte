@@ -83,6 +83,11 @@
     void session.edit(what, op, runner).catch(onError);
   }
 
+  /** Ctrl+click on Solo: this track alone, whatever else was soloed. */
+  function soloOnly(id: string) {
+    void session.edit("Solo Track Only", trackOp(doc, id, { solo: true }, true), runner).catch(onError);
+  }
+
   let menu = $state<{ x: number; y: number; items: ContextItem[] } | null>(null);
   let renaming = $state<string | null>(null);
   function busMenu(e: MouseEvent, st: Strip) {
@@ -222,7 +227,7 @@
         {/if}
         <div class="buttons">
           <button type="button" class:on={t.muted} class="m" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
-          <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo"} aria-pressed={t.solo} onclick={() => setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track")}>S</button>
+          <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo. Ctrl+click to hear only this track."} aria-pressed={t.solo} onclick={(e) => (t.kind === "track" && (e.ctrlKey || e.metaKey) ? soloOnly(t.id) : setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track"))}>S</button>
           <button type="button" class:on={t.mono} class="mo" title="Mono: folds this strip's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={t.mono} onclick={() => setStrip(t, { mono: !t.mono }, t.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
           {#if t.kind === "track"}
             <button type="button" class:on={t.record_armed} class="r" title="Arm for recording" aria-pressed={t.record_armed} onclick={() => setStrip(t, { record_armed: !t.record_armed }, "Arm Track")}>R</button>

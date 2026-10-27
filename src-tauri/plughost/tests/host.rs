@@ -299,7 +299,8 @@ fn scans_processes_saves_and_survives_a_crash() {
     assert!(matches!(
         h.request(&Request::OpenEditor {
             title: "x".into(),
-            owner: 0
+            owner: 0,
+            bypassed: false,
         }),
         Message::Error { .. }
     ));

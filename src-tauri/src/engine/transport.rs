@@ -91,11 +91,77 @@ struct Shared {
     /// Routed mixes: levels changed during playback, waiting for the
     /// render thread.
     levels: Mutex<Option<Levels>>,
+    /// Clip levels changed during playback, waiting for the render thread.
+    clip_gains: Mutex<Option<Vec<(Id, f32)>>>,
     /// Render-thread meters, oldest first, released as the device plays them.
     chain_meters: Mutex<VecDeque<BlockPeaks>>,
     /// The last reading `played_meters` gave, given again when no new block
     /// was played since (otherwise the meters blinked to silence).
     last_played: Mutex<GraphMeters>,
+    /// A level heard over part of the timeline while a level control is
+    /// being dragged (1.0 when none), applied as each sample plays.
+    audition: Audition,
+    /// What the audio thread needs to know where on the timeline it is.
+    clock: Clock,
+}
+
+/// A gain over `start..end` of the timeline (session samples), for
+/// hearing a level change before it is applied.
+struct Audition {
+    gain: AtomicU32,
+    start: AtomicU64,
+    end: AtomicU64,
+    /// One track's stream only (a clip's level handle), or every track
+    /// (`u32::MAX`).
+    track: AtomicU32,
+    /// Output frames from here on were rendered with the edited level
+    /// already, so they are not auditioned again (`u64::MAX`: none yet).
+    until: AtomicU64,
+}
+
+impl Audition {
+    fn set(&self, gain: f32, start: u64, end: u64, track: u32) {
+        self.start.store(start, Ordering::Relaxed);
+        self.end.store(end, Ordering::Relaxed);
+        self.track.store(track, Ordering::Relaxed);
+        self.until.store(u64::MAX, Ordering::Relaxed);
+        self.gain.store(f32_bits(gain), Ordering::Relaxed);
+    }
+}
+
+/// Where playback started and how it jumps, set once playback runs.
+struct Clock {
+    from: AtomicU64,
+    /// 0 plays straight on, 1 loops, 2 skips.
+    kind: AtomicU32,
+    a: AtomicU64,
+    b: AtomicU64,
+    session_rate: AtomicU32,
+    out_rate: AtomicU32,
+}
+
+impl Clock {
+    /// The timeline position (session samples) of output frame `played`.
+    #[inline]
+    fn at(&self, played: u64) -> u64 {
+        let sr = self.session_rate.load(Ordering::Relaxed);
+        let or = self.out_rate.load(Ordering::Relaxed);
+        let elapsed = if sr == 0 || or == 0 {
+            played
+        } else {
+            plan::to_session(played, sr, or)
+        };
+        let (a, b) = (
+            self.a.load(Ordering::Relaxed),
+            self.b.load(Ordering::Relaxed),
+        );
+        let jump = match self.kind.load(Ordering::Relaxed) {
+            1 => Some(Jump::Loop { start: a, end: b }),
+            2 => Some(Jump::Skip { start: a, end: b }),
+            _ => None,
+        };
+        Jump::position(jump, self.from.load(Ordering::Relaxed), elapsed)
+    }
 }
 
 impl Shared {
@@ -120,9 +186,41 @@ impl Shared {
             underruns: AtomicU64::new(0),
             chains: Mutex::new(None),
             levels: Mutex::new(None),
+            clip_gains: Mutex::new(None),
             chain_meters: Mutex::new(VecDeque::new()),
             last_played: Mutex::new(GraphMeters::default()),
+            audition: Audition {
+                gain: AtomicU32::new(f32_bits(1.0)),
+                start: AtomicU64::new(0),
+                end: AtomicU64::new(0),
+                track: AtomicU32::new(u32::MAX),
+                until: AtomicU64::new(u64::MAX),
+            },
+            clock: Clock {
+                from: AtomicU64::new(0),
+                kind: AtomicU32::new(0),
+                a: AtomicU64::new(0),
+                b: AtomicU64::new(0),
+                session_rate: AtomicU32::new(0),
+                out_rate: AtomicU32::new(0),
+            },
         }
+    }
+
+    fn set_clock(&self, from: u64, jump: Option<Jump>, session_rate: u32, out_rate: u32) {
+        let (kind, a, b) = match jump {
+            None => (0, 0, 0),
+            Some(Jump::Loop { start, end }) => (1, start, end),
+            Some(Jump::Skip { start, end }) => (2, start, end),
+        };
+        self.clock.a.store(a, Ordering::Relaxed);
+        self.clock.b.store(b, Ordering::Relaxed);
+        self.clock.kind.store(kind, Ordering::Relaxed);
+        self.clock.from.store(from, Ordering::Relaxed);
+        self.clock
+            .session_rate
+            .store(session_rate, Ordering::Relaxed);
+        self.clock.out_rate.store(out_rate, Ordering::Relaxed);
     }
 
     /// Routed mixes: hands new levels to the render thread.
@@ -130,6 +228,16 @@ impl Shared {
         if let Ok(mut g) = self.levels.lock() {
             *g = Some(levels);
         }
+    }
+
+    fn send_clip_gains(&self, gains: Vec<(Id, f32)>) {
+        if let Ok(mut g) = self.clip_gains.lock() {
+            *g = Some(gains);
+        }
+    }
+
+    fn take_clip_gains(&self) -> Option<Vec<(Id, f32)>> {
+        self.clip_gains.try_lock().ok().and_then(|mut g| g.take())
     }
 
     fn take_levels(&self) -> Option<Levels> {
@@ -408,6 +516,36 @@ impl Transport {
     /// Brings playback in line with an edited session: new gains apply
     /// at once, edited chains swap in; changes that move audio, or a
     /// chain's look-ahead, restart from the same spot.
+    /// Hears `gain` over `start..end` of the timeline (session samples)
+    /// from now on, before any edit is made; 1.0 ends it.
+    pub fn audition(&self, gain: f32, start: u64, end: u64) {
+        if let Ok(cur) = self.current.lock() {
+            if let Some(r) = cur.as_ref() {
+                r.shared.audition.set(gain, start, end, u32::MAX);
+            }
+        }
+    }
+
+    /// Hears `gain` on one track only, over `start..end` of the timeline:
+    /// a clip's level while its handle is dragged. The edit made on
+    /// release takes over seamlessly (see [`Audition::until`]). Not
+    /// possible when the mix is routed (one stream for everything); the
+    /// edit is heard a moment later then.
+    /// False when it cannot (not playing, or routed).
+    pub fn audition_track(&self, track: Id, gain: f32, start: u64, end: u64) -> bool {
+        let Ok(cur) = self.current.lock() else {
+            return false;
+        };
+        let Some(r) = cur.as_ref().filter(|r| !r.routed) else {
+            return false;
+        };
+        let Some(t) = r.track_ids.iter().position(|&i| i == track) else {
+            return false;
+        };
+        r.shared.audition.set(gain, start, end, t as u32);
+        true
+    }
+
     pub fn sync(&self, session: &Session) -> Result<(), String> {
         // As it plays: multichannel clips' channels on their speakers.
         let session = &*super::speaker_feed::expanded(session);
@@ -424,6 +562,7 @@ impl Transport {
             }
             // Routed: every level. Plain: the graph still folds tracks to mono.
             r.shared.send_levels(graph::levels(session));
+            r.shared.send_clip_gains(plan::clip_gains(session));
             let now = plan::chains(session);
             if now == r.chains {
                 return Ok(());
@@ -551,6 +690,7 @@ fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, Str
             return Err("The audio device did not respond.".into());
         }
     };
+    shared.set_clock(from, jump, session_rate, out_rate);
     Ok(Running {
         shared,
         thread: Some(thread),
@@ -880,6 +1020,16 @@ fn render_loop(
         if let Some(levels) = shared.take_levels() {
             mix.graph().set_levels(levels);
         }
+        if let Some(gains) = shared.take_clip_gains() {
+            mix.set_clip_gains(&gains);
+            // A track's audition ends where audio with the edited level begins.
+            if shared.audition.track.load(Ordering::Relaxed) != u32::MAX {
+                shared
+                    .audition
+                    .until
+                    .fetch_min(mix.rendered(), Ordering::Relaxed);
+            }
+        }
         if has_room(&producers, &click_out, bed.as_ref(), nb) {
             render_block(
                 &mut mix,
@@ -971,13 +1121,29 @@ fn mix<T>(
     }
     let master = bits_f32(shared.master.load(Ordering::Relaxed));
     let mono = MONO_CHECK.load(Ordering::Relaxed);
+    // A level being auditioned over part of the timeline.
+    let aud_gain = bits_f32(shared.audition.gain.load(Ordering::Relaxed));
+    let auditioning = aud_gain != 1.0;
+    let (aud_start, aud_end) = (
+        shared.audition.start.load(Ordering::Relaxed),
+        shared.audition.end.load(Ordering::Relaxed),
+    );
+    let aud_track = shared.audition.track.load(Ordering::Relaxed) as usize;
+    let aud_until = shared.audition.until.load(Ordering::Relaxed);
+    let played0 = shared.played.load(Ordering::Relaxed);
     let mut mpeak = [0f32; 2];
     for f in 0..n {
         let mut l = 0f32;
         let mut r = 0f32;
+        // This frame's audition: on every track, on one, or none.
+        let aud = auditioning && played0 + (f as u64) < aud_until && {
+            let at = shared.clock.at(played0 + f as u64);
+            at >= aud_start && at < aud_end
+        };
         for (t, c) in consumers.iter_mut().enumerate() {
-            let sl = c.pop().unwrap_or(0.0) * gains[t][0];
-            let sr = c.pop().unwrap_or(0.0) * gains[t][1];
+            let k = if aud && t == aud_track { aud_gain } else { 1.0 };
+            let sl = c.pop().unwrap_or(0.0) * gains[t][0] * k;
+            let sr = c.pop().unwrap_or(0.0) * gains[t][1] * k;
             peaks[t][0] = peaks[t][0].max(sl.abs());
             peaks[t][1] = peaks[t][1].max(sr.abs());
             l += sl;
@@ -985,6 +1151,10 @@ fn mix<T>(
         }
         l *= master;
         r *= master;
+        if aud && aud_track == u32::MAX as usize {
+            l *= aud_gain;
+            r *= aud_gain;
+        }
         if mono {
             let m = (l + r) * 0.5;
             l = m;
@@ -1088,6 +1258,37 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_clip_level_is_heard_on_its_track_until_the_edit_takes_over() {
+        let shared = Shared::new(2, &[[1.0, 1.0], [1.0, 1.0]], 1.0);
+        let (mut p0, c0) = RingBuffer::<f32>::new(16);
+        let (mut p1, c1) = RingBuffer::<f32>::new(16);
+        for _ in 0..8 {
+            p0.push(0.25).unwrap();
+            p1.push(1.0).unwrap();
+        }
+        // Track 1 at half level over timeline frames 1..4; audio from
+        // output frame 3 on was rendered with the edit already.
+        shared.audition.set(0.5, 1, 4, 1);
+        shared.audition.until.store(3, Ordering::Relaxed);
+        let mut consumers = vec![c0, c1];
+        let mut out = [0.0f32; 8];
+        mix(
+            &mut out,
+            2,
+            &mut consumers,
+            &mut quiet(),
+            &shared,
+            &mut [[0.0; 2]; 2],
+            &mut [[0.0; 2]; 2],
+            &mut Routing::stereo(),
+        );
+        let left: Vec<f32> = out.iter().step_by(2).copied().collect();
+        // The other track is untouched; the clip's track is scaled only
+        // inside its span and before the edit's audio.
+        assert_eq!(left, [1.25, 0.75, 0.75, 1.25]);
+    }
 
     #[test]
     fn mix_applies_gains_meters_and_counts_frames() {

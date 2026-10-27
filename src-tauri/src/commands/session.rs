@@ -187,6 +187,7 @@ pub fn session_get(open: State<'_, OpenSession>) -> Result<SessionWithPath, Stri
 
 #[tauri::command]
 pub fn session_apply(
+    app: AppHandle,
     open: State<'_, OpenSession>,
     transport: State<'_, crate::engine::Transport>,
     playing: State<'_, super::wave::Playing>,
@@ -204,10 +205,12 @@ pub fn session_apply(
     crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
     // New plug-ins and instruments start loading now, not when Play is pressed.
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
+    // Pre-rendered tracks whose sound changed start a new render.
+    super::prerender::refresh(&app, &s.session);
     // Playback follows edits: gains at once, timing changes by restarting.
     // Not while the Waveform editor's file is the one playing.
     if playing.is(super::wave::PlayingDoc::Session) {
-        if let Err(e) = transport.sync(&s.session) {
+        if let Err(e) = transport.sync(&super::live::heard(&s.session)) {
             eprintln!("playback could not follow the edit: {e}");
             transport.stop();
         }
@@ -282,6 +285,7 @@ pub fn session_new(
     }
     s.session = session;
     s.path = path.clone();
+    super::prerender::refresh(&app, &s.session);
     Ok(SessionWithPath {
         session: s.session.clone(),
         path,
@@ -403,9 +407,15 @@ fn backup_previous(
     Ok(())
 }
 
+/// The path a session saves to: always `.audfrm`. A session opened from an
+/// older `.altaudio` file saves beside it under the new extension; the old
+/// file is left as it was.
 fn with_extension(p: PathBuf) -> PathBuf {
-    if p.extension().and_then(|e| e.to_str()) == Some(EXTENSION) {
+    let ext = p.extension().and_then(|e| e.to_str());
+    if ext.is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION)) {
         p
+    } else if ext.is_some_and(|e| e.eq_ignore_ascii_case(file::OLD_EXTENSION)) {
+        p.with_extension(EXTENSION)
     } else {
         let mut s = p.into_os_string();
         s.push(".");
@@ -431,6 +441,7 @@ pub async fn session_open(app: AppHandle, path: PathBuf) -> Result<SessionWithPa
     s.path = Some(path.clone());
     crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
+    super::prerender::refresh(&app, &s.session);
     Ok(SessionWithPath {
         session: opened.session,
         path: Some(path),
@@ -488,6 +499,7 @@ pub async fn session_recover(app: AppHandle, autosave: PathBuf) -> Result<Sessio
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
     s.session = opened.session.clone();
     s.path = found.note.original_path.clone();
+    super::prerender::refresh(&app, &s.session);
     Ok(SessionWithPath {
         session: opened.session,
         path: found.note.original_path,
@@ -536,7 +548,7 @@ pub async fn session_pick_open(app: AppHandle, sesx: bool) -> Result<Option<Path
                 .add_filter("Multitrack session (.sesx)", &["sesx"])
         } else {
             d.set_title("Open Session")
-                .add_filter("Audiform session", &[EXTENSION])
+                .add_filter("Audiform session", &[EXTENSION, file::OLD_EXTENSION])
         };
         if let Some(w) = parent.as_ref() {
             d = d.set_parent(w);
@@ -554,14 +566,14 @@ pub async fn session_pick_open(app: AppHandle, sesx: bool) -> Result<Option<Path
 pub async fn file_pick_open(app: AppHandle) -> Result<Vec<PathBuf>, String> {
     let parent = app.get_webview_window("main");
     spawn_blocking(move || {
-        let mut all: Vec<&str> = vec![EXTENSION, "sesx"];
+        let mut all: Vec<&str> = vec![EXTENSION, file::OLD_EXTENSION, "sesx"];
         all.extend_from_slice(crate::codecs::SUPPORTED_EXTENSIONS);
         let mut d = app
             .dialog()
             .file()
             .set_title("Open")
             .add_filter("Sessions and audio files", &all)
-            .add_filter("Audiform session", &[EXTENSION])
+            .add_filter("Audiform session", &[EXTENSION, file::OLD_EXTENSION])
             .add_filter("Multitrack session (.sesx)", &["sesx"])
             .add_filter("Audio files", crate::codecs::SUPPORTED_EXTENSIONS);
         if let Some(w) = parent.as_ref() {
@@ -668,6 +680,37 @@ pub async fn session_export_sesx(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn sessions_save_as_audfrm_and_old_ones_move_over() {
+        use std::path::PathBuf;
+        assert_eq!(
+            super::with_extension(PathBuf::from("/s/Show")),
+            PathBuf::from("/s/Show.audfrm")
+        );
+        assert_eq!(
+            super::with_extension(PathBuf::from("/s/Show.audfrm")),
+            PathBuf::from("/s/Show.audfrm")
+        );
+        assert_eq!(
+            super::with_extension(PathBuf::from("/s/Show.altaudio")),
+            PathBuf::from("/s/Show.audfrm")
+        );
+        assert_eq!(
+            super::with_extension(PathBuf::from("/s/Show.ALTAUDIO")),
+            PathBuf::from("/s/Show.audfrm")
+        );
+        assert!(crate::session::file::is_session_path(std::path::Path::new(
+            "a.altaudio"
+        )));
+        assert!(crate::session::file::is_session_path(std::path::Path::new(
+            "a.audfrm"
+        )));
+        assert!(!crate::session::file::is_session_path(
+            std::path::Path::new("a.sesx")
+        ));
+    }
+
     use super::*;
 
     #[test]
@@ -699,7 +742,7 @@ mod tests {
     fn backups_keep_the_newest_few() {
         use chrono::TimeZone;
         let d = tempfile::tempdir().unwrap();
-        let target = d.path().join("Show.altaudio");
+        let target = d.path().join("Show.audfrm");
         std::fs::write(&target, "v1").unwrap();
         for m in 0..5 {
             let t = chrono::Local
@@ -709,7 +752,7 @@ mod tests {
         }
         let dir = d.path().join("Backups");
         // Another session's backups in the same folder are left alone.
-        std::fs::write(dir.join("Other 2026-01-01 000000.altaudio"), "x").unwrap();
+        std::fs::write(dir.join("Other 2026-01-01 000000.audfrm"), "x").unwrap();
         super::backup_previous(
             &target,
             3,
@@ -727,13 +770,13 @@ mod tests {
         assert_eq!(
             names,
             [
-                "Other 2026-01-01 000000.altaudio",
-                "Show 2026-10-19 090300.altaudio",
-                "Show 2026-10-19 090400.altaudio",
-                "Show 2026-10-19 100000.altaudio"
+                "Other 2026-01-01 000000.audfrm",
+                "Show 2026-10-19 090300.audfrm",
+                "Show 2026-10-19 090400.audfrm",
+                "Show 2026-10-19 100000.audfrm"
             ]
         );
         // No file yet: nothing to back up.
-        super::backup_previous(&d.path().join("New.altaudio"), 3, chrono::Local::now()).unwrap();
+        super::backup_previous(&d.path().join("New.audfrm"), 3, chrono::Local::now()).unwrap();
     }
 }

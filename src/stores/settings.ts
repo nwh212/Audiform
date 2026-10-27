@@ -47,7 +47,7 @@ export interface AppSettings {
   /** 3D Space sessions heard on speakers: each speaker's device output (from 0) by name. Missing speakers play on the output at their place in the layout. */
   speakerOutputs: Record<string, number>;
   /** Look of the app: the built-in dark theme, or an Aero theme (clear glass over a scene): Meadow, Aqua or Moonlight; Prism; or Phosphor (green screens in a beige case). */
-  theme: "dark" | "meadow" | "aqua" | "moonlight" | "prism" | "phosphor";
+  theme: "dark" | "meadow" | "aqua" | "moonlight" | "prism" | "phosphor" | "analog";
   /** How lively the level meters are. */
   meterSpeed: "fast" | "medium" | "slow";
   /** The custom loudness target: integrated LUFS and true peak ceiling. */
@@ -129,6 +129,8 @@ export interface PhaseWheelPrefs {
   fps: number;
   a: PhaseSignal;
   b: PhaseSignal;
+  /** Show the color key, correlation, settings and note under the wheel. */
+  details: boolean;
 }
 export const PHASE_SIZES = [1024, 2048, 4096, 8192, 16384] as const;
 export const PHASE_RATES = [15, 30, 60, 120] as const;
@@ -179,7 +181,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   countdownSec: 0,
   markerName: "Marker",
   timecodeFps: 30,
-  phaseWheel: { size: 4096, fps: 60, a: "left", b: "right" },
+  phaseWheel: { size: 4096, fps: 60, a: "left", b: "right", details: true },
   spaceSnap: true,
   metronome: { on: false, muted: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
 };
@@ -233,7 +235,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     ),
     driver: o.driver === "asio" ? "asio" : "system",
     // Sky Glass and Night Glass (tried out, then dropped) become Meadow and Moonlight Aero.
-    theme: o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" || o.theme === "prism" || o.theme === "phosphor" ? o.theme : o.theme === "sky" ? "meadow" : o.theme === "night" ? "moonlight" : "dark",
+    theme: o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" || o.theme === "prism" || o.theme === "phosphor" || o.theme === "analog" ? o.theme : o.theme === "sky" ? "meadow" : o.theme === "night" ? "moonlight" : "dark",
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"
         ? o.meterSpeed
@@ -303,6 +305,7 @@ function phasePrefs(raw: unknown): PhaseWheelPrefs {
     fps: PHASE_RATES.includes(p.fps as never) ? (p.fps as number) : d.fps,
     a: sig(p.a, d.a),
     b: sig(p.b, d.b),
+    details: typeof p.details === "boolean" ? p.details : d.details,
   };
 }
 
