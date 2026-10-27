@@ -10,6 +10,7 @@ Audiform is a free, open-source audio editor, a fork of Altered Audio Editor by 
 - Never use the Altered Audio Editor name or logo as Audiform's own (see TRADEMARKS.md); only to say what Audiform is based on. Problem reports go to Audiform, not to the original project.
 - Audiform is its own project. File formats, ids and folder layout follow what Audiform needs. One feature per commit, decisions logged in `docs/decisions.md`.
 - Audiform keeps opening Altered Audio Editor's sessions (`.altaudio`, and its `.sesx` exports) and carrying over its settings for as long as that is feasible. When its format changes, add reading support for the new version where practical; when it no longer is, say so in `docs/decisions.md` and tell the project lead.
+- Builds: test builds (test-build.yml) are Windows only; full releases (release.yml) build Windows, Linux and macOS (decided by the project lead 2026-10-27).
 - Contributions are released under GPL v3.0 or later. Outside contributors also agree to CLA.md, which gives the maintainer (Broman) the right to use their contributions under other terms too. Do not merge an outside pull request without the agreement box checked.
 
 This is not a clone of any commercial product. It is a purpose-built tool shaped by long podcast production experience. The editing model follows common professional audio workflows that any experienced editor will recognize. The design, naming, code, and podcast-specific features are original.
