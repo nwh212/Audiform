@@ -100,6 +100,7 @@ pub fn run() {
             commands::amp::amp_load_model,
             commands::amp::amp_load_ir,
             commands::firewall::firewall_status,
+            commands::app::alt_down,
             commands::firewall::firewall_block,
             commands::reverb::reverb_pick,
             commands::reverb::reverb_load,

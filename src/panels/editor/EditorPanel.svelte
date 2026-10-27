@@ -73,7 +73,8 @@
     router: FileDropRouter;
     actions: ActionRegistry;
     /** Adds files as clips on a track (null makes a new track) at a session sample. */
-    onPlaceFiles: (paths: string[], trackId: string | null, at: number) => void;
+    /** `asTracks`: several files go one per track, all from `at`. */
+    onPlaceFiles: (paths: string[], trackId: string | null, at: number, asTracks: boolean) => void;
     shortcutFor?: (id: string) => string | undefined;
     onError?: (e: unknown) => void;
     /** Asks for one line of text. */
@@ -296,6 +297,8 @@
   /** While the playhead is being dragged on the ruler: where the pointer has it, shown at once. */
   let dragHead = $state<number | null>(null);
   const playhead = $derived(dragHead ?? (tp?.playing ? tp.position : (doc?.view.playhead ?? 0)));
+  /** The start marker: shown while playing or paused, where playback began. */
+  const startMark = $derived(tp && (tp.playing || tp.paused) ? tp.anchor : null);
 
   // Following the playhead while playing is Follow Playhead's job (below):
   // it lets go when you move the view yourself.
@@ -375,10 +378,11 @@
     return router.register({
       element: lanesEl,
       onHover: (over) => (dropping = over),
-      onMove: (paths, at) => showDropGhost(paths, at),
-      onDrop: (paths, at) => {
+      onMove: (paths, at, alt) => showDropGhost(paths, at, alt),
+      // Without Alt, several files go one per track; with Alt, one after another on one track.
+      onDrop: (paths, at, alt) => {
         const { trackId, sample } = hitLanes(at.x, at.y);
-        onPlaceFiles(paths, trackId, dropSample(sample));
+        onPlaceFiles(paths, trackId, dropSample(sample), !alt);
       },
     });
   });
@@ -402,7 +406,7 @@
     }
     return p;
   }
-  function showDropGhost(paths: string[], at: { x: number; y: number } | null) {
+  function showDropGhost(paths: string[], at: { x: number; y: number } | null, alt: boolean) {
     const seq = ++ghostSeq;
     if (!at || paths.length === 0 || !lanesEl || !doc) {
       dropGhost = null;
@@ -418,7 +422,7 @@
     const height = row ? row.offsetHeight - TRACK_GAP : 60;
     void Promise.all(paths.map(probeLength)).then((infos) => {
       if (seq !== ghostSeq) return;
-      const items = ghostItems(infos, dropSample(sample), view, settings.current.dropMany === "tracks");
+      const items = ghostItems(infos, dropSample(sample), view, !alt);
       dropGhost = items.length ? { top, height, newTrack: !row, items } : null;
     });
   }
@@ -450,7 +454,7 @@
     void tick;
     const c = ruler;
     if (!c) return;
-    drawRuler(c, { width: lanesWidth, view, rate, timeFormat: ed.timeFormat, selection: doc?.view.selection, markers: shownMarkers, playhead });
+    drawRuler(c, { width: lanesWidth, view, rate, timeFormat: ed.timeFormat, selection: doc?.view.selection, markers: shownMarkers, playhead, startMark });
   });
 
   /**
@@ -1618,6 +1622,7 @@
                 {view}
                 width={lanesWidth}
                 {playhead}
+                {startMark}
                 selectedClips={ed.selectedClips}
                 trackSelected={ed.selectedTrack === track.id}
                 index={i}

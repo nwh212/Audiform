@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) The Audiform contributors.
+# This file is part of Audiform, based on Altered Audio Editor.
+
+[package]
+name = "audiform-os-keys"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Reads modifier keys for Audiform while the system runs a drag."
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"] }

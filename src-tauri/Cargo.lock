@@ -267,6 +267,7 @@ dependencies = [
  "altered-os-aac",
  "altered-plughost",
  "audiform-os-decode",
+ "audiform-os-keys",
  "audioadapter-buffers",
  "chrono",
  "cpal",
@@ -301,6 +302,13 @@ name = "audiform-os-decode"
 version = "0.1.0"
 dependencies = [
  "windows",
+]
+
+[[package]]
+name = "audiform-os-keys"
+version = "0.1.0"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

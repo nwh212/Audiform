@@ -51,11 +51,11 @@ export function beginPathDrag(
       ghost.style.left = `${e.clientX + 12}px`;
       ghost.style.top = `${e.clientY + 8}px`;
     }
-    router.dragOver(e.clientX, e.clientY, from, dragging ?? []);
+    router.dragOver(e.clientX, e.clientY, from, dragging ?? [], e.altKey);
   };
 
   const up = (e: PointerEvent) => {
-    if (dragging) router.dragEnd(dragging, e.clientX, e.clientY, from);
+    if (dragging) router.dragEnd(dragging, e.clientX, e.clientY, from, e.altKey);
     cleanup();
   };
 

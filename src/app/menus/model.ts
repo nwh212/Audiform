@@ -257,6 +257,7 @@ export const MENUS: readonly Menu[] = [
       item("multitrack.insert-silence", "Insert Silence at Playhead..."),
       sep,
       item("multitrack.play-pause", "Play / Stop"),
+      item("multitrack.pause", "Pause"),
       item("multitrack.stop", "Stop"),
       sub("Go To", [
         item("transport.go-start", "Start"),

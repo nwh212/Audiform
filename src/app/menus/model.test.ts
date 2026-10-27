@@ -134,6 +134,7 @@ describe("menu model", () => {
       "file.import-sesx",
       "multitrack.play-pause",
       "multitrack.stop",
+      "multitrack.pause",
       "transport.go-start",
       "transport.go-end",
       "transport.prev-edge",

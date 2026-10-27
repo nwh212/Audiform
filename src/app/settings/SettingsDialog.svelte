@@ -123,7 +123,7 @@
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
-    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, dropMany: def.dropMany });
+    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
@@ -166,11 +166,6 @@
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="mouse" /> The mouse pointer</label>
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="between" /> Between the pointer and the middle of the view (drifts less)</label>
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="playhead" /> The playhead</label>
-          </fieldset>
-          <fieldset>
-            <legend>Several files dropped on the Editor go</legend>
-            <label><input type="radio" bind:group={d.app.dropMany} value="sequence" /> One after another on one track</label>
-            <label><input type="radio" bind:group={d.app.dropMany} value="tracks" /> Side by side, each on its own track from the same time</label>
           </fieldset>
           <fieldset>
             <legend>New fades start as</legend>
@@ -362,7 +357,7 @@
           <label class="off"><input type="checkbox" disabled checked /> New tracks get a color in turn <span class="why">Always on.</span></label>
         {:else if page === "Clips"}
           <label><input type="checkbox" bind:checked={d.editor.autoCrossfade} /> Crossfade clips that overlap on a track</label>
-          <label class="off"><input type="checkbox" disabled /> Files dropped together go on their own tracks <span class="why">Use Insert Files as Tracks for that for now.</span></label>
+          <p class="note">Several files dragged onto the Editor go one per track. Hold Alt while dragging to put them one after another on one track instead.</p>
           <label class="off"><select disabled><option>Keep pitch</option></select> Time Stretch starts as <span class="why">Picked in the Time Stretch dialog each time.</span></label>
         {:else if page === "Playback and Recording"}
           <fieldset>

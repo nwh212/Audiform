@@ -13,6 +13,7 @@
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
   import { SPECTRUM_HIGH, SPECTRUM_LOW, themeColor } from "../../app/colors";
   import { KIND_COLORS } from "../markers/markers";
+  import { drawStartLine, drawStartTip } from "./ruler-draw";
   import type { ActionRegistry } from "../../app/actions";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import { editor, type EditorState } from "../../stores/editor";
@@ -122,6 +123,8 @@
   const total = $derived(doc ? sessionEnd(doc) : 0);
   const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
   const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  /** The start marker: shown while playing or paused, where playback began. */
+  const startMark = $derived(tp && (tp.playing || tp.paused) ? tp.anchor : null);
   const selection = $derived(doc?.view.selection ?? null);
   const channels = $derived(Math.max(1, Math.min(64, doc?.media[0]?.channels ?? 1)));
   const chNames = $derived(channelLabels(channels));
@@ -465,6 +468,10 @@
       g.fillRect(mx, 0, 2, RULER_H);
       g.fillText(m.name, mx + 4, 11);
     }
+    if (startMark !== null) {
+      const sx = xOf(startMark, view);
+      if (sx >= 0 && sx <= w) drawStartLine(g, sx, h, css("--playhead"));
+    }
     const px = xOf(playhead, view);
     if (px >= 0 && px <= w) {
       g.fillStyle = css("--playhead");
@@ -532,6 +539,10 @@
         g.fillStyle = "rgba(255, 255, 255, 0.16)";
         g.fillRect(a, 0, b - a, RULER_H);
       }
+    }
+    if (startMark !== null) {
+      const sx = xOf(startMark, view);
+      if (sx >= 0 && sx <= w) drawStartTip(g, sx, RULER_H, css("--playhead"));
     }
     const px = xOf(playhead, view);
     if (px >= 0 && px <= w) {
@@ -775,15 +786,6 @@
       <span class="name" title={file.path}>{fileName}</span>
       <span class="info">{info}</span>
       {#if file.untitled}<span class="unsaved">Not saved yet</span>{/if}
-      <span class="spacer"></span>
-      <button
-        type="button"
-        class="tool text"
-        class:on={ed.showSpectrum}
-        aria-pressed={ed.showSpectrum}
-        title={tip("Show Spectrum: frequencies over time under the waveform, for selecting and removing sounds", "view.spectrum")}
-        onclick={() => run("view.spectrum")}>Spectrum</button
-      >
     {:else}
       <span class="info">Waveform editor</span>
     {/if}
@@ -912,10 +914,6 @@
     background: var(--accent-dim);
   }
 
-  .tool.on {
-    border-color: var(--accent);
-    color: var(--text);
-  }
 
   .head {
     display: flex;
@@ -944,26 +942,6 @@
   .unsaved {
     color: var(--clip-5);
     font-size: var(--font-size-small);
-  }
-
-  .spacer {
-    flex: 1;
-  }
-
-  .tool {
-    height: 20px;
-    padding: 0 8px;
-    border: 1px solid transparent;
-    border-radius: 2px;
-    background: none;
-    color: var(--text-dim);
-    font: inherit;
-    font-size: var(--font-size-small);
-  }
-
-  .tool:hover {
-    border-color: var(--border-strong);
-    color: var(--text);
   }
 
   .ruler {

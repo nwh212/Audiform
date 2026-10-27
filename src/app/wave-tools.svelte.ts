@@ -690,6 +690,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
         reason: () => NEED_WAVE_SEL,
       }),
       ov(waveIsOpen, { id: "multitrack.play-pause", run: () => spaceToggle(waveTransport) }),
+      ov(waveIsOpen, { id: "multitrack.pause", run: () => waveTransport.pause() }),
       ov(waveIsOpen, { id: "multitrack.stop", run: () => (recording() ? finishRecord() : waveTransport.stop()) }),
       ov(waveIsOpen, { id: "transport.go-start", run: () => waveTransport.seek(0) }),
       ov(waveIsOpen, { id: "view.zoom-in", run: () => waveZoom.run?.("in") }),

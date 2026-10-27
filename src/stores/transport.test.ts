@@ -53,32 +53,62 @@ function setup() {
 }
 
 describe("TransportStore", () => {
-  it("plays from the playhead and pause leaves the playhead where it reached", async () => {
+  it("Space plays, and stops with the playhead where playback reached", async () => {
     const { t, calls, session } = setup();
     await t.toggle();
     expect(t.current.playing).toBe(true);
+    expect(t.current.anchor).toBe(48_000);
     expect(calls).toEqual(["play:48000"]);
     await t.toggle();
     expect(t.current.playing).toBe(false);
     expect(session.current?.view.playhead).toBe(144_000);
+    // Stop brings the start marker to the playhead.
+    expect(t.current.anchor).toBeNull();
   });
 
-  it("stop returns the playhead to where playback started", async () => {
+  it("Pause keeps the start marker, and plays on from the playhead", async () => {
+    const { t, calls, session } = setup();
+    await t.play();
+    await t.pause();
+    expect(t.current).toMatchObject({ playing: false, paused: true, anchor: 48_000 });
+    expect(session.current?.view.playhead).toBe(144_000);
+    await t.pause();
+    expect(calls).toEqual(["play:48000", "stop", "play:144000"]);
+    expect(t.current).toMatchObject({ playing: true, paused: false, anchor: 48_000 });
+    await t.stop();
+    expect(t.current).toMatchObject({ playing: false, paused: false, anchor: null });
+    expect(session.current?.view.playhead).toBe(240_000);
+  });
+
+  it("Play after Pause also keeps the start marker; Stop while paused clears it", async () => {
+    const { t } = setup();
+    await t.play();
+    await t.pause();
+    await t.toggle();
+    expect(t.current.anchor).toBe(48_000);
+    await t.pause();
+    await t.stop();
+    expect(t.current).toMatchObject({ paused: false, anchor: null });
+  });
+
+  it("Return to Start on Stop puts the playhead back on the start marker", async () => {
     const { t, session } = setup();
+    t.returnOnStop = true;
     await t.play();
     await t.stop();
     expect(session.current?.view.playhead).toBe(48_000);
   });
 
-  it("seeking while playing restarts there; while stopped it moves the playhead", async () => {
+  it("seeking while playing restarts there and moves the start marker; while stopped it moves the playhead", async () => {
     const { t, calls, session } = setup();
     await t.seek(10);
     expect(session.current?.view.playhead).toBe(10);
     await t.play();
     await t.seek(500);
     expect(calls).toEqual(["play:10", "play:500"]);
+    expect(t.current.anchor).toBe(500);
     await t.stop();
-    expect(session.current?.view.playhead).toBe(10);
+    expect(session.current?.view.playhead).toBe(96_500);
   });
 
   it("meters rise at once, fall slowly, hold peaks and remember overs", () => {

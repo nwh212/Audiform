@@ -45,7 +45,8 @@
     /** Double-click on a session row: bring it to the front in the Multitrack view. */
     onOpenSession?: (id: string) => void;
     /** Close a session (asks to save first). */
-    onCloseSession?: (id: string) => void;
+    /** Closes a session (asking to save first); resolves once it is closed or kept. */
+    onCloseSession?: (id: string) => void | Promise<unknown>;
   }
 
   const { pool, actions, drop, onDropPaths, onOpen = () => {}, shortcutFor = () => undefined, sessions, onOpenSession = () => {}, onCloseSession = () => {} }: Props = $props();
@@ -56,15 +57,25 @@
       sessionRows = r;
     }),
   );
-  /** A session row picked with a click, for Delete or the remove button. */
-  let pickedSession = $state<string | null>(null);
+  /** Session rows picked (a click, Ctrl+click, a drag box or Select All), for Delete or the remove button. */
+  let pickedSessions = $state<ReadonlySet<string>>(new Set());
   $effect(() => {
-    if (pickedSession && !sessionRows.some((r) => r.id === pickedSession)) pickedSession = null;
+    if ([...pickedSessions].some((id) => !sessionRows.some((r) => r.id === id))) pickedSessions = new Set([...pickedSessions].filter((id) => sessionRows.some((r) => r.id === id)));
   });
-  $effect(() => {
-    // Picking files drops the session pick.
-    if (snap?.selected.size) pickedSession = null;
-  });
+  const anyPicked = $derived(pickedSessions.size > 0);
+
+  /** Removes the picked files and closes the picked sessions, one at a time (each asks to save first). */
+  async function removePicked() {
+    const ids = [...pickedSessions];
+    if (snap?.selected.size) await actions.run("edit.delete");
+    for (const id of ids) await onCloseSession(id);
+  }
+
+  /** Picks every file and every session row. */
+  function pickAll() {
+    pool.setSelection(visibleIds);
+    pickedSessions = new Set(sessionRows.map((r) => r.id));
+  }
 
   let snap = $state<MediaPoolState | null>(null);
   $effect(() =>
@@ -154,6 +165,7 @@
     if (e.button === 2 && snap.selected.has(item.id)) return;
     if (e.button !== 0 && e.button !== 2) return;
     // Pressing a selected row keeps the selection so the whole group can be dragged.
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) pickedSessions = new Set();
     if (e.button === 0 && snap.selected.has(item.id) && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
       list?.focus();
       beginPathDrag(e, drop, () => pool.selectedItems().map((it) => it.path), undefined, root ?? undefined);
@@ -191,10 +203,16 @@
 
   function onListKey(e: KeyboardEvent) {
     // Plain Delete or Backspace only: chords such as Shift+Delete (Delete Track) pass on.
-    if (pickedSession && (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+    if (anyPicked && (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
-      onCloseSession(pickedSession);
+      void removePicked();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      e.stopPropagation();
+      pickAll();
       return;
     }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
@@ -220,14 +238,17 @@
     return anchor && snap.selected.has(anchor) ? anchor : (sel[sel.length - 1] ?? null);
   }
 
-  /** Drag from empty space in the list: a box that picks every file it touches (Ctrl or Shift adds to what is picked). */
+  /** Drag from empty space in the list: a box that picks every file and session it touches (Ctrl or Shift adds to what is picked). */
   let pickBox = $state<{ x: number; y: number; w: number; h: number } | null>(null);
   function onBlankPointer(e: PointerEvent) {
     if (e.target !== e.currentTarget || e.button !== 0 || !list) return;
     const el = list;
-    const keep = e.ctrlKey || e.metaKey || e.shiftKey ? new Set(snap?.selected ?? []) : new Set<string>();
-    if (!keep.size) {
+    const adding = e.ctrlKey || e.metaKey || e.shiftKey;
+    const keep = adding ? new Set(snap?.selected ?? []) : new Set<string>();
+    const keepSessions = adding ? new Set(pickedSessions) : new Set<string>();
+    if (!adding) {
       pool.setSelection([]);
+      pickedSessions = new Set();
       anchor = null;
     }
     el.focus();
@@ -245,11 +266,15 @@
       const top = Math.min(sy, y);
       const bottom = Math.max(sy, y);
       const picked = new Set(keep);
-      for (const row of el.querySelectorAll<HTMLElement>(".row[data-id]")) {
+      const sessionsPicked = new Set(keepSessions);
+      for (const row of el.querySelectorAll<HTMLElement>(".row[data-id], .row[data-sid]")) {
         const rt = row.offsetTop;
-        if (rt + row.offsetHeight >= top && rt <= bottom) picked.add(row.dataset.id!);
+        if (rt + row.offsetHeight < top || rt > bottom) continue;
+        if (row.dataset.sid) sessionsPicked.add(row.dataset.sid);
+        else picked.add(row.dataset.id!);
       }
       pool.setSelection([...picked]);
+      pickedSessions = sessionsPicked;
     };
     const up = () => {
       window.removeEventListener("pointermove", move, true);
@@ -408,10 +433,10 @@
     <button
       type="button"
       class="tool"
-      title={pickedSession ? "Close the picked session (asks to save first)" : tip("Remove from Session", "edit.delete")}
-      aria-label={pickedSession ? "Close Session" : "Remove from Session"}
-      disabled={!counts.selected && !pickedSession}
-      onclick={() => (pickedSession ? onCloseSession(pickedSession) : run("edit.delete"))}
+      title={anyPicked ? "Remove the picked files and close the picked sessions (each asks to save first)" : tip("Remove from Session", "edit.delete")}
+      aria-label={anyPicked ? "Remove and Close" : "Remove from Session"}
+      disabled={!counts.selected && !anyPicked}
+      onclick={() => void removePicked()}
     >
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" />
@@ -456,23 +481,33 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="row session"
+        data-sid={sr.id}
         class:active={sr.active}
         class:behind={!sr.front}
         role="option"
         tabindex="-1"
-        aria-selected={pickedSession === sr.id}
+        aria-selected={pickedSessions.has(sr.id)}
         title={sr.front ? "The multitrack session in front. Double-click to show it in the Multitrack view; Delete closes it." : "An open session set aside. Double-click to bring it to the front; Delete closes it."}
-        onclick={() => {
-          pickedSession = sr.id;
-          pool.setSelection([]);
+        onclick={(e) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            const next = new Set(pickedSessions);
+            if (next.has(sr.id)) next.delete(sr.id);
+            else next.add(sr.id);
+            pickedSessions = next;
+          } else {
+            pickedSessions = new Set([sr.id]);
+            pool.setSelection([]);
+          }
           list?.focus();
         }}
         ondblclick={() => onOpenSession(sr.id)}
         oncontextmenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          pickedSession = sr.id;
-          pool.setSelection([]);
+          if (!pickedSessions.has(sr.id)) {
+            pickedSessions = new Set([sr.id]);
+            pool.setSelection([]);
+          }
           sessionMenu = { x: e.clientX, y: e.clientY, id: sr.id };
         }}
       >

@@ -1794,3 +1794,10 @@ Reported: M4A files did not open. Stereo AAC, ALAC, FLAC, MP3 and Opus in M4A al
 - Already in Audiform: Hide All Effect Windows, MIDI clips in selection exports, plug-ins started once per export.
 - Left out: the in-app updater (it needs Audiform's own signing key and release setup first; the plan in this file from 2026-10-14 stands) and the Music Mode toggle (Audiform shows music tools by default).
 - A track armed while recording is not monitored until the next take (the monitor mix is set when recording starts).
+
+## 2026-10-27: Stop leaves the playhead; a start marker; Alt picks how dropped files land
+
+- Stop and the Space bar leave the playhead where playback reached. A start marker (an outlined triangle on the ruler and a dashed line down the lanes) shows where playback began while playing or paused. Pause is its own button and toggles: the playhead stays where it stopped, the start marker stays where playback began, and pressing Pause or Play again plays on. Stop brings the start marker to the playhead. Return to Start on Stop (Shift+X) still sends the playhead back to the start marker. Pause is in the Multitrack menu with no shortcut (none approved).
+- Several files dragged onto the Editor go one per track, all from the drop time; holding Alt puts them one after another on one track. The preview follows Alt as it goes down and up. The setting that chose this is gone. While files come from the file manager the window hears no keys, so on Windows Alt is read from the system (`src-tauri/os-keys`, its own crate because the call needs `unsafe`).
+- A clip now covers any clip under it on the same track instead of showing it through.
+- Decided by the project lead.

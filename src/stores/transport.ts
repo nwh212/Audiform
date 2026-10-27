@@ -43,6 +43,13 @@ export interface MeterLevel {
 
 export interface TransportState {
   playing: boolean;
+  /** Paused: stopped by Pause, which picks up again where it left off. */
+  paused: boolean;
+  /**
+   * The start marker: where playback began (session samples). It stays put
+   * through Pause, and moves to the playhead on Stop (then it is null).
+   */
+  anchor: number | null;
   /** Session samples. */
   position: number;
   master: [MeterLevel, MeterLevel];
@@ -93,15 +100,14 @@ export const MASTER_CHAIN = "master";
 type Listener = (s: TransportState) => void;
 
 export class TransportStore {
-  private state: TransportState = { playing: false, position: 0, master: [quiet(), quiet()], tracks: {}, chains: {} };
+  private state: TransportState = { playing: false, paused: false, anchor: null, position: 0, master: [quiet(), quiet()], tracks: {}, chains: {} };
   private readonly listeners = new Set<Listener>();
-  private startedAt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private holds = new Map<string, number>();
   private busy: Promise<unknown> = Promise.resolve();
   /** Set while recording, so playback never stops at the end of the old audio. */
   holdAtEnd = false;
-  /** Return to Start on Stop: the play/stop toggle puts the playhead back where playback started. */
+  /** Return to Start on Stop: Stop puts the playhead back on the start marker. */
   returnOnStop = false;
 
   constructor(
@@ -124,39 +130,52 @@ export class TransportStore {
     return this.state;
   }
 
-  /** Plays from the playhead, or from `from` (session samples). */
+  /**
+   * Plays from the playhead, or from `from` (session samples). The start
+   * marker goes where playback starts, except when resuming from Pause.
+   */
   play(from?: number): Promise<void> {
     return this.serial(async () => {
       const v = this.session.current?.view;
       const at = Math.max(0, Math.round(from ?? playStart(v?.playhead ?? 0, v?.selection, this.backend.skipsSelection?.() ?? false)));
       await this.session.flushView?.();
       await this.backend.play(at);
-      if (!this.state.playing) this.startedAt = at;
-      this.set({ playing: true, position: at });
+      const resume = this.state.paused && from === undefined && this.state.anchor !== null;
+      this.set({ playing: true, paused: false, position: at, anchor: resume ? this.state.anchor : at });
       this.loop();
     });
   }
 
-  /** Stops and leaves the playhead where playback reached. */
+  /**
+   * Pause on and off: stops with the playhead where it reached and the
+   * start marker where it was; pressed again, plays on from the playhead.
+   */
   pause(): Promise<void> {
+    if (this.state.paused) return this.play();
+    if (!this.state.playing) return Promise.resolve();
     return this.serial(async () => {
       const pos = await this.backend.stop();
-      this.halt(pos ?? this.state.position);
+      this.halt(pos ?? this.state.position, true);
     });
   }
 
-  /** Stops and puts the playhead back where playback started. */
+  /**
+   * Stops with the playhead where playback reached, and brings the start
+   * marker to it. With Return to Start on Stop, the playhead goes back to
+   * the start marker instead.
+   */
   stop(): Promise<void> {
     return this.serial(async () => {
       const was = this.state.playing;
-      await this.backend.stop();
-      this.halt(was ? this.startedAt : (this.session.current?.view.playhead ?? 0));
+      const pos = was ? await this.backend.stop() : null;
+      const here = was ? (pos ?? this.state.position) : (this.session.current?.view.playhead ?? 0);
+      this.halt(this.returnOnStop && this.state.anchor !== null ? this.state.anchor : here);
     });
   }
 
+  /** Space: plays (or plays on from Pause), and stops while playing. */
   toggle(): Promise<void> {
-    if (!this.state.playing) return this.play();
-    return this.returnOnStop ? this.stop() : this.pause();
+    return this.state.playing ? this.stop() : this.play();
   }
 
   /** Moves playback to a new spot while playing, or the playhead while stopped. */
@@ -167,7 +186,8 @@ export class TransportStore {
     return Promise.resolve();
   }
 
-  private halt(position: number): void {
+  /** Stops the clock. `paused` keeps the start marker; otherwise it moves to the playhead. */
+  private halt(position: number, paused = false): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     const v = this.session.current?.view;
@@ -176,7 +196,7 @@ export class TransportStore {
     const rest = (m: MeterLevel): MeterLevel => ({ level: 0, peak: 0, over: m.over });
     const tracks: Record<string, [MeterLevel, MeterLevel]> = {};
     for (const [id, [l, r]] of Object.entries(this.state.tracks)) if (l.over || r.over) tracks[id] = [rest(l), rest(r)];
-    this.set({ playing: false, position, master: [rest(this.state.master[0]), rest(this.state.master[1])], tracks, chains: {} });
+    this.set({ playing: false, paused, anchor: paused ? this.state.anchor : null, position, master: [rest(this.state.master[0]), rest(this.state.master[1])], tracks, chains: {} });
   }
 
   /** Clears the over lights of one track, or of the master with no id. */
@@ -204,7 +224,7 @@ export class TransportStore {
         // Stop at the end of the last clip instead of playing on into silence.
         const doc = this.session.current;
         const end = doc ? sessionEnd(doc) : 0;
-        if (end > 0 && !this.holdAtEnd && this.backend.stopAtEnd?.() && s.position >= end && this.startedAt < end) {
+        if (end > 0 && !this.holdAtEnd && this.backend.stopAtEnd?.() && s.position >= end && (this.state.anchor ?? 0) < end) {
           await this.backend.stop();
           this.halt(end);
           return;

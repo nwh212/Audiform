@@ -34,6 +34,14 @@ pub fn app_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 /// Quits the app. Called from File > Exit.
+/// Whether Alt is held, read from the system: while files are dragged in
+/// from the file manager the window hears no key presses. `None` where the
+/// system cannot say (the interface then uses its own key events).
+#[tauri::command]
+pub fn alt_down() -> Option<bool> {
+    audiform_os_keys::alt_down()
+}
+
 #[tauri::command]
 pub fn app_exit(app: tauri::AppHandle) {
     app.exit(0);

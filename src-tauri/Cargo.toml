@@ -26,6 +26,8 @@ altered-os-aac = { path = "os-aac" }
 # Decoding through the decoders built into the OS, for HE-AAC, Dolby
 # Digital (Plus) and other codecs the app cannot read itself (see os-decode/).
 audiform-os-decode = { path = "os-decode" }
+# Modifier keys during a drag from the file manager (see os-keys/).
+audiform-os-keys = { path = "os-keys" }
 tauri = { version = "2", features = [] }
 # VST3 plug-in hosting, run in a separate process (see plughost/).
 altered-plughost = { path = "plughost" }

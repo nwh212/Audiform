@@ -106,15 +106,25 @@
       type="button"
       class="tool play"
       class:on={tp?.playing}
-      title={tip(tp?.playing ? "Pause" : "Play", "multitrack.play-pause")}
-      aria-label={tp?.playing ? "Pause" : "Play"}
-      onclick={() => void transport.toggle()}
+      title={tip(tp?.paused ? "Play: plays on from where Pause stopped" : "Play", "multitrack.play-pause")}
+      aria-label="Play"
+      onclick={() => {
+        if (!tp?.playing) void transport.play();
+      }}
     >
-      {#if tp?.playing}
-        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3.5" width="3" height="9" rx="0.5" fill="currentColor" /><rect x="9" y="3.5" width="3" height="9" rx="0.5" fill="currentColor" /></svg>
-      {:else}
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10l8-5z" fill="currentColor" /></svg>
-      {/if}
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10l8-5z" fill="currentColor" /></svg>
+    </button>
+    <button
+      type="button"
+      class="tool"
+      class:on={tp?.paused}
+      title={tip("Pause: stops where the playhead is and keeps the start marker; press again to play on", "multitrack.pause")}
+      aria-label="Pause"
+      aria-pressed={tp?.paused ?? false}
+      disabled={!tp?.playing && !tp?.paused}
+      onclick={() => void transport.pause()}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3.5" width="3" height="9" rx="0.5" fill="currentColor" /><rect x="9" y="3.5" width="3" height="9" rx="0.5" fill="currentColor" /></svg>
     </button>
     <span class="sep"></span>
     <button type="button" class="tool" title="Go to Start" aria-label="Go to start" onclick={() => void transport.seek(0)}>

@@ -90,7 +90,7 @@
       } else {
         playing = null;
         stopWatch();
-        void transport.pause();
+        void transport.stop();
       }
     }, 20);
   }
@@ -98,7 +98,7 @@
   async function stop() {
     playing = null;
     stopWatch();
-    await transport.pause();
+    await transport.stop();
   }
 </script>
 

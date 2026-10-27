@@ -264,7 +264,7 @@
    * The ops that put `paths` on a track (null makes a new track) one
    * after another from `at`. Null when none of the files can be read.
    */
-  async function placeOps(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string } = {}): Promise<{ ops: Op[]; clips: { id: string }[]; target: string } | null> {
+  async function placeOps(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string; asTracks?: boolean } = {}): Promise<{ ops: Op[]; clips: { id: string }[]; target: string } | null> {
     if (!session.current || paths.length === 0) return null;
     const imported = await mediaPool.importPaths(paths, sessionHistory);
     await mediaPool.whenIdle();
@@ -293,7 +293,7 @@
     };
     const start = Math.max(0, Math.round(at));
     const clips: { id: string }[] = [];
-    if (items.length > 1 && settings.current.dropMany === "tracks") {
+    if (items.length > 1 && place.asTracks) {
       // Side by side: the first on the track under the pointer, the rest on
       // the audio tracks below it, then on new tracks, all from the same time.
       const below = first ? audio.slice(audio.findIndex((t) => t.id === first)) : [];
@@ -322,7 +322,7 @@
     return { ops, clips: list, target };
   }
 
-  async function placeFiles(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string } = {}) {
+  async function placeFiles(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string; asTracks?: boolean } = {}) {
     if (!session.current || paths.length === 0) return;
     const placed = await placeOps(paths, trackId, at, place);
     if (!placed) {
@@ -1009,7 +1009,7 @@
                 .switchTo(id)
                 .then(() => actions.run("view.editor.multitrack"))
                 .catch(showError),
-            onCloseSession: (id: string) => void files.closeSession(id).catch(showError),
+            onCloseSession: (id: string) => files.closeSession(id).catch(showError),
           },
         };
       case "drive-manager":
@@ -1089,8 +1089,8 @@
             actions,
             shortcutFor,
             onError: showError,
-            onPlaceFiles: (paths: string[], trackId: string | null, at: number) =>
-              void placeFiles(paths, trackId, at).catch(showError),
+            onPlaceFiles: (paths: string[], trackId: string | null, at: number, asTracks: boolean) =>
+              void placeFiles(paths, trackId, at, { asTracks }).catch(showError),
             prompt: promptText,
             wave,
             waveFile,

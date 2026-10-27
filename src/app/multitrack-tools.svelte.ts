@@ -257,6 +257,7 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
         run: () => toggleRecord(),
         label: () => (rec.active ? "Stop Recording" : "Record"),
       }),
+      actions.register({ id: "multitrack.pause", run: () => transport.pause(), enabled: () => transport.current.playing || transport.current.paused }),
       actions.register({ id: "multitrack.stop", run: () => (rec.active ? finishRecord() : transport.stop()) }),
       actions.register({
         id: "multitrack.properties",

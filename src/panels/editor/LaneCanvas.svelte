@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
   import { drawGainHandle, gainBox } from "./clip-gain";
+  import { drawStartLine } from "./ruler-draw";
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
   import { clipLength, stretchOf, type ClipDoc, type FadeDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
   import type { LiveWave } from "../../stores/record";
@@ -24,6 +25,8 @@
     view: Viewport;
     width: number;
     playhead: number;
+    /** The start marker while playing or paused. */
+    startMark?: number | null;
     selectedClips: ReadonlySet<string>;
     trackSelected: boolean;
     /** Row number, for alternating lane shades. */
@@ -46,7 +49,7 @@
     stretchHandles?: boolean;
   }
 
-  const { track, media, sessionRate, view, width, playhead, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {}, stretchHandles = false }: Props = $props();
+  const { track, media, sessionRate, view, width, playhead, startMark = null, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {}, stretchHandles = false }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
 
@@ -155,7 +158,8 @@
     g.clearRect(0, 0, width, h);
     // The bottom TRACK_GAP pixels are the dark break between tracks.
     const lh = h - TRACK_GAP;
-    g.fillStyle = trackSelected ? css("--lane-selected") : css(index % 2 ? "--lane-b" : "--lane-a");
+    const laneFill = trackSelected ? css("--lane-selected") : css(index % 2 ? "--lane-b" : "--lane-a");
+    g.fillStyle = laneFill;
     g.fillRect(0, 0, width, lh);
 
     const titleH = 14;
@@ -192,7 +196,13 @@
       const selected = selectedClips.has(clip.id);
       const color = clipColor(clip);
 
-      // Body and title bar.
+      // Body and title bar. The lane color goes down first, so a clip
+      // covers any clip under it instead of letting it show through.
+      // Clearing first keeps see-through themes looking the same.
+      g.globalAlpha = 1;
+      g.clearRect(left, 1, right - left, lh - 2);
+      g.fillStyle = laneFill;
+      g.fillRect(left, 1, right - left, lh - 2);
       g.globalAlpha = clip.muted ? 0.35 : 1;
       g.fillStyle = color;
       g.globalAlpha *= bodyAlpha;
@@ -519,7 +529,11 @@
       if (gb) drawGainHandle(g, gb, clip.gain_db, `10px ${css("--font-ui")}`);
     }
 
-    // Playhead.
+    // Start marker, then the playhead.
+    if (startMark !== null) {
+      const sx = xOf(startMark, view);
+      if (sx >= 0 && sx <= width) drawStartLine(g, sx, lh, css("--playhead"));
+    }
     const px = xOf(playhead, view);
     if (px >= 0 && px <= width) {
       g.fillStyle = css("--playhead");

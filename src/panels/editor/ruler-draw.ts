@@ -19,6 +19,37 @@ export interface RulerScene {
   selection: { start: number; end: number } | null | undefined;
   markers: readonly MarkerDoc[];
   playhead: number;
+  /** The start marker while playing or paused (see TransportState.anchor). */
+  startMark?: number | null;
+}
+
+/** The start marker on a ruler: an outlined triangle where the playhead's solid one sits. */
+export function drawStartTip(g: CanvasRenderingContext2D, px: number, rulerH: number, color: string): void {
+  const cx = Math.round(px) + 0.5;
+  g.save();
+  g.strokeStyle = color;
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(cx - 4.5, rulerH - 7.5);
+  g.lineTo(cx + 4.5, rulerH - 7.5);
+  g.lineTo(cx, rulerH - 0.5);
+  g.closePath();
+  g.stroke();
+  g.restore();
+}
+
+/** The start marker down a lane: a dashed line in the playhead's color. */
+export function drawStartLine(g: CanvasRenderingContext2D, px: number, h: number, color: string): void {
+  g.save();
+  g.strokeStyle = color;
+  g.globalAlpha = 0.75;
+  g.lineWidth = 1;
+  g.setLineDash([3, 3]);
+  g.beginPath();
+  g.moveTo(Math.round(px) + 0.5, 0);
+  g.lineTo(Math.round(px) + 0.5, h);
+  g.stroke();
+  g.restore();
 }
 
 export function drawRuler(c: HTMLCanvasElement, s: RulerScene): void {
@@ -86,6 +117,10 @@ export function drawRuler(c: HTMLCanvasElement, s: RulerScene): void {
     g.fillRect(mx + 7, 0, tw + 4, 12);
     g.fillStyle = cs.getPropertyValue("--text");
     g.fillText(m.name, mx + 9, 1);
+  }
+  if (s.startMark != null) {
+    const sx = xOf(s.startMark, view);
+    if (sx >= -6 && sx <= w + 6) drawStartTip(g, sx, RULER_H, cs.getPropertyValue("--playhead"));
   }
   const px = xOf(playhead, view);
   if (px >= -6 && px <= w + 6) {
