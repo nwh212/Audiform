@@ -22,54 +22,36 @@
   import { sessionHistory } from "../stores/history";
   import { keymap } from "../stores/keymap";
   import { bindKeymap } from "../keymap/dispatch";
-  import KeyboardShortcutsDialog from "./KeyboardShortcutsDialog.svelte";
   import { DockController, type PanelContent, type WorkspaceState } from "./docking/dock";
   import { panelDef, type PanelId } from "./docking/registry";
   import DockShell from "./docking/DockShell.svelte";
+  import LazyPanel from "./docking/LazyPanel.svelte";
   import { ActionRegistry } from "./actions";
   import { MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
-  import AboutDialog from "./AboutDialog.svelte";
-  import HistoryPanel from "../panels/history/HistoryPanel.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
   import { peaks, session, transport } from "../stores/open-session";
-  import PhaseWheelPanel from "../panels/phase/PhaseWheelPanel.svelte";
-  import SpacePanel from "../panels/space/SpacePanel.svelte";
-  import PropertiesPanel from "../panels/properties/PropertiesPanel.svelte";
   import LevelsPanel from "../panels/levels/LevelsPanel.svelte";
   import { PreviewMeter } from "../stores/preview-meter";
-  import QuickPassPanel from "../panels/quickpass/QuickPassPanel.svelte";
-  import BatchConvertPanel from "../panels/batch/BatchConvertPanel.svelte";
-  import MixerPanel from "../panels/mixer/MixerPanel.svelte";
   import TimeInfoPanel from "../panels/time-info/TimeInfoPanel.svelte";
   import { editor, restoreSettings, settingsOf } from "../stores/editor";
   import { sessionEnd, setErrorSink, type ClipDoc, type Op } from "../stores/session";
   import ChoiceDialog, { type ChoiceButton } from "./ChoiceDialog.svelte";
-  import ExportDialog, { type ExportScopeInfo, type ExportSettings } from "./ExportDialog.svelte";
-  import SessionPropertiesDialog from "./SessionPropertiesDialog.svelte";
+  import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
   import PromptDialog from "./PromptDialog.svelte";
   import ExportProgress from "./ExportProgress.svelte";
-  import LoudnessDialog from "./LoudnessDialog.svelte";
-  import LoudnessMatchDialog from "./LoudnessMatchDialog.svelte";
-  import ExportMarkersDialog from "./ExportMarkersDialog.svelte";
-  import StretchDialog from "./StretchDialog.svelte";
-  import MusicFitDialog from "./MusicFitDialog.svelte";
   import { describeJoins, describePlan, FIT_XFADE, fitOps, type FitPlan } from "../panels/editor/musicfit";
-  import SettingsDialog from "./settings/SettingsDialog.svelte";
   import type { SettingsDraft } from "./settings/pages";
   import { colorVars, meterPercent, sanitizeSettings, settings, type AppSettings } from "../stores/settings";
   import { appearanceChanged } from "../stores/appearance";
   import { bindScrub } from "./scrub";
   import { setMeterSpeed, type TransportStore } from "../stores/transport";
-  import GenerateDialog, { type GenerateMode, type GenerateValues } from "./GenerateDialog.svelte";
+  import type { GenerateMode, GenerateValues } from "./GenerateDialog.svelte";
   import { naturalLength, stretchTo } from "../panels/editor/stretch";
   import { matchChanges, matchItems, matchRow, type MatchItem, type MatchRow } from "./loudness-match";
   import { DEFAULT_REGION, DEFAULT_TARGET, setCustomTarget, targetById, type LoudnessReport } from "./loudness";
-  import ClipColorDialog from "./ClipColorDialog.svelte";
-  import MarkersPanel from "../panels/markers/MarkersPanel.svelte";
-  import PlaylistPanel from "../panels/playlist/PlaylistPanel.svelte";
   import { listen } from "@tauri-apps/api/event";
   import {
     clipEnd,
@@ -92,9 +74,7 @@
   import { createViewTools } from "./view-tools.svelte";
   import { createWaveTools } from "./wave-tools.svelte";
   import { createExportTools } from "./export-tools.svelte";
-  import RecordOptionsDialog from "./RecordOptionsDialog.svelte";
-  import AddTracksDialog, { type AddTracksValues } from "./AddTracksDialog.svelte";
-  import PluginManagerDialog from "./PluginManagerDialog.svelte";
+  import type { AddTracksValues } from "./AddTracksDialog.svelte";
   import { PluginSync } from "./plugin-sync";
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
@@ -165,7 +145,6 @@
   import { setFxCatalog } from "../panels/editor/envelope";
   import type { Finding } from "../panels/quickpass/quickpass";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
-  import DriveManagerPanel from "../panels/drive-manager/DriveManagerPanel.svelte";
   import { prefs } from "../stores/prefs";
   import { libraries } from "../stores/library";
   import LibrariesPanel from "../panels/libraries/LibrariesPanel.svelte";
@@ -173,8 +152,8 @@
   import { FileDropRouter, bindNativeFileDrop } from "./filedrop";
   import { activeArea, currentArea, trackArea } from "./area";
   import ToolStrip from "./ToolStrip.svelte";
-  import NewAudioFileDialog, { type NewAudioSettings } from "./NewAudioFileDialog.svelte";
-  import NewSessionDialog, { type NewSessionSettings } from "./NewSessionDialog.svelte";
+  import type { NewAudioSettings } from "./NewAudioFileDialog.svelte";
+  import type { NewSessionSettings } from "./NewSessionDialog.svelte";
   import { liveCopies, samePath } from "../stores/wave";
   import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, newWaveFromClips, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
   import { get, writable } from "svelte/store";
@@ -985,13 +964,24 @@
   );
 
   const asComponent = (c: unknown) => c as Component<Record<string, unknown>>;
+  // Panels hidden in the default layout load the first time they are shown.
+  const loadHistoryPanel = () => import("../panels/history/HistoryPanel.svelte");
+  const loadDriveManagerPanel = () => import("../panels/drive-manager/DriveManagerPanel.svelte");
+  const loadMixerPanel = () => import("../panels/mixer/MixerPanel.svelte");
+  const loadSpacePanel = () => import("../panels/space/SpacePanel.svelte");
+  const loadPhaseWheelPanel = () => import("../panels/phase/PhaseWheelPanel.svelte");
+  const loadBatchConvertPanel = () => import("../panels/batch/BatchConvertPanel.svelte");
+  const loadQuickPassPanel = () => import("../panels/quickpass/QuickPassPanel.svelte");
+  const loadPropertiesPanel = () => import("../panels/properties/PropertiesPanel.svelte");
+  const loadPlaylistPanel = () => import("../panels/playlist/PlaylistPanel.svelte");
+  const loadMarkersPanel = () => import("../panels/markers/MarkersPanel.svelte");
 
   function content(id: PanelId): PanelContent {
     switch (id) {
       case "history":
         return {
-          component: asComponent(HistoryPanel),
-          props: { stack: sessionHistory, waveStack: waveHistory, shortcutFor, onError: showError },
+          component: asComponent(LazyPanel),
+          props: { load: loadHistoryPanel, stack: sessionHistory, waveStack: waveHistory, shortcutFor, onError: showError },
         };
       case "files":
         return {
@@ -1014,8 +1004,8 @@
         };
       case "drive-manager":
         return {
-          component: asComponent(DriveManagerPanel),
-          props: {
+          component: asComponent(LazyPanel),
+          props: { load: loadDriveManagerPanel,
             router: fileDrop,
             prefs,
             onImport: (paths: string[]) => void importPaths(paths).catch(showError),
@@ -1024,21 +1014,21 @@
         };
       case "mixer":
         return {
-          component: asComponent(MixerPanel),
-          props: { session, transport, runner: sessionHistory, onError: showError },
+          component: asComponent(LazyPanel),
+          props: { load: loadMixerPanel, session, transport, runner: sessionHistory, onError: showError },
         };
       case "time-info":
         return { component: asComponent(TimeInfoPanel), props: { session, transport, wave, waveTransport } };
       case "levels":
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter, session } };
       case "space":
-        return { component: asComponent(SpacePanel), props: { session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown") } };
+        return { component: asComponent(LazyPanel), props: { load: loadSpacePanel, session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown") } };
       case "phase-wheel":
-        return { component: asComponent(PhaseWheelPanel), props: { transport, wave: waveTransport } };
+        return { component: asComponent(LazyPanel), props: { load: loadPhaseWheelPanel, transport, wave: waveTransport } };
       case "batch-convert":
         return {
-          component: asComponent(BatchConvertPanel),
-          props: { pool: mediaPool, drop: fileDrop, prefs, onNotice: showNotice, onError: showError },
+          component: asComponent(LazyPanel),
+          props: { load: loadBatchConvertPanel, pool: mediaPool, drop: fileDrop, prefs, onNotice: showNotice, onError: showError },
         };
       case "voice-chain":
         return {
@@ -1047,8 +1037,8 @@
         };
       case "quickpass":
         return {
-          component: asComponent(QuickPassPanel),
-          props: { session, transport, runner: sessionHistory, prefs, ask: promptText, onRepair: repairSpots, onNotice: showNotice, onError: showError, wave, waveTransport, waveRunner: waveHistory },
+          component: asComponent(LazyPanel),
+          props: { load: loadQuickPassPanel, session, transport, runner: sessionHistory, prefs, ask: promptText, onRepair: repairSpots, onNotice: showNotice, onError: showError, wave, waveTransport, waveRunner: waveHistory },
         };
       case "libraries":
         return {
@@ -1065,16 +1055,16 @@
           },
         };
       case "properties":
-        return { component: asComponent(PropertiesPanel), props: { session, onEdit: editClips, onError: showError } };
+        return { component: asComponent(LazyPanel), props: { load: loadPropertiesPanel, session, onEdit: editClips, onError: showError } };
       case "playlist":
         return {
-          component: asComponent(PlaylistPanel),
-          props: { session, transport, runner: sessionHistory, onExport: (items: MarkerDoc[]) => void exportPlaylist(items).catch(showError), onError: showError },
+          component: asComponent(LazyPanel),
+          props: { load: loadPlaylistPanel, session, transport, runner: sessionHistory, onExport: (items: MarkerDoc[]) => void exportPlaylist(items).catch(showError), onError: showError },
         };
       case "markers":
         return {
-          component: asComponent(MarkersPanel),
-          props: { session, transport, runner: sessionHistory, actions, onError: showError, wave, waveRunner: waveHistory, waveTransport, waveFile },
+          component: asComponent(LazyPanel),
+          props: { load: loadMarkersPanel, session, transport, runner: sessionHistory, actions, onError: showError, wave, waveRunner: waveHistory, waveTransport, waveFile },
         };
       case "editor":
         return {
@@ -2029,10 +2019,13 @@
 </div>
 
 {#if shortcutsOpen}
+  {#await import("./KeyboardShortcutsDialog.svelte") then { default: KeyboardShortcutsDialog }}
   <KeyboardShortcutsDialog {keymap} onChange={saveKeymap} onClose={() => (shortcutsOpen = false)} />
+  {/await}
 {/if}
 
 {#if colorFor}
+  {#await import("./ClipColorDialog.svelte") then { default: ClipColorDialog }}
   <ClipColorDialog
     current={colorFor.current}
     onDone={(c) => {
@@ -2041,9 +2034,11 @@
       if (target && c !== null) void editClips("Clip Color", target.ids.map((id) => ({ id, color: c }))).catch(showError);
     }}
   />
+  {/await}
 {/if}
 
 {#if loud}
+  {#await import("./LoudnessDialog.svelte") then { default: LoudnessDialog }}
   <LoudnessDialog
     report={loud.report}
     progress={loud.progress}
@@ -2063,9 +2058,11 @@
     onApplyGain={(db) => void applyMasterGain(db).catch(showError)}
     onClose={() => (loud = null)}
   />
+  {/await}
 {/if}
 
 {#if pluginManagerOpen}
+  {#await import("./PluginManagerDialog.svelte") then { default: PluginManagerDialog }}
   <PluginManagerDialog
     pickFolder={() => exportPickFolder(null, "Add a Plug-in Folder")}
     onNotice={showNotice}
@@ -2073,15 +2070,18 @@
     onClose={() => (pluginManagerOpen = false)}
     beforeRestart={() => pluginSync.captureAll()}
   />
+  {/await}
 {/if}
 
 {#if addTracksOpen && session.current}
+  {#await import("./AddTracksDialog.svelte") then { default: AddTracksDialog }}
   <AddTracksDialog
     existing={session.current.tracks.map((t) => t.name)}
     afterName={selectedTrackDoc()?.name ?? null}
     onApply={(v) => void addTracks(v).catch(showError)}
     onClose={() => (addTracksOpen = false)}
   />
+  {/await}
 {/if}
 
 {#if rec.countdown !== null}
@@ -2089,10 +2089,13 @@
 {/if}
 
 {#if settingsDraft}
+  {#await import("./settings/SettingsDialog.svelte") then { default: SettingsDialog }}
   <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onClose={() => (settingsDraft = null)} />
+  {/await}
 {/if}
 
 {#if rec.optionsOpen}
+  {#await import("./RecordOptionsDialog.svelte") then { default: RecordOptionsDialog }}
   <RecordOptionsDialog
     initial={recordOptions()}
     onApply={(o) => {
@@ -2101,10 +2104,12 @@
     }}
     onClose={() => (rec.optionsOpen = false)}
   />
+  {/await}
 {/if}
 
 {#if generateMode}
   {@const mode = generateMode}
+  {#await import("./GenerateDialog.svelte") then { default: GenerateDialog }}
   <GenerateDialog
     {mode}
     initial={generateDefaults()}
@@ -2113,12 +2118,14 @@
     onApply={(v) => void applyGenerate(mode, v).catch(showError)}
     onClose={() => (generateMode = null)}
   />
+  {/await}
 {/if}
 
 {#if fitClip && session.current}
   {@const doc = session.current}
   {@const sel = timeSel()}
   {@const fm = doc.media.find((x) => x.id === fitClip.clip.media_id)}
+  {#await import("./MusicFitDialog.svelte") then { default: MusicFitDialog }}
   <MusicFitDialog
     clipName={fitClip.clip.name}
     origin={fitClip.clip.source_in / (fm?.sample_rate || doc.sample_rate)}
@@ -2128,12 +2135,14 @@
     onApply={(p) => void applyFit(p).catch(showError)}
     onClose={() => (fitFor = null)}
   />
+  {/await}
 {/if}
 
 {#if stretchClip && session.current}
   {@const doc = session.current}
   {@const m = doc.media.find((x) => x.id === stretchClip.media_id)}
   {@const sel = timeSel()}
+  {#await import("./StretchDialog.svelte") then { default: StretchDialog }}
   <StretchDialog
     clipName={stretchClip.name}
     natural={naturalLength(stretchClip, m, doc.sample_rate) / doc.sample_rate}
@@ -2149,9 +2158,11 @@
     }}
     onClose={() => (stretchFor = null)}
   />
+  {/await}
 {/if}
 
 {#if exp.markersExport && markerDoc()}
+  {#await import("./ExportMarkersDialog.svelte") then { default: ExportMarkersDialog }}
   <ExportMarkersDialog
     markers={markerDoc()!.markers}
     rate={markerDoc()!.sample_rate}
@@ -2163,9 +2174,11 @@
     onSave={(content, f) => void saveMarkers(content, f).catch(showError)}
     onClose={() => (exp.markersExport = null)}
   />
+  {/await}
 {/if}
 
 {#if lm}
+  {#await import("./LoudnessMatchDialog.svelte") then { default: LoudnessMatchDialog }}
   <LoudnessMatchDialog
     mode={lm.mode}
     rows={lm.rows}
@@ -2190,6 +2203,7 @@
     onApply={(rows) => void applyMatch(rows).catch(showError)}
     onClose={() => (lm = null)}
   />
+  {/await}
 {/if}
 
 {#if exporting}
@@ -2210,10 +2224,13 @@
 {/if}
 
 {#if propertiesOpen && session.current}
+  {#await import("./SessionPropertiesDialog.svelte") then { default: SessionPropertiesDialog }}
   <SessionPropertiesDialog doc={session.current} path={session.path} onDone={(v) => void applyProperties(v)} />
+  {/await}
 {/if}
 
 {#if exp.exportReq}
+  {#await import("./ExportDialog.svelte") then { default: ExportDialog }}
   <ExportDialog
     initial={exp.exportReq.initial}
     scopes={exp.exportReq.scopes}
@@ -2223,6 +2240,7 @@
     onBrowse={(from) => exportPickFolder(from || null, "Export To")}
     onDone={(v) => void finishExportDialog(v)}
   />
+  {/await}
 {/if}
 
 {#if choice}
@@ -2239,6 +2257,7 @@
 {/if}
 
 {#if newSessionReq}
+  {#await import("./NewSessionDialog.svelte") then { default: NewSessionDialog }}
   <NewSessionDialog
     initial={newSessionReq.initial}
     templates={newSessionReq.templates}
@@ -2250,9 +2269,11 @@
       if (v) void makeNewSession(v);
     }}
   />
+  {/await}
 {/if}
 
 {#if newAudio}
+  {#await import("./NewAudioFileDialog.svelte") then { default: NewAudioFileDialog }}
   <NewAudioFileDialog
     initial={newAudio}
     onDone={(v) => {
@@ -2260,10 +2281,13 @@
       if (v) void makeNewAudio(v);
     }}
   />
+  {/await}
 {/if}
 
 {#if aboutOpen}
+  {#await import("./AboutDialog.svelte") then { default: AboutDialog }}
   <AboutDialog version={info?.version ?? null} onClose={() => (aboutOpen = false)} />
+  {/await}
 {/if}
 
 <style>

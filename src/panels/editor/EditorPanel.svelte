@@ -21,7 +21,6 @@
   import type { CommandRunner } from "../../stores/media-pool";
   import { clipLength, isMidi, midiEnd, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
-  import PianoRollDialog from "./PianoRollDialog.svelte";
   import { replaceClip, transferClips } from "./midi";
   import { transportAuditionClip, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginsRegistry, type EffectInfo } from "../../app/core";
   import type { MenuPlugin } from "../voice-chain/chain";
@@ -1761,6 +1760,7 @@
   {@const prTrack = doc.tracks.find((t) => t.id === pr.trackId)}
   {@const prClip = prTrack?.midi_clips?.find((c) => c.id === pr.clipId)}
   {#if prTrack && prClip}
+    {#await import("./PianoRollDialog.svelte") then { default: PianoRollDialog }}
     <PianoRollDialog
       clip={prClip}
       {tempo}
@@ -1776,6 +1776,7 @@
       onPlay={(notes) => midiPlayNotes(prTrack.id, notes).catch(() => false)}
       onStop={() => void previewStop().catch(() => {})}
     />
+    {/await}
   {/if}
 {/if}
 

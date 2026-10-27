@@ -60,19 +60,7 @@
     type MenuPlugin,
   } from "./chain";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
-  import ResponseGraph from "./ResponseGraph.svelte";
-  import BandEqPanel from "./BandEqPanel.svelte";
-  import NotchGraph from "./NotchGraph.svelte";
-  import CenterPanel from "./CenterPanel.svelte";
-  import ReverbPanel from "./ReverbPanel.svelte";
-  import EqGraph from "./EqGraph.svelte";
-  import PhaseCurveGraph from "./PhaseCurveGraph.svelte";
   import EffectControls from "./EffectControls.svelte";
-  import NoiseShapeGraph from "./NoiseShapeGraph.svelte";
-  import TubePanel from "./TubePanel.svelte";
-  import AmpPanel from "./AmpPanel.svelte";
-  import VoxStripPanel from "./VoxStripPanel.svelte";
-  import WidthPanel from "./WidthPanel.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, type WindowBox } from "./effect-window";
@@ -821,6 +809,7 @@
         {/if}
         <EffectPresetBar slot={winSlot} info={winInfo} {prefs} {ask} {onNotice} {onError} onChange={(change, label) => commit(label, setSlot(chain, winSlot.id, change))} />
                 {#if winSlot.effect === "altaudio.parametric_eq"}
+          {#await import("./EqGraph.svelte") then { default: EqGraph }}
           <EqGraph
             slot={winSlot}
             info={winInfo}
@@ -829,7 +818,9 @@
             wave={inWave}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
           />
+          {/await}
         {:else if winSlot.effect === "altaudio.shaped_noise"}
+          {#await import("./NoiseShapeGraph.svelte") then { default: NoiseShapeGraph }}
           <NoiseShapeGraph
             slot={winSlot}
             info={winInfo}
@@ -838,13 +829,21 @@
             wave={inWave}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
           />
+          {/await}
         {:else if winSlot.effect === "altaudio.opto_leveler" || winSlot.effect === "altaudio.tube_preamp"}
+          {#await import("./TubePanel.svelte") then { default: TubePanel }}
           <TubePanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if winSlot.effect === "altaudio.stereo_width"}
+          {#await import("./WidthPanel.svelte") then { default: WidthPanel }}
           <WidthPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if winSlot.effect === "altaudio.vox_strip"}
+          {#await import("./VoxStripPanel.svelte") then { default: VoxStripPanel }}
           <VoxStripPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if winSlot.effect === "altaudio.amp_model"}
+          {#await import("./AmpPanel.svelte") then { default: AmpPanel }}
           <AmpPanel
             slot={winSlot}
             info={winInfo}
@@ -853,7 +852,9 @@
             onData={(data, label) => commit(label, setSlot(chain, winSlot.id, { data }))}
             {onError}
           />
+          {/await}
         {:else if winSlot.effect === "altaudio.convolution_reverb"}
+          {#await import("./ReverbPanel.svelte") then { default: ReverbPanel }}
           <ReverbPanel
             slot={winSlot}
             info={winInfo}
@@ -861,17 +862,28 @@
             onData={(data, label) => commit(label, setSlot(chain, winSlot.id, { data }))}
             {onError}
           />
+          {/await}
         {:else if winSlot.effect === "altaudio.center_extractor"}
+          {#await import("./CenterPanel.svelte") then { default: CenterPanel }}
           <CenterPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if winSlot.effect === "altaudio.notch"}
+          {#await import("./NotchGraph.svelte") then { default: NotchGraph }}
           <NotchGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if winSlot.effect === PHASE_CURVE}
+          {#await import("./PhaseCurveGraph.svelte") then { default: PhaseCurveGraph }}
           <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if GRAPHED.has(winSlot.effect)}
+          {#await import("./ResponseGraph.svelte") then { default: ResponseGraph }}
           <ResponseGraph slot={winSlot} info={winInfo} onPoint={(pf, f, pg, g, done) => dragPoint(winSlot, pf, f, pg, g, done)} />
+          {/await}
         {/if}
         {#if BAND_EQS.includes(winSlot.effect)}
+          {#await import("./BandEqPanel.svelte") then { default: BandEqPanel }}
           <BandEqPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {/if}
         {#if winInfo.sidechain && onTrackTab && doc && keyOwner}
           <label class="param" title="Sidechain: let another track's or bus's sound drive this effect, for example to duck music under a voice. It listens before that track's fader.">
