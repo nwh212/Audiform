@@ -3,8 +3,10 @@
 # This file is part of Audiform, based on Altered Audio Editor.
 
 # Builds the Windows installer and a portable zip when a version tag is
-# pushed (git tag v0.1.0 && git push origin v0.1.0). It makes a DRAFT
-# release, so nothing is public until you review and publish it.
+# pushed (git tag v0.1.0 && git push origin v0.1.0), or from the Actions
+# tab: Release > Run workflow, with the version typed in. It makes a DRAFT
+# release, so nothing is public until you review and publish it. A draft
+# made from the Actions tab gets its tag when you publish it.
 # Each platform builds in its own job and hands its files over as a build
 # artifact; the last job makes the draft with everything that built.
 # Linux and macOS are experimental: if one fails, the draft still gets
@@ -17,6 +19,14 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, like v0.4.0 (it must match the version in package.json)"
+        required: true
+
+env:
+  TAG: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: read
@@ -27,6 +37,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+
+      # The version typed in the Actions tab must be the one the build
+      # carries, so the files and the app agree.
+      - name: Check the version
+        shell: bash
+        run: |
+          want="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$want" ]; then echo "::error::Release $TAG, but package.json says $want."; exit 1; fi
 
       - uses: actions/setup-node@v5
         with:
@@ -59,7 +77,7 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ env.TAG }}"
           $out = Join-Path $env:RUNNER_TEMP "release"
           $portable = Join-Path $env:RUNNER_TEMP "portable"
           New-Item -ItemType Directory -Force -Path $out, $portable | Out-Null
@@ -112,7 +130,7 @@ jobs:
 
       - name: Package
         run: |
-          tag="${{ github.ref_name }}"
+          tag="${{ env.TAG }}"
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
           cp src-tauri/target/release/bundle/appimage/*.AppImage "$out/Audiform-$tag-linux-x86_64.AppImage"
@@ -154,7 +172,7 @@ jobs:
 
       - name: Package
         run: |
-          tag="${{ github.ref_name }}"
+          tag="${{ env.TAG }}"
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
           cp src-tauri/target/release/bundle/dmg/*.dmg "$out/Audiform-$tag-macos-arm64.dmg"
@@ -184,10 +202,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tag="${{ github.ref_name }}"
+          tag="${{ env.TAG }}"
           cd files
           if [ -f NO-ASIO.txt ]; then echo "::warning::The ASIO build failed; the Windows installer has no ASIO."; rm NO-ASIO.txt; fi
           sha256sum * > SHA256SUMS.txt
           ls -la
           # Every release, 0.x included, is a full release that becomes Latest when published.
-          gh release create "$tag" --draft --title "Audiform $tag" --generate-notes ./*
+          gh release create "$tag" --draft --target "${{ github.sha }}" --title "Audiform $tag" --generate-notes ./*

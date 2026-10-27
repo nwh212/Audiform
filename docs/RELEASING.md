@@ -18,6 +18,8 @@ Every update that goes out gets its own version, so a bug report can name the bu
    git push origin v0.1.2
    ```
 
+   Or, without the command line: on GitHub, open **Actions > Release > Run workflow**, type the version (like `v0.1.2`) and click **Run workflow**. The tag is made when you publish the draft.
+
 4. The Release workflow builds the installer and a portable zip, then makes a **draft** release.
 5. Install the installer on a clean Windows machine and run it. Release immutability means a published release can't be changed, so test first.
 6. Edit the notes, then publish the draft. It becomes the Latest release (0.x versions too). Don't make a release by hand on GitHub: publishing one creates the tag, and the workflow's draft step then fails because the release already exists.
