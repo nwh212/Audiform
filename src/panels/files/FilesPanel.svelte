@@ -648,23 +648,27 @@
 {/if}
 
 <style>
+  /* Just a small arrow (a letter when one channel is picked), not a box. */
   .chan {
-    margin-right: 4px;
-    min-width: 16px;
-    height: 14px;
-    padding: 0 3px;
-    border: 1px solid var(--border-strong);
-    border-radius: 2px;
-    background: transparent;
-    color: var(--text-dim);
+    margin-right: 2px;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    height: auto !important;
+    color: var(--text-faint);
     font-size: 9px;
-    line-height: 12px;
+    line-height: 1;
     vertical-align: middle;
   }
-  .chan.picked {
-    border-color: var(--accent);
+  .chan:hover {
     color: var(--accent);
-    font-weight: 600;
+  }
+  .chan.picked {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 10px;
   }
   .row.session .name {
     font-weight: 600;
