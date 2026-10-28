@@ -292,6 +292,23 @@ pub async fn separation_run(
         if !checkpoint.is_file() {
             return Err(format!("{} is not downloaded.", m.name));
         }
+        // An engine from before this version cannot read this version's jobs.
+        let version = {
+            let mut c = Command::new(&engine);
+            c.arg("--version").stdin(Stdio::null()).stderr(Stdio::null());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                c.creation_flags(0x0800_0000);
+            }
+            c.output()
+                .ok()
+                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                .unwrap_or_default()
+        };
+        if !separation::engine_is_new_enough(&version) {
+            return Err("The separation engine is out of date. Open Audio Separation and press Update next to the engine.".into());
+        }
         let work = separation::root(&dir)
             .join("work")
             .join(uuid::Uuid::new_v4().to_string());
@@ -382,7 +399,7 @@ fn run_engine(
     cmd.arg(job)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -396,6 +413,32 @@ fn run_engine(
         .stdout
         .take()
         .ok_or("The separation engine gave no output.")?;
+    // What the engine says on its error channel (a crash or a graphics card
+    // complaint shows up here), kept so a failure can say why.
+    let said = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(mut err) = child.stderr.take() {
+        let said = said.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0u8; 1024];
+            while let Ok(n) = err.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                if let Ok(mut s) = said.lock() {
+                    s.push_str(&String::from_utf8_lossy(&buf[..n]));
+                    // Only the end matters.
+                    if s.len() > 4000 {
+                        let cut = s.len() - 3000;
+                        let cut = (cut..s.len())
+                            .find(|i| s.is_char_boundary(*i))
+                            .unwrap_or(cut);
+                        *s = s[cut..].to_string();
+                    }
+                }
+            }
+        });
+    }
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -446,12 +489,22 @@ fn run_engine(
                 let status = child.wait().map_err(|e| e.to_string())?;
                 return match outcome {
                     Some(r) => r,
-                    None if status.success() => {
-                        Err("The separation engine stopped without finishing.".into())
+                    None => {
+                        let why = said
+                            .lock()
+                            .map(|s| s.trim().to_string())
+                            .unwrap_or_default();
+                        let why = if why.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" It said: {}", why.lines().last().unwrap_or_default())
+                        };
+                        Err(if status.success() {
+                            format!("The separation engine stopped without finishing.{why}")
+                        } else {
+                            format!("The separation engine stopped unexpectedly ({status}).{why}")
+                        })
                     }
-                    None => Err(format!(
-                        "The separation engine stopped unexpectedly ({status})."
-                    )),
                 };
             }
         }

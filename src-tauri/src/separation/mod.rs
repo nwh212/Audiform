@@ -290,6 +290,21 @@ pub fn engine_asset() -> Option<&'static str> {
     }
 }
 
+/// The oldest engine that understands the jobs this Audiform writes.
+pub const MIN_ENGINE: &str = "0.2.0";
+
+/// Whether an engine's `--version` output (like "0.2.0") is at least `MIN_ENGINE`.
+pub fn engine_is_new_enough(version: &str) -> bool {
+    let parse = |v: &str| -> Option<(u32, u32, u32)> {
+        let mut it = v.trim().split('.').map(|p| p.trim().parse::<u32>().ok());
+        Some((it.next()??, it.next()??, it.next().flatten().unwrap_or(0)))
+    };
+    match (parse(version), parse(MIN_ENGINE)) {
+        (Some(have), Some(need)) => have >= need,
+        _ => false,
+    }
+}
+
 /// The engine release Audiform uses. Engines are released on their own
 /// (as pre-releases, so they never show as Audiform's latest version);
 /// change this when a new engine is needed.
@@ -439,6 +454,16 @@ mod tests {
             None,
         );
         assert_eq!(j["outputs"][1]["rest"], json!(true));
+    }
+
+    #[test]
+    fn an_old_engine_is_noticed() {
+        assert!(engine_is_new_enough("0.2.0\n"));
+        assert!(engine_is_new_enough("0.3.1"));
+        assert!(engine_is_new_enough("1.0.0"));
+        assert!(!engine_is_new_enough("0.1.0"));
+        assert!(!engine_is_new_enough("garbage"));
+        assert!(!engine_is_new_enough(""));
     }
 
     #[test]

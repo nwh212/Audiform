@@ -1108,9 +1108,6 @@
           component: asComponent(EditorPanel),
           props: {
             onShowChain: () => dock.show("voice-chain"),
-            sessions: sessionRows,
-            onOpenSession: (id: string) => void files.switchTo(id).catch(showError),
-            onCloseSession: (id: string) => files.closeSession(id).catch(showError),
             session,
             runner: sessionHistory,
             peaks,
@@ -1147,6 +1144,16 @@
     setCurrentId: (id) => prefs.set(KEY_WORKSPACE, id),
     ready: () => prefs.load(),
     onError: showError,
+    sessionTabs: {
+      rows: sessionRows,
+      open: (id) => {
+        const front = get(sessionRows).find((r) => r.id === id)?.front;
+        void (front ? Promise.resolve() : files.switchTo(id))
+          .then(() => actions.run("view.editor.multitrack"))
+          .catch(showError);
+      },
+      close: (id) => void files.closeSession(id).catch(showError),
+    },
   });
 
   let aboutOpen = $state(false);
