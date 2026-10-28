@@ -13,6 +13,7 @@ import { type ClipBoard } from "../panels/editor/clip-edit";
 import { rasterize } from "../panels/editor/spectrum";
 import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels } from "../panels/editor/wave-channels";
 import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
+import { embedList } from "../panels/markers/chapters";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
 import { chainOf } from "../panels/voice-chain/chain";
 import { editor } from "../stores/editor";
@@ -23,7 +24,7 @@ import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
 import { closeWaveFile, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportPickPath, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
+import { exportEmbedChapters, exportPickPath, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
 import { kindOfPath } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
@@ -229,15 +230,26 @@ export function createWaveTools(deps: WaveToolsDeps) {
       const markerCount = wave.current?.markers.length ?? 0;
       await saveWaveFile(path);
       const saved = waveFile.current()?.path ?? f.path;
+      // MP3, FLAC and M4A carry chapters inside the file (WAV keeps its markers as cue points).
+      // Written before the peaks and the session read the file again, so they see the finished file.
+      const saveDoc = wave.current;
+      const chapters = saveDoc && /\.(mp3|flac|m4a)$/i.test(saved) ? embedList(saveDoc.markers, saveDoc.sample_rate, null) : [];
+      let added = chapters.length;
+      if (saveDoc && added > 0) {
+        const totalMs = Math.round((sessionEnd(saveDoc) / saveDoc.sample_rate) * 1000);
+        await exportEmbedChapters(saved, chapters, totalMs).catch((e) => {
+          added = 0;
+          showError(e);
+        });
+      }
       peaks.invalidate(saved);
       exactSamples.forget(saved);
       await syncSessionMedia(saved);
       const keepsMarkers = /\.wave?$/i.test(saved);
-      showNotice(
-        markerCount && !keepsMarkers
-          ? `Saved ${saved.split(/[\\/]/).pop()}. Its markers stay only while it is open: only WAV files store them.`
-          : `Saved ${saved.split(/[\\/]/).pop()}.`,
-      );
+      const left = keepsMarkers ? 0 : markerCount - added;
+      const chapterNote = added > 0 ? ` ${added} ${added === 1 ? "chapter" : "chapters"} added.` : "";
+      const leftNote = left > 0 ? ` ${left} other ${left === 1 ? "marker stays" : "markers stay"} only while it is open: only WAV files store them.` : "";
+      showNotice(`Saved ${saved.split(/[\\/]/).pop()}.${chapterNote}${leftNote}`);
       return true;
     } catch (e) {
       showError(e);
