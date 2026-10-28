@@ -114,7 +114,7 @@ export const MENUS: readonly Menu[] = [
         item("file.export.sesx", "Multitrack Session (.sesx)..."),
       ]),
       item("file.check-loudness", "Check Loudness..."),
-      item("file.publish-package", "Publish Package...", { pending: P7 }),
+      item("file.publish-package", "Publish Package..."),
       sep,
       item("file.reveal", "Show in File Manager"),
       sep,

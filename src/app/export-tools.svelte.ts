@@ -22,12 +22,14 @@ import { type MarkerDoc, clipLength, sessionEnd, tempoOf } from "../stores/sessi
 import { beatsToSeconds } from "../stores/tempo";
 import { openWaveFile, wave, waveFile } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, pathsExist } from "./core";
+import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, pathsExist, publishWriteFiles } from "./core";
 import type { DockController } from "./docking/dock";
-import { targetsFor } from "./loudness";
-import { type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
+import { DEFAULT_TARGET, targetsFor } from "./loudness";
+import { DEFAULT_FORMAT, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
 import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
+import type { PublishSettings } from "./PublishDialog.svelte";
+import { EMPTY_EPISODE, type EpisodeInfo, packageFiles, slugOf } from "./publish";
 import type { Exporting } from "./wave-tools.svelte";
 
 export type MixSource = "all" | "selection" | "clips";
@@ -209,6 +211,53 @@ export function createExportTools(deps: ExportToolsDeps) {
     await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters, v.speakers, v.normalize, v.verify);
   }
 
+  // File > Publish Package.
+  const KEY_PUBLISH = "publish.package";
+  let publishReq = $state<{ initial: PublishSettings; source: { sampleRate: number; channels: number; bitDepth: number } } | null>(null);
+
+  function openPublishDialog() {
+    const doc = session.current;
+    if (!doc) return;
+    const saved = prefs.raw(KEY_PUBLISH) as { format?: unknown; folder?: unknown; normalize?: unknown } | null;
+    const format = sanitizeFormat(saved?.format);
+    const norm = saved?.normalize;
+    publishReq = {
+      initial: {
+        episode: { ...EMPTY_EPISODE, title: doc.name },
+        folder: (typeof saved?.folder === "string" && saved.folder) || sessionFolder() || "",
+        // Hosts want MP3; a saved choice of another kind is not carried over.
+        format: format.kind === "mp3" ? format : { ...DEFAULT_FORMAT, kind: "mp3", mp3Bitrate: 128 },
+        normalize: typeof norm === "string" ? norm : DEFAULT_TARGET,
+      },
+      source: { sampleRate: doc.sample_rate, channels: doc.master?.channels === "mono" ? 1 : 2, bitDepth: doc.bit_depth },
+    };
+  }
+
+  async function finishPublishDialog(v: PublishSettings | null) {
+    publishReq = null;
+    if (!v) return;
+    prefs.set(KEY_PUBLISH, { format: v.format, folder: v.folder, normalize: v.normalize });
+    const sep = v.folder.includes("\\") ? "\\" : "/";
+    const slug = slugOf(v.episode.title);
+    const folder = `${v.folder.replace(/[\\/]+$/, "")}${sep}${slug}`;
+    const audioName = `${slug}.${extensionOf(v.format.kind)}`;
+    const [exists] = await pathsExist([`${folder}${sep}${audioName}`]);
+    if (exists) {
+      const ok = await ask("Replace the episode?", `${slug} already has ${audioName}. The package will replace it and its files.`, [
+        { label: "Replace", value: "yes", primary: true },
+        { label: "Cancel", value: "no" },
+      ]);
+      if (ok !== "yes") return;
+    }
+    try {
+      await publishWriteFiles(folder, []);
+    } catch (e) {
+      showError(e);
+      return;
+    }
+    await runMixdown("all", "file", `${folder}${sep}${audioName}`, v.format, true, undefined, v.normalize, true, { episode: v.episode, folder, audioName });
+  }
+
   async function mixDown(source: MixSource, target: MixTarget) {
     const doc = session.current;
     if (!doc || !mixRange(source) || exporting()) return;
@@ -271,7 +320,7 @@ export function createExportTools(deps: ExportToolsDeps) {
     }
   }
 
-  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string, normalize = "", verify = false) {
+  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string, normalize = "", verify = false, pack?: { episode: EpisodeInfo; folder: string; audioName: string }) {
     // A 3D Space speaker bed is written as mixed; every other file can be brought to a loudness.
     const bed = !!speakers && speakers !== "binaural" && speakers !== "2.0";
     const goal = normalize && !bed ? targetsFor().find((t) => t.id === normalize) : undefined;
@@ -327,13 +376,19 @@ export function createExportTools(deps: ExportToolsDeps) {
           checkNote = ` The check could not run: ${e instanceof Error ? e.message : String(e)}`;
         }
       }
+      let packNote = "";
+      if (pack && doc) {
+        const files = packageFiles(pack.episode, pack.audioName, Math.round((r.frames / r.sampleRate) * 1000), doc.markers, doc.sample_rate, checkNote.trim() || "The file was not checked.");
+        await publishWriteFiles(pack.folder, files);
+        packNote = ` Package ready in ${pack.folder}.`;
+      }
       const clipped = r.peak > 1 ? ` The mix clipped (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); turn the Master down and export again.` : "";
       if (target === "files-panel") {
         const imported = await mediaPool.importPaths([path], sessionHistory);
         mediaPool.setSelection(imported.ids);
         showNotice(`Mixed down to ${name} and added it to the Files panel.${levelNote}${chapterNote}${checkNote}${clipped}`);
       } else {
-        showNotice(`Exported ${name}.${levelNote}${chapterNote}${checkNote}${clipped}`);
+        showNotice(`Exported ${name}.${levelNote}${chapterNote}${checkNote}${packNote}${clipped}`);
       }
     } catch (e) {
       showError(e);
@@ -481,6 +536,10 @@ export function createExportTools(deps: ExportToolsDeps) {
     set exportReq(v) {
       exportReq = v;
     },
+    /** File > Publish Package's dialog, while it is open. */
+    get publishReq() {
+      return publishReq;
+    },
     /** File > Export > Markers and Chapters' dialog, while it is open. */
     get markersExport() {
       return markersExport;
@@ -495,6 +554,8 @@ export function createExportTools(deps: ExportToolsDeps) {
     saveMarkers,
     openExportDialog,
     finishExportDialog,
+    openPublishDialog,
+    finishPublishDialog,
     mixDown,
     bounceRange,
     bounce,

@@ -112,6 +112,12 @@ export function createFileTools(deps: FileToolsDeps) {
         reason: () => "The session has no clips yet.",
       }),
       actions.register({
+        id: "file.publish-package",
+        run: () => exp.openPublishDialog(),
+        enabled: () => exporting() === null && contentEnd() > 0,
+        reason: () => "The session has no clips yet.",
+      }),
+      actions.register({
         id: "file.export.sesx",
         run: async () => {
           try {

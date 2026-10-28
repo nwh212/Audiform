@@ -1139,6 +1139,11 @@ export function exportVerify(
   return invoke<{ ok: boolean; checks: VerifyCheck[] }>("export_verify", { path, expect });
 }
 
+/** Writes the text files of a Publish Package into `folder` (made if missing). Returns their paths. */
+export function publishWriteFiles(folder: string, files: { name: string; content: string }[]): Promise<string[]> {
+  return invoke<string[]>("publish_write_files", { folder, files });
+}
+
 /** One control of a built-in effect, as the core describes it. */
 export interface EffectParamInfo {
   key: string;
