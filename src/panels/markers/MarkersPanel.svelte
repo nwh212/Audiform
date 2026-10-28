@@ -18,6 +18,7 @@
   import type { TransportStore } from "../../stores/transport";
   import { formatIn } from "../editor/timeline";
   import { KIND_LABELS, markerCss } from "./markers";
+  import { chapterUrl, isChapterUrl, titleTips } from "./chapters";
 
   interface Props {
     session: SessionStore;
@@ -170,6 +171,34 @@
               }}
             />
           </div>
+          {#if m.kind === "chapter"}
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+            <div class="notes" onclick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                placeholder="Link (optional; MP3 files carry it, chapters.json always does)"
+                aria-label="Chapter link"
+                value={chapterUrl(m)}
+                onkeydown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                onblur={(e) => {
+                  const v = e.currentTarget.value.trim();
+                  if (v === chapterUrl(m)) return;
+                  if (v !== "" && !isChapterUrl(v)) {
+                    onError?.(new Error("A chapter link starts with http:// or https:// and has no spaces."));
+                    e.currentTarget.value = chapterUrl(m);
+                    return;
+                  }
+                  edit("Chapter Link", m, { url: v });
+                }}
+              />
+            </div>
+            {#each titleTips(m.name) as tip (tip)}
+              <div class="notes tip">{tip}</div>
+            {/each}
+          {/if}
         </div>
       {/each}
     </div>
@@ -282,6 +311,12 @@
   .notes {
     grid-column: 2 / -1;
     padding-bottom: 3px;
+  }
+
+  .tip {
+    padding: 0 4px 3px;
+    color: var(--text-faint);
+    font-size: var(--font-size-small);
   }
 
   .notes input {

@@ -416,6 +416,7 @@ mod tests {
             title: "Intro".into(),
             start_ms: 0,
             end_ms: None,
+            url: None,
         }];
         embed_mp3(&p, &ch, 1000).unwrap();
         write_tags(&p, &sample()).unwrap();
@@ -451,6 +452,7 @@ mod tests {
                 title: "Intro".into(),
                 start_ms: 0,
                 end_ms: None,
+                url: None,
             }],
         )
         .unwrap();

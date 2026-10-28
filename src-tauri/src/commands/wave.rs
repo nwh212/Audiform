@@ -293,7 +293,10 @@ pub async fn wave_open(
                 position: c.start_ms * rate / 1000,
                 duration: 0,
                 description: String::new(),
-                chapter: None,
+                chapter: c.url.clone().map(|u| crate::session::model::ChapterInfo {
+                    url: Some(u),
+                    image: None,
+                }),
                 contracted_duration: None,
                 color: None,
             })

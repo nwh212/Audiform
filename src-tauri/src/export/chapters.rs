@@ -27,6 +27,9 @@ pub struct Chapter {
     pub start_ms: u64,
     /// The next chapter's start, or the end of the file, when not given.
     pub end_ms: Option<u64>,
+    /// A web link for the chapter (MP3 carries it; other formats have no place for one).
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 /// ID3v2 sizes are 7 bits per byte.
@@ -90,6 +93,12 @@ pub fn id3_tag(chapters: &[Chapter], total_ms: u64) -> Vec<u8> {
         // No byte offsets: readers use the times.
         body.extend_from_slice(&[0xff; 8]);
         body.extend(title(&c.title));
+        if let Some(url) = c.url.as_deref().filter(|u| u.is_ascii() && !u.is_empty()) {
+            // WXXX: Latin-1, an empty description, then the link.
+            let mut w = vec![0u8, 0];
+            w.extend_from_slice(url.as_bytes());
+            body.extend(frame(b"WXXX", &w));
+        }
         frames.extend(frame(b"CHAP", &body));
     }
     let mut tag = b"ID3".to_vec();
@@ -483,15 +492,26 @@ fn read_mp3(path: &Path) -> std::io::Result<Vec<Chapter>> {
         let start = u64::from(u32::from_be_bytes([rest[0], rest[1], rest[2], rest[3]]));
         let mut at = 16;
         let mut name = String::new();
+        let mut link = None;
         while at + 10 <= rest.len() {
             let n = u32::from_be_bytes([rest[at + 4], rest[at + 5], rest[at + 6], rest[at + 7]])
                 as usize;
             let Some(sub) = rest.get(at + 10..at + 10 + n) else {
                 break;
             };
-            if &rest[at..at + 4] == b"TIT2" {
-                name = id3_text(sub);
-                break;
+            match &rest[at..at + 4] {
+                b"TIT2" => name = id3_text(sub),
+                // WXXX: an encoding byte, a description ending in a zero, then the link in Latin-1.
+                b"WXXX" if sub.len() > 2 => {
+                    if let Some(z) = sub[1..].iter().position(|&b| b == 0) {
+                        let url: String = sub[1 + z + 1..].iter().map(|&b| b as char).collect();
+                        let url = url.trim_end_matches('\0').to_string();
+                        if !url.is_empty() {
+                            link = Some(url);
+                        }
+                    }
+                }
+                _ => {}
             }
             at += 10 + n;
         }
@@ -499,6 +519,7 @@ fn read_mp3(path: &Path) -> std::io::Result<Vec<Chapter>> {
             title: name,
             start_ms: start,
             end_ms: None,
+            url: link,
         });
     }
     Ok(out)
@@ -570,6 +591,7 @@ fn read_flac(path: &Path) -> std::io::Result<Vec<Chapter>> {
                 title,
                 start_ms: ms,
                 end_ms: None,
+                url: None,
             }
         })
         .collect())
@@ -591,6 +613,7 @@ mod tests {
             title: title.into(),
             start_ms,
             end_ms: None,
+            url: None,
         }
     }
 
@@ -725,5 +748,19 @@ mod tests {
         assert_eq!(parse_clock("01:02:03.004"), Some(3_723_004));
         assert_eq!(parse_clock("00:00:01.5"), Some(1500));
         assert_eq!(parse_clock("nonsense"), None);
+    }
+
+    #[test]
+    fn an_mp3_chapter_keeps_its_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.mp3");
+        fs::write(&p, [0xffu8, 0xfb, 0x90, 0x00, 1, 2, 3, 4]).unwrap();
+        let mut list = three();
+        list[1].url = Some("https://example.com/talk".into());
+        embed_mp3(&p, &list, 4_000_000).unwrap();
+        let got = read_chapters(&p);
+        assert_eq!(got[0].url, None);
+        assert_eq!(got[1].url.as_deref(), Some("https://example.com/talk"));
+        assert_eq!(got[1].title, "Café talk");
     }
 }

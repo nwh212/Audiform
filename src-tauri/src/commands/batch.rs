@@ -82,6 +82,7 @@ fn carry(job: &BatchJob, copy: bool) -> Carry {
                 title: c.label.clone(),
                 start_ms: c.position * 1000 / u64::from(r.max(1)),
                 end_ms: None,
+                url: None,
             })
             .collect(),
         (true, None) => Vec::new(),
@@ -292,11 +293,13 @@ mod tests {
                 title: "Intro".into(),
                 start_ms: 0,
                 end_ms: None,
+                url: None,
             },
             Chapter {
                 title: "Talk".into(),
                 start_ms: 12_500,
                 end_ms: None,
+                url: None,
             },
         ];
         crate::export::chapters::embed_mp3(&mp3, &ch, 30_000).unwrap();

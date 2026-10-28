@@ -314,6 +314,7 @@ fn parse_chpl(body: &[u8]) -> Vec<Chapter> {
             title: String::from_utf8_lossy(title).into_owned(),
             start_ms: start / 10_000,
             end_ms: None,
+            url: None,
         });
         at += 9 + usize::from(n);
     }
@@ -425,11 +426,13 @@ mod tests {
                 title: "Intro".into(),
                 start_ms: 0,
                 end_ms: None,
+                url: None,
             },
             Chapter {
                 title: "Café talk".into(),
                 start_ms: 61_500,
                 end_ms: None,
+                url: None,
             },
         ];
         write_m4a_chapters(&p, &ch).unwrap();

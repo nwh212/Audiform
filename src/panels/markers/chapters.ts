@@ -107,7 +107,7 @@ export function warnings(list: readonly Chapter[], format: ChapterFormat): strin
  * the start of the export. With a range (a time-selection export), only
  * chapters inside it go, moved so the range starts at 0.
  */
-export function embedList(markers: readonly MarkerDoc[], rate: number, range: [number, number] | null): { title: string; startMs: number; endMs: number | null }[] {
+export function embedList(markers: readonly MarkerDoc[], rate: number, range: [number, number] | null): { title: string; startMs: number; endMs: number | null; url?: string | null }[] {
   const [a, b] = range ?? [0, Number.POSITIVE_INFINITY];
   return markers
     .filter((m) => m.kind === "chapter" && m.position >= a && m.position < b)
@@ -117,5 +117,38 @@ export function embedList(markers: readonly MarkerDoc[], rate: number, range: [n
       title: m.name.trim() || "Untitled",
       startMs: Math.round(((m.position - a) / rate) * 1000),
       endMs: m.duration > 0 ? Math.round(((Math.min(m.position + m.duration, b) - a) / rate) * 1000) : null,
+      url: chapterUrl(m) || null,
     }));
+}
+
+/** A chapter marker's link, or "". */
+export function chapterUrl(m: Pick<MarkerDoc, "chapter">): string {
+  const info = m.chapter as { url?: string | null } | null;
+  return info?.url ?? "";
+}
+
+/** A link a chapter can carry: http or https, no spaces. */
+export const isChapterUrl = (text: string) => /^https?:\/\/[^\s]+$/i.test(text.trim());
+
+/**
+ * Plain tips for a chapter title, from Apple's guidance for chapter titles:
+ * 45 characters or fewer, no more than five words, no repeated words.
+ * Empty when the title is fine. Tips only; nothing is blocked.
+ */
+export function titleTips(title: string): string[] {
+  const t = title.trim();
+  if (!t) return [];
+  const out: string[] = [];
+  const words = t.split(/\s+/).filter(Boolean);
+  if (t.length > 45) out.push(`${t.length} characters; apps show about 45.`);
+  if (words.length > 5) out.push(`${words.length} words; five or fewer reads best.`);
+  const seen = new Set<string>();
+  for (const w of words.map((x) => x.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")).filter((x) => x.length > 3)) {
+    if (seen.has(w)) {
+      out.push(`"${w}" appears twice.`);
+      break;
+    }
+    seen.add(w);
+  }
+  return out;
 }

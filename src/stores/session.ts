@@ -405,6 +405,8 @@ export interface MarkerChange {
   contracted_duration?: number;
   /** Removes the contracted length. */
   clear_contracted?: boolean;
+  /** A chapter's web link; "" removes it. */
+  url?: string;
 }
 
 /** Changes to one clip. Fields left out are unchanged; `track_id` moves it. */

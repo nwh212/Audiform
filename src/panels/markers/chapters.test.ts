@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { chaptersOf, clock, embedList, render, warnings } from "./chapters";
+import { chapterUrl, chaptersOf, clock, embedList, isChapterUrl, render, titleTips, warnings } from "./chapters";
 import { newMarker } from "./markers";
 
 const R = 48_000;
@@ -54,6 +54,29 @@ describe("chapters inside an export", () => {
       ["Main topic", 35_000],
       ['Ad, "midroll"', 3_665_000],
     ]);
-    expect(embedList(marks, R, null)[0]).toEqual({ title: "Intro", startMs: 0, endMs: null });
+    expect(embedList(marks, R, null)[0]).toEqual({ title: "Intro", startMs: 0, endMs: null, url: null });
+  });
+});
+
+describe("chapter links and title tips", () => {
+  it("reads a link and accepts only web links", () => {
+    expect(chapterUrl({ chapter: null })).toBe("");
+    expect(chapterUrl({ chapter: { url: "https://a.example/x", image: null } })).toBe("https://a.example/x");
+    expect(isChapterUrl(" https://a.example/x ")).toBe(true);
+    expect(isChapterUrl("ftp://a.example")).toBe(false);
+    expect(isChapterUrl("https://a b")).toBe(false);
+  });
+
+  it("carries the link into the embed list", () => {
+    const m = { id: "1", name: "Intro", kind: "chapter" as const, position: 0, duration: 0, description: "", chapter: { url: "https://a.example", image: null }, contracted_duration: null };
+    expect(embedList([m], 48_000, null)[0]?.url).toBe("https://a.example");
+    expect(embedList([{ ...m, chapter: null }], 48_000, null)[0]?.url).toBeNull();
+  });
+
+  it("flags long, wordy and repetitive titles and leaves good ones alone", () => {
+    expect(titleTips("Intro")).toEqual([]);
+    expect(titleTips("")).toEqual([]);
+    expect(titleTips("A very long chapter title that goes on and on and on")).toHaveLength(2);
+    expect(titleTips("Movie review: movie night")).toEqual(['"movie" appears twice.']);
   });
 });
