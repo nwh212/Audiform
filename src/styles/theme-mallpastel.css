@@ -492,3 +492,21 @@
 :root[data-theme="mallnight"] :is(.levels .bar, .phase .legend .bar, .phase .track)::after {
   background: repeating-linear-gradient(90deg, transparent 0 6px, #1d1538 6px 7px);
 }
+
+/* Join the Discord: a pastel pill; the Japanese tagline moves in beside it. */
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) footer.status::after {
+  margin-left: 12px;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) footer.status .discord {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: #fbf7ff;
+  color: #8a2f74;
+  font-weight: 700;
+  opacity: 1;
+}
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) footer.status .discord:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}

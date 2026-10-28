@@ -19,8 +19,8 @@ export const LINKS = {
   releases: "https://github.com/nwh212/audiform/releases/latest",
   /** Opens Audiform's bug form: problems with Audiform come here, not to the original project. */
   report: "https://github.com/nwh212/audiform/issues/new/choose",
-  /** Community chat invite. None for Audiform yet. */
-  discord: null as string | null,
+  /** Community chat invite (Help menu and the small button in the status bar). */
+  discord: "https://discord.gg/AxECgkCy6a" as string | null,
   /** The original project, Altered Audio Editor. */
   original: "https://github.com/geekcastradio/altered-audio-editor",
   /** The GeekCast Radio Network, who make Altered Audio Editor. */

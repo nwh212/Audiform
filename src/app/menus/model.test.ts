@@ -297,6 +297,7 @@ describe("menu model", () => {
       "view.zoom-selection",
       "clip.split-channels",
       "fx.capture-noise-print",
+      "help.discord",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

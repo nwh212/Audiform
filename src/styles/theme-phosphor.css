@@ -240,3 +240,17 @@
 :root[data-theme="phosphor"] input[type="range"] {
   accent-color: var(--text);
 }
+
+/* Join the Discord: a case-colored key that lights like the screens when pressed. */
+:root[data-theme="phosphor"] footer.status .discord {
+  border: 1px solid var(--p-case-dark);
+  border-radius: 1px;
+  background: linear-gradient(var(--p-case-light), var(--p-case));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 1;
+}
+:root[data-theme="phosphor"] footer.status .discord:hover {
+  background: var(--p-ink);
+  color: var(--p-case-light);
+}

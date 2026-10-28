@@ -531,9 +531,7 @@ export const MENUS: readonly Menu[] = [
       item("help.report", "Report a Problem..."),
       item("help.update", "Check for Updates..."),
       item("help.github", "Audiform Source Code on GitHub"),
-      item("help.discord", "Join the Community on Discord", {
-        pending: "Audiform has no community chat yet.",
-      }),
+      item("help.discord", "Join the Community on Discord"),
       sep,
       sub("Based on Altered Audio Editor", [
         item("help.original", "Altered Audio Editor on GitHub"),

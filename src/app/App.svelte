@@ -13,6 +13,7 @@
     exitApp,
     getAppInfo,
     loadKeymapOverrides,
+    openLink,
     workspaceGet,
     workspaceList,
     saveKeymapOverrides,
@@ -149,6 +150,7 @@
   import type { Finding } from "../panels/quickpass/quickpass";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
   import { prefs } from "../stores/prefs";
+  import { LINKS } from "./links";
   import { onlyChannel, pickedChannel } from "../stores/file-channels";
   import { libraries } from "../stores/library";
   import LibrariesPanel from "../panels/libraries/LibrariesPanel.svelte";
@@ -2048,6 +2050,9 @@
     {#if lastError}
       <span class="warn">{lastError}</span>
     {/if}
+    {#if LINKS.discord}
+      <button type="button" class="discord" title="Join the Audiform community on Discord (opens your browser)" onclick={() => void openLink(LINKS.discord!).catch(showError)}>Join the Discord</button>
+    {/if}
   </footer>
 </div>
 
@@ -2395,5 +2400,25 @@
 
   .warn {
     color: var(--danger);
+  }
+
+  /* Small and quiet, at the right end of the status bar; each theme dresses it in its own file. */
+  .discord {
+    margin-left: auto;
+    padding: 0 8px;
+    height: 16px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 10px;
+    line-height: 14px;
+    opacity: 0.8;
+  }
+  .discord:hover,
+  .discord:focus-visible {
+    border-color: var(--accent);
+    color: var(--text);
+    opacity: 1;
   }
 </style>

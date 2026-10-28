@@ -986,3 +986,15 @@
   border-color: rgba(70, 150, 200, 0.45);
   color: var(--value);
 }
+
+/* Join the Discord: a small clear-glass pill, like the other glass controls but quieter. */
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) footer.status .discord {
+  height: 17px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  opacity: 0.9;
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) footer.status .discord:hover {
+  opacity: 1;
+}
