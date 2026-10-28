@@ -35,6 +35,20 @@ export function handlesAt(x: number, y: number, boxes: readonly Box[], reach = C
 
 const SASH = ".dv-sash";
 
+/** A made-up pointer event at (x, y), copying the real one's pointer. */
+function pointer(type: string, like: PointerEvent, x: number, y: number): PointerEvent {
+  return new PointerEvent(type, {
+    bubbles: type !== "pointerdown",
+    cancelable: true,
+    button: 0,
+    buttons: type === "pointerup" ? 0 : 1,
+    clientX: x,
+    clientY: y,
+    pointerId: like.pointerId,
+    pointerType: like.pointerType,
+  });
+}
+
 /** Wires the behaviour onto the docking area. Returns the stop function. */
 export function enableCornerDrag(host: HTMLElement): () => void {
   const others = (target: HTMLElement, x: number, y: number): HTMLElement[] => {
@@ -66,20 +80,32 @@ export function enableCornerDrag(host: HTMLElement): () => void {
     // inner ones then get the last word on each pointer move.
     e.stopPropagation();
     e.preventDefault();
-    for (const s of [target, ...together].sort((a, b) => depth(a) - depth(b))) {
-      s.dispatchEvent(
-        new PointerEvent("pointerdown", {
-          bubbles: false,
-          cancelable: true,
-          button: 0,
-          buttons: 1,
-          clientX: e.clientX,
-          clientY: e.clientY,
-          pointerId: e.pointerId,
-          pointerType: e.pointerType,
-        }),
-      );
-    }
+    const all = [target, ...together].sort((a, b) => depth(a) - depth(b));
+    for (const s of all) s.dispatchEvent(pointer("pointerdown", e, e.clientX, e.clientY));
+    // On release the library ends the outer handle first, which lays the
+    // inner splits out again from their old proportions before they save
+    // their own. So once every handle has let go, drag each inner handle
+    // again on its own, from where it now is to where it was let go.
+    const outer = depth(all[0]!);
+    const inner = all.filter((s) => depth(s) > outer);
+    if (inner.length === 0) return;
+    const onUp = (u: PointerEvent) => {
+      if (!u.isTrusted) return;
+      window.removeEventListener("pointerup", onUp, true);
+      requestAnimationFrame(() => {
+        for (const s of inner) {
+          if (!s.isConnected) continue;
+          const r = s.getBoundingClientRect();
+          const cx = (r.left + r.right) / 2;
+          const cy = (r.top + r.bottom) / 2;
+          s.dispatchEvent(pointer("pointerdown", u, cx, cy));
+          const doc = s.ownerDocument;
+          doc.dispatchEvent(pointer("pointermove", u, u.clientX, u.clientY));
+          doc.dispatchEvent(pointer("pointerup", u, u.clientX, u.clientY));
+        }
+      });
+    };
+    window.addEventListener("pointerup", onUp, true);
   };
 
   // A hint: over a meeting point the pointer becomes a four-way mover.
