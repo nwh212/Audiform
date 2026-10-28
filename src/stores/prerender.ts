@@ -19,10 +19,18 @@ const states = writable<Record<string, PrerenderState>>({});
 /** Each track's pre-render state, by track id. A track with Pre-render on but no entry yet is waiting. */
 export const prerenderStates: Readable<Record<string, PrerenderState>> = { subscribe: states.subscribe };
 
+/** Sets the store only when something differs, so nothing redraws for a same answer. */
+function setIfChanged(next: Record<string, PrerenderState>) {
+  states.update((cur) => {
+    const a = Object.keys(cur);
+    return a.length === Object.keys(next).length && a.every((k) => cur[k] === next[k]) ? cur : next;
+  });
+}
+
 export function refreshPrerenders(): void {
   prerenderStatus()
-    .then((list) => states.set(Object.fromEntries(list.map((p) => [p.trackId, p.state]))))
-    .catch(() => states.set({}));
+    .then((list) => setIfChanged(Object.fromEntries(list.map((p) => [p.trackId, p.state]))))
+    .catch(() => setIfChanged({}));
 }
 
 let watchers = 0;

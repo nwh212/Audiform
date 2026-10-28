@@ -187,12 +187,18 @@ pub fn refresh(app: &AppHandle, s: &Session) {
         return;
     };
     let dir = root.join("prerender");
-    // The session as it sounds, unsaved Waveform editor edits included.
-    let base = super::live::files_heard(s).into_owned();
     let mut state = match STATE.lock() {
         Ok(m) => m,
         Err(_) => return,
     };
+    // Nothing is pre-rendered and nothing was: every edit comes through
+    // here, so leave before copying the session.
+    if state.is_empty() && !s.tracks.iter().any(|t| t.prerender) {
+        return;
+    }
+    // The session as it sounds, unsaved Waveform editor edits included.
+    let base = super::live::files_heard(s);
+    let before = snapshot(&state);
     state.retain(|id, _| base.tracks.iter().any(|t| t.id == *id && t.prerender));
     for t in base.tracks.iter().filter(|t| t.prerender) {
         let Some(key) = fingerprint(&base, t.id) else {
@@ -228,8 +234,23 @@ pub fn refresh(app: &AppHandle, s: &Session) {
             let _ = app.emit("prerender-changed", ());
         });
     }
+    // Only said when something changed: every edit calls this, and the
+    // interface re-reads the state each time it hears.
+    let changed = snapshot(&state) != before;
     drop(state);
-    let _ = app.emit("prerender-changed", ());
+    if changed {
+        let _ = app.emit("prerender-changed", ());
+    }
+}
+
+/// Where each pre-rendered track stands, for noticing a change.
+fn snapshot(state: &HashMap<Id, Entry>) -> Vec<(Id, bool, bool)> {
+    let mut v: Vec<(Id, bool, bool)> = state
+        .iter()
+        .map(|(id, e)| (*id, e.ready.is_some(), e.rendering.is_some()))
+        .collect();
+    v.sort();
+    v
 }
 
 /// How many renders the cache keeps, newest first, so undoing to an
