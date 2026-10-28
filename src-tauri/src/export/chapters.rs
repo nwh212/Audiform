@@ -376,6 +376,31 @@ pub fn embed_wav(path: &Path, chapters: &[Chapter]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Embeds `chapters` in an exported file of any format that holds them
+/// (WAV, FLAC, MP3, M4A). False for other formats; they are left as they are.
+pub fn embed_chapters(path: &Path, chapters: &[Chapter]) -> std::io::Result<bool> {
+    if chapters.is_empty() {
+        return Ok(false);
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "mp3" => {
+            let total_ms = crate::codecs::probe(path)
+                .map(|i| (i.duration_seconds() * 1000.0) as u64)
+                .unwrap_or_else(|_| chapters.last().map_or(0, |c| c.start_ms));
+            embed_mp3(path, chapters, total_ms).map(|_| true)
+        }
+        "flac" => embed_flac(path, chapters).map(|_| true),
+        "wav" | "wave" => embed_wav(path, chapters).map(|_| true),
+        "m4a" => super::m4a_tags::write_m4a_chapters(path, chapters).map(|_| true),
+        _ => Ok(false),
+    }
+}
+
 /// Chapters in an audio file: MP3 (ID3 chapters), FLAC (`CHAPTERnnn`
 /// comments) and M4A (`chpl`). Empty for other files or when there are none.
 pub fn read_chapters(path: &Path) -> Vec<Chapter> {

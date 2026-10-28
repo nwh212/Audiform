@@ -185,7 +185,7 @@
 
     <section class="stack">
       <label class="check"><input type="checkbox" bind:checked={s.removeDone} /> Take finished files off the list</label>
-      <label class="check" title="Title, artist, album and so on. WAV markers carry over when the output is WAV too."><input type="checkbox" bind:checked={s.copyTags} /> Keep each file's tags and markers</label>
+      <label class="check" title="Title, artist, album and so on. Markers carry over too: WAV cue points and the chapters of MP3, FLAC and M4A files, into any of those formats."><input type="checkbox" bind:checked={s.copyTags} /> Keep each file's tags and markers</label>
       <button type="button" class="more" aria-expanded={tagsOpen} onclick={() => (tagsOpen = !tagsOpen)}>{tagsOpen ? "▾" : "▸"} Set tags on every file</button>
       {#if tagsOpen}
         <div class="grid">
