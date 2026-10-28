@@ -214,7 +214,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
     const pending = chainOf(wave.current?.tracks[0]?.effects);
     if (pending.enabled && pending.slots.some((x) => x.enabled)) {
       try {
-        await applyWaveChain(pending, true);
+        if (!(await applyWaveChain(pending, true))) return false;
       } catch (e) {
         showError(e);
         return false;
@@ -309,21 +309,52 @@ export function createWaveTools(deps: WaveToolsDeps) {
   }
 
   /** Writes the Waveform preview chain into the selection (or the whole file), then clears the preview. */
-  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false) {
+  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false): Promise<boolean> {
     const d = wave.current;
     const r = wholeFile && d ? clampRange(d, 0, sessionEnd(d)) : waveAll();
     const t = d?.tracks[0];
-    if (!d || !r || !t) return;
+    if (!d || !r || !t) return false;
     const label = !wholeFile && waveSel() ? "Apply Audio FX to Selection" : "Apply Audio FX";
-    const res = await waveApplyChain(chain, r[0], r[1]);
+    if (exporting()) {
+      showNotice("Wait for the current export to finish.");
+      return false;
+    }
+    // Plug-ins can take a while, so show how far along it is and about how long is left.
+    const startedAt = Date.now();
+    const heading = wholeFile || !waveSel() ? "Applying the Audio FX to the file" : "Applying the Audio FX to the selection";
+    const timeLeft = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`);
+    setExporting({ title: heading, progress: 0 });
+    let off: (() => void) | null = null;
+    let res: Awaited<ReturnType<typeof waveApplyChain>>;
+    try {
+      off = await listen<{ done: number; total: number }>("export-progress", (e) => {
+        const cur = exporting();
+        if (!cur) return;
+        const p = e.payload.total > 0 ? e.payload.done / e.payload.total : 0;
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const left = p >= 0.05 ? Math.max(1, Math.round((elapsed * (1 - p)) / p)) : null;
+        setExporting({ ...cur, progress: p, title: left === null ? heading : `${heading}, about ${timeLeft(left)} left` });
+      });
+      res = await waveApplyChain(chain, r[0], r[1]);
+    } catch (e) {
+      if (String(e).includes("Cancelled")) {
+        showNotice("Apply cancelled. The file was not changed.");
+        return false;
+      }
+      throw e;
+    } finally {
+      off?.();
+      setExporting(null);
+    }
     // The result belongs to the file the job started on. If another file is open now, do not apply it there.
     if (wave.current?.tracks[0]?.id !== t.id) {
       showNotice("You switched files while the effect was running, so it was not applied. Stay on the file until it finishes. To process many files, use Batch Convert.");
-      return;
+      return false;
     }
     await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
     await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: chainOf(null) });
     if (!wholeFile) showNotice(`${label}: done. Undo takes it back.`);
+    return true;
   }
 
   /** Spectral edit on the current spectral selection: turn it down by `db` (-120 removes it), or repair it. */

@@ -47,6 +47,9 @@
   // misbehaves under parallel calls can no longer take the app down.
   let devicesLoading = false;
   let devicesStale = $state(false);
+  // ASIO found its drivers but opened none: ask again a couple of times by
+  // itself, since the driver may only be letting go of an earlier run.
+  let autoTries = 0;
   async function loadDevices() {
     if (devicesLoading) return;
     devicesLoading = true;
@@ -61,6 +64,17 @@
     } finally {
       devicesLoading = false;
     }
+    if (d.app.driver === "asio" && (driver?.drivers.length ?? 0) > 0 && ((outputs?.length ?? 0) === 0 || (inputs?.length ?? 0) === 0) && autoTries < 2) {
+      autoTries += 1;
+      setTimeout(() => {
+        if (page === "Audio Devices") void loadDevices();
+      }, 2000);
+    }
+  }
+  function refreshDevices() {
+    autoTries = 0;
+    outputs = null;
+    inputs = null;
   }
   $effect(() => {
     if (page === "Audio Devices" && (outputs === null || inputs === null || driver === null)) void loadDevices();
@@ -234,6 +248,7 @@
                 // Device names differ between drivers, so the output goes back to the default.
                 d.app.output = null;
                 d.app.waveInput = null;
+                autoTries = 0;
                 outputs = null;
                 inputs = null;
               }}
@@ -252,7 +267,13 @@
             </p>
           {/if}
           <p class="note">ASIO is a trademark of Steinberg Media Technologies GmbH.</p>
-          <div><button type="button" onclick={() => void openSoundSettings()}>Open System Sound Settings</button></div>
+          {#if d.app.driver === "asio" && driver && driver.drivers.length > 0 && ((outputs?.length ?? 0) === 0 || (inputs?.length ?? 0) === 0)}
+            <p class="note">The ASIO driver is installed but did not open. Another program may be using it, or the last plug-in that failed may have left it busy. Choose Refresh Devices; if it stays empty, restart the app.</p>
+          {/if}
+          <div>
+            <button type="button" onclick={() => void openSoundSettings()}>Open System Sound Settings</button>
+            <button type="button" onclick={refreshDevices}>Refresh Devices</button>
+          </div>
         {:else if page === "Channel Routing"}
           <p class="note">Which outputs of {d.app.output ?? "the playback device"} the mix plays on.{outCount ? ` It has ${outCount} outputs.` : ""} Takes effect from the next playback.</p>
           <div class="outmap">
@@ -402,6 +423,7 @@
             <label class="row">Trim from each take <input type="number" min="0" max="1000" step="1" bind:value={d.record.offsetMs} /> ms (latency offset)</label>
             <label class="row">Play before a punch-in <input type="number" min="0" max="10" step="0.5" bind:value={d.record.prerollSec} /> seconds</label>
             <label><input type="checkbox" bind:checked={d.record.punch} /> With a time selection, record only into the selection</label>
+            <label><input type="checkbox" bind:checked={d.app.waveMonitor} /> Hear the input while recording in the Waveform editor, through the file's Audio FX (use headphones, or the microphone will pick up the speakers)</label>
             <label class="row">
               Count down before recording
               <select value={String(d.app.countdownSec)} onchange={(e) => (d.app.countdownSec = Number(e.currentTarget.value))}>

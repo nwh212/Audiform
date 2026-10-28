@@ -105,7 +105,8 @@ export function createRecorder(deps: RecorderDeps) {
           const base = f.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "Take";
           const channels = Math.min(2, Math.max(1, d.media[0]?.channels ?? 1));
           const at = wavePlayhead();
-          await recordStart([{ key: "wave", input: settings.current.waveInput, channels, name: `${base} take ${stamp()}` }]);
+          const heard = settings.current.waveMonitor;
+          await recordStart([{ key: "wave", input: settings.current.waveInput, channels, name: `${base} take ${stamp()}`, monitor: heard, chain: heard ? (d.tracks[0]?.effects ?? null) : null }]);
           take = { mode: "wave", at };
           liveTakes.set({ at, rate: 0, waves: {}, tick: 0 });
           holdEnd(true);
