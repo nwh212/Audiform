@@ -231,7 +231,13 @@ impl Graph {
             .iter()
             .map(|t| Strip {
                 id: t.id,
-                fx: fx(&t.effects),
+                // A track with nothing on it hears nothing: its effects (and
+                // their plug-in processes) are not started.
+                fx: if t.clips.is_empty() && t.instrument.is_none() {
+                    None
+                } else {
+                    fx(&t.effects)
+                },
                 auto: super::automation::StripAuto::new(
                     &t.envelopes,
                     &t.sends,

@@ -1821,3 +1821,7 @@ Audio Separation splits a file into a target (for now vocals) and the rest (inst
 - **Results** go into the Files panel. For clips in a session, Audiform offers two new tracks under each clip's track, copying its effects, levels, routing, sends and automation, with copies of the clips playing the results. One undo removes them.
 - **Layout**: the panel docks beside 3D Space (the second tab in the Music layout).
 
+
+## 2026-10-28: Heavy sessions start fewer plug-ins
+
+Two tester sessions (24 tracks, 679 clips, about 30 plug-in instances; 9 tracks with Ozone-style chains) loaded but played late or lagged. The media and plug-ins were not available to measure, so the change targets what the session files show: plug-ins were started for tracks that never sound. Now (1) the warm-up uses the session as it is heard, so pre-rendered tracks (which play their render, not their effects) load no plug-ins, and (2) tracks with no clips and no instrument get no effect chain in the mix graph and are not warmed. Both come back as soon as a clip or instrument is added. Also: the vocal strip plug-in some sessions use is imported as Vox Strip with mapped settings; a track's render switch imports as Pre-render.

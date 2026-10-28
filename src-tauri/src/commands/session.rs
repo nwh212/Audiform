@@ -204,7 +204,9 @@ pub fn session_apply(
     // Plug-ins taken out of the session stop running.
     crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
     // New plug-ins and instruments start loading now, not when Play is pressed.
-    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
+    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
+        &super::live::heard(&s.session),
+    ));
     // Pre-rendered tracks whose sound changed start a new render.
     super::prerender::refresh(&app, &s.session);
     // Playback follows edits: gains at once, timing changes by restarting.
@@ -440,7 +442,9 @@ pub async fn session_open(app: AppHandle, path: PathBuf) -> Result<SessionWithPa
     s.session = opened.session.clone();
     s.path = Some(path.clone());
     crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
-    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
+    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
+        &super::live::heard(&s.session),
+    ));
     super::prerender::refresh(&app, &s.session);
     Ok(SessionWithPath {
         session: opened.session,
@@ -612,7 +616,9 @@ pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxIm
     s.session = imported.session.clone();
     s.path = None;
     // Its plug-ins start loading now, so playback is ready sooner.
-    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(&s.session));
+    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
+        &super::live::heard(&s.session),
+    ));
     Ok(SesxImported {
         result: SessionWithPath {
             session: imported.session,

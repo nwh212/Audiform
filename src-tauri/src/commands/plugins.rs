@@ -49,6 +49,9 @@ pub fn plugin_slots(s: &Session) -> HashSet<Id> {
         }
     };
     for t in &s.tracks {
+        if t.clips.is_empty() && t.instrument.is_none() {
+            continue;
+        }
         add(&t.effects);
         for c in &t.clips {
             add(&c.effects);
@@ -68,6 +71,10 @@ pub fn plugin_slots(s: &Session) -> HashSet<Id> {
 
 /// Every plug-in slot in the session that plays: enabled chain slots on
 /// tracks, clips, buses and the master, and MIDI tracks' instruments.
+/// Tracks with no clips and no instrument hear nothing, so their
+/// plug-ins are left to load when something is put on them. Pass the
+/// session as it is heard, so pre-rendered tracks (which play a render
+/// instead of their effects) don't load plug-ins they won't use.
 pub fn playing_plugin_slots(s: &Session) -> Vec<EffectSlot> {
     let mut out = Vec::new();
     let mut add = |c: &EffectChain| {
