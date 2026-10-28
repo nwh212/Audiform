@@ -1427,6 +1427,8 @@ export interface SeparationModel {
 
 export interface SeparationStatus {
   engineInstalled: boolean;
+  /** Size of the installed engine on disk, in bytes. */
+  engineBytes: number | null;
   /** False when no engine is published for this computer. */
   engineAvailable: boolean;
   models: SeparationModel[];

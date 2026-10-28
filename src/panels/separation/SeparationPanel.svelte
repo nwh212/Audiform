@@ -62,6 +62,24 @@
     {#if !status}
       <p class="note">Reading the model list…</p>
     {:else}
+      <h3>Separation engine</h3>
+      <ul>
+        <li>
+          <div class="pick">
+            <span class="name">Engine (runs the models on this computer)</span>
+          </div>
+          <div class="meta">
+            {#if status.engineInstalled}
+              <span>{status.engineBytes ? sizeText(status.engineBytes) : ""}</span>
+              <span class="ok">Downloaded</span>
+              <button type="button" class="link" disabled={!!job} onclick={() => void tools.removeEngine()}>Remove</button>
+            {:else}
+              <span>About 10 MB</span>
+              <button type="button" class="link" disabled={!!job || !status.engineAvailable} onclick={() => void tools.download("engine")}>Download</button>
+            {/if}
+          </div>
+        </li>
+      </ul>
       {#each groups as [category, models] (category)}
         <h3>{category}</h3>
         <ul>

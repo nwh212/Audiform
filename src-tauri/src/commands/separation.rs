@@ -40,6 +40,8 @@ pub struct ModelStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SeparationStatus {
     pub engine_installed: bool,
+    /// Size of the installed engine on disk, in bytes.
+    pub engine_bytes: Option<u64>,
     /// None when no engine is published for this computer.
     pub engine_available: bool,
     pub models: Vec<ModelStatus>,
@@ -82,6 +84,9 @@ pub fn separation_status(app: AppHandle) -> Result<SeparationStatus, String> {
         .collect();
     Ok(SeparationStatus {
         engine_installed: separation::engine_path(&dir).is_file(),
+        engine_bytes: std::fs::metadata(separation::engine_path(&dir))
+            .ok()
+            .map(|m| m.len()),
         engine_available: separation::engine_asset().is_some(),
         models,
         folder: separation::root(&dir),

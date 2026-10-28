@@ -338,7 +338,7 @@
           </label>
           <p class="note">Each moment is separated this many times in overlapping pieces and blended, which hides the seams between pieces. 2 is what the models were measured with.</p>
           <p class="note">Audio separation is handled locally on your own hardware, and speeds and results depend on your hardware. A graphics card is usually many times faster. If it cannot be used, Audiform offers the processor instead.</p>
-          <p class="note">Audiform only pulls the model you choose for demixing, plus the separation engine the first time, and only when you click Download in the Audio Separation panel. Downloads and removals are managed there.</p>
+          <p class="note">Audiform only pulls the model you choose for demixing, plus the separation engine the first time, and only when you click Download in the Audio Separation panel. Downloads and removals (the engine and each model) are managed there, in the Audio Separation panel under Effects.</p>
         {:else if page === "Cache and Files"}
           {#if cache}
             <p class="note">Working files live in <code>{cache.path}</code></p>

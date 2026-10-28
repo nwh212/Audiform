@@ -142,6 +142,20 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     await refresh();
   }
 
+  async function removeEngine() {
+    const ok = await ask("Remove the separation engine?", "This deletes the downloaded separation engine from Audiform's files. Your models stay. It is downloaded again the next time you separate.", [
+      { label: "Remove", value: "yes", primary: true },
+      { label: "Cancel", value: "no" },
+    ]);
+    if (ok !== "yes") return;
+    try {
+      await separationRemove("engine");
+    } catch (e) {
+      showError(e);
+    }
+    await refresh();
+  }
+
   /** First use: offers to download what is missing. False if the user said no or it failed. */
   async function ensureReady(m: SeparationModel): Promise<boolean> {
     const s = status ?? (await separationStatus());
@@ -281,6 +295,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     source,
     download,
     remove,
+    removeEngine,
     separate,
     cancel: () => void separationCancel(),
   };
