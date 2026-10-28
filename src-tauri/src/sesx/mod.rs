@@ -152,6 +152,30 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
                 continue;
             }
         }
+        // The other editor's vocal strip plug-in comes across as our Vox Strip.
+        if c.attribute("componentID") == Some(XVOX_ID) && chain.slots.len() < MAX_SLOTS {
+            if let Some((params, on)) = child(c, "presetChunkData")
+                .and_then(|d| d.text())
+                .and_then(vox_strip_params)
+            {
+                chain.slots.push(EffectSlot {
+                    id: new_id(),
+                    effect: crate::dsp::effects::vocal::VOCAL.into(),
+                    enabled: on && slot.attribute("powered") != Some("false"),
+                    params,
+                    preset: None,
+                    sidechain: None,
+                    plugin_state: None,
+                    data: None,
+                    position: u32::try_from(index)
+                        .ok()
+                        .filter(|i| (*i as usize) < MAX_SLOTS),
+                    routing: None,
+                });
+                report.converted += 1;
+                continue;
+            }
+        }
         let plugin = c
             .attribute("componentID")
             .and_then(vst3_effect)
@@ -186,6 +210,75 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
         });
     }
     chain
+}
+
+/// The component id of the vocal strip plug-in some sessions use.
+const XVOX_ID: &str = "3:abcdef01 9182faeb 58766f78 58766f78";
+
+/// Vox Strip settings from that plug-in's saved settings (its state holds
+/// a small XML list of 0 to 1 knobs; gains are linear, trims in dB, tone
+/// knobs -1 to 1). Each knob goes to the nearest Vox Strip control.
+/// Returns the settings and whether the strip was on.
+fn vox_strip_params(text: &str) -> Option<(std::collections::BTreeMap<String, f64>, bool)> {
+    let raw = altered_plughost::protocol::base64_decode(text)?;
+    let xml = String::from_utf8_lossy(&raw);
+    let start = xml.find("<XVox")?;
+    let end = xml[start..]
+        .find("</XVox>")
+        .map_or(xml.len(), |e| start + e);
+    let mut knobs = std::collections::BTreeMap::<String, f64>::new();
+    for part in xml[start..end].split("<PARAM ").skip(1) {
+        let id = part.split("id=\"").nth(1).and_then(|r| r.split('"').next());
+        let value = part
+            .split("value=\"")
+            .nth(1)
+            .and_then(|r| r.split('"').next())
+            .and_then(|v| v.parse::<f64>().ok());
+        if let (Some(id), Some(value)) = (id, value) {
+            knobs.insert(id.to_string(), value);
+        }
+    }
+    if knobs.is_empty() {
+        return None;
+    }
+    let k = |name: &str| knobs.get(name).copied();
+    let on = |name: &str| k(name).map(|v| if v >= 0.5 { 1.0 } else { 0.0 });
+    let db = |gain: f64| 20.0 * gain.max(1e-4).log10();
+    let mut out = std::collections::BTreeMap::new();
+    let mut put = |key: &str, v: Option<f64>| {
+        if let Some(v) = v {
+            out.insert(key.to_string(), v);
+        }
+    };
+    put("input", k("input_gain").map(db));
+    put("output", k("output_gain").map(db));
+    put("low_cut", on("hpf"));
+    put("dyn_on", on("dyn_enable"));
+    put("dyn_style", k("dyn_mode").map(f64::round));
+    put("comp", k("dyn_comp").map(|v| (v * 100.0).round()));
+    put("deess", k("deesser_amount").map(|v| (v * 100.0).round()));
+    put("dyn_trim", k("dyn_trim"));
+    put("tone_on", on("tone_enable"));
+    put("tone_style", k("tone_mode").map(f64::round));
+    put("low", k("tone_low").map(|v| v * 12.0));
+    put("mid", k("tone_mid").map(|v| v * 12.0));
+    put("high", k("tone_high").map(|v| v * 12.0));
+    put("air", k("tone_exciter_gain").map(|v| (v * 100.0).round()));
+    put("tone_trim", k("tone_trim"));
+    put("fx_on", on("sfx_enable"));
+    put("fx_style", k("sfx_mode").map(f64::round));
+    put("fx", k("sfx_control").map(|v| (v * 100.0).round()));
+    put("fx_trim", k("sfx_trim"));
+    put("space_on", on("space_enable"));
+    put("space_style", k("space_mode").map(f64::round));
+    put(
+        "reverb",
+        k("space_reverb_level").map(|v| (v * 100.0).round()),
+    );
+    put("delay", k("space_delay_level").map(|v| (v * 100.0).round()));
+    put("space_trim", k("space_trim"));
+    let enabled = k("globalEnable").is_none_or(|v| v >= 0.5);
+    Some((out, enabled))
 }
 
 /// The component id the other editor gives its per-frequency phase shifter.
@@ -939,6 +1032,19 @@ mod tests {
         assert!(matches!(import(&p), Err(SesxError::NoSession)));
         std::fs::write(&p, "not xml at all").unwrap();
         assert!(matches!(import(&p), Err(SesxError::Xml(_))));
+    }
+
+    #[test]
+    fn the_vocal_strip_plug_in_comes_across_as_vox_strip() {
+        use altered_plughost::protocol::base64_encode;
+        let xml = r#"head <XVox><PARAM id="deesser_amount" value="0.5"/><PARAM id="dyn_comp" value="0.25"/><PARAM id="tone_low" value="-0.5"/><PARAM id="hpf" value="1.0"/><PARAM id="space_enable" value="0.0"/><PARAM id="globalEnable" value="1.0"/></XVox>"#;
+        let (p, on) = vox_strip_params(&base64_encode(xml.as_bytes())).unwrap();
+        assert!(on);
+        assert_eq!(p["deess"], 50.0);
+        assert_eq!(p["comp"], 25.0);
+        assert_eq!(p["low"], -6.0);
+        assert_eq!(p["low_cut"], 1.0);
+        assert_eq!(p["space_on"], 0.0);
     }
 
     #[test]
