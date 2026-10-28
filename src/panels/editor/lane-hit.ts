@@ -28,11 +28,11 @@ export const RAZOR_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g transform="rotate(-35 12 12)"><rect x="9" y="1" width="6" height="15" rx="1" fill="%23e8e8ee" stroke="%23111" stroke-width="1"/><path d="M12 3v11" stroke="%23111" stroke-width="1" stroke-dasharray="2 1.5"/><rect x="10" y="16" width="4" height="6" rx="1" fill="%23e5534b" stroke="%23111" stroke-width="1"/></g></svg>',
 ).replace(/%2523/g, "%23")}") 4 22, crosshair`;
 
-/** Edge trim cursors: a bracket with an arrow, pointing the way the edge moves out. */
+/** Edge trim cursors: a double arrow (the edge moves either way) beside a bracket on the clip's side. */
 const trimCursor = (left: boolean) =>
   `url("data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><g transform="${left ? "" : "translate(22 0) scale(-1 1)"}" stroke-linecap="square"><path d="M12 3h-3v16h3" fill="none" stroke="#111" stroke-width="3.6"/><path d="M12 3h-3v16h3" fill="none" stroke="#f2f2f5" stroke-width="1.6"/><path d="M20 11h-7M16 8l-3 3 3 3" fill="none" stroke="#111" stroke-width="3.4"/><path d="M20 11h-7M16 8l-3 3 3 3" fill="none" stroke="#f2f2f5" stroke-width="1.4"/></g></svg>`,
-  )}") ${left ? 9 : 13} 11, ${left ? "w-resize" : "e-resize"}`;
+    `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><g transform="${left ? "" : "translate(22 0) scale(-1 1)"}" stroke-linecap="square" fill="none"><path d="M14 4h3v14h-3" stroke="#111" stroke-width="3.6"/><path d="M14 4h3v14h-3" stroke="#f2f2f5" stroke-width="1.6"/><path d="M2 11h10M5 8l-3 3 3 3M9 8l3 3-3 3" stroke="#111" stroke-width="3.4"/><path d="M2 11h10M5 8l-3 3 3 3M9 8l3 3-3 3" stroke="#f2f2f5" stroke-width="1.4"/></g></svg>`,
+  )}") ${left ? 7 : 15} 11, ew-resize`;
 
 export const CURSORS: Record<Gesture, string> = {
   move: "grab",
@@ -78,11 +78,43 @@ export function clipAt(g: LaneGeometry, track: TrackDoc, x: number): ClipDoc | n
   return null;
 }
 
+/** A clip's start or end that lies under a clip drawn above it (an overlap or crossfade). */
+export interface HiddenEdge {
+  clip: ClipDoc;
+  side: "start" | "end";
+  /** The edge's lane x. */
+  x: number;
+  /** Where the clip on top covers it, in lane x: the overlap's other end. */
+  to: number;
+}
+
+/** Every clip edge in `track` that a later (higher) clip covers. */
+export function hiddenEdges(g: LaneGeometry, track: TrackDoc): HiddenEdge[] {
+  const spans = track.clips.map((c) => {
+    const x0 = xOf(c.start, g.view);
+    return { c, x0, x1: xOf(c.start + clipLength(c, g.media.get(c.media_id), g.rate), g.view) };
+  });
+  const out: HiddenEdge[] = [];
+  spans.forEach((a, i) => {
+    for (const side of ["start", "end"] as const) {
+      const x = side === "start" ? a.x0 : a.x1;
+      const over = spans.slice(i + 1).find((b) => x > b.x0 + 0.5 && x < b.x1 - 0.5);
+      if (over) out.push({ clip: a.c, side, x, to: side === "start" ? Math.min(a.x1, over.x1) : Math.max(a.x0, over.x0) });
+    }
+  });
+  return out;
+}
+
 /** The part of a clip under (x, y) in a lane, and the gesture a press there starts. */
 export function zoneAt(g: LaneGeometry, ed: HitOptions, track: TrackDoc, x: number, y: number): Zone | null {
   const view = g.view;
   const clip = clipAt(g, track, x);
   if (!clip) return null;
+  // The edge of a clip running under this one, below the fade handles: trim it.
+  if (y > TITLE_H + 21) {
+    const under = hiddenEdges(g, track).find((e) => e.clip !== clip && !e.clip.locked && Math.abs(e.x - x) <= EDGE_PX);
+    if (under) return { kind: under.side === "start" ? "trim-left" : "trim-right", clip: under.clip };
+  }
   const x0 = xOf(clip.start, view);
   const x1 = xOf(clip.start + clipLength(clip, g.media.get(clip.media_id), g.rate), view);
   const w = x1 - x0;
@@ -100,6 +132,9 @@ export function zoneAt(g: LaneGeometry, ed: HitOptions, track: TrackDoc, x: numb
     if (hit(x0 + clip.fade_in.length / view.spp)) return { kind: "fade-in", clip };
     if (hit(x1 - clip.fade_out.length / view.spp)) return { kind: "fade-out", clip };
   }
+  // Edges come before the volume and pan lines, which run right up to them.
+  if (w > 16 && !clip.locked && y > TITLE_H && x - x0 <= EDGE_PX) return { kind: "trim-left", clip };
+  if (w > 16 && !clip.locked && y > TITLE_H && x1 - x <= EDGE_PX) return { kind: "trim-right", clip };
   if (y > TITLE_H && !clip.locked) {
     const box = envBox(trackHeight(track));
     const lane = fxLaneOf(clip, ed.fxLanes);

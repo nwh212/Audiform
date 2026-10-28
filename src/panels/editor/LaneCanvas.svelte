@@ -9,6 +9,7 @@
 <script lang="ts">
   import { drawGainHandle, gainBox } from "./clip-gain";
   import { drawStartLine } from "./ruler-draw";
+  import { hiddenEdges } from "./lane-hit";
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
   import { clipLength, stretchOf, type ClipDoc, type FadeDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
   import type { LiveWave } from "../../stores/record";
@@ -527,6 +528,32 @@
       // Level handle in the bottom-left corner (see clip-gain.ts), with the level when it is not 0.
       const gb = clip === liveClip ? null : gainBox(x0, x1, lh - 2, 1 + titleH);
       if (gb) drawGainHandle(g, gb, clip.gain_db, `10px ${css("--font-ui")}`);
+    }
+
+    // Clip edges under a clip on top (overlaps and crossfades): a strip of
+    // the hidden clip's color along the bottom of the overlap, and a line
+    // where it starts or ends, so it can be seen and grabbed.
+    for (const e of hiddenEdges({ view, media, rate: sessionRate }, track)) {
+      const a = Math.min(e.x, e.to);
+      const b = Math.max(e.x, e.to);
+      if (b < 0 || a > width) continue;
+      const color = clipColor(e.clip);
+      g.globalAlpha = 0.85;
+      g.fillStyle = color;
+      g.fillRect(a, lh - 7, b - a, 4);
+      g.globalAlpha = 1;
+      g.fillStyle = "rgba(0, 0, 0, 0.75)";
+      g.fillRect(Math.round(e.x) - 1, titleH + 2, 3, lh - titleH - 4);
+      g.fillStyle = color;
+      g.fillRect(Math.round(e.x), titleH + 2, 1, lh - titleH - 4);
+      // A small tab on the hidden clip's side of the line.
+      const dir = e.side === "start" ? 1 : -1;
+      g.beginPath();
+      g.moveTo(e.x, lh - 3);
+      g.lineTo(e.x + dir * 6, lh - 3);
+      g.lineTo(e.x, lh - 11);
+      g.closePath();
+      g.fill();
     }
 
     // Start marker, then the playhead.
