@@ -11,6 +11,15 @@ Linux builds have not been thoroughly tested. Windows is the main target; if som
 - Clip edges that run under another clip (overlaps and crossfades) now show where they end and can be dragged to shorten them. Clip edges show a double-arrow pointer.
 - Mix down, bounce and the other renders work on an imported session without saving it first; files go in a folder beside the imported session file.
 
+## From Altered Audio Editor 0.5 to 0.6
+
+- Chapter markers are written into WAV, MP3, FLAC and M4A files and read back when they open; chapters can carry a web link; Batch Convert keeps markers between formats.
+- File > Publish Package puts the episode, its chapters and notes in one folder, ready to upload by hand.
+- Export scans the loudness first and says what the file will come out as, and checks the finished file.
+- FLAC files never get an oversized frame; tags are written as a stream.
+- Apply Audio FX in the Waveform editor shows progress and can be cancelled; the Waveform editor can play the input through the file's Audio FX while recording (off by default); ASIO devices are retried and can be refreshed in Settings.
+- Long submenus scroll on screen, and Time Info turns on its side when narrow.
+
 ## Importing sessions from the other editor
 
 - Per-track render switches come across as Pre-render.

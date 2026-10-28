@@ -1844,3 +1844,7 @@ Already in this tree, so not taken again: split channels (Source Channels and Ch
 Skipped on purpose: version bumps, release notes and the release pipeline (signed update files, `latest.json`), community links, and everything titled "port from Audiform" (it came from here).
 
 Not verified here: the Windows AAC path, playing the finished files in other players, ASIO on hardware, and the new screens by eye. The tests and the checks pass.
+
+## 2026-10-28: Audiform 0.5.0
+
+Version 0.5.0 (not 0.4.1): Audio Separation with six stems and single instruments, the Altered Audio Editor 0.6 intake, and the session import fixes. The separation engine moves to its own release `engine-v0.2.0` (several outputs per model, and it runs only when Audiform started it). Publish the four engine files on that pre-release before releasing 0.5.0, or Audio Separation's download will fail. Linux is noted as not thoroughly tested in the release notes.
