@@ -656,6 +656,23 @@ export class SessionStore {
     return this.filePath;
   }
 
+  /** The other editor's session file each imported session came from, by session id. */
+  private readonly imported = new Map<string, string>();
+
+  /** Notes that the open session was brought in from `sesx`. */
+  markImported(sesx: string): void {
+    if (this.doc) this.imported.set(this.doc.id, sesx);
+  }
+
+  /**
+   * Where the session's files live: its own file once saved, else the
+   * session file it was imported from, so mixdowns and other renders of
+   * an imported session land beside it without saving first.
+   */
+  get home(): string | null {
+    return this.filePath ?? (this.doc ? (this.imported.get(this.doc.id) ?? null) : null);
+  }
+
   async load(): Promise<SessionDoc> {
     const r = await this.backend.get();
     this.set(r.session, r.path);

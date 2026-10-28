@@ -326,14 +326,18 @@
     );
   }
 
-  /** A folder named `name` beside the saved session, asking to save first if needed. Null if not saved. */
+  /**
+   * A folder named `name` beside the session: its saved file, or the
+   * session file it was imported from. Asks to save first only when it
+   * has neither. Null if not saved.
+   */
   async function folderBesideSession(name: string, why: string): Promise<string | null> {
-    if (!session.path) {
+    if (!session.home) {
       showNotice(`Save the session first. ${why}`);
       await actions.run("file.save-as");
-      if (!session.path) return null;
+      if (!session.home) return null;
     }
-    const sp = session.path;
+    const sp = session.home!;
     const cut = Math.max(sp.lastIndexOf("/"), sp.lastIndexOf("\\"));
     const sep = sp.includes("\\") ? "\\" : "/";
     return `${sp.slice(0, cut)}${sep}${name}`;

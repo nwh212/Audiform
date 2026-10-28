@@ -254,6 +254,7 @@ export class SessionFiles {
     const r = await this.d.backend.importSesx(target);
     // The summary replaces the generic missing-files notice.
     await this.replace({ ...r, missing: [] }, "Import Session", true);
+    this.d.session.markImported?.(target);
     this.d.notice(sesxSummary(r.report));
     return true;
   }

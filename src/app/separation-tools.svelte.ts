@@ -198,7 +198,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
 
   /** Where results go: a Separated folder beside the saved session, else beside the source file. */
   function outFolder(sourcePath: string): string {
-    const sp = session.path;
+    const sp = session.home;
     const base = sp && !inWave() ? dirOf(sp) : dirOf(sourcePath);
     return `${base}${sepOf(base)}Separated`;
   }

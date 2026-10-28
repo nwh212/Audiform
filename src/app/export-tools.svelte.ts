@@ -92,7 +92,7 @@ export function createExportTools(deps: ExportToolsDeps) {
   let exportReq = $state<{ initial: ExportSettings; scopes: ExportScopeInfo[]; source: { sampleRate: number; channels: number; bitDepth: number } } | null>(null);
 
   function sessionFolder(): string | null {
-    const sp = session.path;
+    const sp = session.home;
     return sp ? sp.slice(0, Math.max(sp.lastIndexOf("/"), sp.lastIndexOf("\\"))) || null : null;
   }
 
@@ -417,7 +417,7 @@ export function createExportTools(deps: ExportToolsDeps) {
       showNotice("No unmuted tracks with clips to export.");
       return;
     }
-    const sp = session.path;
+    const sp = session.home;
     const start = sp ? sp.slice(0, Math.max(sp.lastIndexOf("/"), sp.lastIndexOf("\\"))) || null : null;
     const folder = await exportPickFolder(start);
     if (!folder) return;
