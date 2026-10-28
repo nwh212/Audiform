@@ -86,4 +86,16 @@ describe("the spectrum view's frequency axis", () => {
     expect(t).toContain(1_000);
     expect(freqTicks({ lo: 400, hi: 600, log: 0 }, ny, 300).every((f) => f >= 400 && f <= 600)).toBe(true);
   });
+
+  it("adds finer marks as the log scale zooms in", () => {
+    const ny = 24_000;
+    const full = freqTicks(FULL_VIEW, ny, 300);
+    // A narrow band in log view still gets several marks, at round numbers.
+    const near = freqTicks({ lo: 400, hi: 600, log: 1 }, ny, 300);
+    expect(near.length).toBeGreaterThanOrEqual(4);
+    expect(near).toContain(500);
+    expect(near.every((f) => f > 400 && f < 600 && Number.isInteger(f / 10))).toBe(true);
+    // Never crowded: marks keep their spacing.
+    expect(full.length).toBeLessThan(300 / 16 + 1);
+  });
 });

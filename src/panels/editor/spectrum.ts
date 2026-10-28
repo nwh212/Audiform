@@ -122,22 +122,44 @@ export function zoomFreq(v: FreqView, hz: number, factor: number, nyquist: numbe
 /** Scale marks for the view: well-spaced frequencies with labels. */
 export function freqTicks(v: FreqView, nyquist: number, height: number, minGap = 16): number[] {
   const [lo, hi] = viewRange(v, nyquist);
-  const nice = [1, 2, 3, 5];
-  const out: number[] = [];
-  if (v.log >= 0.5) {
-    for (let d = 1; d <= 100_000; d *= 10) for (const m of nice) out.push(m * d);
-  } else {
+  const yOf = (f: number) => (1 - viewFrac(f, v, nyquist)) * height;
+  if (v.log < 0.5) {
     const span = hi - lo;
     const want = Math.max(2, Math.floor(height / (minGap * 2)));
     const raw = span / want;
     const p = Math.pow(10, Math.floor(Math.log10(raw)));
     const step = [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw) ?? raw;
+    const out: number[] = [];
     for (let f = Math.ceil(lo / step) * step; f <= hi; f += step) out.push(Math.round(f * 1000) / 1000);
+    return keepApart(out.filter((f) => f > lo && f < hi), yOf, minGap);
   }
+  // Log scale: round steps from coarse to fine, each adding the marks that
+  // still fit, so zooming in on a range keeps adding round-numbered marks.
+  const kept: { f: number; y: number }[] = [];
+  const span = hi - lo;
+  for (let e = Math.ceil(Math.log10(hi)); e >= -2; e--) {
+    for (const m of [5, 2, 1]) {
+      const step = m * Math.pow(10, e);
+      if (step > hi || span / step > 4000) continue;
+      for (let i = Math.floor(lo / step) + 1; i * step < hi; i++) {
+        const f = Math.round(i * step * 1000) / 1000;
+        if (f <= lo || kept.some((k) => k.f === f)) continue;
+        const y = yOf(f);
+        // Only where the whole step fits here, so marks stay evenly stepped.
+        const room = Math.min(Math.abs(yOf(f - step) - y), Math.abs(y - yOf(f + step)));
+        if (room >= minGap && kept.every((k) => Math.abs(k.y - y) >= minGap)) kept.push({ f, y });
+      }
+    }
+  }
+  return kept.map((k) => k.f).sort((a, b) => a - b);
+}
+
+/** In order, each mark at least `minGap` pixels from the last one kept. */
+function keepApart(freqs: number[], yOf: (f: number) => number, minGap: number): number[] {
   const kept: number[] = [];
   let lastY = Infinity;
-  for (const f of out.filter((f) => f > lo && f < hi).sort((a, b) => a - b)) {
-    const y = (1 - viewFrac(f, v, nyquist)) * height;
+  for (const f of [...freqs].sort((a, b) => a - b)) {
+    const y = yOf(f);
     if (lastY - y >= minGap) {
       kept.push(f);
       lastY = y;
