@@ -350,8 +350,8 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
     id: "music",
     name: "Music",
     description:
-      "Tracks in the center; effects, properties and history on the left; Phase Wheel and 3D Space on the right.",
-    version: 2,
+      "Tracks in the center; effects, properties and history on the left; Phase Wheel, 3D Space and Audio Separation on the right.",
+    version: 3,
     steps: [
       { id: "editor", placement: null },
       { id: "mixer", placement: { reference: "editor", direction: "within" }, inactive: true },
@@ -362,7 +362,6 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
       },
       { id: "space", placement: { reference: "phase-wheel", direction: "below" } },
       { id: "separation", placement: { reference: "space", direction: "within" }, inactive: true },
-      { id: "libraries", placement: { reference: "space", direction: "within" }, inactive: true },
       { id: "levels", placement: { edge: "below" }, height: S.levelsHeight },
       {
         id: "time-info",

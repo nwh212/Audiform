@@ -1460,6 +1460,11 @@ export function separationDownload(id: string): Promise<void> {
   return invoke<void>("separation_download", { id });
 }
 
+/** True when the published engine differs from the installed one. Only fetches a small checksum file, on the user's click. */
+export function separationCheckEngine(): Promise<boolean> {
+  return invoke<boolean>("separation_check_engine");
+}
+
 export function separationRemove(id: string): Promise<void> {
   return invoke<void>("separation_remove", { id });
 }

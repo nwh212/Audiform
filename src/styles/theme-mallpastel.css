@@ -186,20 +186,20 @@
 }
 
 /* Old-computer bevels in pastel: square raised menus, dialogs and keys. */
-:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context) {
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context, .dv-context-menu) {
   background: #ffffff;
   border: 2px solid;
   border-color: var(--mp-raised);
   border-radius: 0;
   box-shadow: 1px 1px 0 #5d4b86, 5px 5px 0 rgba(140, 123, 176, 0.35);
 }
-:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context) .sep {
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .dropdown, .context, .dv-context-menu) :is(.sep, .dv-context-menu-separator) {
   height: 0;
   background: transparent;
   border-top: 1px solid var(--border-strong);
   border-bottom: 1px solid #ffffff;
 }
-:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
+:root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(.menubar .row.active, .context button.active, .dv-context-menu-item:hover, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
   background: var(--accent);
   color: #ffffff;
 }
@@ -429,15 +429,15 @@
 :root[data-theme="mallnight"] .lanes {
   background-image: url("../assets/themes/mallnight-moon.svg");
 }
-:root[data-theme="mallnight"] :is(.menubar .dropdown, .context) {
+:root[data-theme="mallnight"] :is(.menubar .dropdown, .context, .dv-context-menu) {
   background: #241a45;
   box-shadow: 1px 1px 0 #0b0718, 5px 5px 0 rgba(0, 0, 0, 0.45);
 }
-:root[data-theme="mallnight"] :is(.menubar .dropdown, .context) .sep {
+:root[data-theme="mallnight"] :is(.menubar .dropdown, .context, .dv-context-menu) :is(.sep, .dv-context-menu-separator) {
   border-top-color: #0b0718;
   border-bottom-color: #4a3d7a;
 }
-:root[data-theme="mallnight"] :is(.menubar .row.active, .context button.active, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
+:root[data-theme="mallnight"] :is(.menubar .row.active, .context button.active, .dv-context-menu-item:hover, tr.sel, tr.selected, li.sel, li.selected, .item.sel, .item.selected, .file.sel, .file.selected, [role="option"][aria-selected="true"]) {
   background: var(--accent);
   color: var(--selected-text);
 }

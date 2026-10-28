@@ -72,6 +72,12 @@
             {#if status.engineInstalled}
               <span>{status.engineBytes ? sizeText(status.engineBytes) : ""}</span>
               <span class="ok">Downloaded</span>
+              {#if tools.engineUpdate === "available"}
+                <span class="ok">Update available</span>
+                <button type="button" class="link" disabled={!!job} onclick={() => void tools.download("engine")}>Update</button>
+              {:else}
+                <button type="button" class="link" disabled={!!job} onclick={() => void tools.checkEngine()}>{tools.engineUpdate === "current" ? "Up to date. Check again" : "Check for update"}</button>
+              {/if}
               <button type="button" class="link" disabled={!!job} onclick={() => void tools.removeEngine()}>Remove</button>
             {:else}
               <span>About 10 MB</span>

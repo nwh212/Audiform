@@ -241,3 +241,25 @@ body.aa-small-tabs .dockview-theme-altaudio {
   --dv-tabs-and-actions-container-height: 20px;
   --dv-tabs-and-actions-container-font-size: 11px;
 }
+
+/*
+  The panel tab menu is drawn by the docking library outside the dock's own
+  element, so it cannot see the variables above and came out see-through.
+  Style it from our tokens directly, like the app's other menus.
+*/
+.dv-context-menu {
+  z-index: 6000;
+  min-width: 190px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  font-size: var(--font-size);
+}
+.dv-context-menu-item:hover {
+  background: var(--surface-3);
+}
+.dv-context-menu-separator {
+  background: var(--border);
+}

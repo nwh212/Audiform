@@ -26,6 +26,7 @@ import { waveFile } from "../stores/wave";
 import {
   onSeparationProgress,
   separationCancel,
+  separationCheckEngine,
   separationDownload,
   separationRemove,
   separationRun,
@@ -61,6 +62,8 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
   const { showError, showNotice, ask, inWave } = deps;
   let status = $state<SeparationStatus | null>(null);
   let job = $state<SeparationJob | null>(null);
+  /** The last "check for update" on the engine: unknown until asked. */
+  let engineUpdate = $state<"unknown" | "current" | "available">("unknown");
 
   async function refresh() {
     try {
@@ -119,6 +122,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     const what = id === "engine" ? "the separation engine" : (s.models.find((m) => m.id === id)?.name ?? id);
     try {
       await withProgress(`Downloading ${what}`, "", () => separationDownload(id));
+      if (id === "engine") engineUpdate = "current";
       return true;
     } catch (e) {
       if (!String(e).includes("cancelled")) showError(e);
@@ -142,6 +146,16 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     await refresh();
   }
 
+  /** Asks whether a newer engine is published (fetches a small checksum file). */
+  async function checkEngine() {
+    try {
+      engineUpdate = (await separationCheckEngine()) ? "available" : "current";
+      if (engineUpdate === "current") showNotice("The separation engine is up to date.");
+    } catch (e) {
+      showError(e);
+    }
+  }
+
   async function removeEngine() {
     const ok = await ask("Remove the separation engine?", "This deletes the downloaded separation engine from Audiform's files. Your models stay. It is downloaded again the next time you separate.", [
       { label: "Remove", value: "yes", primary: true },
@@ -150,6 +164,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     if (ok !== "yes") return;
     try {
       await separationRemove("engine");
+      engineUpdate = "unknown";
     } catch (e) {
       showError(e);
     }
@@ -291,6 +306,10 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     get job() {
       return job;
     },
+    get engineUpdate() {
+      return engineUpdate;
+    },
+    checkEngine,
     refresh,
     source,
     download,

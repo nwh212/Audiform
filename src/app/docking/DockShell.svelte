@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
+  import { enableCornerDrag } from "./corner-drag";
   import type { DockController } from "./dock";
 
   interface Props {
@@ -18,7 +19,12 @@
 
   onMount(() => {
     void dock.attach(host);
-    return () => dock.dispose();
+    // Grabbing where panel handles meet moves them all (see corner-drag.ts).
+    const stopCorners = enableCornerDrag(host);
+    return () => {
+      stopCorners();
+      dock.dispose();
+    };
   });
 </script>
 

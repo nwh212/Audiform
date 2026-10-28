@@ -162,6 +162,10 @@ fn install_engine(app: &AppHandle, dir: &Path, cancel: &AtomicBool) -> Result<()
     })?;
     download::verify(&zip_path, &expected)?;
     let result = unpack_engine(&zip_path, &separation::engine_path(dir));
+    if result.is_ok() {
+        // What was installed, so "check for update" can tell when it changes.
+        let _ = std::fs::write(engine_dir.join("engine.sha256"), &expected);
+    }
     let _ = std::fs::remove_file(&zip_path);
     result
 }
@@ -192,6 +196,47 @@ fn unpack_engine(zip_path: &Path, dest: &Path) -> Result<(), String> {
     std::fs::rename(&tmp, dest).map_err(|e| e.to_string())
 }
 
+/// Whether the published engine differs from the installed one. Fetches only
+/// the small checksum file, and only when the user asks. An engine installed
+/// before Audiform kept a record of it counts as out of date.
+#[tauri::command]
+pub async fn separation_check_engine(
+    app: AppHandle,
+    cancel: State<'_, SeparationCancel>,
+) -> Result<bool, String> {
+    let dir = data_dir(&app)?;
+    let flag = cancel.0.clone();
+    flag.store(false, Ordering::Relaxed);
+    spawn_blocking(move || {
+        let asset = separation::engine_asset()
+            .ok_or("Audio Separation is not available for this computer yet.")?;
+        let engine_dir = separation::root(&dir).join("engine");
+        let latest_path = engine_dir.join("latest.sha256");
+        download::fetch(
+            &format!("{}.sha256", separation::engine_url(asset)),
+            &latest_path,
+            &flag,
+            |_| {},
+        )?;
+        let latest = std::fs::read_to_string(&latest_path).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&latest_path);
+        let latest = latest
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let mine = std::fs::read_to_string(engine_dir.join("engine.sha256")).unwrap_or_default();
+        Ok(mine
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            != latest)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Removes a downloaded model, or the engine with `id` "engine".
 #[tauri::command]
 pub fn separation_remove(app: AppHandle, id: String) -> Result<(), String> {
@@ -205,6 +250,9 @@ pub fn separation_remove(app: AppHandle, id: String) -> Result<(), String> {
     } else {
         separation::model_path(&dir, &separation::model(&id).ok_or("Unknown model.")?)
     };
+    if id == "engine" {
+        let _ = std::fs::remove_file(path.with_file_name("engine.sha256"));
+    }
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),

@@ -125,6 +125,7 @@ pub fn run() {
             commands::separation::separation_status,
             commands::separation::separation_download,
             commands::separation::separation_remove,
+            commands::separation::separation_check_engine,
             commands::separation::separation_run,
             commands::separation::separation_cancel,
             commands::firewall::firewall_block,
