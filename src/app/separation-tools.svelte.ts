@@ -183,7 +183,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
         return await separationRun(path, m.id, gpu, overlap, outFolder(path));
       } catch (e) {
         if (gpu && String(e).startsWith("GPU:")) {
-          const go = await ask("Use the processor?", `The graphics card could not be used (${String(e).slice(4).trim()}). Separate on the processor instead? It is slower.`, [
+          const go = await ask("Use the processor?", "The graphics card could not be used on this computer. Separate on the processor instead? It is slower. (Settings > Audio Separation can turn the graphics card off.)", [
             { label: "Use the Processor", value: "yes", primary: true },
             { label: "Cancel", value: "no" },
           ]);

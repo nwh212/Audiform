@@ -174,3 +174,27 @@ mod tests {
         assert!(!p.exists());
     }
 }
+
+#[cfg(test)]
+mod live {
+    use super::*;
+
+    /// Downloads the published engine for this computer and checks it, as
+    /// the app does. Needs the network: `cargo test -- --ignored live`.
+    #[test]
+    #[ignore]
+    fn live_engine_download() {
+        let asset = crate::separation::engine_asset().expect("an engine for this system");
+        let url = crate::separation::engine_url(asset);
+        let dir = tempfile::tempdir().unwrap();
+        let sum = dir.path().join("sum");
+        let zip = dir.path().join(asset);
+        let stop = AtomicBool::new(false);
+        fetch(&format!("{url}.sha256"), &sum, &stop, |_| {}).unwrap();
+        let expected = std::fs::read_to_string(&sum).unwrap();
+        let mut last = 0;
+        fetch(&url, &zip, &stop, |n| last = n).unwrap();
+        assert!(last > 1_000_000, "only {last} bytes");
+        verify(&zip, expected.split_whitespace().next().unwrap()).unwrap();
+    }
+}
