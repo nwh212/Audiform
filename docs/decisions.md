@@ -1825,3 +1825,22 @@ Audio Separation splits a file into a target (for now vocals) and the rest (inst
 ## 2026-10-28: Heavy sessions start fewer plug-ins
 
 Two tester sessions (24 tracks, 679 clips, about 30 plug-in instances; 9 tracks with Ozone-style chains) loaded but played late or lagged. The media and plug-ins were not available to measure, so the change targets what the session files show: plug-ins were started for tracks that never sound. Now (1) the warm-up uses the session as it is heard, so pre-rendered tracks (which play their render, not their effects) load no plug-ins, and (2) tracks with no clips and no instrument get no effect chain in the mix graph and are not warmed. Both come back as soon as a clip or instrument is added. Also: the vocal strip plug-in some sessions use is imported as Vox Strip with mapped settings; a track's render switch imports as Pre-render.
+
+## 2026-10-28: Intake from Altered Audio Editor 0.5 to 0.6
+
+The original editor moved on after the fork. The project lead asked for its own changes that are easy to pull. Each was cherry-picked with `-x` (so the original commit is named in the message) or ported by hand where Audiform's tree had split a file. Wording was kept to Audiform's names (Audio FX, not the old panel name).
+
+Taken:
+- **FLAC frame size fix** (4e6fdaf). Loud 24-bit audio could produce one huge frame and a wrong maximum frame size in the header. Tag and chapter writes to FLAC are now streamed instead of loading the whole file.
+- **Long submenus scroll on screen; Time Info grid turns on its side when narrow** (2c5586d).
+- **Chapters inside the files** (110389a, 7345885, 11f117d, bd3d5b8). Chapters are written into WAV (cue points), M4A, MP3 and FLAC on export and on Save in the Waveform editor, and read back when those files open. Batch Convert carries markers and chapters between formats. Each chapter can have a web link, kept in MP3 files. The link edit is one undoable step. The session-ops part was ported into `session/ops/markers.rs`, the dialog parts into `export-tools.svelte.ts` and `wave-tools.svelte.ts`.
+- **Check the finished export** (d06a4cb): after saving, the file is read back (opens, decodes to the end, right length, chapters present). The test that exports every format and runs `flac -t` and `ffprobe` over it is in `export/mixdown/tests.rs`; CI installs both tools and requires them (`AUDIFORM_REQUIRE_TOOLS`).
+- **File > Publish Package** (8e3c0fb): the episode in MP3, its chapters and show notes in one folder, ready to upload by hand. It writes files only. It makes no network request, so the privacy rules are untouched.
+- **Scan the loudness before exporting** (fe5b881), in the Export and Publish Package dialogs.
+- **From the 0.5.0 mixed commit** (4ae7c96): progress, time left and Cancel when applying Audio FX in the Waveform editor; the setting to hear the input through the file's Audio FX while recording in the Waveform editor (off by default); ASIO retries and a Refresh Devices button in Settings. If Cancel is chosen while saving, the save stops too, so a file is never written without the effects the person expects.
+
+Already in this tree, so not taken again: split channels (Source Channels and Channel Routing cover it), Capture Noise Print, export at a loudness, Delay and Echo with its presets, Hide All Effect Windows, ASIO lookup retries in the device commands, and monitoring through the track's built-in effects.
+
+Skipped on purpose: version bumps, release notes and the release pipeline (signed update files, `latest.json`), community links, and everything titled "port from Audiform" (it came from here).
+
+Not verified here: the Windows AAC path, playing the finished files in other players, ASIO on hardware, and the new screens by eye. The tests and the checks pass.
