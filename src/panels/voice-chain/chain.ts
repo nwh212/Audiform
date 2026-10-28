@@ -111,14 +111,25 @@ function pinned(chain: EffectChainDoc): EffectSlotDoc[] {
   return chain.slots.map((s) => ({ ...s, position: where.get(s.id) ?? s.position ?? null }));
 }
 
-/** Pushes effects down where one now sits on or above the one before. */
+/** A reordered list takes the numbered places the chain showed, in order. */
+function keepPlaces(chain: EffectChainDoc, slots: EffectSlotDoc[]): EffectSlotDoc[] {
+  const places = layoutSlots(chain).flatMap((s, i) => (s ? [i] : []));
+  return slots.map((s, k) => ({ ...s, position: places[k] ?? null }));
+}
+
+/** Pushes effects down where one now sits on or above the one before; none goes past the last slot. */
 function bumped(slots: EffectSlotDoc[]): EffectSlotDoc[] {
   let next = 0;
-  return slots.map((s) => {
+  const out = slots.map((s) => {
     const at = Math.max(next, s.position ?? next);
     next = at + 1;
     return at === s.position ? s : { ...s, position: at };
   });
+  for (let k = out.length - 1, limit = MAX_SLOTS - 1; k >= 0; k--, limit--) {
+    const s = out[k]!;
+    if ((s.position ?? 0) > limit) out[k] = { ...s, position: limit };
+  }
+  return out;
 }
 
 export function removeSlot(chain: EffectChainDoc, id: string): EffectChainDoc {
@@ -137,7 +148,7 @@ export function moveSlot(
   const slots = [...chain.slots];
   const [s] = slots.splice(i, 1);
   slots.splice(j, 0, s!);
-  return { ...chain, slots };
+  return { ...chain, slots: keepPlaces(chain, slots) };
 }
 
 /** Moves a slot to `to` (an index in the current list). Unchanged when it is already there. */
@@ -152,7 +163,7 @@ export function moveSlotTo(
   const slots = [...chain.slots];
   const [s] = slots.splice(i, 1);
   slots.splice(j, 0, s!);
-  return { ...chain, slots };
+  return { ...chain, slots: keepPlaces(chain, slots) };
 }
 
 /** Puts `slot` where the slot `id` is, keeping its place in the list. */

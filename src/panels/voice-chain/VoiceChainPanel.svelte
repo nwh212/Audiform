@@ -440,7 +440,7 @@
         const ni = byId.get(id);
         if (!ni) return;
         const made = fresh(ni, crypto.randomUUID());
-        commit(`Replace with ${ni.name}`, replaceSlot(chain, s.id, made));
+        commit(`Replace with ${ni.name}`, replaceSlot(chain, s.id, { ...made, position: s.position ?? null }));
         openSlot(made);
       }),
     );
@@ -764,7 +764,7 @@
             <button type="button" class="mini arrow" title="Effect menu" aria-label="Effect menu for slot {i + 1}" aria-haspopup="menu" onclick={(e) => openSlotArrow(e, s, i)}>▸</button>
           {:else}
             <!-- One wide button: it opens the same menu the row's arrow did. -->
-            <button type="button" class="add" class:quiet={i !== chain.slots.length && i > 0 && !rows[i - 1]} aria-haspopup="menu" title="Add an effect in slot {i + 1}" onclick={(e) => openAddMenu(e, i)}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
+            <button type="button" class="add" aria-haspopup="menu" title="Add an effect in slot {i + 1}" onclick={(e) => openAddMenu(e, i)}>+ Add effect <span class="chev" aria-hidden="true">▾</span></button>
           {/if}
         </li>
       {/each}
@@ -1186,7 +1186,7 @@
     color: var(--text-dim);
     text-align: left;
   }
-  /* Empty slots show as an empty box; later ones say nothing until hovered, so the list stays calm. */
+  /* Every empty slot is a dashed box that says Add effect. */
   .add {
     height: 18px;
     border: 1px dashed color-mix(in srgb, var(--border-strong) 80%, transparent);
@@ -1197,13 +1197,6 @@
   .add:focus-visible {
     border-color: var(--rack, var(--accent));
     border-style: solid;
-  }
-  .add.quiet {
-    color: transparent;
-  }
-  li:hover .add.quiet,
-  .add.quiet:focus-visible {
-    color: var(--text-dim);
   }
   .mini {
     min-width: 20px;

@@ -287,6 +287,22 @@ describe("numbered slots", () => {
     // Run order follows the slots.
     expect(moveSlotToIndex(c, "c", 0).slots.map((x) => x.id)).toEqual(["c", "a", "b"]);
   });
+
+  it("moving an effect up or down swaps places and leaves gaps where they were", () => {
+    const base = addSlotAt(addSlotAt(chain(), s("a"), 3)!, s("b"), 6)!;
+    const down = moveSlot(base, "a", 1);
+    const rows = layoutSlots(down);
+    expect(rows[3]?.id).toBe("b");
+    expect(rows[6]?.id).toBe("a");
+  });
+
+  it("never pushes an effect past the last slot", () => {
+    const last = addSlotAt(chain(), s("a"), MAX_SLOTS - 1)!;
+    const next = addSlotAt(last, s("b"), MAX_SLOTS - 1)!;
+    const rows = layoutSlots(next);
+    expect(rows[MAX_SLOTS - 2]?.id).toBe("b");
+    expect(rows[MAX_SLOTS - 1]?.id).toBe("a");
+  });
 });
 
 describe("instrument menu groups", () => {
@@ -296,4 +312,5 @@ describe("instrument menu groups", () => {
     expect(types.map(([t]) => t)).toEqual(["Piano", "Synth", "Other"]);
     expect(makers.map(([m]) => m)).toEqual(["Maker", "Other Co"]);
   });
+
 });
