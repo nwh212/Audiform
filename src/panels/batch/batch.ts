@@ -41,7 +41,7 @@ export interface BatchSettings {
   folder: string | null;
   overwrite: boolean;
   removeDone: boolean;
-  /** Carry each file's tags (and a WAV's markers) into the output. */
+  /** Carry each file's tags and markers (WAV cue points, MP3/FLAC/M4A chapters) into the output. */
   copyTags: boolean;
   /** Tags to set on every output; blank leaves the copied value. Text can use the name tokens. */
   tags: TagFields;

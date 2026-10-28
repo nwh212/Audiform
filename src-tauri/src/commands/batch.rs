@@ -6,8 +6,9 @@
 //! thread, reporting each file's progress as `batch-progress` events. A
 //! file that fails is reported and the rest carry on.
 //!
-//! Tags: with `copy_tags`, each file's tags (and a WAV's markers, when
-//! the output is WAV too) carry over; a job's own `tags` go on top.
+//! Tags: with `copy_tags`, each file's tags and markers carry over (WAV cue
+//! points, and the chapters of MP3, FLAC and M4A files, into any of those
+//! formats); a job's own `tags` go on top.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +19,7 @@ use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::codecs::cue::{read_cues, write_cues, Cue};
+use crate::export::chapters::{embed_chapters, read_chapters, Chapter};
 use crate::export::convert::{convert_with, Converted, Shaping};
 use crate::export::encode::OutputFormat;
 use crate::export::tags::{read_tags, write_tags, Tags};
@@ -49,6 +51,8 @@ struct Carry {
     tags: Tags,
     cues: Vec<Cue>,
     rate: Option<u32>,
+    /// The same markers in milliseconds, for files that keep chapters.
+    chapters: Vec<Chapter>,
 }
 
 fn wav_rate(p: &Path) -> Option<u32> {
@@ -61,17 +65,34 @@ fn carry(job: &BatchJob, copy: bool) -> Carry {
             tags: Tags::default(),
             cues: Vec::new(),
             rate: None,
+            chapters: Vec::new(),
         };
     }
     let wav = is_wav(&job.source);
+    let cues = if wav {
+        read_cues(&job.source)
+    } else {
+        Vec::new()
+    };
+    let rate = if wav { wav_rate(&job.source) } else { None };
+    let chapters = match (wav, rate) {
+        (true, Some(r)) => cues
+            .iter()
+            .map(|c| Chapter {
+                title: c.label.clone(),
+                start_ms: c.position * 1000 / u64::from(r.max(1)),
+                end_ms: None,
+                url: None,
+            })
+            .collect(),
+        (true, None) => Vec::new(),
+        (false, _) => read_chapters(&job.source),
+    };
     Carry {
         tags: read_tags(&job.source),
-        cues: if wav {
-            read_cues(&job.source)
-        } else {
-            Vec::new()
-        },
-        rate: if wav { wav_rate(&job.source) } else { None },
+        cues,
+        rate,
+        chapters,
     }
 }
 
@@ -108,6 +129,9 @@ fn finish_tags(job: &BatchJob, carried: Carry) -> Result<(), String> {
             })
             .collect();
         write_cues(&job.dest, &moved).map_err(|e| format!("Markers not copied: {e}"))?;
+    } else if !carried.chapters.is_empty() {
+        embed_chapters(&job.dest, &carried.chapters)
+            .map_err(|e| format!("Markers not copied: {e}"))?;
     }
     Ok(())
 }
@@ -230,4 +254,88 @@ pub async fn batch_convert(
 #[tauri::command]
 pub fn batch_cancel(cancel: State<'_, BatchCancel>) {
     cancel.0.store(true, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wav(path: &Path) {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 8000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(path, spec).unwrap();
+        for i in 0..8000 * 30 {
+            w.write_sample((i % 50) as i16 * 100).unwrap();
+        }
+        w.finalize().unwrap();
+    }
+
+    fn job(source: PathBuf, dest: PathBuf) -> BatchJob {
+        BatchJob {
+            id: "1".into(),
+            source,
+            dest,
+            tags: None,
+        }
+    }
+
+    #[test]
+    fn chapters_follow_a_file_from_any_format_to_any_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let mp3 = dir.path().join("a.mp3");
+        std::fs::write(&mp3, [0xffu8, 0xfb, 0x90, 0x00, 1, 2, 3, 4]).unwrap();
+        let ch = vec![
+            Chapter {
+                title: "Intro".into(),
+                start_ms: 0,
+                end_ms: None,
+                url: None,
+            },
+            Chapter {
+                title: "Talk".into(),
+                start_ms: 12_500,
+                end_ms: None,
+                url: None,
+            },
+        ];
+        crate::export::chapters::embed_mp3(&mp3, &ch, 30_000).unwrap();
+
+        // MP3 chapters into a WAV as cue points.
+        let out = dir.path().join("b.wav");
+        wav(&out);
+        let j = job(mp3.clone(), out.clone());
+        finish_tags(&j, carry(&j, true)).unwrap();
+        let cues = read_cues(&out);
+        assert_eq!(cues.len(), 2);
+        assert_eq!(
+            (cues[1].position, cues[1].label.as_str()),
+            (12_500 * 8, "Talk")
+        );
+
+        // And those cue points on into an M4A-style chapter list? Not here (no encoder in a test);
+        // a WAV's cue points reach a FLAC as chapter comments.
+        let flac = dir.path().join("c.flac");
+        let mut f = b"fLaC".to_vec();
+        f.extend_from_slice(&[0x80, 0, 0, 34]);
+        f.extend_from_slice(&[0u8; 34]);
+        f.extend_from_slice(&[1, 2, 3, 4]);
+        std::fs::write(&flac, f).unwrap();
+        let j = job(out, flac.clone());
+        finish_tags(&j, carry(&j, true)).unwrap();
+        let got = read_chapters(&flac);
+        assert_eq!(got.len(), 2);
+        assert_eq!((got[1].start_ms, got[1].title.as_str()), (12_500, "Talk"));
+
+        // Copying is off: nothing is carried.
+        let none = dir.path().join("d.flac");
+        std::fs::copy(&flac, &none).unwrap();
+        crate::export::chapters::embed_flac(&none, &[]).unwrap();
+        let j = job(mp3, none.clone());
+        finish_tags(&j, carry(&j, false)).unwrap();
+        assert!(read_chapters(&none).is_empty());
+    }
 }

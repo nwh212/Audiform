@@ -8,8 +8,10 @@
 //! interface swaps that stretch in as one undoable edit, like any other
 //! destructive edit.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use tauri::async_runtime::spawn_blocking;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use super::spectral::{by_pairs, render_n, snapshot, write_n, SpectralResult};
 use super::wave::OpenWave;
@@ -34,10 +36,29 @@ pub fn process_range(
     frames: usize,
     edge: usize,
 ) -> Vec<f32> {
+    process_range_with(chain, audio, warm, frames, edge, &mut |_| true).unwrap_or_default()
+}
+
+/// [`process_range`], telling `step` how far along it is (0 to 1) after
+/// each block. None when `step` answers false, which is how Cancel stops it.
+pub fn process_range_with(
+    chain: &mut ChainProcessor,
+    audio: &[f32],
+    warm: usize,
+    frames: usize,
+    edge: usize,
+    step: &mut dyn FnMut(f32) -> bool,
+) -> Option<Vec<f32>> {
     let latency = chain.latency();
     let mut wet = audio.to_vec();
+    let total = wet.len().max(1) as f32;
+    let mut done = 0usize;
     for block in wet.chunks_mut(4096 * 2) {
         chain.process(block);
+        done += block.len();
+        if !step(done as f32 / total) {
+            return None;
+        }
     }
     let dry = audio.as_chunks::<2>().0;
     let wet = wet.as_chunks::<2>().0;
@@ -55,7 +76,7 @@ pub fn process_range(
         out.push(d[0] + (w[0] - d[0]) * k);
         out.push(d[1] + (w[1] - d[1]) * k);
     }
-    out
+    Some(out)
 }
 
 /// Renders `start..end` of the open file through `chain` into a new
@@ -64,12 +85,16 @@ pub fn process_range(
 pub async fn wave_apply_chain(
     app: AppHandle,
     wave: State<'_, OpenWave>,
+    cancel: State<'_, super::export::ExportCancel>,
     chain: EffectChain,
     start: u64,
     end: u64,
 ) -> Result<SpectralResult, String> {
     let session = snapshot(&wave)?;
     let dir = crate::commands::cache::cache_root(&app)?.join("wave-fx");
+    let flag = cancel.0.clone();
+    flag.store(false, Ordering::Relaxed);
+    let progress = app.clone();
     spawn_blocking(move || -> Result<SpectralResult, String> {
         let rate = session.sample_rate;
         let total = mixdown::session_end(&session);
@@ -86,9 +111,28 @@ pub async fn wave_apply_chain(
         let frames = (end - start) as usize;
         let edge = (f64::from(rate) * EDGE_SECONDS) as usize;
         // A multichannel file goes through the chain a pair of channels at a time.
+        // Progress runs 0 to 1 across all the channel pairs, as "export-progress".
+        let pairs = n.div_ceil(2).max(1);
+        let pair = AtomicUsize::new(0);
+        let mut last = -1.0f32;
         let out = by_pairs(&audio, n, |st| {
             let mut c = ChainProcessor::new(&chain, rate).ok_or(empty())?;
-            Ok(process_range(&mut c, st, warm, frames, edge))
+            let p = pair.fetch_add(1, Ordering::Relaxed);
+            process_range_with(&mut c, st, warm, frames, edge, &mut |f| {
+                if flag.load(Ordering::Relaxed) {
+                    return false;
+                }
+                let whole = (p as f32 + f) / pairs as f32;
+                if whole - last >= 0.01 || whole >= 1.0 {
+                    last = whole;
+                    let _ = progress.emit(
+                        "export-progress",
+                        serde_json::json!({ "done": (whole * 1000.0) as u64, "total": 1000u64 }),
+                    );
+                }
+                true
+            })
+            .ok_or_else(|| "Cancelled.".to_string())
         })?;
         let media = write_n(&dir, "voice-chain", &out, n, 0, frames, rate)?;
         Ok(SpectralResult { media, start, end })

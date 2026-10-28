@@ -2271,7 +2271,22 @@
     chapterCount={session.current?.markers.filter((m) => m.kind === "chapter").length ?? 0}
     spaceLayout={session.current?.space?.layout ?? null}
     onBrowse={(from) => exportPickFolder(from || null, "Export To")}
+    onScan={(scope) => exp.scanForExport(scope)}
     onDone={(v) => void finishExportDialog(v)}
+  />
+  {/await}
+{/if}
+
+{#if exp.publishReq}
+  {#await import("./PublishDialog.svelte") then { default: PublishDialog }}
+  <PublishDialog
+    initial={exp.publishReq.initial}
+    source={exp.publishReq.source}
+    chapterCount={session.current?.markers.filter((m) => m.kind === "chapter").length ?? 0}
+    adCount={session.current?.markers.filter((m) => m.kind === "ad_slot").length ?? 0}
+    onBrowse={(from) => exportPickFolder(from || null, "Publish To")}
+    onScan={() => exp.scanForExport("all")}
+    onDone={(v) => void exp.finishPublishDialog(v)}
   />
   {/await}
 {/if}

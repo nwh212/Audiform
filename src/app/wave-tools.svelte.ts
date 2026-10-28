@@ -13,6 +13,7 @@ import { type ClipBoard } from "../panels/editor/clip-edit";
 import { rasterize } from "../panels/editor/spectrum";
 import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels } from "../panels/editor/wave-channels";
 import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
+import { embedList } from "../panels/markers/chapters";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
 import { chainOf } from "../panels/voice-chain/chain";
 import { editor } from "../stores/editor";
@@ -23,7 +24,7 @@ import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
 import { closeWaveFile, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportPickPath, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
+import { exportEmbedChapters, exportPickPath, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
 import { kindOfPath } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
@@ -213,7 +214,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
     const pending = chainOf(wave.current?.tracks[0]?.effects);
     if (pending.enabled && pending.slots.some((x) => x.enabled)) {
       try {
-        await applyWaveChain(pending, true);
+        if (!(await applyWaveChain(pending, true))) return false;
       } catch (e) {
         showError(e);
         return false;
@@ -229,15 +230,26 @@ export function createWaveTools(deps: WaveToolsDeps) {
       const markerCount = wave.current?.markers.length ?? 0;
       await saveWaveFile(path);
       const saved = waveFile.current()?.path ?? f.path;
+      // MP3, FLAC and M4A carry chapters inside the file (WAV keeps its markers as cue points).
+      // Written before the peaks and the session read the file again, so they see the finished file.
+      const saveDoc = wave.current;
+      const chapters = saveDoc && /\.(mp3|flac|m4a)$/i.test(saved) ? embedList(saveDoc.markers, saveDoc.sample_rate, null) : [];
+      let added = chapters.length;
+      if (saveDoc && added > 0) {
+        const totalMs = Math.round((sessionEnd(saveDoc) / saveDoc.sample_rate) * 1000);
+        await exportEmbedChapters(saved, chapters, totalMs).catch((e) => {
+          added = 0;
+          showError(e);
+        });
+      }
       peaks.invalidate(saved);
       exactSamples.forget(saved);
       await syncSessionMedia(saved);
       const keepsMarkers = /\.wave?$/i.test(saved);
-      showNotice(
-        markerCount && !keepsMarkers
-          ? `Saved ${saved.split(/[\\/]/).pop()}. Its markers stay only while it is open: only WAV files store them.`
-          : `Saved ${saved.split(/[\\/]/).pop()}.`,
-      );
+      const left = keepsMarkers ? 0 : markerCount - added;
+      const chapterNote = added > 0 ? ` ${added} ${added === 1 ? "chapter" : "chapters"} added.` : "";
+      const leftNote = left > 0 ? ` ${left} other ${left === 1 ? "marker stays" : "markers stay"} only while it is open: only WAV files store them.` : "";
+      showNotice(`Saved ${saved.split(/[\\/]/).pop()}.${chapterNote}${leftNote}`);
       return true;
     } catch (e) {
       showError(e);
@@ -297,21 +309,52 @@ export function createWaveTools(deps: WaveToolsDeps) {
   }
 
   /** Writes the Waveform preview chain into the selection (or the whole file), then clears the preview. */
-  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false) {
+  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false): Promise<boolean> {
     const d = wave.current;
     const r = wholeFile && d ? clampRange(d, 0, sessionEnd(d)) : waveAll();
     const t = d?.tracks[0];
-    if (!d || !r || !t) return;
+    if (!d || !r || !t) return false;
     const label = !wholeFile && waveSel() ? "Apply Audio FX to Selection" : "Apply Audio FX";
-    const res = await waveApplyChain(chain, r[0], r[1]);
+    if (exporting()) {
+      showNotice("Wait for the current export to finish.");
+      return false;
+    }
+    // Plug-ins can take a while, so show how far along it is and about how long is left.
+    const startedAt = Date.now();
+    const heading = wholeFile || !waveSel() ? "Applying the Audio FX to the file" : "Applying the Audio FX to the selection";
+    const timeLeft = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`);
+    setExporting({ title: heading, progress: 0 });
+    let off: (() => void) | null = null;
+    let res: Awaited<ReturnType<typeof waveApplyChain>>;
+    try {
+      off = await listen<{ done: number; total: number }>("export-progress", (e) => {
+        const cur = exporting();
+        if (!cur) return;
+        const p = e.payload.total > 0 ? e.payload.done / e.payload.total : 0;
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const left = p >= 0.05 ? Math.max(1, Math.round((elapsed * (1 - p)) / p)) : null;
+        setExporting({ ...cur, progress: p, title: left === null ? heading : `${heading}, about ${timeLeft(left)} left` });
+      });
+      res = await waveApplyChain(chain, r[0], r[1]);
+    } catch (e) {
+      if (String(e).includes("Cancelled")) {
+        showNotice("Apply cancelled. The file was not changed.");
+        return false;
+      }
+      throw e;
+    } finally {
+      off?.();
+      setExporting(null);
+    }
     // The result belongs to the file the job started on. If another file is open now, do not apply it there.
     if (wave.current?.tracks[0]?.id !== t.id) {
       showNotice("You switched files while the effect was running, so it was not applied. Stay on the file until it finishes. To process many files, use Batch Convert.");
-      return;
+      return false;
     }
     await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
     await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: chainOf(null) });
     if (!wholeFile) showNotice(`${label}: done. Undo takes it back.`);
+    return true;
   }
 
   /** Spectral edit on the current spectral selection: turn it down by `db` (-120 removes it), or repair it. */

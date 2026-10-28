@@ -159,6 +159,7 @@
     line-height: 1.2;
     box-sizing: border-box;
     background: var(--surface-1);
+    container-type: inline-size;
   }
 
   .head {
@@ -169,7 +170,7 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    grid-template-columns: auto repeat(3, minmax(max-content, 1fr));
     gap: 1px 6px;
     align-items: center;
   }
@@ -185,6 +186,24 @@
     font-size: var(--font-size-small);
   }
 
+
+  /* In a narrow panel the grid turns on its side: Start, End and Duration down the
+     left, Selection and View across the top, so the times never run into each other. */
+  @container (max-width: 340px) {
+    .grid {
+      grid-auto-flow: column;
+      grid-template-rows: repeat(4, auto);
+      grid-template-columns: auto repeat(2, minmax(max-content, 1fr));
+    }
+    .h {
+      text-align: left;
+      padding-right: 0;
+    }
+    .grid > .k {
+      text-align: right;
+      padding-right: 4px;
+    }
+  }
 
   .foot {
     display: flex;

@@ -1119,9 +1119,29 @@ export function generateAudio(path: string, request: GenerateRequest): Promise<s
   return invoke<string>("generate_audio", { path, request });
 }
 
-/** Writes chapters into an exported MP3 or FLAC. False when the format has no chapter support here. */
-export function exportEmbedChapters(path: string, chapters: { title: string; startMs: number; endMs: number | null }[], totalMs: number): Promise<boolean> {
+/** Writes chapters into an exported WAV, FLAC, MP3 or M4A. False when the format has no chapter support here. */
+export function exportEmbedChapters(path: string, chapters: { title: string; startMs: number; endMs: number | null; url?: string | null }[], totalMs: number): Promise<boolean> {
   return invoke<boolean>("export_embed_chapters", { path, chapters, totalMs });
+}
+
+/** One line of an export check. */
+export interface VerifyCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+/** Reads an exported file back and checks it: opens, decodes, length, chapters. */
+export function exportVerify(
+  path: string,
+  expect: { frames: number; sampleRate: number; chapters: { title: string; startMs: number; endMs: number | null }[] },
+): Promise<{ ok: boolean; checks: VerifyCheck[] }> {
+  return invoke<{ ok: boolean; checks: VerifyCheck[] }>("export_verify", { path, expect });
+}
+
+/** Writes the text files of a Publish Package into `folder` (made if missing). Returns their paths. */
+export function publishWriteFiles(folder: string, files: { name: string; content: string }[]): Promise<string[]> {
+  return invoke<string[]>("publish_write_files", { folder, files });
 }
 
 /** One control of a built-in effect, as the core describes it. */

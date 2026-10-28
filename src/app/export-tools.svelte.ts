@@ -22,12 +22,14 @@ import { type MarkerDoc, clipLength, sessionEnd, tempoOf } from "../stores/sessi
 import { beatsToSeconds } from "../stores/tempo";
 import { openWaveFile, wave, waveFile } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, pathsExist } from "./core";
+import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, loudnessCheck, pathsExist, publishWriteFiles } from "./core";
 import type { DockController } from "./docking/dock";
-import { targetsFor } from "./loudness";
-import { type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
+import { DEFAULT_TARGET, type LoudnessReport, targetsFor } from "./loudness";
+import { DEFAULT_FORMAT, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
 import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
+import type { PublishSettings } from "./PublishDialog.svelte";
+import { EMPTY_EPISODE, type EpisodeInfo, packageFiles, slugOf } from "./publish";
 import type { Exporting } from "./wave-tools.svelte";
 
 export type MixSource = "all" | "selection" | "clips";
@@ -180,6 +182,7 @@ export function createExportTools(deps: ExportToolsDeps) {
         format: sanitizeFormat(saved?.format),
         addToFiles: saved?.addToFiles === true,
         chapters: (saved as { chapters?: unknown } | null)?.chapters !== false,
+        verify: (saved as { verify?: unknown } | null)?.verify !== false,
         normalize: (() => {
           const n = (saved as { normalize?: unknown } | null)?.normalize;
           return typeof n === "string" && targetsFor().some((t) => t.id === n) ? n : "";
@@ -194,7 +197,7 @@ export function createExportTools(deps: ExportToolsDeps) {
   async function finishExportDialog(v: ExportSettings | null) {
     exportReq = null;
     if (!v) return;
-    prefs.set(KEY_EXPORT, { format: v.format, folder: v.folder, addToFiles: v.addToFiles, chapters: v.chapters, normalize: v.normalize });
+    prefs.set(KEY_EXPORT, { format: v.format, folder: v.folder, addToFiles: v.addToFiles, chapters: v.chapters, verify: v.verify, normalize: v.normalize });
     const sep = v.folder.includes("\\") ? "\\" : "/";
     const path = `${v.folder.replace(/[\\/]+$/, "")}${sep}${fileSafe(v.name)}.${extensionOf(v.format.kind)}`;
     const [exists] = await pathsExist([path]);
@@ -205,7 +208,69 @@ export function createExportTools(deps: ExportToolsDeps) {
       ]);
       if (ok !== "yes") return;
     }
-    await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters, v.speakers, v.normalize);
+    await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters, v.speakers, v.normalize, v.verify);
+  }
+
+  /** Measures the mix for an export dialog without writing anything. */
+  async function scanForExport(source: MixSource): Promise<LoudnessReport | null> {
+    const what = mixRange(source);
+    if (!what) return null;
+    try {
+      return await loudnessCheck({
+        ...(what.range ? { range: what.range } : {}),
+        ...(what.clips ? { clips: what.clips } : {}),
+      });
+    } catch (e) {
+      showError(e);
+      return null;
+    }
+  }
+
+  // File > Publish Package.
+  const KEY_PUBLISH = "publish.package";
+  let publishReq = $state<{ initial: PublishSettings; source: { sampleRate: number; channels: number; bitDepth: number } } | null>(null);
+
+  function openPublishDialog() {
+    const doc = session.current;
+    if (!doc) return;
+    const saved = prefs.raw(KEY_PUBLISH) as { format?: unknown; folder?: unknown; normalize?: unknown } | null;
+    const format = sanitizeFormat(saved?.format);
+    const norm = saved?.normalize;
+    publishReq = {
+      initial: {
+        episode: { ...EMPTY_EPISODE, title: doc.name },
+        folder: (typeof saved?.folder === "string" && saved.folder) || sessionFolder() || "",
+        // Hosts want MP3; a saved choice of another kind is not carried over.
+        format: format.kind === "mp3" ? format : { ...DEFAULT_FORMAT, kind: "mp3", mp3Bitrate: 128 },
+        normalize: typeof norm === "string" ? norm : DEFAULT_TARGET,
+      },
+      source: { sampleRate: doc.sample_rate, channels: doc.master?.channels === "mono" ? 1 : 2, bitDepth: doc.bit_depth },
+    };
+  }
+
+  async function finishPublishDialog(v: PublishSettings | null) {
+    publishReq = null;
+    if (!v) return;
+    prefs.set(KEY_PUBLISH, { format: v.format, folder: v.folder, normalize: v.normalize });
+    const sep = v.folder.includes("\\") ? "\\" : "/";
+    const slug = slugOf(v.episode.title);
+    const folder = `${v.folder.replace(/[\\/]+$/, "")}${sep}${slug}`;
+    const audioName = `${slug}.${extensionOf(v.format.kind)}`;
+    const [exists] = await pathsExist([`${folder}${sep}${audioName}`]);
+    if (exists) {
+      const ok = await ask("Replace the episode?", `${slug} already has ${audioName}. The package will replace it and its files.`, [
+        { label: "Replace", value: "yes", primary: true },
+        { label: "Cancel", value: "no" },
+      ]);
+      if (ok !== "yes") return;
+    }
+    try {
+      await publishWriteFiles(folder, []);
+    } catch (e) {
+      showError(e);
+      return;
+    }
+    await runMixdown("all", "file", `${folder}${sep}${audioName}`, v.format, true, undefined, v.normalize, true, { episode: v.episode, folder, audioName });
   }
 
   async function mixDown(source: MixSource, target: MixTarget) {
@@ -270,7 +335,7 @@ export function createExportTools(deps: ExportToolsDeps) {
     }
   }
 
-  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string, normalize = "") {
+  async function runMixdown(source: MixSource, target: MixTarget, path: string, format: OutputFormat | null, chapters = false, speakers?: string, normalize = "", verify = false, pack?: { episode: EpisodeInfo; folder: string; audioName: string }) {
     // A 3D Space speaker bed is written as mixed; every other file can be brought to a loudness.
     const bed = !!speakers && speakers !== "binaural" && speakers !== "2.0";
     const goal = normalize && !bed ? targetsFor().find((t) => t.id === normalize) : undefined;
@@ -295,22 +360,50 @@ export function createExportTools(deps: ExportToolsDeps) {
       }
       const name = path.split(/[\\/]/).pop();
       let chapterNote = "";
+      let writtenChapters: { title: string; startMs: number; endMs: number | null; url?: string | null }[] = [];
       const levelNote = goal ? ` Brought to ${goal.lufs} LUFS with peaks under ${goal.peak} dBTP.` : "";
       const doc = session.current;
-      if (chapters && doc && (format?.kind === "mp3" || format?.kind === "flac")) {
+      if (chapters && doc && (format?.kind === "mp3" || format?.kind === "flac" || format?.kind === "wav" || format?.kind === "m4a")) {
         const list = embedList(doc.markers, doc.sample_rate, what.range ?? null);
         if (list.length) {
-          await exportEmbedChapters(path, list, Math.round((r.frames / r.sampleRate) * 1000));
-          chapterNote = ` ${list.length} ${list.length === 1 ? "chapter" : "chapters"} added.`;
+          try {
+            await exportEmbedChapters(path, list, Math.round((r.frames / r.sampleRate) * 1000));
+            writtenChapters = list;
+            chapterNote = ` ${list.length} ${list.length === 1 ? "chapter" : "chapters"} added.`;
+          } catch (e) {
+            // The audio is saved either way; say why the chapters are not in it.
+            chapterNote = ` The chapters could not be added: ${e instanceof Error ? e.message : String(e)}`;
+          }
         }
+      }
+      let checkNote = "";
+      if (verify) {
+        setExporting({ title: "Checking the file", progress: 0 });
+        try {
+          const rep = await exportVerify(path, { frames: r.frames, sampleRate: r.sampleRate, chapters: writtenChapters });
+          if (rep.ok) checkNote = " Checked: it opens, decodes end to end and is the right length.";
+          else {
+            const bad = rep.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`).join(" ");
+            showError(`${name} was saved, but the check found a problem. ${bad} Export it again; if it repeats, report it.`);
+            checkNote = " The check found a problem.";
+          }
+        } catch (e) {
+          checkNote = ` The check could not run: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+      let packNote = "";
+      if (pack && doc) {
+        const files = packageFiles(pack.episode, pack.audioName, Math.round((r.frames / r.sampleRate) * 1000), doc.markers, doc.sample_rate, checkNote.trim() || "The file was not checked.");
+        await publishWriteFiles(pack.folder, files);
+        packNote = ` Package ready in ${pack.folder}.`;
       }
       const clipped = r.peak > 1 ? ` The mix clipped (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); turn the Master down and export again.` : "";
       if (target === "files-panel") {
         const imported = await mediaPool.importPaths([path], sessionHistory);
         mediaPool.setSelection(imported.ids);
-        showNotice(`Mixed down to ${name} and added it to the Files panel.${levelNote}${chapterNote}${clipped}`);
+        showNotice(`Mixed down to ${name} and added it to the Files panel.${levelNote}${chapterNote}${checkNote}${clipped}`);
       } else {
-        showNotice(`Exported ${name}.${levelNote}${chapterNote}${clipped}`);
+        showNotice(`Exported ${name}.${levelNote}${chapterNote}${checkNote}${packNote}${clipped}`);
       }
     } catch (e) {
       showError(e);
@@ -458,6 +551,10 @@ export function createExportTools(deps: ExportToolsDeps) {
     set exportReq(v) {
       exportReq = v;
     },
+    /** File > Publish Package's dialog, while it is open. */
+    get publishReq() {
+      return publishReq;
+    },
     /** File > Export > Markers and Chapters' dialog, while it is open. */
     get markersExport() {
       return markersExport;
@@ -472,6 +569,9 @@ export function createExportTools(deps: ExportToolsDeps) {
     saveMarkers,
     openExportDialog,
     finishExportDialog,
+    scanForExport,
+    openPublishDialog,
+    finishPublishDialog,
     mixDown,
     bounceRange,
     bounce,

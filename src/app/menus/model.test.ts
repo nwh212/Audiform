@@ -188,6 +188,7 @@ describe("menu model", () => {
       "tool.slip",
       "tool.time",
       "file.check-loudness",
+      "file.publish-package",
       "fx.loudness-match",
       "fx.add.vox_strip",
       "fx.add.stereo_width",

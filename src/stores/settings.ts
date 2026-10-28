@@ -55,6 +55,8 @@ export interface AppSettings {
   driver: "system" | "asio";
   /** Input the Waveform editor records from, as a track input ("Mono: ..." or "Stereo: ..."); null is the system default. */
   waveInput: string | null;
+  /** Hear the input while recording in the Waveform editor. */
+  waveMonitor: boolean;
   autosave: boolean;
   autosaveMinutes: number;
   /** Mix down sessions that use VST3 plug-ins at playback speed, for plug-ins that only work in real time. */
@@ -162,6 +164,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   speakerOutputs: {},
   waveInput: null,
+  waveMonitor: false,
   driver: "system",
   meterSpeed: "fast",
   customLufs: -18,
@@ -248,6 +251,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       typeof o.waveInput === "string" && /^(Mono|Stereo): /.test(o.waveInput)
         ? o.waveInput
         : null,
+    waveMonitor: bool(o.waveMonitor, d.waveMonitor),
     autosave: bool(o.autosave, d.autosave),
     autosaveMinutes: Math.round(
       num(o.autosaveMinutes, 1, 60, d.autosaveMinutes),

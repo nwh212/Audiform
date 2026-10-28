@@ -15,7 +15,7 @@
 use std::fs;
 use std::path::Path;
 
-use super::chapters::replace;
+use super::chapters::{replace, Chapter};
 use super::tags::Tags;
 
 fn bad() -> std::io::Error {
@@ -159,17 +159,23 @@ fn shift_offsets(moov: &mut [u8], from: u64, delta: i64) -> std::io::Result<()> 
 
 /// Writes `tags` into an M4A file, replacing any tags already there.
 pub fn write_m4a(path: &Path, tags: &Tags) -> std::io::Result<()> {
+    rewrite_udta(path, b"meta", &meta_box(tags))
+}
+
+/// Rebuilds the movie header's `udta`: every box in it is kept except the
+/// ones of type `drop`, and `add` goes at the end. Audio offsets follow.
+fn rewrite_udta(path: &Path, drop: &[u8; 4], add: &[u8]) -> std::io::Result<()> {
     let data = fs::read(path)?;
     let top = boxes(&data)?;
     let &(m_at, m_head, m_len, _) = top.iter().find(|b| &b.3 == b"moov").ok_or_else(bad)?;
-    // The new movie header: its children, with udta rebuilt to hold the new meta.
+    // The new movie header: its children, with udta rebuilt to hold the new box.
     let moov_body = &data[m_at + m_head..m_at + m_len];
     let mut children = Vec::new();
     let mut udta_rest: Vec<u8> = Vec::new();
     for (at, head, len, kind) in boxes(moov_body)? {
         if &kind == b"udta" {
             for (u_at, _, u_len, u_kind) in boxes(&moov_body[at + head..at + len])? {
-                if &u_kind != b"meta" {
+                if &u_kind != drop {
                     udta_rest
                         .extend_from_slice(&moov_body[at + head + u_at..at + head + u_at + u_len]);
                 }
@@ -178,8 +184,10 @@ pub fn write_m4a(path: &Path, tags: &Tags) -> std::io::Result<()> {
             children.extend_from_slice(&moov_body[at..at + len]);
         }
     }
-    udta_rest.extend(meta_box(tags));
-    children.extend(make_box(b"udta", &udta_rest));
+    udta_rest.extend_from_slice(add);
+    if !udta_rest.is_empty() {
+        children.extend(make_box(b"udta", &udta_rest));
+    }
     let mut moov = make_box(b"moov", &children);
     let delta = moov.len() as i64 - m_len as i64;
     // Audio after the header moves; offsets into it move with it.
@@ -191,6 +199,126 @@ pub fn write_m4a(path: &Path, tags: &Tags) -> std::io::Result<()> {
     out.extend(moov);
     out.extend_from_slice(&data[m_at + m_len..]);
     replace(path, &out)
+}
+
+/// The Nero chapter list (`chpl`): version 1, a reserved word, a count,
+/// then each chapter's start in 100 ns units and its title (up to 255 bytes).
+fn chpl_box(chapters: &[Chapter]) -> Vec<u8> {
+    let list = &chapters[..chapters.len().min(255)];
+    let mut body = vec![1, 0, 0, 0, 0, 0, 0, 0, list.len() as u8];
+    for c in list {
+        body.extend_from_slice(&(c.start_ms * 10_000).to_be_bytes());
+        let mut title = c.title.as_bytes();
+        if title.len() > 255 {
+            // Cut on a character boundary so the title stays valid text.
+            let mut n = 255;
+            while !c.title.is_char_boundary(n) {
+                n -= 1;
+            }
+            title = &title[..n];
+        }
+        body.push(title.len() as u8);
+        body.extend_from_slice(title);
+    }
+    make_box(b"chpl", &body)
+}
+
+/// Writes chapters into an M4A file (`moov/udta/chpl`, which podcast apps
+/// read), replacing old ones and keeping the tags. An empty list removes them.
+pub fn write_m4a_chapters(path: &Path, chapters: &[Chapter]) -> std::io::Result<()> {
+    let add = if chapters.is_empty() {
+        Vec::new()
+    } else {
+        chpl_box(chapters)
+    };
+    rewrite_udta(path, b"chpl", &add)
+}
+
+/// The chapters in an M4A file's `chpl` box, if it has one.
+pub fn read_m4a_chapters(path: &Path) -> Vec<Chapter> {
+    read_chpl(path).unwrap_or_default()
+}
+
+fn read_chpl(path: &Path) -> std::io::Result<Vec<Chapter>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path)?;
+    let len = f.metadata()?.len();
+    // Walk the top-level boxes by their headers; only the movie header is read.
+    let mut at = 0u64;
+    let mut moov = None;
+    while at + 8 <= len {
+        f.seek(SeekFrom::Start(at))?;
+        let mut h = [0u8; 8];
+        f.read_exact(&mut h)?;
+        let mut size = u64::from(u32::from_be_bytes([h[0], h[1], h[2], h[3]]));
+        let mut head = 8;
+        if size == 1 {
+            let mut w = [0u8; 8];
+            f.read_exact(&mut w)?;
+            size = u64::from_be_bytes(w);
+            head = 16;
+        } else if size == 0 {
+            size = len - at;
+        }
+        if size < head || at + size > len {
+            return Err(bad());
+        }
+        if &h[4..8] == b"moov" {
+            if size > 64 << 20 {
+                return Ok(Vec::new());
+            }
+            let mut body = vec![0u8; (size - head) as usize];
+            f.read_exact(&mut body)?;
+            moov = Some(body);
+            break;
+        }
+        at += size;
+    }
+    let Some(moov) = moov else {
+        return Ok(Vec::new());
+    };
+    for (at, head, len, kind) in boxes(&moov)? {
+        if &kind != b"udta" {
+            continue;
+        }
+        let udta = &moov[at + head..at + len];
+        for (u_at, u_head, u_len, u_kind) in boxes(udta)? {
+            if &u_kind == b"chpl" {
+                return Ok(parse_chpl(&udta[u_at + u_head..u_at + u_len]));
+            }
+        }
+    }
+    Ok(Vec::new())
+}
+
+fn parse_chpl(body: &[u8]) -> Vec<Chapter> {
+    let mut out = Vec::new();
+    // Version 1 has a reserved word before the count; version 0 does not.
+    let mut at = if body.first() == Some(&1) { 8 } else { 4 };
+    let Some(&count) = body.get(at) else {
+        return out;
+    };
+    at += 1;
+    for _ in 0..count {
+        let Some(start) = body.get(at..at + 8) else {
+            break;
+        };
+        let start = u64::from_be_bytes(start.try_into().unwrap_or([0; 8]));
+        let Some(&n) = body.get(at + 8) else {
+            break;
+        };
+        let Some(title) = body.get(at + 9..at + 9 + usize::from(n)) else {
+            break;
+        };
+        out.push(Chapter {
+            title: String::from_utf8_lossy(title).into_owned(),
+            start_ms: start / 10_000,
+            end_ms: None,
+            url: None,
+        });
+        at += 9 + usize::from(n);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -285,5 +413,46 @@ mod tests {
             "chapter box kept"
         );
         assert!(data.windows(4).any(|w| w == b"ilst"));
+    }
+
+    #[test]
+    fn chapters_go_in_read_back_and_keep_the_tags() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.m4a");
+        fs::write(&p, sample(true)).unwrap();
+        write_m4a(&p, &tags()).unwrap();
+        let ch = vec![
+            Chapter {
+                title: "Intro".into(),
+                start_ms: 0,
+                end_ms: None,
+                url: None,
+            },
+            Chapter {
+                title: "Café talk".into(),
+                start_ms: 61_500,
+                end_ms: None,
+                url: None,
+            },
+        ];
+        write_m4a_chapters(&p, &ch).unwrap();
+        assert_eq!(read_m4a_chapters(&p), ch);
+        let data = fs::read(&p).unwrap();
+        assert!(data.windows(4).any(|w| w == b"ilst"), "tags kept");
+        assert_eq!(chunk(&data).1, b"AUDIODAT", "audio offsets follow");
+        // Tags written afterwards keep the chapters; new chapters replace old.
+        write_m4a(&p, &tags()).unwrap();
+        assert_eq!(read_m4a_chapters(&p).len(), 2);
+        write_m4a_chapters(&p, &ch[..1]).unwrap();
+        assert_eq!(read_m4a_chapters(&p), ch[..1]);
+        write_m4a_chapters(&p, &[]).unwrap();
+        assert!(read_m4a_chapters(&p).is_empty());
+        assert_eq!(chunk(&fs::read(&p).unwrap()).1, b"AUDIODAT");
+        // The audio-last layout works too.
+        let q = dir.path().join("b.m4a");
+        fs::write(&q, sample(false)).unwrap();
+        write_m4a_chapters(&q, &ch).unwrap();
+        assert_eq!(read_m4a_chapters(&q), ch);
+        assert_eq!(chunk(&fs::read(&q).unwrap()).1, b"AUDIODAT");
     }
 }

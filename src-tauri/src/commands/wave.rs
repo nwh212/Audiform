@@ -277,6 +277,31 @@ pub async fn wave_open(
         .await
         .map_err(|e| e.to_string())?;
     session.markers = markers_from_cues(&cues);
+    if session.markers.is_empty() {
+        // MP3, FLAC and M4A keep chapters, not cue points.
+        let p = path.clone();
+        let chapters = spawn_blocking(move || crate::export::chapters::read_chapters(&p))
+            .await
+            .map_err(|e| e.to_string())?;
+        let rate = u64::from(session.sample_rate);
+        session.markers = chapters
+            .iter()
+            .map(|c| Marker {
+                id: new_id(),
+                name: c.title.clone(),
+                kind: MarkerKind::Chapter,
+                position: c.start_ms * rate / 1000,
+                duration: 0,
+                description: String::new(),
+                chapter: c.url.clone().map(|u| crate::session::model::ChapterInfo {
+                    url: Some(u),
+                    image: None,
+                }),
+                contracted_duration: None,
+                color: None,
+            })
+            .collect();
+    }
     if playing.is(PlayingDoc::Wave) {
         transport.stop();
     }

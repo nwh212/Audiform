@@ -341,8 +341,66 @@ pub fn export_cancel(cancel: State<'_, ExportCancel>) {
     cancel.0.store(true, Ordering::Relaxed);
 }
 
-/// Writes chapter markers into an exported MP3 (ID3 chapters) or FLAC
-/// (Vorbis comments). Other formats are left as they are.
+/// One text file of a Publish Package.
+#[derive(serde::Deserialize)]
+pub struct PackageText {
+    pub name: String,
+    pub content: String,
+}
+
+/// Writes the text files of a Publish Package into `folder`, which is made
+/// if it is not there. Names are plain file names; nothing leaves the folder.
+#[tauri::command]
+pub async fn publish_write_files(
+    folder: PathBuf,
+    files: Vec<PackageText>,
+) -> Result<Vec<PathBuf>, String> {
+    spawn_blocking(move || write_package(&folder, files))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn write_package(
+    folder: &std::path::Path,
+    files: Vec<PackageText>,
+) -> Result<Vec<PathBuf>, String> {
+    for f in &files {
+        let n = f.name.as_str();
+        if n.is_empty()
+            || n.starts_with('.')
+            || !n
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-_. ".contains(c))
+        {
+            return Err(format!("{n:?} is not a file name the package can use."));
+        }
+    }
+    std::fs::create_dir_all(folder).map_err(|e| format!("Could not make the folder: {e}"))?;
+    let mut out = Vec::new();
+    for f in files {
+        let path = folder.join(&f.name);
+        std::fs::write(&path, f.content.as_bytes())
+            .map_err(|e| format!("Could not write {}: {e}", f.name))?;
+        out.push(path);
+    }
+    Ok(out)
+}
+
+/// Reads a file just exported back and checks it against what the export
+/// should have made: it opens, decodes end to end, is the right length,
+/// and has its chapters.
+#[tauri::command]
+pub async fn export_verify(
+    path: PathBuf,
+    expect: crate::export::verify::Expect,
+) -> Result<crate::export::verify::Report, String> {
+    spawn_blocking(move || crate::export::verify::verify(&path, &expect))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Writes chapter markers into an exported MP3 (ID3 chapters), FLAC
+/// (Vorbis comments), WAV (cue points) or M4A (chapter list). Other formats are left as they are.
 #[tauri::command]
 pub async fn export_embed_chapters(
     path: PathBuf,
@@ -358,6 +416,8 @@ pub async fn export_embed_chapters(
         let r = match ext.as_str() {
             "mp3" => crate::export::chapters::embed_mp3(&path, &chapters, total_ms).map(|_| true),
             "flac" => crate::export::chapters::embed_flac(&path, &chapters).map(|_| true),
+            "wav" => crate::export::chapters::embed_wav(&path, &chapters).map(|_| true),
+            "m4a" => crate::export::m4a_tags::write_m4a_chapters(&path, &chapters).map(|_| true),
             _ => Ok(false),
         };
         r.map_err(|e| format!("Could not add chapters: {e}"))
@@ -373,4 +433,26 @@ pub async fn clip_reverse_prepare(path: PathBuf) -> Result<(), String> {
     spawn_blocking(move || crate::engine::reverse::prepare(&path).map(|_| ()))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_package_writes_plain_names_into_its_folder_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("ep");
+        let file = |n: &str| PackageText {
+            name: n.into(),
+            content: "x".into(),
+        };
+        assert!(write_package(&folder, vec![file("../x.txt")]).is_err());
+        assert!(write_package(&folder, vec![file("a/b.txt")]).is_err());
+        assert!(write_package(&folder, vec![file(".hidden")]).is_err());
+        assert!(!folder.exists(), "nothing is made when a name is refused");
+        let done = write_package(&folder, vec![file("episode.json"), file("README.txt")]).unwrap();
+        assert_eq!(done.len(), 2);
+        assert!(folder.join("episode.json").is_file());
+    }
 }

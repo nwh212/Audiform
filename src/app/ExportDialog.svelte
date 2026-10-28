@@ -18,8 +18,10 @@
     folder: string;
     format: OutputFormat;
     addToFiles: boolean;
-    /** Write chapter markers into the file (MP3 and FLAC). */
+    /** Write chapter markers into the file (WAV, FLAC, MP3 and M4A). */
     chapters: boolean;
+    /** Read the file back after saving and check it. */
+    verify: boolean;
     /** A loudness target to bring the file to (an id from Check Loudness); "" leaves it as mixed. */
     normalize: string;
     /** 3D Space sessions: a speaker layout ("5.1", "7.1.4"...) or "binaural". */
@@ -40,7 +42,8 @@
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat, estimateBytes, extensionOf } from "./output-format";
   import { SPACE_LAYOUTS, type SpaceLayout } from "../stores/session";
-  import { targetsFor } from "./loudness";
+  import { targetsFor, type LoudnessReport } from "./loudness";
+  import LoudnessScan from "./LoudnessScan.svelte";
   import { LAYOUT_NAMES } from "../panels/space/space";
 
   interface Props {
@@ -48,6 +51,8 @@
     scopes: ExportScopeInfo[];
     source: { sampleRate: number; channels: number; bitDepth: number };
     onBrowse: (from: string) => Promise<string | null>;
+    /** Measures the chosen part of the mix without writing a file. */
+    onScan?: (scope: ExportScope) => Promise<LoudnessReport | null>;
     /** Chapter markers in the session. */
     chapterCount?: number;
     /** 3D Space sessions: the session's speaker layout, to offer every layout and binaural. */
@@ -55,7 +60,7 @@
     onDone: (value: ExportSettings | null) => void;
   }
 
-  const { initial, scopes, source, onBrowse, chapterCount = 0, spaceLayout = null, onDone }: Props = $props();
+  const { initial, scopes, source, onBrowse, onScan, chapterCount = 0, spaceLayout = null, onDone }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   let s = $state<ExportSettings>({ ...initial, format: { ...initial.format } });
@@ -74,6 +79,7 @@
   });
   const targets = targetsFor();
   const ext = $derived(extensionOf(s.format.kind));
+  const canChapter = $derived(["wav", "flac", "mp3", "m4a"].includes(s.format.kind));
   const summary = $derived(describeFormat(s.format, source));
   const size = $derived.by(() => {
     const secs = current?.seconds;
@@ -166,13 +172,17 @@
           {#each targets as t (t.id)}<option value={t.id}>Bring to {t.name}</option>{/each}
         </select>
       </label>
+      {#if onScan && !multi}
+        <LoudnessScan target={s.normalize} mono={s.format.channels === 1 || (s.format.channels === null && source.channels === 1)} stamp={`${s.scope}|${s.format.channels}`} scan={() => onScan(s.scope)} />
+      {/if}
     </section>
 
     <section class="options">
       <label class="check"><input type="checkbox" bind:checked={s.addToFiles} /> Add the file to the Files panel</label>
+      <label class="check" title="Reads the finished file back from start to end: it opens, every sample decodes, it is the right length and the chapters are in it."><input type="checkbox" bind:checked={s.verify} /> Check the file after saving</label>
       {#if chapterCount > 0}
-        <label class="check" class:off={s.format.kind !== "mp3" && s.format.kind !== "flac"} title={s.format.kind === "mp3" || s.format.kind === "flac" ? "" : "Chapters go into MP3 and FLAC files. For other formats, use File > Export > Markers and Chapters."}>
-          <input type="checkbox" bind:checked={s.chapters} disabled={s.format.kind !== "mp3" && s.format.kind !== "flac"} /> Add the {chapterCount} chapter {chapterCount === 1 ? "marker" : "markers"} to the file
+        <label class="check" class:off={!canChapter} title={canChapter ? "" : "Chapters go into WAV, FLAC, MP3 and M4A files. For other formats, use File > Export > Markers and Chapters."}>
+          <input type="checkbox" bind:checked={s.chapters} disabled={!canChapter} /> Add the {chapterCount} chapter {chapterCount === 1 ? "marker" : "markers"} to the file
         </label>
       {:else}
         <label class="check off" title="Set a marker's type to Chapter, or use Edit > Markers > Add Chapter Marker.">
