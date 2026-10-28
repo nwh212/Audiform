@@ -422,9 +422,26 @@
     }
   }
 
+  /**
+   * Audio dropped or opened in the empty window the app starts with: the
+   * first file opens in the Waveform editor (no session is made), the rest
+   * wait in the Files panel.
+   */
+  async function openInEmptyWindow(paths: string[]): Promise<void> {
+    const imported = await mediaPool.importPaths(paths, sessionHistory);
+    await mediaPool.whenIdle();
+    const first = imported.ids.map((id) => mediaPool.get(id)).find((it) => it?.status === "ready");
+    if (first) await openInWaveform(first.path);
+    if (imported.ids.length > 1) {
+      dock.show("files");
+      showNotice(`Opened ${first?.name ?? "the first file"}. The other ${imported.ids.length - 1} are in the Files panel.`);
+    }
+  }
+
   async function openAudio(paths: string[]): Promise<void> {
     const doc = session.current;
     if (!doc) return;
+    if (session.isScratch(doc)) return openInEmptyWindow(paths);
     const empty = doc.tracks.every((t) => t.clips.length === 0);
     if (empty) {
       // Each file onto the next empty track (new sessions start with some), then new tracks.
@@ -1099,7 +1116,7 @@
             shortcutFor,
             onError: showError,
             onPlaceFiles: (paths: string[], trackId: string | null, at: number, asTracks: boolean) =>
-              void placeFiles(paths, trackId, at, { asTracks }).catch(showError),
+              void (session.current && session.isScratch(session.current) ? openInEmptyWindow(paths) : placeFiles(paths, trackId, at, { asTracks })).catch(showError),
             prompt: promptText,
             wave,
             waveFile,

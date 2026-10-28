@@ -140,6 +140,9 @@
     return key;
   });
 
+  // Worked out only when the clips or the view change, not on every playhead move.
+  const hidden = $derived.by(() => hiddenEdges({ view, media, rate: sessionRate }, track));
+
   $effect(() => {
     void peakKey;
     void exactTick;
@@ -533,7 +536,7 @@
     // Clip edges under a clip on top (overlaps and crossfades): a strip of
     // the hidden clip's color along the bottom of the overlap, and a line
     // where it starts or ends, so it can be seen and grabbed.
-    for (const e of hiddenEdges({ view, media, rate: sessionRate }, track)) {
+    for (const e of hidden) {
       const a = Math.min(e.x, e.to);
       const b = Math.max(e.x, e.to);
       if (b < 0 || a > width) continue;

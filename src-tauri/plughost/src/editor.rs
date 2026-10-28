@@ -99,10 +99,11 @@ mod win {
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
         GetWindowLongPtrW, LoadCursorW, MoveWindow, PeekMessageW, RegisterClassW,
         SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-        CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE,
-        SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_LBUTTONDOWN,
-        WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-        WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+        CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE,
+        SWP_NOMOVE, SWP_NOZORDER, SW_HIDE, SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED,
+        WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD,
+        WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME,
+        WS_VISIBLE,
     };
 
     use super::EditorWindow;
@@ -194,10 +195,13 @@ mod win {
             FillRect(dc, &rect, b);
             DeleteObject(b);
         };
+        // The whole window first (the plug-in's own child window covers
+        // its part), so a window bigger than the plug-in shows plain
+        // background rather than leftovers.
         fill(
             RECT {
                 left: 0,
-                top,
+                top: 0,
                 right: r.right,
                 bottom: r.bottom,
             },
@@ -377,7 +381,7 @@ mod win {
                 (&view_class, Some(DefWindowProcW as _)),
             ] {
                 let wc = WNDCLASSW {
-                    style: 0,
+                    style: CS_HREDRAW | CS_VREDRAW,
                     lpfnWndProc: proc_fn,
                     cbClsExtra: 0,
                     cbWndExtra: 0,
@@ -545,7 +549,17 @@ mod win {
                 }
                 if self.state.sized.take().is_some() {
                     let (w, h) = self.fit_child();
-                    if let (true, Some(v)) = (self.resizable, &self.view) {
+                    // A plug-in that cannot be resized: the window goes back to its size.
+                    if let (false, Some(v)) = (self.resizable, &self.view) {
+                        let mut now: ViewRect = std::mem::zeroed();
+                        if v.getSize(&mut now) == kResultOk {
+                            let got = (now.right - now.left, now.bottom - now.top);
+                            if got.0 > 0 && got.1 > 0 && got != (w, h) {
+                                self.resize(got.0, got.1);
+                                self.state.sized = None;
+                            }
+                        }
+                    } else if let (true, Some(v)) = (self.resizable, &self.view) {
                         let mut r = ViewRect {
                             left: 0,
                             top: 0,
@@ -554,10 +568,18 @@ mod win {
                         };
                         // Sizes the plug-in can't take snap to the nearest it can.
                         v.checkSizeConstraint(&mut r);
-                        let (cw, ch) = (r.right - r.left, r.bottom - r.top);
+                        let want = (r.right - r.left, r.bottom - r.top);
                         v.onSize(&mut r);
-                        if cw > 0 && ch > 0 && (cw, ch) != (w, h) {
-                            self.resize(cw, ch);
+                        // What the plug-in now draws at. One that ignores
+                        // resizing keeps its size, and the window follows it
+                        // instead of showing empty space around it.
+                        let mut now: ViewRect = std::mem::zeroed();
+                        let got = (v.getSize(&mut now) == kResultOk)
+                            .then(|| (now.right - now.left, now.bottom - now.top))
+                            .filter(|&(gw, gh)| gw > 0 && gh > 0)
+                            .unwrap_or(want);
+                        if got != (w, h) {
+                            self.resize(got.0, got.1);
                             self.state.sized = None;
                         }
                     }
