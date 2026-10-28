@@ -30,3 +30,29 @@ describe("app settings", () => {
     settings.set(DEFAULT_SETTINGS);
   });
 });
+
+describe("theme setting", () => {
+  it("keeps any theme id, so themes from the Themes folder survive", () => {
+    expect(sanitizeSettings({ theme: "meadow" }).theme).toBe("meadow");
+    expect(sanitizeSettings({ theme: "my-own-theme" }).theme).toBe("my-own-theme");
+    expect(sanitizeSettings({ theme: "mallnight" }).theme).toBe("mallnight");
+  });
+
+  it("migrates the old names", () => {
+    expect(sanitizeSettings({ theme: "sky" }).theme).toBe("meadow");
+    expect(sanitizeSettings({ theme: "night" }).theme).toBe("moonlight");
+  });
+
+  it("falls back to dark for anything that is not an id", () => {
+    expect(sanitizeSettings({}).theme).toBe("dark");
+    expect(sanitizeSettings({ theme: 5 }).theme).toBe("dark");
+    expect(sanitizeSettings({ theme: "Not An Id" }).theme).toBe("dark");
+    expect(sanitizeSettings({ theme: "../x" }).theme).toBe("dark");
+  });
+
+  it("keeps unlocked secret theme ids as a clean list", () => {
+    expect(sanitizeSettings({}).unlockedThemes).toEqual([]);
+    expect(sanitizeSettings({ unlockedThemes: ["a-b", "a-b", "Bad Id", 3, "dark", "c"] }).unlockedThemes).toEqual(["a-b", "c"]);
+    expect(sanitizeSettings({ unlockedThemes: "x" }).unlockedThemes).toEqual([]);
+  });
+});

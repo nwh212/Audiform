@@ -1848,3 +1848,15 @@ Not verified here: the Windows AAC path, playing the finished files in other pla
 ## 2026-10-28: Audiform 0.5.0
 
 Version 0.5.0 (not 0.4.1): Audio Separation with six stems and single instruments, the Altered Audio Editor 0.6 intake, and the session import fixes. The separation engine moves to its own release `engine-v0.2.0` (several outputs per model, and it runs only when Audiform started it). Publish the four engine files on that pre-release before releasing 0.5.0, or Audio Separation's download will fail. Linux is noted as not thoroughly tested in the release notes.
+
+## 2026-10-28: Themes are files (.audtheme)
+
+The project lead asked for themes as a proprietary file with a folder to drop them in, except secret themes that will come later as surprises.
+
+- A theme is one JSON file, `.audtheme`: id, name, base, css, assets (data addresses) and optional pointers and canvas flags. Format in `docs/themes.md` and `schemas/theme.schema.json`.
+- The eight themes that were hard-coded (four style sheets and their pictures) are now files in `src/themes/`, made by `scripts/pack-themes.mjs` from the old sources in git history. The default dark and light tokens stay in `tokens.css`.
+- User themes live in a `themes` folder in the app config folder. Two small commands list it and read one file (16 MB limit, no network).
+- No code checks a theme id any more. What it used to know by name is in the file: pointer pictures (`pointers`), the Phase Wheel's pixel look and the arrow mark (`canvasLook`).
+- The settings store a theme id (any valid id; the old `sky` and `night` still migrate). An id nothing has, a broken file or a locked secret theme shows as Dark; the saved id is kept, so a theme that is only missing for a moment is not forgotten. `unlockedThemes` lists the secret themes the picker may show.
+- Photos stay inside the files as data addresses. They grow by about a third against separate image files (the two photos are 1.7 MB and 1.3 MB as files), so the app is about 1.2 MB larger; built-in themes load one at a time, only when used.
+- The style sheet check refuses `@import`, `image-set()` and any `url()` outside the file, so a theme file cannot reach the network (see the privacy rules).

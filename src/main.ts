@@ -12,10 +12,6 @@ import "@fontsource/nunito/latin-600.css";
 import "@fontsource/nunito/latin-800.css";
 import "./styles/tokens.css";
 import "./styles/dock-theme.css";
-import "./styles/theme-aero.css";
-import "./styles/theme-phosphor.css";
-import "./styles/theme-analog.css";
-import "./styles/theme-mallpastel.css";
 import App from "./app/App.svelte";
 import { installNativeMenuBlock } from "./app/native-menu";
 

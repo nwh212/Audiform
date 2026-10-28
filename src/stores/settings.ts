@@ -44,8 +44,10 @@ export interface AppSettings {
   outputPair: [number, number];
   /** 3D Space sessions heard on speakers: each speaker's device output (from 0) by name. Missing speakers play on the output at their place in the layout. */
   speakerOutputs: Record<string, number>;
-  /** Look of the app: the built-in dark theme, or an Aero theme (clear glass over a scene): Meadow, Aqua or Moonlight; Prism; or Phosphor (green screens in a beige case). */
-  theme: "dark" | "meadow" | "aqua" | "moonlight" | "prism" | "phosphor" | "analog" | "mallpastel" | "mallnight";
+  /** Look of the app: "dark" (built in) or the id of a theme file, shipped or in the Themes folder. An id nothing has is shown as dark. */
+  theme: string;
+  /** Ids of secret themes that are unlocked, so the picker lists them. */
+  unlockedThemes: string[];
   /** How lively the level meters are. */
   meterSpeed: "fast" | "medium" | "slow";
   /** The custom loudness target: integrated LUFS and true peak ceiling. */
@@ -162,6 +164,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   output: null,
   outputPair: [0, 1],
   theme: "dark",
+  unlockedThemes: [],
   speakerOutputs: {},
   waveInput: null,
   waveMonitor: false,
@@ -240,7 +243,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     ),
     driver: o.driver === "asio" ? "asio" : "system",
     // Sky Glass and Night Glass (tried out, then dropped) become Meadow and Moonlight Aero.
-    theme: o.theme === "meadow" || o.theme === "aqua" || o.theme === "moonlight" || o.theme === "prism" || o.theme === "phosphor" || o.theme === "analog" || o.theme === "mallpastel" || o.theme === "mallnight" ? o.theme : o.theme === "sky" ? "meadow" : o.theme === "night" ? "moonlight" : "dark",
+    theme: themeId(o.theme),
+    unlockedThemes: themeIds(o.unlockedThemes),
     meterSpeed:
       o.meterSpeed === "medium" || o.meterSpeed === "slow"
         ? o.meterSpeed
@@ -302,6 +306,19 @@ function metronomePrefs(raw: unknown): MetronomePrefs {
     accent: typeof m.accent === "boolean" ? m.accent : d.accent,
     subdivide: METRONOME_SUBDIVIDE.some((x) => x.value === m.subdivide) ? (m.subdivide as MetronomeSubdivide) : d.subdivide,
   };
+}
+
+/** A saved theme id: the old names are migrated; anything that is not an id is "dark". Whether a theme with that id exists is checked when it is applied. */
+export function themeId(v: unknown): string {
+  if (v === "sky") return "meadow";
+  if (v === "night") return "moonlight";
+  return typeof v === "string" && v.length <= 48 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v) ? v : "dark";
+}
+
+function themeIds(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const ids = v.filter((x): x is string => typeof x === "string" && themeId(x) === x && x !== "dark");
+  return [...new Set(ids)].slice(0, 200);
 }
 
 function phasePrefs(raw: unknown): PhaseWheelPrefs {
