@@ -1860,3 +1860,14 @@ The project lead asked for themes as a proprietary file with a folder to drop th
 - The settings store a theme id (any valid id; the old `sky` and `night` still migrate). An id nothing has, a broken file or a locked secret theme shows as Dark; the saved id is kept, so a theme that is only missing for a moment is not forgotten. `unlockedThemes` lists the secret themes the picker may show.
 - Photos stay inside the files as data addresses. They grow by about a third against separate image files (the two photos are 1.7 MB and 1.3 MB as files), so the app is about 1.2 MB larger; built-in themes load one at a time, only when used.
 - The style sheet check refuses `@import`, `image-set()` and any `url()` outside the file, so a theme file cannot reach the network (see the privacy rules).
+
+## 2026-10-28: Frame rate
+
+The project lead found the interface sluggish with one file open, the Phase Wheel the clearest case. Measured in headless Chromium with a stub core (`scripts/perf/measure-frames.mjs`), the causes were:
+
+- **Glass themes (Meadow, Aqua, Moonlight, Prism).** Every panel had `backdrop-filter: blur(26px)`. The browser blurs the scene behind a panel again whenever anything in the panel repaints, so a moving playhead, meters or the Phase Wheel held these themes at 13 to 20 frames a second where the dark theme ran at about 80 (software rendering; the ratio, not the number, is what carries over). This is in 0.4.0 too. Fix: each panel paints a copy of its scene that was blurred once (`scripts/themes/make-glass-blur.py`, four files of about 8 KB), fixed to the window like the scene, under the same tint. Screenshots differ from the live blur by under 1 in 255 on average. The menu, dialog and bar blurs are left as they were: they do not repaint while playing.
+- **Playhead repaints.** Each playhead move (about 30 a second while playing) redrew every lane, the whole Waveform editor picture and the spectrogram, because the playhead was drawn in the same effect. The still picture is now drawn off screen and a move copies it and draws the playhead and start marker. Script time while playing fell from about 500 ms to 90 ms in 3 seconds (Multitrack), and 207 ms to 60 ms (Waveform editor).
+- **Phase Wheel data command.** `scope_phase` was a plain (not async) Tauri command, which runs on the main thread that also serves the window. It is now async with the analysis on a blocking thread, like `scope_phase_at`. Not compiled or timed here.
+- Smaller: the Phase Wheel reads the ring color from the style sheet when the look changes, not on every picture.
+
+Not changed: Mall Pastel and Analog cost about three times the dark theme's raster time while panels are being resized (headless, software), from their many background images and gradients; playing is as cheap as dark. A real GPU should hide that, so it is left until someone reports it.

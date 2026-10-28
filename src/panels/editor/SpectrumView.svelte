@@ -16,6 +16,7 @@
   or more logarithmic scale, the analysis resolution and the colors.
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import { wavePitch, waveSpectrogram } from "../../app/core";
   import type { SpectralTool } from "../../stores/editor";
   import type { SessionDoc } from "../../stores/session";
@@ -276,6 +277,37 @@
     g.restore();
   }
 
+  // The picture without the playhead is drawn off screen; the playhead moves
+  // about thirty times a second while playing, and moving it copies that
+  // picture and draws one line instead of building the whole spectrogram
+  // image again.
+  let base: HTMLCanvasElement | null = null;
+  let headColor = "#f2c14e";
+  function paintHead() {
+    const c = canvas;
+    if (!c || !base || c.width !== base.width || c.height !== base.height) return;
+    const g = c.getContext("2d");
+    if (!g) return;
+    const dpr = window.devicePixelRatio || 1;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(base, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const px = xOf(playhead, view);
+    if (px >= 0 && px <= width) {
+      g.fillStyle = headColor;
+      // Not over the gap between bands.
+      for (let lane = 0; lane < lanes; lane++) {
+        const y0 = lane === 0 ? 0 : Math.round(lane * laneH) + 1;
+        const y1 = lane === lanes - 1 ? height : Math.round((lane + 1) * laneH) - 1;
+        g.fillRect(Math.round(px), y0, 1, y1 - y0);
+      }
+    }
+  }
+  $effect(() => {
+    void playhead;
+    untrack(paintHead);
+  });
+
   $effect(() => {
     const c = canvas;
     if (!c) return;
@@ -286,7 +318,10 @@
     c.height = Math.max(1, Math.round(h * dpr));
     c.style.width = `${w}px`;
     c.style.height = `${h}px`;
-    const g = c.getContext("2d");
+    base ??= document.createElement("canvas");
+    base.width = c.width;
+    base.height = c.height;
+    const g = base.getContext("2d");
     if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = "#08080d";
@@ -378,12 +413,7 @@
       g.restore();
     }
 
-    // Playhead.
-    const px = xOf(playhead, view);
-    if (px >= 0 && px <= width) {
-      g.fillStyle = css("--playhead");
-      g.fillRect(Math.round(px), 0, 1, h);
-    }
+    headColor = css("--playhead");
 
     // Frequency scale.
     g.fillStyle = css("--surface-1");
@@ -408,6 +438,7 @@
         g.fillStyle = css("--text-faint");
       }
     }
+    untrack(paintHead);
   });
 
   const cursor = $derived(tool === "time" ? "text" : tool === "brush" || tool === "spot" ? "none" : "crosshair");

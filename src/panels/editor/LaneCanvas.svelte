@@ -7,6 +7,7 @@
   the visible width. Redraws when the view, the track, or peaks change.
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import { drawGainHandle, gainBox } from "./clip-gain";
   import { drawStartLine } from "./ruler-draw";
   import { hiddenEdges } from "./lane-hit";
@@ -143,6 +144,46 @@
   // Worked out only when the clips or the view change, not on every playhead move.
   const hidden = $derived.by(() => hiddenEdges({ view, media, rate: sessionRate }, track));
 
+  /**
+   * The lane without the playhead and start marker, drawn off screen. The
+   * playhead moves about thirty times a second while playing; moving it
+   * copies this picture and draws two lines instead of drawing every clip
+   * and waveform again.
+   */
+  let base: HTMLCanvasElement | null = null;
+  let headColor = "#888";
+
+  /** Puts the still picture on screen with the start marker and the playhead over it. */
+  function paintHead() {
+    const c = canvas;
+    if (!c || !base || c.width !== base.width || c.height !== base.height) return;
+    const g = c.getContext("2d");
+    if (!g) return;
+    const dpr = window.devicePixelRatio || 1;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(base, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const h = trackHeight(track);
+    const lh = h - TRACK_GAP;
+    if (startMark !== null) {
+      const sx = xOf(startMark, view);
+      if (sx >= 0 && sx <= width) drawStartLine(g, sx, lh, headColor);
+    }
+    const px = xOf(playhead, view);
+    if (px >= 0 && px <= width) {
+      g.fillStyle = headColor;
+      g.fillRect(Math.round(px), 0, 1, lh);
+    }
+  }
+
+  // Only the playhead and the start marker: a cheap repaint.
+  $effect(() => {
+    void playhead;
+    void startMark;
+    untrack(paintHead);
+  });
+
   $effect(() => {
     void peakKey;
     void exactTick;
@@ -152,11 +193,16 @@
     if (!c) return;
     const dpr = window.devicePixelRatio || 1;
     const h = trackHeight(track);
-    c.width = Math.max(1, Math.round(width * dpr));
-    c.height = Math.max(1, Math.round(h * dpr));
+    const bw = Math.max(1, Math.round(width * dpr));
+    const bh = Math.max(1, Math.round(h * dpr));
+    c.width = bw;
+    c.height = bh;
     c.style.width = `${width}px`;
     c.style.height = `${h}px`;
-    const g = c.getContext("2d");
+    base ??= document.createElement("canvas");
+    base.width = bw;
+    base.height = bh;
+    const g = base.getContext("2d");
     if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, width, h);
@@ -559,20 +605,11 @@
       g.fill();
     }
 
-    // Start marker, then the playhead.
-    if (startMark !== null) {
-      const sx = xOf(startMark, view);
-      if (sx >= 0 && sx <= width) drawStartLine(g, sx, lh, css("--playhead"));
-    }
-    const px = xOf(playhead, view);
-    if (px >= 0 && px <= width) {
-      g.fillStyle = css("--playhead");
-      g.fillRect(Math.round(px), 0, 1, h);
-    }
-
-    // Break between tracks.
+    // Break between tracks. (The start marker and the playhead go on at paintHead.)
     g.fillStyle = css("--track-gap");
     g.fillRect(0, lh, width, TRACK_GAP);
+    headColor = css("--playhead");
+    untrack(paintHead);
   });
 </script>
 
