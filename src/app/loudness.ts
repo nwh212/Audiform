@@ -130,3 +130,48 @@ export function evaluate(r: LoudnessReport, t: LoudnessTarget): LoudnessVerdict 
   else advice = `Peaks reach ${r.truePeak.toFixed(1)} dBTP, over the ${t.peak} dBTP limit. Lower the loudest moments or limit them, then check again.`;
   return { measured, offset, loudness, peak, gainToTarget, gainIsSafe, advice };
 }
+
+export interface ExportPrediction {
+  /** Gain the export applies to reach the target, dB. 0 when left as mixed. */
+  gain: number;
+  /** Loudness of the file, LUFS. */
+  loudness: number;
+  /** True peak of the file, dBTP. */
+  truePeak: number;
+  /** The gain stopped short of the target to keep peaks under its limit. */
+  limitedByPeak: boolean;
+  /** How far the file lands from the target, LU (negative is quieter). Null without a target. */
+  offset: number | null;
+  grade: Grade;
+  /** One plain sentence. */
+  summary: string;
+}
+
+/**
+ * What an export will come out as, from a scan of the mix: with a target the
+ * export moves the whole file by one fixed gain, but never past the target's
+ * peak limit; without one it is the mix as it stands. `mono` is true when
+ * the file is written as mono.
+ */
+export function predictExport(r: LoudnessReport, t: LoudnessTarget | null, mono = false): ExportPrediction {
+  // The export measures what it writes: the folded mix only when the file is mono.
+  const measured = mono ? r.integratedMono : r.integrated;
+  if (!Number.isFinite(measured)) {
+    return { gain: 0, loudness: measured, truePeak: r.truePeak, limitedByPeak: false, offset: null, grade: "fail", summary: "The mix is silent or too short to measure." };
+  }
+  if (!t) {
+    return { gain: 0, loudness: measured, truePeak: r.truePeak, limitedByPeak: false, offset: null, grade: "pass", summary: `Exports as mixed: ${measured.toFixed(1)} LUFS, peaks ${r.truePeak.toFixed(1)} dBTP.` };
+  }
+  const want = t.lufs - measured;
+  const room = t.peak - r.truePeak;
+  const limitedByPeak = want > room;
+  const gain = Math.round(Math.min(want, room) * 10) / 10;
+  const loudness = measured + gain;
+  const truePeak = r.truePeak + gain;
+  const offset = Math.round((loudness - t.lufs) * 10) / 10;
+  const grade: Grade = Math.abs(offset) <= TOLERANCE_LU ? "pass" : Math.abs(offset) <= 2 * TOLERANCE_LU ? "close" : "fail";
+  const move = Math.abs(gain) < 0.05 ? "left as it is" : `${gain > 0 ? "raised" : "lowered"} ${Math.abs(gain).toFixed(1)} dB`;
+  const base = `Measures ${measured.toFixed(1)} LUFS with peaks at ${r.truePeak.toFixed(1)} dBTP. The export is ${move} and lands at ${loudness.toFixed(1)} LUFS, peaks ${truePeak.toFixed(1)} dBTP.`;
+  const why = limitedByPeak ? ` That is ${Math.abs(offset).toFixed(1)} LU under the ${t.lufs} target: the peaks reach the ${t.peak} dBTP limit first. Limit the loudest moments to get closer.` : grade === "pass" ? " On target." : "";
+  return { gain, loudness, truePeak, limitedByPeak, offset, grade, summary: base + why };
+}

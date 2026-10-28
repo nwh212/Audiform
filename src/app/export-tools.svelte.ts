@@ -22,9 +22,9 @@ import { type MarkerDoc, clipLength, sessionEnd, tempoOf } from "../stores/sessi
 import { beatsToSeconds } from "../stores/tempo";
 import { openWaveFile, wave, waveFile } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, pathsExist, publishWriteFiles } from "./core";
+import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, loudnessCheck, pathsExist, publishWriteFiles } from "./core";
 import type { DockController } from "./docking/dock";
-import { DEFAULT_TARGET, targetsFor } from "./loudness";
+import { DEFAULT_TARGET, type LoudnessReport, targetsFor } from "./loudness";
 import { DEFAULT_FORMAT, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
 import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
@@ -209,6 +209,21 @@ export function createExportTools(deps: ExportToolsDeps) {
       if (ok !== "yes") return;
     }
     await runMixdown(v.scope, v.addToFiles ? "files-panel" : "file", path, v.format, v.chapters, v.speakers, v.normalize, v.verify);
+  }
+
+  /** Measures the mix for an export dialog without writing anything. */
+  async function scanForExport(source: MixSource): Promise<LoudnessReport | null> {
+    const what = mixRange(source);
+    if (!what) return null;
+    try {
+      return await loudnessCheck({
+        ...(what.range ? { range: what.range } : {}),
+        ...(what.clips ? { clips: what.clips } : {}),
+      });
+    } catch (e) {
+      showError(e);
+      return null;
+    }
   }
 
   // File > Publish Package.
@@ -554,6 +569,7 @@ export function createExportTools(deps: ExportToolsDeps) {
     saveMarkers,
     openExportDialog,
     finishExportDialog,
+    scanForExport,
     openPublishDialog,
     finishPublishDialog,
     mixDown,

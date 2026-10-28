@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { evaluate, targetById, type LoudnessReport } from "./loudness";
+import { evaluate, predictExport, targetById, type LoudnessReport } from "./loudness";
 
 const report = (integrated: number, truePeak: number, integratedMono = integrated - 3): LoudnessReport => ({
   integrated,
@@ -71,5 +71,35 @@ describe("broadcast regions", () => {
       expect(list.find((t) => t.id === "podcast-stereo")!.lufs).toBe(-16);
       expect(list.find((t) => t.id === "broadcast")!.lufs).toBe(r.lufs);
     }
+  });
+});
+
+describe("predictExport", () => {
+  const rep = (integrated: number, truePeak: number) => ({ integrated, integratedMono: integrated - 3, range: 5, truePeak, samplePeak: truePeak - 0.5, seconds: 60, cancelled: false });
+  const podcast = { id: "podcast-stereo", name: "Podcast", lufs: -16, mono: false, peak: -1 };
+
+  it("leaves the mix alone without a target", () => {
+    const p = predictExport(rep(-20, -3), null);
+    expect(p).toMatchObject({ gain: 0, loudness: -20, offset: null });
+  });
+
+  it("moves the file to the target when the peaks have room", () => {
+    const p = predictExport(rep(-20, -6), podcast);
+    expect(p).toMatchObject({ gain: 4, loudness: -16, truePeak: -2, limitedByPeak: false, offset: 0, grade: "pass" });
+  });
+
+  it("stops at the peak limit and says so", () => {
+    const p = predictExport(rep(-22, -2), podcast);
+    expect(p.limitedByPeak).toBe(true);
+    expect(p.gain).toBe(1);
+    expect(p.truePeak).toBe(-1);
+    expect(p.offset).toBe(-5);
+    expect(p.grade).toBe("fail");
+    expect(p.summary).toContain("peaks reach the -1 dBTP limit first");
+  });
+
+  it("lowers a loud mix and reads a silent one as unmeasurable", () => {
+    expect(predictExport(rep(-10, -0.5), podcast).gain).toBe(-6);
+    expect(predictExport(rep(Number.NEGATIVE_INFINITY, -100), podcast).grade).toBe("fail");
   });
 });

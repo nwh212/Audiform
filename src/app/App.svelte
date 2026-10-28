@@ -2271,6 +2271,7 @@
     chapterCount={session.current?.markers.filter((m) => m.kind === "chapter").length ?? 0}
     spaceLayout={session.current?.space?.layout ?? null}
     onBrowse={(from) => exportPickFolder(from || null, "Export To")}
+    onScan={(scope) => exp.scanForExport(scope)}
     onDone={(v) => void finishExportDialog(v)}
   />
   {/await}
@@ -2284,6 +2285,7 @@
     chapterCount={session.current?.markers.filter((m) => m.kind === "chapter").length ?? 0}
     adCount={session.current?.markers.filter((m) => m.kind === "ad_slot").length ?? 0}
     onBrowse={(from) => exportPickFolder(from || null, "Publish To")}
+    onScan={() => exp.scanForExport("all")}
     onDone={(v) => void exp.finishPublishDialog(v)}
   />
   {/await}

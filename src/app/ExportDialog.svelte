@@ -42,7 +42,8 @@
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat, estimateBytes, extensionOf } from "./output-format";
   import { SPACE_LAYOUTS, type SpaceLayout } from "../stores/session";
-  import { targetsFor } from "./loudness";
+  import { targetsFor, type LoudnessReport } from "./loudness";
+  import LoudnessScan from "./LoudnessScan.svelte";
   import { LAYOUT_NAMES } from "../panels/space/space";
 
   interface Props {
@@ -50,6 +51,8 @@
     scopes: ExportScopeInfo[];
     source: { sampleRate: number; channels: number; bitDepth: number };
     onBrowse: (from: string) => Promise<string | null>;
+    /** Measures the chosen part of the mix without writing a file. */
+    onScan?: (scope: ExportScope) => Promise<LoudnessReport | null>;
     /** Chapter markers in the session. */
     chapterCount?: number;
     /** 3D Space sessions: the session's speaker layout, to offer every layout and binaural. */
@@ -57,7 +60,7 @@
     onDone: (value: ExportSettings | null) => void;
   }
 
-  const { initial, scopes, source, onBrowse, chapterCount = 0, spaceLayout = null, onDone }: Props = $props();
+  const { initial, scopes, source, onBrowse, onScan, chapterCount = 0, spaceLayout = null, onDone }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   let s = $state<ExportSettings>({ ...initial, format: { ...initial.format } });
@@ -169,6 +172,9 @@
           {#each targets as t (t.id)}<option value={t.id}>Bring to {t.name}</option>{/each}
         </select>
       </label>
+      {#if onScan && !multi}
+        <LoudnessScan target={s.normalize} mono={s.format.channels === 1 || (s.format.channels === null && source.channels === 1)} stamp={`${s.scope}|${s.format.channels}`} scan={() => onScan(s.scope)} />
+      {/if}
     </section>
 
     <section class="options">

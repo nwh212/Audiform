@@ -25,7 +25,8 @@
 <script lang="ts">
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat } from "./output-format";
-  import { targetsFor } from "./loudness";
+  import { targetsFor, type LoudnessReport } from "./loudness";
+  import LoudnessScan from "./LoudnessScan.svelte";
   import { DESCRIPTION_MAX, TITLE_MAX, episodeProblems, slugOf } from "./publish";
 
   interface Props {
@@ -34,10 +35,11 @@
     chapterCount: number;
     adCount: number;
     onBrowse: (from: string) => Promise<string | null>;
+    onScan: () => Promise<LoudnessReport | null>;
     onDone: (value: PublishSettings | null) => void;
   }
 
-  const { initial, source, chapterCount, adCount, onBrowse, onDone }: Props = $props();
+  const { initial, source, chapterCount, adCount, onBrowse, onScan, onDone }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   let s = $state<PublishSettings>({ ...initial, episode: { ...initial.episode }, format: { ...initial.format } });
@@ -134,6 +136,7 @@
           {#each targets as t (t.id)}<option value={t.id}>Bring to {t.name}</option>{/each}
         </select>
       </label>
+      <LoudnessScan target={s.normalize} mono={s.format.channels === 1 || (s.format.channels === null && source.channels === 1)} stamp={`${s.format.channels}`} scan={onScan} />
       <p class="summary">
         {chapterCount === 0 ? "No chapter markers." : `${chapterCount} ${chapterCount === 1 ? "chapter goes" : "chapters go"} inside the file and into chapters.json.`}
         {adCount === 0 ? "" : `${adCount} ad ${adCount === 1 ? "position is" : "positions are"} listed in episode.json.`}
