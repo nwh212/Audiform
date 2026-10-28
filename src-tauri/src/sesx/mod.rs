@@ -441,7 +441,7 @@ fn mix_params(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, bool, f64, Opt
         let p = if p.abs() <= 1.0 { p * 100.0 } else { p };
         p.clamp(-100.0, 100.0).round()
     });
-    let (volume, envelope) = level(nodes);
+    let (volume, envelope) = level(nodes, None);
     (volume, muted, pan, envelope)
 }
 
@@ -459,11 +459,20 @@ fn fader<'a, 'i>(nodes: &[Option<roxmltree::Node<'a, 'i>>]) -> Option<roxmltree:
 ///
 /// The fader keeps two gains that multiply: `volume` (the level you see
 /// and draw on) and `static gain` (a fixed gain under it). A drawn line
-/// keeps its points as `parameterKeyframe`s under `volume`, positions
-/// counted from the start of the clip (or of the session, for a track),
-/// values as gains. Then the line is the level, imported as a volume
-/// envelope, and only the static gain stays as the fixed level.
-fn level(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, Option<Envelope>) {
+/// keeps its points as `parameterKeyframe`s under `volume` (inside a
+/// `parameterKeyframes` list in newer files), values as gains. Then the
+/// line is the level, imported as a volume envelope, and only the static
+/// gain stays as the fixed level.
+///
+/// A track's points count from the start of the session. A clip's count
+/// from the start of its file, so `clip` gives the clip's source in point
+/// and length: the points move to clip time, and a line shared by the
+/// pieces of a split clip is cut to this piece, with its level at each
+/// end worked out from the points either side.
+fn level(
+    nodes: &[Option<roxmltree::Node<'_, '_>>],
+    clip: Option<(u64, u64)>,
+) -> (f64, Option<Envelope>) {
     let Some(f) = fader(nodes) else {
         return (0.0, None);
     };
@@ -478,15 +487,24 @@ fn level(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, Option<Envelope>) {
         .and_then(|p| value(p, "parameterValue"))
         .unwrap_or(1.0);
     let volume = param("volume");
-    let mut points: Vec<EnvelopePoint> = volume
+    let mut raw: Vec<(f64, f64)> = volume
         .into_iter()
-        .flat_map(|v| v.children().filter(|k| k.has_tag_name("parameterKeyframe")))
-        .filter_map(|k| {
-            Some(EnvelopePoint {
-                position: value(k, "sampleOffset")?.max(0.0).round() as u64,
-                value: gain_to_db(value(k, "value")?),
-                curve: EnvelopeCurve::Linear,
-            })
+        .flat_map(|v| {
+            v.descendants()
+                .filter(|k| k.has_tag_name("parameterKeyframe"))
+        })
+        .filter_map(|k| Some((value(k, "sampleOffset")?, gain_to_db(value(k, "value")?))))
+        .collect();
+    raw.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((source_in, length)) = clip {
+        raw = clip_line(&raw, source_in as f64, length as f64);
+    }
+    let mut points: Vec<EnvelopePoint> = raw
+        .into_iter()
+        .map(|(at, db)| EnvelopePoint {
+            position: at.max(0.0).round() as u64,
+            value: (db * 100.0).round() / 100.0,
+            curve: EnvelopeCurve::Linear,
         })
         .collect();
     if points.is_empty() {
@@ -504,6 +522,43 @@ fn level(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, Option<Envelope>) {
         height: None,
     };
     (gain_to_db(fixed), Some(envelope))
+}
+
+/// A line's points (position, dB) moved by `-origin` and cut to `0..=length`,
+/// with points added at the ends where the line crosses them.
+fn clip_line(points: &[(f64, f64)], origin: f64, length: f64) -> Vec<(f64, f64)> {
+    let moved: Vec<(f64, f64)> = points.iter().map(|&(p, v)| (p - origin, v)).collect();
+    if moved.is_empty() {
+        return moved;
+    }
+    let at = |x: f64| -> f64 {
+        let first = moved[0];
+        let last = moved[moved.len() - 1];
+        if x <= first.0 {
+            return first.1;
+        }
+        if x >= last.0 {
+            return last.1;
+        }
+        let k = (1..moved.len()).find(|&i| x <= moved[i].0).unwrap_or(1);
+        let (a, b) = (moved[k - 1], moved[k]);
+        if b.0 - a.0 <= 0.0 {
+            b.1
+        } else {
+            a.1 + (b.1 - a.1) * (x - a.0) / (b.0 - a.0)
+        }
+    };
+    let mut out = vec![(0.0, at(0.0))];
+    out.extend(
+        moved
+            .iter()
+            .copied()
+            .filter(|&(p, _)| p > 0.0 && p < length),
+    );
+    if length > 0.0 {
+        out.push((length, at(length)));
+    }
+    out
 }
 
 /// Where a track or bus sends its sound: a bus by its `.sesx` id, else the master.
@@ -721,7 +776,15 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 }
             }
             let effects = racks(c, &mut report);
-            let (gain_db, clip_line) = level(&[Some(c)]);
+            let (gain_db, clip_line) = level(
+                &[Some(c)],
+                Some((
+                    attr_u64(c, "sourceInPoint").unwrap_or(0),
+                    attr_u64(c, "endPoint")
+                        .unwrap_or(0)
+                        .saturating_sub(attr_u64(c, "startPoint").unwrap_or(0)),
+                )),
+            );
             if clip_stretch.is_some() {
                 report.stretched += 1;
             }
@@ -1118,7 +1181,19 @@ mod tests {
         let env = &drawn.envelopes[0];
         assert_eq!(env.target, EnvelopeTarget::Volume);
         let pts: Vec<_> = env.points.iter().map(|p| (p.position, p.value)).collect();
-        assert_eq!(pts, vec![(0, 0.0), (22050, -6.0)]);
+        assert_eq!(pts, vec![(0, 0.0), (22050, -6.0), (44100, -6.0)]);
+    }
+
+    #[test]
+    fn a_clip_line_counts_from_the_file_and_is_cut_to_the_clip() {
+        // Points at 100 and 200 in the file; the clip plays the file from 150 for 100.
+        let pts = clip_line(&[(100.0, 0.0), (200.0, -10.0)], 150.0, 100.0);
+        assert_eq!(pts, vec![(0.0, -5.0), (50.0, -10.0), (100.0, -10.0)]);
+        // A piece wholly after the points keeps the last level.
+        assert_eq!(
+            clip_line(&[(100.0, -3.0), (200.0, -6.0)], 500.0, 50.0),
+            vec![(0.0, -6.0), (50.0, -6.0)]
+        );
     }
 
     #[test]
