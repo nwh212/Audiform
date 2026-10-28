@@ -573,6 +573,8 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         if let Some(h) = params.and_then(|p| attr_u64(p, "trackHeight")) {
             track.height = (h as u32).clamp(40, 600);
         }
+        // The other editor's per-track render switch.
+        track.prerender = t.attribute("preRendered") == Some("true");
         if let Some(a) = audio {
             track.solo = a.attribute("solo") == Some("true");
             track.record_armed = a.attribute("recordArmed") == Some("true");
@@ -937,6 +939,29 @@ mod tests {
         assert!(matches!(import(&p), Err(SesxError::NoSession)));
         std::fs::write(&p, "not xml at all").unwrap();
         assert!(matches!(import(&p), Err(SesxError::Xml(_))));
+    }
+
+    #[test]
+    fn a_tracks_render_switch_comes_across_as_pre_render() {
+        const SES: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<sesx version="1.9">
+  <session sampleRate="44100" duration="100">
+    <tracks>
+      <audioTrack id="10001" index="0" preRendered="true"><trackParameters><name>On</name></trackParameters><trackAudioParameters audioChannelType="stereo"/></audioTrack>
+      <audioTrack id="10002" index="1" preRendered="false"><trackParameters><name>Off</name></trackParameters><trackAudioParameters audioChannelType="stereo"/></audioTrack>
+      <audioTrack id="10003" index="2"><trackParameters><name>None</name></trackParameters><trackAudioParameters audioChannelType="stereo"/></audioTrack>
+    </tracks>
+  </session>
+  <files/>
+</sesx>"#;
+        let dir = tempfile::tempdir().unwrap();
+        let sesx = dir.path().join("Render.sesx");
+        std::fs::write(&sesx, SES).unwrap();
+        let s = import(&sesx).unwrap().session;
+        assert_eq!(
+            s.tracks.iter().map(|t| t.prerender).collect::<Vec<_>>(),
+            [true, false, false]
+        );
     }
 
     #[test]

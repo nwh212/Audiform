@@ -21,10 +21,11 @@
   import { channelNames } from "../space/space";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
-  import { effectsCatalog, learnNoisePrint, onPrerenderChanged, prerenderStatus, type PrerenderStatus, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
+  import { prerenderStates, prerenderWords, refreshPrerenders, watchPrerenders, type PrerenderState } from "../../stores/prerender";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
   import { MASTER_CHAIN, meterFraction, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
@@ -325,39 +326,20 @@
 
   // Pre-render: the track's clips and Audio FX rendered ahead, so heavy
   // plug-ins rest. The core renders again whenever the sound changes.
-  let prerenders = $state<PrerenderStatus[]>([]);
+  let prerenders = $state<Record<string, PrerenderState>>({});
   const canPrerender = $derived(onTrackTab && !!track && !bus && !onMaster);
-  const prerenderState = $derived(track?.prerender ? (prerenders.find((p) => p.trackId === track.id)?.state ?? "waiting") : null);
-  function loadPrerenders() {
-    prerenderStatus()
-      .then((p) => (prerenders = p))
-      .catch(() => (prerenders = []));
-  }
+  const prerenderState = $derived<PrerenderState | null>(track?.prerender ? (prerenders[track.id] ?? "waiting") : null);
+  $effect(() => prerenderStates.subscribe((v) => (prerenders = v)));
+  $effect(() => watchPrerenders());
   $effect(() => {
     void doc;
-    untrack(loadPrerenders);
-  });
-  $effect(() => {
-    let stop: (() => void) | undefined;
-    let gone = false;
-    onPrerenderChanged(loadPrerenders)
-      .then((f) => (gone ? f() : (stop = f)))
-      .catch(() => {});
-    return () => {
-      gone = true;
-      stop?.();
-    };
+    untrack(refreshPrerenders);
   });
   function togglePrerender() {
     if (!track) return;
     const on = !track.prerender;
     void session.edit(on ? "Pre-render Track" : "Stop Pre-rendering Track", trackOp(doc, track.id, { prerender: on }), runner).catch(onError);
   }
-  const PRERENDER_TIP: Record<string, string> = {
-    rendering: "Pre-render on: rendering the track's clips and effects now. The live track plays until the render is ready.",
-    ready: "Pre-render on: playback and export use the rendered track, so its effects rest. Any change to clips or effects renders again. Click to turn off.",
-    waiting: "Pre-render on: waiting to render. Click to turn off.",
-  };
 
   function commit(what: string, next: EffectChainDoc | null) {
     if (!target) return;
@@ -661,12 +643,13 @@
             class="prerender"
             class:on={!!track?.prerender}
             class:busy={prerenderState === "rendering"}
-            title={prerenderState ? PRERENDER_TIP[prerenderState] : "Pre-render: render this track's clips and effects ahead, so heavy plug-ins rest during playback. Renders again after any change."}
+            class:ready={prerenderState === "ready"}
+            title={prerenderState ? `${prerenderWords(prerenderState)} Any change to clips or effects renders again. Click to turn off.` : "Pre-render: render this track's clips and effects ahead, so heavy plug-ins rest during playback. Renders again after any change."}
             aria-pressed={!!track?.prerender}
             onclick={togglePrerender}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h1.5M5 5v6M8 3v10M11 6v4" stroke="currentColor" stroke-width="1.4" fill="none" /><rect x="12.5" y="3" width="2" height="10" fill="currentColor" /></svg>
-            <span>{prerenderState === "rendering" ? "Rendering…" : "Pre-render"}</span>
+            <span>{prerenderState === "rendering" ? "Rendering…" : prerenderState === "ready" ? "Rendered" : prerenderState === "waiting" ? "Pre-render on" : "Pre-render"}</span>
           </button>
         {/if}
         <select
@@ -1107,6 +1090,12 @@
   }
   .prerender.on {
     color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .prerender.ready {
+    background: color-mix(in srgb, var(--accent) 38%, transparent);
+    font-weight: 600;
   }
   .prerender.busy svg {
     animation: prerender-pulse 1s ease-in-out infinite alternate;

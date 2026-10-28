@@ -14,6 +14,7 @@
   import { audioInputs, openSoundSettings, pluginOpenWindow, type AudioInput, type EffectInfo } from "../../app/core";
   import { keepLast } from "../../app/settings/device-cache";
   import { chainTarget } from "../../stores/chain-target";
+  import { prerenderStates, prerenderWords, watchPrerenders, type PrerenderState } from "../../stores/prerender";
   import { editor, type EditorState } from "../../stores/editor";
   import type { CommandRunner } from "../../stores/media-pool";
   import { monoCheck } from "../../stores/mono-check";
@@ -36,6 +37,11 @@
 
   /** An installed instrument plug-in. */
   type Instrument = MenuPlugin & { hasWindow: boolean };
+
+  /** Pre-render state per track, for the marker on each handle. */
+  let prerenders = $state<Record<string, PrerenderState>>({});
+  $effect(() => prerenderStates.subscribe((v) => (prerenders = v)));
+  $effect(() => watchPrerenders());
 
   interface Props {
     /** Tracks and buses, top to bottom. */
@@ -253,7 +259,13 @@
       }}
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="grab" title="Click to select the track (its effects show in the Audio FX chain). Drag to move it up or down." onpointerdown={(e) => onHeaderPointer(e, track)}></div>
+      <div
+        class="grab"
+        title={`Click to select the track (its effects show in the Audio FX chain). Drag to move it up or down.${track.prerender ? ` ${prerenderWords(prerenders[track.id] ?? "waiting")}` : ""}`}
+        onpointerdown={(e) => onHeaderPointer(e, track)}
+      >
+        {#if track.prerender}<span class="pre" class:ready={prerenders[track.id] === "ready"} class:busy={prerenders[track.id] === "rendering"} aria-hidden="true"></span>{/if}
+      </div>
       {#if $chainTarget === track.id}<span class="fx-tag" title="The Audio FX chain is showing this track's effects">FX</span>{/if}
       <div class="line">
         <button
@@ -965,6 +977,34 @@
     background-size: 4px 5.5px;
     opacity: 0;
     transition: opacity 0.12s ease;
+  }
+
+  /* Pre-render marker on the handle: hollow while waiting, pulsing while
+     rendering, solid once the render is ready. */
+  .pre {
+    position: absolute;
+    left: 1px;
+    top: 4px;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 8px;
+    height: 8px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    background: var(--surface-0, #000);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+  }
+  .pre.ready {
+    background: var(--accent);
+  }
+  .pre.busy {
+    animation: pre-pulse 0.9s ease-in-out infinite alternate;
+  }
+  @keyframes pre-pulse {
+    to {
+      opacity: 0.3;
+    }
   }
 
   .grab:hover::before,
