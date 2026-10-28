@@ -1119,7 +1119,7 @@ export function generateAudio(path: string, request: GenerateRequest): Promise<s
   return invoke<string>("generate_audio", { path, request });
 }
 
-/** Writes chapters into an exported MP3 or FLAC. False when the format has no chapter support here. */
+/** Writes chapters into an exported WAV, FLAC, MP3 or M4A. False when the format has no chapter support here. */
 export function exportEmbedChapters(path: string, chapters: { title: string; startMs: number; endMs: number | null }[], totalMs: number): Promise<boolean> {
   return invoke<boolean>("export_embed_chapters", { path, chapters, totalMs });
 }

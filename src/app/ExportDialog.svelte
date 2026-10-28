@@ -74,6 +74,7 @@
   });
   const targets = targetsFor();
   const ext = $derived(extensionOf(s.format.kind));
+  const canChapter = $derived(["wav", "flac", "mp3", "m4a"].includes(s.format.kind));
   const summary = $derived(describeFormat(s.format, source));
   const size = $derived.by(() => {
     const secs = current?.seconds;
@@ -171,8 +172,8 @@
     <section class="options">
       <label class="check"><input type="checkbox" bind:checked={s.addToFiles} /> Add the file to the Files panel</label>
       {#if chapterCount > 0}
-        <label class="check" class:off={s.format.kind !== "mp3" && s.format.kind !== "flac"} title={s.format.kind === "mp3" || s.format.kind === "flac" ? "" : "Chapters go into MP3 and FLAC files. For other formats, use File > Export > Markers and Chapters."}>
-          <input type="checkbox" bind:checked={s.chapters} disabled={s.format.kind !== "mp3" && s.format.kind !== "flac"} /> Add the {chapterCount} chapter {chapterCount === 1 ? "marker" : "markers"} to the file
+        <label class="check" class:off={!canChapter} title={canChapter ? "" : "Chapters go into WAV, FLAC, MP3 and M4A files. For other formats, use File > Export > Markers and Chapters."}>
+          <input type="checkbox" bind:checked={s.chapters} disabled={!canChapter} /> Add the {chapterCount} chapter {chapterCount === 1 ? "marker" : "markers"} to the file
         </label>
       {:else}
         <label class="check off" title="Set a marker's type to Chapter, or use Edit > Markers > Add Chapter Marker.">

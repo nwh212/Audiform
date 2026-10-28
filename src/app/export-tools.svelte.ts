@@ -297,11 +297,16 @@ export function createExportTools(deps: ExportToolsDeps) {
       let chapterNote = "";
       const levelNote = goal ? ` Brought to ${goal.lufs} LUFS with peaks under ${goal.peak} dBTP.` : "";
       const doc = session.current;
-      if (chapters && doc && (format?.kind === "mp3" || format?.kind === "flac")) {
+      if (chapters && doc && (format?.kind === "mp3" || format?.kind === "flac" || format?.kind === "wav" || format?.kind === "m4a")) {
         const list = embedList(doc.markers, doc.sample_rate, what.range ?? null);
         if (list.length) {
-          await exportEmbedChapters(path, list, Math.round((r.frames / r.sampleRate) * 1000));
-          chapterNote = ` ${list.length} ${list.length === 1 ? "chapter" : "chapters"} added.`;
+          try {
+            await exportEmbedChapters(path, list, Math.round((r.frames / r.sampleRate) * 1000));
+            chapterNote = ` ${list.length} ${list.length === 1 ? "chapter" : "chapters"} added.`;
+          } catch (e) {
+            // The audio is saved either way; say why the chapters are not in it.
+            chapterNote = ` The chapters could not be added: ${e instanceof Error ? e.message : String(e)}`;
+          }
         }
       }
       const clipped = r.peak > 1 ? ` The mix clipped (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); turn the Master down and export again.` : "";

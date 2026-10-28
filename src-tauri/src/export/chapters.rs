@@ -15,7 +15,7 @@
 //! Both are added after the audio is written, by rewriting the file once.
 
 use std::fs::{self, File};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use serde::Deserialize;
@@ -203,7 +203,7 @@ pub fn vorbis_block(items: &[String]) -> Vec<u8> {
 }
 
 /// The comment lines in a VORBIS_COMMENT block body.
-fn vorbis_items(body: &[u8]) -> Vec<String> {
+pub(crate) fn vorbis_items(body: &[u8]) -> Vec<String> {
     let u32_at = |i: usize| {
         body.get(i..i + 4)
             .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
@@ -312,6 +312,244 @@ fn write_flac_copy(
     out.flush()
 }
 
+/// Adds the chapters to a WAV file as cue points with labels (`cue ` and
+/// `LIST`/`adtl`), which audio editors and broadcast tools read. The audio
+/// is not rewritten: the chunks go on the end and the RIFF size is fixed.
+/// Plain RIFF only; a file that already has cue points is left alone.
+pub fn embed_wav(path: &Path, chapters: &[Chapter]) -> std::io::Result<()> {
+    use crate::codecs::cue::{chunks, Cue};
+    let bad = |m: &str| std::io::Error::new(std::io::ErrorKind::InvalidData, m.to_string());
+    if chapters.is_empty() {
+        return Ok(());
+    }
+    let mut f = fs::OpenOptions::new().read(true).write(true).open(path)?;
+    let mut head = [0u8; 12];
+    f.read_exact(&mut head)
+        .map_err(|_| bad("Not a WAV file."))?;
+    if &head[..4] == b"RF64" {
+        return Err(bad("Markers cannot go into RF64 files (over 4 GB) yet."));
+    }
+    if &head[..4] != b"RIFF" || &head[8..12] != b"WAVE" {
+        return Err(bad("Not a WAV file."));
+    }
+    let len = f.metadata()?.len();
+    let mut rate = 0u32;
+    let mut at = 12u64;
+    while at + 8 <= len {
+        f.seek(SeekFrom::Start(at))?;
+        let mut h = [0u8; 8];
+        f.read_exact(&mut h)?;
+        let size = u64::from(u32::from_le_bytes([h[4], h[5], h[6], h[7]]));
+        match &h[..4] {
+            b"fmt " => {
+                let mut fmt = [0u8; 8];
+                f.read_exact(&mut fmt)?;
+                rate = u32::from_le_bytes([fmt[4], fmt[5], fmt[6], fmt[7]]);
+            }
+            b"cue " => return Err(bad("This WAV file already has markers.")),
+            _ => {}
+        }
+        at += 8 + size + (size & 1);
+    }
+    if rate == 0 {
+        return Err(bad("Not a WAV file."));
+    }
+    let cues: Vec<Cue> = chapters
+        .iter()
+        .map(|c| Cue {
+            position: c.start_ms * u64::from(rate) / 1000,
+            length: 0,
+            label: c.title.clone(),
+        })
+        .collect();
+    let add = chunks(&cues);
+    let padded = len + (len & 1);
+    let riff = u32::try_from(padded + add.len() as u64 - 8)
+        .map_err(|_| bad("The file is too big to hold markers."))?;
+    f.seek(SeekFrom::Start(len))?;
+    if len & 1 == 1 {
+        f.write_all(&[0])?;
+    }
+    f.write_all(&add)?;
+    f.seek(SeekFrom::Start(4))?;
+    f.write_all(&riff.to_le_bytes())?;
+    Ok(())
+}
+
+/// Chapters in an audio file: MP3 (ID3 chapters), FLAC (`CHAPTERnnn`
+/// comments) and M4A (`chpl`). Empty for other files or when there are none.
+pub fn read_chapters(path: &Path) -> Vec<Chapter> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut list = match ext.as_str() {
+        "mp3" => read_mp3(path).unwrap_or_default(),
+        "flac" => read_flac(path).unwrap_or_default(),
+        "m4a" | "mp4" => super::m4a_tags::read_m4a_chapters(path),
+        _ => Vec::new(),
+    };
+    list.sort_by_key(|c| c.start_ms);
+    list
+}
+
+/// A text frame's text: the encoding byte, then the text.
+fn id3_text(body: &[u8]) -> String {
+    let Some((&enc, rest)) = body.split_first() else {
+        return String::new();
+    };
+    let utf16 = |bytes: &[u8], big: bool| {
+        let units: Vec<u16> = bytes
+            .iter()
+            .step_by(2)
+            .zip(bytes.iter().skip(1).step_by(2))
+            .map(|(&a, &b)| {
+                if big {
+                    u16::from_be_bytes([a, b])
+                } else {
+                    u16::from_le_bytes([a, b])
+                }
+            })
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    let text = match enc {
+        1 | 2 => {
+            let (big, bytes) = match rest {
+                [0xff, 0xfe, r @ ..] => (false, r),
+                [0xfe, 0xff, r @ ..] => (true, r),
+                r => (enc == 2, r),
+            };
+            utf16(bytes, big)
+        }
+        3 => String::from_utf8_lossy(rest).into_owned(),
+        _ => rest.iter().map(|&b| b as char).collect(),
+    };
+    text.trim_end_matches('\0').to_string()
+}
+
+fn read_mp3(path: &Path) -> std::io::Result<Vec<Chapter>> {
+    let mut f = File::open(path)?;
+    let mut head = [0u8; 10];
+    f.read_exact(&mut head)?;
+    if &head[..3] != b"ID3" {
+        return Ok(Vec::new());
+    }
+    let size = head[6..10]
+        .iter()
+        .fold(0usize, |n, b| (n << 7) | usize::from(b & 0x7f));
+    let mut tag = head.to_vec();
+    tag.resize(10 + size.min(16 << 20), 0);
+    f.read_exact(&mut tag[10..])?;
+    let mut out = Vec::new();
+    for (id, body) in id3_frames(&tag) {
+        if &id != b"CHAP" {
+            continue;
+        }
+        // Element id, a zero, start and end in ms, two byte offsets, then sub-frames.
+        let Some(z) = body.iter().position(|&b| b == 0) else {
+            continue;
+        };
+        let rest = &body[z + 1..];
+        if rest.len() < 16 {
+            continue;
+        }
+        let start = u64::from(u32::from_be_bytes([rest[0], rest[1], rest[2], rest[3]]));
+        let mut at = 16;
+        let mut name = String::new();
+        while at + 10 <= rest.len() {
+            let n = u32::from_be_bytes([rest[at + 4], rest[at + 5], rest[at + 6], rest[at + 7]])
+                as usize;
+            let Some(sub) = rest.get(at + 10..at + 10 + n) else {
+                break;
+            };
+            if &rest[at..at + 4] == b"TIT2" {
+                name = id3_text(sub);
+                break;
+            }
+            at += 10 + n;
+        }
+        out.push(Chapter {
+            title: name,
+            start_ms: start,
+            end_ms: None,
+        });
+    }
+    Ok(out)
+}
+
+/// `HH:MM:SS.mmm` to milliseconds.
+fn parse_clock(text: &str) -> Option<u64> {
+    let mut parts = text.trim().split(':');
+    let h: u64 = parts.next()?.parse().ok()?;
+    let m: u64 = parts.next()?.parse().ok()?;
+    let sec = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let (s, ms) = sec.split_once('.').unwrap_or((sec, "0"));
+    let s: u64 = s.parse().ok()?;
+    let ms: u64 = format!("{ms:0<3}")[..3].parse().ok()?;
+    Some(((h * 60 + m) * 60 + s) * 1000 + ms)
+}
+
+fn read_flac(path: &Path) -> std::io::Result<Vec<Chapter>> {
+    let mut src = BufReader::new(File::open(path)?);
+    let mut magic = [0u8; 4];
+    src.read_exact(&mut magic)?;
+    if &magic != b"fLaC" {
+        return Ok(Vec::new());
+    }
+    let mut items = Vec::new();
+    loop {
+        let mut head = [0u8; 4];
+        src.read_exact(&mut head)?;
+        let len = (usize::from(head[1]) << 16) | (usize::from(head[2]) << 8) | usize::from(head[3]);
+        if head[0] & 0x7f == 4 {
+            let mut body = vec![0u8; len];
+            src.read_exact(&mut body)?;
+            items.extend(vorbis_items(&body));
+        } else {
+            src.seek(SeekFrom::Current(len as i64))?;
+        }
+        if head[0] & 0x80 != 0 {
+            break;
+        }
+    }
+    let mut times: Vec<(String, u64)> = Vec::new();
+    for line in &items {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.to_ascii_uppercase();
+        if let Some(n) = key.strip_prefix("CHAPTER") {
+            if n.len() == 3 && n.bytes().all(|b| b.is_ascii_digit()) {
+                if let Some(ms) = parse_clock(value) {
+                    times.push((n.to_string(), ms));
+                }
+            }
+        }
+    }
+    Ok(times
+        .into_iter()
+        .map(|(n, ms)| {
+            let want = format!("CHAPTER{n}NAME");
+            let title = items
+                .iter()
+                .filter_map(|l| l.split_once('='))
+                .find(|(k, _)| k.to_ascii_uppercase() == want)
+                .map(|(_, v)| v.to_string())
+                .unwrap_or_default();
+            Chapter {
+                title,
+                start_ms: ms,
+                end_ms: None,
+            }
+        })
+        .collect())
+}
+
 /// Writes beside the file, then swaps it in, so a failure never leaves half a file.
 pub(crate) fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("chapters.tmp");
@@ -382,5 +620,85 @@ mod tests {
         embed_flac(&p, &[ch("Only", 0)]).unwrap();
         let again = String::from_utf8_lossy(&fs::read(&p).unwrap()).to_string();
         assert!(again.contains("CHAPTER001NAME=Only") && !again.contains("CHAPTER002"));
+    }
+
+    fn three() -> Vec<Chapter> {
+        vec![
+            ch("Intro", 0),
+            ch("Café talk", 61_500),
+            ch("Wrap up", 3_723_004),
+        ]
+    }
+
+    #[test]
+    fn mp3_chapters_read_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.mp3");
+        fs::write(&p, [0xffu8, 0xfb, 0x90, 0x00, 1, 2, 3, 4]).unwrap();
+        embed_mp3(&p, &three(), 4_000_000).unwrap();
+        let got = read_chapters(&p);
+        assert_eq!(
+            got.iter()
+                .map(|c| (c.title.as_str(), c.start_ms))
+                .collect::<Vec<_>>(),
+            vec![("Intro", 0), ("Café talk", 61_500), ("Wrap up", 3_723_004)]
+        );
+    }
+
+    #[test]
+    fn flac_chapters_read_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.flac");
+        // STREAMINFO (last block) then fake audio: enough for the comment code.
+        let mut f = b"fLaC".to_vec();
+        f.extend_from_slice(&[0x80, 0, 0, 34]);
+        f.extend_from_slice(&[0u8; 34]);
+        f.extend_from_slice(&[1, 2, 3, 4]);
+        fs::write(&p, f).unwrap();
+        embed_flac(&p, &three()).unwrap();
+        let got = read_chapters(&p);
+        assert_eq!(
+            got.iter()
+                .map(|c| (c.title.as_str(), c.start_ms))
+                .collect::<Vec<_>>(),
+            vec![("Intro", 0), ("Café talk", 61_500), ("Wrap up", 3_723_004)]
+        );
+    }
+
+    #[test]
+    fn wav_chapters_become_cue_points_and_the_audio_still_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 8000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&p, spec).unwrap();
+        for i in 0..8000 * 70 {
+            w.write_sample((i % 50) as i16 * 100).unwrap();
+        }
+        w.finalize().unwrap();
+        let ch = vec![ch("Intro", 0), ch("Café talk", 61_500)];
+        embed_wav(&p, &ch).unwrap();
+        let cues = crate::codecs::cue::read_cues(&p);
+        assert_eq!(cues.len(), 2);
+        assert_eq!(
+            (cues[1].position, cues[1].label.as_str()),
+            (61_500 * 8, "Café talk")
+        );
+        let r = hound::WavReader::open(&p).unwrap();
+        assert_eq!(r.len(), 8000 * 70);
+        // Writing twice is refused, not doubled.
+        assert!(embed_wav(&p, &ch).is_err());
+        assert_eq!(crate::codecs::cue::read_cues(&p).len(), 2);
+    }
+
+    #[test]
+    fn clocks_parse() {
+        assert_eq!(parse_clock("01:02:03.004"), Some(3_723_004));
+        assert_eq!(parse_clock("00:00:01.5"), Some(1500));
+        assert_eq!(parse_clock("nonsense"), None);
     }
 }

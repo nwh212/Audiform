@@ -341,8 +341,8 @@ pub fn export_cancel(cancel: State<'_, ExportCancel>) {
     cancel.0.store(true, Ordering::Relaxed);
 }
 
-/// Writes chapter markers into an exported MP3 (ID3 chapters) or FLAC
-/// (Vorbis comments). Other formats are left as they are.
+/// Writes chapter markers into an exported MP3 (ID3 chapters), FLAC
+/// (Vorbis comments), WAV (cue points) or M4A (chapter list). Other formats are left as they are.
 #[tauri::command]
 pub async fn export_embed_chapters(
     path: PathBuf,
@@ -358,6 +358,8 @@ pub async fn export_embed_chapters(
         let r = match ext.as_str() {
             "mp3" => crate::export::chapters::embed_mp3(&path, &chapters, total_ms).map(|_| true),
             "flac" => crate::export::chapters::embed_flac(&path, &chapters).map(|_| true),
+            "wav" => crate::export::chapters::embed_wav(&path, &chapters).map(|_| true),
+            "m4a" => crate::export::m4a_tags::write_m4a_chapters(&path, &chapters).map(|_| true),
             _ => Ok(false),
         };
         r.map_err(|e| format!("Could not add chapters: {e}"))
