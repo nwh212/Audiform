@@ -134,8 +134,8 @@ pub fn engine_path(data_dir: &Path) -> PathBuf {
     }
 }
 
-/// The engine build for this computer, attached to each Audiform release
-/// next to the installers. None where no build is published yet.
+/// The engine build for this computer, in the engine release. None where
+/// no build is published yet.
 pub fn engine_asset() -> Option<&'static str> {
     if cfg!(all(windows, target_arch = "x86_64")) {
         Some("audiform-separate-windows-x64.zip")
@@ -146,11 +146,13 @@ pub fn engine_asset() -> Option<&'static str> {
     }
 }
 
+/// The engine release Audiform uses. Engines are released on their own
+/// (as pre-releases, so they never show as Audiform's latest version);
+/// change this when a new engine is needed.
+pub const ENGINE_TAG: &str = "engine-v0.1.0";
+
 pub fn engine_url(asset: &str) -> String {
-    format!(
-        "https://github.com/nwh212/Audiform/releases/download/v{}/{asset}",
-        env!("CARGO_PKG_VERSION")
-    )
+    format!("https://github.com/nwh212/Audiform/releases/download/{ENGINE_TAG}/{asset}")
 }
 
 /// The job file the engine reads.

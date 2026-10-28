@@ -24,7 +24,7 @@ The Help menu has links (Audiform's GitHub page and problem reports, and, credit
 Audio Separation needs a model to separate audio with, and a small separation engine to run it. Neither comes with Audiform. When you pick a model and click Download (or Separate, which asks first), Audiform downloads:
 
 - the model, from its author's own page, and
-- the separation engine, the first time only, from Audiform's own releases.
+- the separation engine, the first time only, from Audiform's own GitHub releases.
 
 It only pulls the necessary model for demixing. Audio separation is handled locally on your hardware, and speed and results depend on your hardware. Nothing about you or your audio is sent; these are plain file downloads. Each file is checked against a fingerprint (SHA-256) kept in Audiform before it is used, and kept in the app's data folder for next time. The Audio Separation panel lists what is downloaded and removes it.
 
