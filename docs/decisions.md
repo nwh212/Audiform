@@ -1848,3 +1848,14 @@ Not verified here: the Windows AAC path, playing the finished files in other pla
 ## 2026-10-28: Audiform 0.5.0
 
 Version 0.5.0 (not 0.4.1): Audio Separation with six stems and single instruments, the Altered Audio Editor 0.6 intake, and the session import fixes. The separation engine moves to its own release `engine-v0.2.0` (several outputs per model, and it runs only when Audiform started it). Publish the four engine files on that pre-release before releasing 0.5.0, or Audio Separation's download will fail. Linux is noted as not thoroughly tested in the release notes.
+
+## 2026-10-28: Frame rate
+
+The project lead found the interface sluggish with one file open, the Phase Wheel the clearest case. Measured in headless Chromium with a stub core (`scripts/perf/measure-frames.mjs`), the causes were:
+
+- **Glass themes (Meadow, Aqua, Moonlight, Prism).** Every panel had `backdrop-filter: blur(26px)`. The browser blurs the scene behind a panel again whenever anything in the panel repaints, so a moving playhead, meters or the Phase Wheel held these themes at 13 to 20 frames a second where the dark theme ran at about 80 (software rendering; the ratio, not the number, is what carries over). This is in 0.4.0 too. Fix: each panel paints a copy of its scene that was blurred once (`scripts/themes/make-glass-blur.py`, four files of about 8 KB), fixed to the window like the scene, under the same tint. Screenshots differ from the live blur by under 1 in 255 on average. The menu, dialog and bar blurs are left as they were: they do not repaint while playing.
+- **Playhead repaints.** Each playhead move (about 30 a second while playing) redrew every lane, the whole Waveform editor picture and the spectrogram, because the playhead was drawn in the same effect. The still picture is now drawn off screen and a move copies it and draws the playhead and start marker. Script time while playing fell from about 500 ms to 90 ms in 3 seconds (Multitrack), and 207 ms to 60 ms (Waveform editor).
+- **Phase Wheel data command.** `scope_phase` was a plain (not async) Tauri command, which runs on the main thread that also serves the window. It is now async with the analysis on a blocking thread, like `scope_phase_at`. Not compiled or timed here.
+- Smaller: the Phase Wheel reads the ring color from the style sheet when the look changes, not on every picture.
+
+Not changed: Mall Pastel and Analog cost about three times the dark theme's raster time while panels are being resized (headless, software), from their many background images and gradients; playing is as cheap as dark. A real GPU should hide that, so it is left until someone reports it.
