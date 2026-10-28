@@ -1,0 +1,13 @@
+{
+  "format": "audiform-theme",
+  "version": 1,
+  "id": "sunset",
+  "name": "Sunset",
+  "base": "dark",
+  "description": "Warm purples with an orange accent. An example theme.",
+  "author": "The Audiform contributors",
+  "css": ":root[data-theme=\"sunset\"] {\n  --surface-0: #1d1228;\n  --surface-1: #2a1a3a;\n  --surface-2: #35224a;\n  --surface-3: #412b5a;\n  --accent: #ff8a4a;\n  --playhead: #ffd166;\n}\n:root[data-theme=\"sunset\"] body {\n  background: #1d1228 url(asset:glow) 0 0 / 64px 64px;\n}\n",
+  "assets": {
+    "glow": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMmExYTNhIi8+PGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMjQiIGZpbGw9IiNmZjhhNGEiIG9wYWNpdHk9IjAuMTgiLz48L3N2Zz4="
+  }
+}

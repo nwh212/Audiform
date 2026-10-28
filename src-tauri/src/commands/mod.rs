@@ -33,6 +33,7 @@ pub mod separation;
 pub mod session;
 pub mod spectral;
 pub mod template;
+pub mod themes;
 pub mod transport;
 pub mod wave;
 pub mod wave_fx;

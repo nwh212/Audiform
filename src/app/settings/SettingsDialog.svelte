@@ -9,7 +9,9 @@
   reason, never faked.
 -->
 <script lang="ts">
-  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, type CacheInfo } from "../core";
+  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, themesDir, type CacheInfo } from "../core";
+  import { listThemes, type ThemeCatalog } from "../../themes/loader";
+  import { themeId } from "../../stores/settings";
   import { audioDriver, audioInputs, audioOutputs, outputChannels, type AudioDriver, type AudioInput } from "../core";
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
@@ -32,6 +34,22 @@
   let d = $state<SettingsDraft>($state.snapshot(initial) as SettingsDraft);
   // svelte-ignore state_referenced_locally
   let page = $state<Page>(startPage);
+
+  // Appearance: the themes found (shipped and in the Themes folder), read when the page opens.
+  let catalog = $state<ThemeCatalog | null>(null);
+  const shippedThemes = $derived(catalog?.themes.filter((t) => t.builtin) ?? []);
+  const userThemes = $derived(catalog?.themes.filter((t) => !t.builtin) ?? []);
+  const pickedTheme = $derived(catalog?.themes.find((t) => t.id === d.app.theme));
+  async function loadThemes(refresh: boolean) {
+    catalog = await listThemes(d.app.unlockedThemes, refresh).catch(() => ({ themes: [], problems: [] }));
+  }
+  async function openThemesFolder() {
+    try {
+      await revealMedia(await themesDir());
+    } catch (e) {
+      onNotice(`Could not open the Themes folder: ${String(e)}`);
+    }
+  }
 
   let outputs = $state<{ name: string; isDefault: boolean }[] | null>(null);
   let inputs = $state<AudioInput[] | null>(null);
@@ -78,6 +96,7 @@
   }
   $effect(() => {
     if (page === "Audio Devices" && (outputs === null || inputs === null || driver === null)) void loadDevices();
+    if (page === "Appearance" && catalog === null) void loadThemes(false);
     if (page === "Cache and Files" && cache === null) void refreshCache();
     if (page === "Channel Routing" && outCount === null) void outputChannels().then((n) => (outCount = n), () => (outCount = 0));
   });
@@ -200,19 +219,44 @@
           </div>
           <label class="row">
             Theme
-            <select value={d.app.theme} onchange={(e) => { const v = e.currentTarget.value; d.app.theme = v === "meadow" || v === "aqua" || v === "moonlight" || v === "prism" || v === "phosphor" || v === "analog" || v === "mallpastel" || v === "mallnight" ? v : "dark"; }}>
+            <select value={d.app.theme} onchange={(e) => (d.app.theme = themeId(e.currentTarget.value))}>
               <option value="dark">Dark</option>
-              <option value="meadow">Meadow Aero</option>
-              <option value="aqua">Aqua Aero</option>
-              <option value="moonlight">Moonlight Aero</option>
-              <option value="prism">Prism</option>
-              <option value="phosphor">Phosphor</option>
-              <option value="analog">Analog</option>
-              <option value="mallpastel">Mall Pastel '95 (モール・パステル '95)</option>
-              <option value="mallnight">Mall Pastel '95 Night (モール・パステル '95 ナイト)</option>
+              {#if catalog && d.app.theme !== "dark" && !pickedTheme}
+                <option value={d.app.theme}>{d.app.theme} (not found, shown as Dark)</option>
+              {/if}
+              {#if shippedThemes.length}
+                <optgroup label="Built in">
+                  {#each shippedThemes as t (t.id)}
+                    <option value={t.id}>{t.name}</option>
+                  {/each}
+                </optgroup>
+              {/if}
+              {#if userThemes.length}
+                <optgroup label="Your themes">
+                  {#each userThemes as t (t.id)}
+                    <option value={t.id}>{t.name}</option>
+                  {/each}
+                </optgroup>
+              {/if}
             </select>
           </label>
-          <p class="note">The Aero themes float the app as clear glass over a bright scene (Meadow, Aqua) or a night one (Moonlight). Phosphor is an early studio computer: green screens in a beige case. Mall Pastel '95 is a pastel shopping plaza with marble columns; its Night version is the same plaza after closing. Apply tries one while this window stays open. Your colors above still apply on top of any theme.</p>
+          {#if pickedTheme?.description}
+            <p class="note">{pickedTheme.description}{pickedTheme.author ? ` By ${pickedTheme.author}.` : ""}</p>
+          {/if}
+          <p class="note">Apply tries a theme while this window stays open. Your colors above still apply on top of any theme.</p>
+          <div class="row">
+            <button type="button" onclick={() => void openThemesFolder()}>Open Themes Folder</button>
+            <button type="button" onclick={() => void loadThemes(true)}>Look Again</button>
+          </div>
+          <p class="note">To add a theme, put its .audtheme file in the Themes folder, then choose Look Again. Themes in that folder are listed above under Your themes.</p>
+          {#if catalog?.problems.length}
+            <p class="note">These theme files could not be used:</p>
+            <ul class="note">
+              {#each catalog.problems as p (p.file)}
+                <li>{p.file}: {p.message}</li>
+              {/each}
+            </ul>
+          {/if}
         {:else if page === "Audio Devices"}
           <label class="row">
             Play through

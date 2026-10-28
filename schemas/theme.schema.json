@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Audiform theme",
+  "description": "A theme file (.audtheme): a look for the whole app, as a style sheet with its pictures inside. See docs/themes.md.",
+  "type": "object",
+  "required": ["format", "version", "id", "name", "base", "css"],
+  "properties": {
+    "format": {
+      "description": "Always `audiform-theme`.",
+      "const": "audiform-theme"
+    },
+    "version": {
+      "description": "Version of this file format. Audiform refuses a number higher than it knows.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "id": {
+      "description": "Unique id, lowercase letters, digits and single dashes. Saved in the settings, and the style sheet is written against `:root[data-theme=\"<id>\"]`. `dark` is taken by the built-in look.",
+      "type": "string",
+      "maxLength": 48,
+      "pattern": "^(?!dark$)[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": {
+      "description": "The name shown in the theme list.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "base": {
+      "description": "Which built-in colors the theme starts from. `light` also makes form controls and scroll bars start light.",
+      "enum": ["dark", "light"]
+    },
+    "description": {
+      "description": "One or two sentences about the look, shown under the list.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "secret": {
+      "description": "A secret theme is not listed until its id is in the `unlockedThemes` setting.",
+      "type": "boolean"
+    },
+    "css": {
+      "description": "The style sheet text. Pictures are written `url(asset:<name>)`. `@import`, `image-set()` and any other address in `url()` are refused. Up to 512 KB.",
+      "type": "string",
+      "maxLength": 524288
+    },
+    "assets": {
+      "description": "Every picture or font the style sheet and the pointers use, by name, as a base64 `data:` address. Up to 200 assets of 8 MB each.",
+      "type": "object",
+      "maxProperties": 200,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        "maxLength": 64
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^data:(image/(png|jpeg|webp|gif|avif|svg\\+xml)|font/(woff2|woff|ttf|otf));base64,[A-Za-z0-9+/=]+$"
+      }
+    },
+    "pointers": {
+      "description": "Pictures for the mouse pointer, by kind. A kind that is left out keeps the standard pointer.",
+      "type": "object",
+      "propertyNames": {
+        "enum": ["text", "ew", "ns", "nwse", "nesw", "move", "grab", "grabbing", "busy"]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["asset", "hot"],
+        "properties": {
+          "asset": {
+            "description": "Name of a picture in `assets`.",
+            "type": "string"
+          },
+          "hot": {
+            "description": "The hot spot, in pixels from the picture's top left corner: x and y.",
+            "type": "array",
+            "items": { "type": "integer", "minimum": 0, "maximum": 128 },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "canvasLook": {
+      "description": "Flags for views that draw themselves, so no code has to know a theme by its id. Unknown flags are ignored.",
+      "type": "object",
+      "properties": {
+        "pixel": {
+          "description": "Views that can draw blocky (the Phase Wheel) do.",
+          "type": "boolean"
+        },
+        "markCursor": {
+          "description": "Anything whose own style asks for the hand or the plain arrow is marked, so the style sheet can give it the theme's arrow.",
+          "type": "boolean"
+        },
+        "glass": {
+          "description": "Translucent panels over a picture.",
+          "type": "boolean"
+        },
+        "marble": {
+          "description": "Textured panels.",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

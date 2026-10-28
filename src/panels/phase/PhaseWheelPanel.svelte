@@ -26,6 +26,7 @@
   import { scopePhase, scopePhaseAt, type ScopeSignal } from "../../app/core";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
   import { hexToRgb, PHASE_HIGH, PHASE_LOW, ramp, themeColor } from "../../app/colors";
+  import { themeLook } from "../../themes/loader";
   import { appearanceTick } from "../../stores/appearance";
   import { PHASE_RATES, PHASE_SIZES, settings, type PhaseWheelPrefs } from "../../stores/settings";
   import type { TransportState, TransportStore } from "../../stores/transport";
@@ -75,7 +76,7 @@
   const themeLow = $derived((void looks, themeColor("--phase-low") || PHASE_LOW));
   const themeHigh = $derived((void looks, themeColor("--phase-high") || PHASE_HIGH));
   /** Phosphor: drawn coarse and blown up, like a low-resolution screen. */
-  const pixel = $derived((void looks, typeof document !== "undefined" && document.documentElement.dataset.theme === "phosphor"));
+  const pixel = $derived((void looks, themeLook().pixel === true));
   /** Screen pixels per drawn pixel in that look. */
   const PIXEL = 3;
   let labelSide = $state(0);

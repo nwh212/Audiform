@@ -30,6 +30,7 @@
   import { ActionRegistry } from "./actions";
   import { MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
+  import { applyThemeId, themeLook } from "../themes/loader";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
@@ -1447,12 +1448,11 @@
     prefs.set(KEY_LOUD_TARGET, d.loudness.target);
     applyAppSettings(settings.current, autosaveChanged);
   }
-  // Aero themes and Phosphor: anything whose own style asks for the hand
-  // or the plain arrow gets the theme's arrow too (the theme style sheets
-  // style the mark).
+  // Themes with the markCursor look: anything whose own style asks for the
+  // hand or the plain arrow gets the theme's arrow too (the theme's style
+  // sheet styles the mark).
   function markAeroCursor(e: MouseEvent) {
-    const root = document.documentElement;
-    if (!["meadow", "aqua", "moonlight", "prism", "phosphor", "mallpastel", "mallnight"].includes(root.dataset.theme ?? "")) return;
+    if (!themeLook().markCursor) return;
     for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
       if (el.dataset.aeroCursor !== undefined) return;
       const c = getComputedStyle(el).cursor;
@@ -1532,8 +1532,8 @@
 
   /** Puts settings that live outside the interface's own reads into effect. */
   function applyAppSettings(s: AppSettings, autosave: boolean) {
-    if (s.theme !== "dark") document.documentElement.dataset.theme = s.theme;
-    else delete document.documentElement.dataset.theme;
+    // The theme comes from its file, so it lands a moment later; views that draw themselves redraw then.
+    void applyThemeId(s.theme, s.unlockedThemes).then(() => appearanceChanged());
     const root = document.documentElement.style;
     for (const k of ["--wave", "--playhead", "--accent", "--lane-selected"]) root.removeProperty(k);
     for (const [k, v] of Object.entries(colorVars(s.colors))) root.setProperty(k, v);

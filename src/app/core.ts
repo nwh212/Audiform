@@ -109,6 +109,21 @@ export function revealMedia(path: string): Promise<void> {
   return invoke<void>("media_reveal", { path });
 }
 
+/** The Themes folder in the app config folder, made if it is not there yet. */
+export function themesDir(): Promise<string> {
+  return invoke<string>("themes_dir");
+}
+
+/** The `.audtheme` files in the Themes folder. */
+export function themesList(): Promise<{ fileName: string; size: number }[]> {
+  return invoke<{ fileName: string; size: number }[]>("themes_list");
+}
+
+/** The text of one theme file in the Themes folder. */
+export function themesRead(fileName: string): Promise<string> {
+  return invoke<string>("themes_read", { fileName });
+}
+
 /** Shows the Import Folder dialog. Resolves to null on cancel. */
 export function pickMediaFolder(): Promise<string | null> {
   return invoke<string | null>("media_pick_folder");
