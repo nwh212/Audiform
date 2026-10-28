@@ -86,8 +86,9 @@ mod win {
     use windows_sys::Win32::Graphics::Gdi::{
         Arc as ArcTo, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject,
         DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MonitorFromWindow,
-        MoveToEx, SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_RIGHT, DT_SINGLELINE,
-        DT_VCENTER, MONITOR_DEFAULTTONEAREST, NULL_BRUSH, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+        MoveToEx, SelectObject, SetBkMode, SetTextColor, DT_CENTER, DT_LEFT, DT_RIGHT,
+        DT_SINGLELINE, DT_VCENTER, MONITOR_DEFAULTTONEAREST, NULL_BRUSH, PAINTSTRUCT, PS_SOLID,
+        TRANSPARENT,
     };
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::HiDpi::{
@@ -96,14 +97,14 @@ mod win {
         MDT_EFFECTIVE_DPI,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
-        GetWindowLongPtrW, LoadCursorW, MoveWindow, PeekMessageW, RegisterClassW,
-        SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-        CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE,
-        SWP_NOMOVE, SWP_NOZORDER, SW_HIDE, SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED,
-        WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD,
-        WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME,
-        WS_VISIBLE,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumChildWindows,
+        GetClientRect, GetWindowLongPtrW, GetWindowRect, LoadCursorW, MoveWindow, PeekMessageW,
+        RegisterClassW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+        TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG,
+        PM_REMOVE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE, SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE,
+        WM_DPICHANGED, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION,
+        WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
+        WS_THICKFRAME, WS_VISIBLE,
     };
 
     use super::EditorWindow;
@@ -126,6 +127,8 @@ mod win {
         picked: Option<bool>,
         /// The strip's height in pixels at the window's scale.
         strip: i32,
+        /// "Fit" was pressed on the strip: size the window to the plug-in.
+        fit: bool,
     }
 
     unsafe fn state<'a>(hwnd: HWND) -> Option<&'a mut State> {
@@ -175,6 +178,62 @@ mod win {
         let mut r: RECT = std::mem::zeroed();
         GetClientRect(hwnd, &mut r);
         r
+    }
+
+    /// Writes one line about window sizes to a small log in the temp folder,
+    /// so a window that opens the wrong size can be looked into. Local only.
+    fn log(line: &str) {
+        use std::io::Write;
+        let path = std::env::temp_dir().join("audiform-plughost.log");
+        if std::fs::metadata(&path)
+            .map(|m| m.len() > 200_000)
+            .unwrap_or(false)
+        {
+            let _ = std::fs::remove_file(&path);
+        }
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            let _ = writeln!(f, "{secs} {line}");
+        }
+    }
+
+    /// The "Fit" button in the strip: centered, so it stays clear of the power button and the name.
+    fn fit_rect(r: &RECT, strip: i32) -> RECT {
+        let w = strip * 4;
+        let mid = (r.right + r.left) / 2;
+        RECT {
+            left: mid - w / 2,
+            top: r.bottom - strip,
+            right: mid + w / 2,
+            bottom: r.bottom,
+        }
+    }
+
+    /// How far the plug-in's own windows reach inside `child` (its real
+    /// size when it draws into windows of its own), if any are bigger than it.
+    unsafe fn reach_of_children(child: HWND) -> Option<(i32, i32)> {
+        unsafe extern "system" fn each(hwnd: HWND, lp: LPARAM) -> i32 {
+            let acc = &mut *(lp as *mut (i32, i32, i32, i32));
+            let mut r: RECT = std::mem::zeroed();
+            if GetWindowRect(hwnd, &mut r) != 0 {
+                acc.2 = acc.2.max(r.right - acc.0);
+                acc.3 = acc.3.max(r.bottom - acc.1);
+            }
+            1
+        }
+        let mut origin: RECT = std::mem::zeroed();
+        if GetWindowRect(child, &mut origin) == 0 {
+            return None;
+        }
+        let mut acc = (origin.left, origin.top, 0, 0);
+        EnumChildWindows(child, Some(each), &mut acc as *mut _ as LPARAM);
+        (acc.2 > 0 && acc.3 > 0).then_some((acc.2, acc.3))
     }
 
     /// The power button and its label, from the strip's left edge.
@@ -277,6 +336,15 @@ mod win {
             DT_LEFT | DT_VCENTER | DT_SINGLELINE,
         );
         SetTextColor(dc, rgb(0x8a, 0x8c, 0x96));
+        let mut fit_label = wide("Fit to plug-in");
+        let mut fr = fit_rect(&r, s);
+        DrawTextW(
+            dc,
+            fit_label.as_mut_ptr(),
+            -1,
+            &mut fr,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+        );
         let mut name = wide("Audiform");
         let mut nr = RECT {
             left: button_width(s),
@@ -327,10 +395,16 @@ mod win {
             WM_LBUTTONDOWN => {
                 let x = (lp & 0xFFFF) as i16 as i32;
                 let y = ((lp >> 16) & 0xFFFF) as i16 as i32;
-                if y >= client(hwnd).bottom - st.strip && x < button_width(st.strip) {
+                let c = client(hwnd);
+                if y >= c.bottom - st.strip && x < button_width(st.strip) {
                     st.bypassed = !st.bypassed;
                     st.picked = Some(st.bypassed);
                     InvalidateRect(hwnd, ptr::null(), 0);
+                } else {
+                    let f = fit_rect(&c, st.strip);
+                    if y >= f.top && x >= f.left && x < f.right {
+                        st.fit = true;
+                    }
                 }
                 0
             }
@@ -347,9 +421,51 @@ mod win {
         style: u32,
         resizable: bool,
         state: Box<State>,
+        opened: std::time::Instant,
+        last_poll: std::time::Instant,
+        /// The size the plug-in last said it wants.
+        wanted: (i32, i32),
     }
 
     impl Win {
+        /// Asks the plug-in how big it wants to be (and how far its own
+        /// windows reach), and grows the window to that when it is bigger
+        /// than the window's plug-in area. `force` also shrinks to it.
+        unsafe fn refit(&mut self, force: bool) {
+            let Some(v) = &self.view else { return };
+            let mut now: ViewRect = std::mem::zeroed();
+            let said = (v.getSize(&mut now) == kResultOk)
+                .then(|| (now.right - now.left, now.bottom - now.top))
+                .filter(|&(w, h)| w > 0 && h > 0);
+            let reach = reach_of_children(self.child);
+            let r = client(self.hwnd);
+            let have = (r.right, (r.bottom - self.state.strip).max(1));
+            let mut want = said.unwrap_or(have);
+            if let Some((rw, rh)) = reach {
+                want = (want.0.max(rw), want.1.max(rh));
+            }
+            if want != self.wanted || force {
+                log(&format!(
+                    "size: plug-in says {said:?}, its windows reach {reach:?}, window area {have:?}, force {force}"
+                ));
+                self.wanted = want;
+            }
+            let grow = want.0 > have.0 || want.1 > have.1;
+            if grow || (force && want != have) {
+                self.resize(want.0, want.1);
+                self.state.sized = None;
+                let mut vr = ViewRect {
+                    left: 0,
+                    top: 0,
+                    right: want.0,
+                    bottom: want.1,
+                };
+                if let Some(v) = &self.view {
+                    v.onSize(&mut vr);
+                }
+            }
+        }
+
         /// Fits the plug-in's area to the window, above the strip.
         unsafe fn fit_child(&self) -> (i32, i32) {
             let r = client(self.hwnd);
@@ -457,6 +573,7 @@ mod win {
                 bypassed,
                 picked: None,
                 strip,
+                fit: false,
             });
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, &mut *state as *mut State as isize);
             let child = CreateWindowExW(
@@ -501,7 +618,13 @@ mod win {
                 style,
                 resizable,
                 state,
+                opened: std::time::Instant::now(),
+                last_poll: std::time::Instant::now(),
+                wanted: (w, h),
             };
+            log(&format!(
+                "open: first size {w}x{h}, after attach {attached_size:?}, dpi {dpi}, resizable {resizable}"
+            ));
             if let Some((aw, ah)) = attached_size {
                 win.resize(aw, ah);
                 win.state.sized = None;
@@ -519,6 +642,16 @@ mod win {
                 while PeekMessageW(&mut msg, ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
+                }
+                // A plug-in often settles on its real size a moment after it
+                // opens: look again for the first few seconds, and when "Fit"
+                // is pressed on the strip.
+                let fit = std::mem::take(&mut self.state.fit);
+                let soon = self.opened.elapsed() < std::time::Duration::from_secs(4)
+                    && self.last_poll.elapsed() >= std::time::Duration::from_millis(250);
+                if fit || soon {
+                    self.last_poll = std::time::Instant::now();
+                    self.refit(fit);
                 }
                 // Moved to a monitor with another scale: tell the plug-in,
                 // then size the window to what it asks for.
