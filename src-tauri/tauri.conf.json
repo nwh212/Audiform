@@ -33,6 +33,14 @@
     "publisher": "Audiform",
     "copyright": "Copyright (c) The Audiform contributors. Based on Altered Audio Editor, copyright (c) The GeekCast Radio Network, LLC. Licensed under GPL-3.0-or-later.",
     "category": "Music",
+    "fileAssociations": [
+      {
+        "ext": ["audfrm"],
+        "name": "Audiform Session",
+        "description": "Audiform multitrack session",
+        "role": "Editor"
+      }
+    ],
     "shortDescription": "Multitrack audio editor for podcasters and voiceover",
     "icon": [
       "icons/32x32.png",

@@ -54,6 +54,7 @@ opus-decoder = "0.1.1"
 mp3lame-encoder = "0.2.5"
 flacenc = { version = "0.5.1", default-features = false }
 zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
 pretty_assertions = "1"

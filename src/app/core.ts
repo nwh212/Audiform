@@ -1382,6 +1382,16 @@ export function prerenderStatus(): Promise<PrerenderStatus[]> {
   return invoke<PrerenderStatus[]>("prerender_status");
 }
 
+/** Files Audiform was started with (File Explorer's Open or Open with); empty after the first call. */
+export function launchPaths(): Promise<string[]> {
+  return invoke<string[]>("launch_paths");
+}
+
+/** Calls `fn` with files opened from File Explorer while Audiform runs. Returns the stop function. */
+export function onOpenPaths(fn: (paths: string[]) => void): Promise<() => void> {
+  return listen<string[]>("open-paths", (e) => fn(e.payload));
+}
+
 /** Calls `fn` when a pre-render starts or finishes. Returns the stop function. */
 export function onPrerenderChanged(fn: () => void): Promise<() => void> {
   return listen("prerender-changed", () => fn());

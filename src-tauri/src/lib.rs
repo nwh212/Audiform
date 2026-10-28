@@ -22,7 +22,25 @@ pub mod sesx;
 
 /// Starts the desktop app.
 pub fn run() {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let launch = commands::app::file_args(std::env::args().skip(1), &cwd);
     tauri::Builder::default()
+        // Opening a session or audio file from File Explorer while Audiform
+        // runs hands it to the running window, which comes to the front,
+        // instead of starting a second, empty Audiform.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            use tauri::{Emitter, Manager};
+            let paths =
+                commands::app::file_args(argv.into_iter().skip(1), std::path::Path::new(&cwd));
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+            if !paths.is_empty() {
+                let _ = app.emit("open-paths", paths);
+            }
+        }))
+        .manage(commands::app::LaunchPaths(std::sync::Mutex::new(launch)))
         .manage(engine::PreviewPlayer::default())
         .manage(engine::Transport::default())
         .manage(engine::Recorder::default())
@@ -101,6 +119,7 @@ pub fn run() {
             commands::amp::amp_load_ir,
             commands::firewall::firewall_status,
             commands::app::alt_down,
+            commands::app::launch_paths,
             commands::firewall::firewall_block,
             commands::reverb::reverb_pick,
             commands::reverb::reverb_load,

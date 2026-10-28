@@ -34,6 +34,27 @@ pub fn app_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 /// Quits the app. Called from File > Exit.
+/// Files Audiform was started with (File Explorer's Open or Open with),
+/// handed to the interface once, when it is ready.
+#[derive(Default)]
+pub struct LaunchPaths(pub std::sync::Mutex<Vec<String>>);
+
+/// The arguments that name existing files, relative ones taken from `cwd`.
+pub fn file_args<I: IntoIterator<Item = String>>(args: I, cwd: &std::path::Path) -> Vec<String> {
+    args.into_iter()
+        .filter(|a| !a.starts_with('-'))
+        .map(|a| cwd.join(a))
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
+/// The files Audiform was started with; empty after the first call.
+#[tauri::command]
+pub fn launch_paths(state: tauri::State<'_, LaunchPaths>) -> Vec<String> {
+    std::mem::take(&mut *state.0.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
 /// Whether Alt is held, read from the system: while files are dragged in
 /// from the file manager the window hears no key presses. `None` where the
 /// system cannot say (the interface then uses its own key events).
