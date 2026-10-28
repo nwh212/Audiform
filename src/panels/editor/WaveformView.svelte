@@ -259,7 +259,37 @@
   /** dB marks on the level scale. */
   const MARKS = [0, -3, -6, -9, -12, -18, -24];
 
-  // Waveform.
+  // Waveform. The picture without the start marker and playhead is drawn
+  // off screen; the playhead moves about thirty times a second while playing,
+  // and moving it copies that picture and draws two lines instead of
+  // working out every column of the waveform again.
+  let waveBase: HTMLCanvasElement | null = null;
+  let headColor = "#53c28b";
+  function paintWaveHead() {
+    const c = canvas;
+    if (!c || !waveBase || c.width !== waveBase.width || c.height !== waveBase.height) return;
+    const g = c.getContext("2d");
+    if (!g) return;
+    const dpr = window.devicePixelRatio || 1;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(waveBase, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const w = width;
+    if (startMark !== null) {
+      const sx = xOf(startMark, view);
+      if (sx >= 0 && sx <= w) drawStartLine(g, sx, height, headColor);
+    }
+    const px = xOf(playhead, view);
+    if (px >= 0 && px <= w) {
+      g.fillStyle = headColor;
+      g.fillRect(Math.round(px), 0, 1, height);
+    }
+  }
+  $effect(() => {
+    void playhead;
+    void startMark;
+    untrack(paintWaveHead);
+  });
   $effect(() => {
     void peakTick;
     void live?.tick;
@@ -272,7 +302,10 @@
     c.height = Math.round(h * dpr);
     c.style.width = `${w + SCALE_W}px`;
     c.style.height = `${h}px`;
-    const g = c.getContext("2d");
+    waveBase ??= document.createElement("canvas");
+    waveBase.width = c.width;
+    waveBase.height = c.height;
+    const g = waveBase.getContext("2d");
     if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = css("--surface-0");
@@ -470,15 +503,7 @@
       g.fillRect(mx, 0, 2, RULER_H);
       g.fillText(m.name, mx + 4, 11);
     }
-    if (startMark !== null) {
-      const sx = xOf(startMark, view);
-      if (sx >= 0 && sx <= w) drawStartLine(g, sx, h, css("--playhead"));
-    }
-    const px = xOf(playhead, view);
-    if (px >= 0 && px <= w) {
-      g.fillStyle = css("--playhead");
-      g.fillRect(Math.round(px), 0, 1, h);
-    }
+    headColor = css("--playhead");
 
     // Level scale on the right.
     g.fillStyle = css("--surface-2");
@@ -504,6 +529,7 @@
       }
       g.fillText("-∞", w + 8, mid);
     }
+    untrack(paintWaveHead);
   });
 
   // Ruler.

@@ -199,6 +199,8 @@
   function css(name: string, fallback: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
   }
+  /** The ring color, read when the look changes and not on every picture (a style lookup each time). */
+  const ringColor = $derived((void looks, css("--accent", "#3fa9f5")));
 
   /** `fade` dims the last picture by that much (1 clears it), so dots leave a trail while playing. */
   function draw(bins: Float32Array, fade: number) {
@@ -235,7 +237,7 @@
     g.moveTo(mid, mid - R);
     g.lineTo(mid, mid + R);
     g.stroke();
-    g.strokeStyle = css("--accent", "#3fa9f5");
+    g.strokeStyle = ringColor;
     g.lineWidth = pixel ? PIXEL : 1.5;
     g.beginPath();
     g.arc(mid, mid, R, 0, Math.PI * 2);
