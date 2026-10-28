@@ -81,6 +81,9 @@ pub fn fetch(
                 }
                 let _ = std::fs::remove_file(&part);
                 let err = err.trim();
+                if err.contains("404") {
+                    return Err("That file is not published at the download address (404). If this is a new version of Audiform, its separation engine or model may not be released yet.".into());
+                }
                 return Err(if err.is_empty() {
                     "The download failed.".into()
                 } else {
