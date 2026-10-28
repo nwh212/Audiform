@@ -281,13 +281,18 @@ fn phase_bytes(p: &crate::engine::scope::Phase) -> Response {
     Response::new(out)
 }
 
+/// Async with the work on a blocking thread: a plain (sync) command runs on
+/// the main thread, which is also the window's message thread, so up to 120
+/// analyses a second there would stall every repaint and click.
 #[tauri::command]
-pub fn scope_phase(
+pub async fn scope_phase(
     size: usize,
     a: crate::engine::scope::Signal,
     b: crate::engine::scope::Signal,
-) -> Response {
+) -> Result<Response, String> {
     use crate::engine::scope;
-    let p = scope::analyse(&scope::latest(window(size)), a, b, scope::rate());
-    phase_bytes(&p)
+    let p = spawn_blocking(move || scope::analyse(&scope::latest(window(size)), a, b, scope::rate()))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(phase_bytes(&p))
 }
