@@ -81,6 +81,28 @@ pub fn catalog() -> Vec<ModelEntry> {
                 })
             },
         },
+        ModelEntry {
+            id: "mel-roformer-kim",
+            name: "Mel-Band Roformer (Kim)",
+            category: "Vocals and instrumental",
+            sdr: 10.98,
+            sdr_note: "vocals, Multisong test set",
+            target_name: "Vocals",
+            rest_name: "Instrumental",
+            author: "Kimberley Jensen",
+            page: "https://huggingface.co/KimberleyJSN/melbandroformer",
+            url: "https://huggingface.co/KimberleyJSN/melbandroformer/resolve/main/MelBandRoformer.ckpt",
+            sha256: "87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e",
+            bytes: 913_106_900,
+            licence: "MIT licence, as stated on the author's page.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 352800, "num_overlap": 2
+                })
+            },
+        },
     ]
 }
 

@@ -38,6 +38,7 @@ Models are not bundled or re-hosted. Audiform downloads each one from its author
 | PoPE (polar coordinate position embeddings) | Paper by its authors; reference code by Phil Wang (lucidrains, MIT) | The position scheme BS PolarFormer uses. |
 | Reference implementations and training code | Phil Wang (lucidrains, MIT); Roman Solovyev, ZFTurbo (Music-Source-Separation-Training, MIT) | Checked against for layer layout, chunking and overlap. |
 | BS PolarFormer weights | ZFTurbo (Music-Source-Separation-Training, release v1.0.20) | Offered for download from the author's release. No licence is stated for the weights. |
+| Mel-Band Roformer vocal model weights | Kimberley Jensen (huggingface.co/KimberleyJSN/melbandroformer) | Offered for download from the author's page, under the MIT licence stated there. |
 
 ## Bundled assets
 
