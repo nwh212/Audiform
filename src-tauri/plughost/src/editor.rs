@@ -78,8 +78,8 @@ mod win {
 
     use vst3::Steinberg::Vst::{IEditController, IEditControllerTrait, ViewType};
     use vst3::Steinberg::{
-        kPlatformTypeHWND, kResultTrue, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
-        IPlugViewContentScaleSupportTrait, IPlugViewTrait, ViewRect,
+        kPlatformTypeHWND, kResultOk, kResultTrue, IPlugFrame, IPlugView,
+        IPlugViewContentScaleSupport, IPlugViewContentScaleSupportTrait, IPlugViewTrait, ViewRect,
     };
     use vst3::{ComPtr, ComWrapper};
     use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -391,12 +391,15 @@ mod win {
                 // Fails harmlessly when the class is already registered.
                 RegisterClassW(&wc);
             }
-            let resizable = view.canResize() == kResultTrue;
-            let mut style =
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
-            if resizable {
-                style |= WS_THICKFRAME;
-            }
+            // Every plug-in window has a sizing frame: a plug-in that only
+            // says it can resize once it is attached, or one drawn larger
+            // than it said, can still be shown whole.
+            let style = WS_OVERLAPPED
+                | WS_CAPTION
+                | WS_SYSMENU
+                | WS_MINIMIZEBOX
+                | WS_CLIPCHILDREN
+                | WS_THICKFRAME;
             // Plug-in windows follow each monitor's scale (per-monitor DPI
             // aware), so a plug-in sizes and draws in real pixels. Plug-ins
             // that take the VST3 content scale are told it before they size
@@ -480,9 +483,13 @@ mod win {
                 DestroyWindow(hwnd);
                 return Err("The plug-in could not open its window.".into());
             }
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-            Ok(Box::new(Win {
+            // Some plug-ins only know (or say) their real size once attached.
+            let resizable = view.canResize() == kResultTrue;
+            let mut now: ViewRect = std::mem::zeroed();
+            let attached_size = (view.getSize(&mut now) == kResultOk)
+                .then(|| (now.right - now.left, now.bottom - now.top))
+                .filter(|&(aw, ah)| aw > 0 && ah > 0 && (aw, ah) != (w, h));
+            let mut win = Win {
                 hwnd,
                 child,
                 view: Some(view),
@@ -490,7 +497,14 @@ mod win {
                 style,
                 resizable,
                 state,
-            }))
+            };
+            if let Some((aw, ah)) = attached_size {
+                win.resize(aw, ah);
+                win.state.sized = None;
+            }
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+            Ok(Box::new(win))
         }
     }
 
@@ -538,7 +552,14 @@ mod win {
                             right: w,
                             bottom: h,
                         };
+                        // Sizes the plug-in can't take snap to the nearest it can.
+                        v.checkSizeConstraint(&mut r);
+                        let (cw, ch) = (r.right - r.left, r.bottom - r.top);
                         v.onSize(&mut r);
+                        if cw > 0 && ch > 0 && (cw, ch) != (w, h) {
+                            self.resize(cw, ch);
+                            self.state.sized = None;
+                        }
                     }
                 }
             }
