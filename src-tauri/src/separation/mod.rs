@@ -117,13 +117,14 @@ pub fn catalog() -> Vec<ModelEntry> {
             sdr_note: "vocals, MVSep Multisong set; bass 14.62, drums 14.11, guitar 9.05, piano 7.83, other 8.71",
             target_name: "Vocals",
             rest_name: "Instrumental",
+            // The model's outputs come in the order it was trained with.
             stems: &[
-                ("Vocals", 11.30),
-                ("Drums", 14.11),
                 ("Bass", 14.62),
+                ("Drums", 14.11),
+                ("Other", 8.71),
+                ("Vocals", 11.30),
                 ("Guitar", 9.05),
                 ("Piano", 7.83),
-                ("Other", 8.71),
             ],
             author: "Community (original trainer unknown), fixed for UVR and MSST by jarredou",
             page: "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed",
@@ -143,20 +144,20 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
-            id: "mega-bass",
+            id: "xlance-bass",
             name: "Bass (single instrument)",
             category: "Instruments",
             sdr: None,
-            sdr_note: "no public score for this single-instrument model",
+            sdr_note: "no public score; fine-tuned by X-LANCE from the 6-stem model above, whose own bass score is the published one",
             target_name: "Bass",
             rest_name: "Without bass",
             stems: &[],
-            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
-            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
-            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_bass_mvsep.ckpt",
-            sha256: "b17600dd1c2027a72ab34180ff6191d3bdeb786db9fbb13c58337c33fc10163c",
-            bytes: 77_616_219,
-            licence: "No licence is stated for the weights.",
+            author: "X-LANCE (MIT licence), as converted and re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/chenxie95/xlance-msr-ckpt",
+            url: "https://huggingface.co/noblebarkrr/mvsepless_resources/resolve/main/bs_roformer/bs_bass_xlancer.ckpt",
+            sha256: "c409465e3dccfd83fa34e6a807dbdae2f4f1db24f2f85a0fdc146b6fa828afff",
+            bytes: 204_411_168,
+            licence: "MIT licence, as stated on the X-LANCE page for the original files.",
             spec: || {
                 json!({
                     "arch": "bs",
@@ -164,25 +165,25 @@ pub fn catalog() -> Vec<ModelEntry> {
                         4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
                         48,48,48,48,48,48,48,48,128,129],
                     "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
-                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                    "heads": 8, "dim_head": 64, "chunk_size": 588800, "num_overlap": 2
                 })
             },
         },
         ModelEntry {
-            id: "mega-drums",
+            id: "xlance-drums",
             name: "Drums (single instrument)",
             category: "Instruments",
             sdr: None,
-            sdr_note: "no public score for this single-instrument model",
+            sdr_note: "no public score; fine-tuned by X-LANCE from the 6-stem model above, whose own drums score is the published one",
             target_name: "Drums",
             rest_name: "Without drums",
             stems: &[],
-            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
-            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
-            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_drums_mvsep.ckpt",
-            sha256: "abfa64203417f0874aa3936320b1666364ef1badd917f5613a3017d0ea73c7a2",
-            bytes: 77_616_988,
-            licence: "No licence is stated for the weights.",
+            author: "X-LANCE (MIT licence), as converted and re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/chenxie95/xlance-msr-ckpt",
+            url: "https://huggingface.co/noblebarkrr/mvsepless_resources/resolve/main/bs_roformer/bs_drums2_xlancer.ckpt",
+            sha256: "7d53b4d663212d748b1450ca9c9d97a13f8b95eeee1ac39cf986bc916f227314",
+            bytes: 204_412_534,
+            licence: "MIT licence, as stated on the X-LANCE page for the original files.",
             spec: || {
                 json!({
                     "arch": "bs",
@@ -190,25 +191,25 @@ pub fn catalog() -> Vec<ModelEntry> {
                         4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
                         48,48,48,48,48,48,48,48,128,129],
                     "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
-                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                    "heads": 8, "dim_head": 64, "chunk_size": 588800, "num_overlap": 2
                 })
             },
         },
         ModelEntry {
-            id: "mega-guitar",
+            id: "xlance-guitar",
             name: "Guitar (single instrument)",
             category: "Instruments",
             sdr: None,
-            sdr_note: "no public score for this single-instrument model",
+            sdr_note: "no public score; fine-tuned by X-LANCE from the 6-stem model above, whose own guitar score is the published one",
             target_name: "Guitar",
             rest_name: "Without guitar",
             stems: &[],
-            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
-            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
-            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_guitar_mvsep.ckpt",
-            sha256: "9e4524d60cc7eb01eae4048ecda6e3fbf9a9a404e12838f4ed58b8dfb733762d",
-            bytes: 77_617_693,
-            licence: "No licence is stated for the weights.",
+            author: "X-LANCE (MIT licence), as converted and re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/chenxie95/xlance-msr-ckpt",
+            url: "https://huggingface.co/noblebarkrr/mvsepless_resources/resolve/main/bs_roformer/bs_gtr_xlancer.ckpt",
+            sha256: "813a92bd210e1fc7412d658c777e3676b4991e33499437ea2f830d7b58af2684",
+            bytes: 204_409_973,
+            licence: "MIT licence, as stated on the X-LANCE page for the original files.",
             spec: || {
                 json!({
                     "arch": "bs",
@@ -216,25 +217,25 @@ pub fn catalog() -> Vec<ModelEntry> {
                         4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
                         48,48,48,48,48,48,48,48,128,129],
                     "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
-                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                    "heads": 8, "dim_head": 64, "chunk_size": 588800, "num_overlap": 2
                 })
             },
         },
         ModelEntry {
-            id: "mega-piano",
-            name: "Piano (single instrument)",
+            id: "xlance-keys",
+            name: "Piano and keys (single instrument)",
             category: "Instruments",
             sdr: None,
-            sdr_note: "no public score for this single-instrument model",
-            target_name: "Piano",
-            rest_name: "Without piano",
+            sdr_note: "no public score; fine-tuned by X-LANCE from the 6-stem model above, whose own piano and keys score is the published one",
+            target_name: "Piano and keys",
+            rest_name: "Without keys",
             stems: &[],
-            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
-            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
-            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_piano_mvsep.ckpt",
-            sha256: "8e58ad544386136028ec1f5764bb95a235235492144112d94782ff1333905fe9",
-            bytes: 77_616_988,
-            licence: "No licence is stated for the weights.",
+            author: "X-LANCE (MIT licence), as converted and re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/chenxie95/xlance-msr-ckpt",
+            url: "https://huggingface.co/noblebarkrr/mvsepless_resources/resolve/main/bs_roformer/bs_keys_xlancer.ckpt",
+            sha256: "09ec2bcde2f2cbc0001ef444c4854562bdebd8cf62e34d09311da8fc594090a3",
+            bytes: 204_409_973,
+            licence: "MIT licence, as stated on the X-LANCE page for the original files.",
             spec: || {
                 json!({
                     "arch": "bs",
@@ -242,7 +243,7 @@ pub fn catalog() -> Vec<ModelEntry> {
                         4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
                         48,48,48,48,48,48,48,48,128,129],
                     "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
-                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                    "heads": 8, "dim_head": 64, "chunk_size": 588800, "num_overlap": 2
                 })
             },
         },
@@ -421,6 +422,11 @@ mod tests {
         let files = j["outputs"].as_array().unwrap();
         assert_eq!(files.len(), 6);
         assert_eq!(files[3]["stems"], json!([3]));
+        // The model writes bass, drums, other, vocals, guitar, piano.
+        assert_eq!(
+            m.output_names(),
+            ["Bass", "Drums", "Other", "Vocals", "Guitar", "Piano"]
+        );
         assert!(files[3].get("rest").is_none());
         // A two-result model gives its target and the rest.
         let v = model("bs-polarformer").unwrap();

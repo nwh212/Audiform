@@ -101,23 +101,21 @@
       {#each groups as [category, models] (category)}
         <ul>
           {#each models as m (m.id)}
-            <li class:on={model?.id === m.id}>
-              <label class="pick" title={`${m.author}: ${m.page}`}>
+            <li class:on={model?.id === m.id} title={`${m.name}\n${m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`}\n${sizeText(m.bytes)}\nBy ${m.author}. ${m.licence}\nScore: ${m.sdrNote}. Higher is better.\n${m.page}`}>
+              <label class="pick">
                 <input type="radio" name="separation-model" checked={model?.id === m.id} onchange={() => pick(m.id)} />
                 <span class="name">{m.name}</span>
-                <span class="sdr" title={`Published score: ${m.sdrNote}. Higher is better.`}>{sdrText(m)}</span>
+                {#if m.installed}
+                  <button type="button" class="link" disabled={!!job} onclick={(e) => { e.preventDefault(); void tools.remove(m); }}>Remove</button>
+                {:else}
+                  <button type="button" class="link" disabled={!!job || !status.engineAvailable} onclick={(e) => { e.preventDefault(); void tools.download(m.id); }}>Download</button>
+                {/if}
               </label>
               <div class="meta">
-                <span>{m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`}</span>
+                <span class="sdr">{sdrText(m)}</span>
                 <span>{sizeText(m.bytes)}</span>
-                {#if m.installed}
-                  <span class="ok">Downloaded</span>
-                  <button type="button" class="link" disabled={!!job} onclick={() => void tools.remove(m)}>Remove</button>
-                {:else}
-                  <button type="button" class="link" disabled={!!job || !status.engineAvailable} onclick={() => void tools.download(m.id)}>Download</button>
-                {/if}
+                {#if m.installed}<span class="ok">Downloaded</span>{/if}
               </div>
-              <p class="licence">By {m.author}. {m.licence}</p>
             </li>
           {/each}
         </ul>
@@ -223,24 +221,21 @@
   .sdr {
     font-family: var(--font-mono);
     color: var(--value, var(--accent));
+    font-size: 10px;
   }
 
   .meta {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: var(--space-2);
-    margin: 2px 0 0 22px;
+    margin: 1px 0 0 22px;
     color: var(--text-dim);
+    font-size: 11px;
   }
 
   .ok {
     color: var(--accent);
-  }
-
-  .licence {
-    margin: 2px 0 0 22px;
-    color: var(--text-faint);
   }
 
   .link {

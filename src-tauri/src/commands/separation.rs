@@ -405,7 +405,13 @@ fn run_engine(
         }
     });
     let mut outcome: Option<Result<(), String>> = None;
+    // Once the engine has said it is done, it gets a few seconds to exit
+    // on its own, then it is stopped: it never lingers after a job.
+    let mut finished_at: Option<std::time::Instant> = None;
     loop {
+        if finished_at.is_some_and(|t| t.elapsed() > Duration::from_secs(5)) {
+            let _ = child.kill();
+        }
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
             let _ = child.wait();
@@ -423,13 +429,17 @@ fn run_engine(
                     },
                 );
             }
-            Ok(EngineLine::Done) => outcome = Some(Ok(())),
+            Ok(EngineLine::Done) => {
+                outcome = Some(Ok(()));
+                finished_at = Some(std::time::Instant::now());
+            }
             Ok(EngineLine::Error { gpu, message }) => {
                 outcome = Some(Err(if gpu {
                     format!("GPU: {message}")
                 } else {
                     message
-                }))
+                }));
+                finished_at = Some(std::time::Instant::now());
             }
             Ok(EngineLine::Other) | Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => {
