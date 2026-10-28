@@ -32,6 +32,10 @@ pub struct ClipSpec {
     pub start: u64,
     pub source_in: u64,
     pub source_out: u64,
+    /// Which of the file's channels the clip plays (one side of a stereo
+    /// file, say). None plays them as usual.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_mix: Option<ChannelMix>,
 }
 
 impl ClipSpec {
@@ -55,7 +59,7 @@ impl ClipSpec {
             looped: None,
             stretch: None,
             audio_type: None,
-            channel_mix: None,
+            channel_mix: self.channel_mix.clone(),
             reversed: false,
             inverted: false,
             invert_channel: None,
@@ -470,6 +474,7 @@ mod tests {
             start: 0,
             source_in: 0,
             source_out: 480_000,
+            channel_mix: None,
         };
         assert_eq!(
             apply(
@@ -526,6 +531,7 @@ mod tests {
                 start: 0,
                 source_in: 0,
                 source_out: 48_000,
+                channel_mix: None,
             }],
         });
         apply(&mut s, &Op::Batch { ops }).unwrap();
@@ -612,6 +618,7 @@ mod tests {
                     start: i as u64 * 1000,
                     source_in: 0,
                     source_out: 10_000,
+                    channel_mix: None,
                 })
                 .collect(),
         });
@@ -660,6 +667,7 @@ mod tests {
                             start: 0,
                             source_in: 0,
                             source_out: 100,
+                            channel_mix: None,
                         }],
                     },
                 ],
@@ -715,6 +723,7 @@ mod tests {
                             start: 0,
                             source_in: 0,
                             source_out: 48_000,
+                            channel_mix: None,
                         }],
                     },
                 ],
@@ -793,6 +802,7 @@ mod tests {
                             start: 0,
                             source_in: 0,
                             source_out: 48_000,
+                            channel_mix: None,
                         }],
                     },
                 ],

@@ -931,6 +931,7 @@ mod tests {
                     start: 48_000,
                     source_in: 44_100,
                     source_out: 88_200,
+                    channel_mix: None,
                 }],
             },
         )

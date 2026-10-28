@@ -465,6 +465,8 @@ export interface ClipSpec {
   start: number;
   source_in: number;
   source_out: number;
+  /** Which of the file's channels the clip plays; missing plays them as usual. */
+  channel_mix?: ChannelMixDoc;
 }
 
 export interface TrackChanges {

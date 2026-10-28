@@ -139,7 +139,7 @@
   } from "./core";
   import { isTauri } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import type { EffectChainDoc, EffectTarget, MediaRefDoc, SessionDoc } from "../stores/session";
+  import type { ChannelMixDoc, EffectChainDoc, EffectTarget, MediaRefDoc, SessionDoc } from "../stores/session";
   import PendingPanel from "../panels/PendingPanel.svelte";
   import VoiceChainPanel from "../panels/voice-chain/VoiceChainPanel.svelte";
   import { addSlot, chainOf, newSlot, type MenuPlugin } from "../panels/voice-chain/chain";
@@ -149,6 +149,7 @@
   import type { Finding } from "../panels/quickpass/quickpass";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
   import { prefs } from "../stores/prefs";
+  import { onlyChannel, pickedChannel } from "../stores/file-channels";
   import { libraries } from "../stores/library";
   import LibrariesPanel from "../panels/libraries/LibrariesPanel.svelte";
   import { mediaPool } from "../stores/media";
@@ -285,7 +286,7 @@
         const info = it!.info!;
         const track = below[k]?.id ?? newTrack(it, true);
         if (k === 0) target = track;
-        const clip = { id: uuid(), name: stem(it!.name), media_id: it!.id, start, source_in: 0, source_out: info.length };
+        const clip = { id: uuid(), name: stem(it!.name), media_id: it!.id, start, source_in: 0, source_out: info.length, ...picked(it!.path, info.channels) };
         ops.push({ op: "add_clips", track_id: track, clips: [clip] });
         clips.push(clip);
       });
@@ -297,11 +298,17 @@
     for (const it of items) {
       addMedia(it);
       const info = it!.info!;
-      list.push({ id: uuid(), name: stem(it!.name), media_id: it!.id, start: pos, source_in: 0, source_out: info.length });
+      list.push({ id: uuid(), name: stem(it!.name), media_id: it!.id, start: pos, source_in: 0, source_out: info.length, ...picked(it!.path, info.channels) });
       pos += Math.round((info.length * doc.sample_rate) / info.sampleRate);
     }
     ops.push({ op: "add_clips", track_id: target, clips: list });
     return { ops, clips: list, target };
+  }
+
+  /** A clip's Source Channels when one channel of its file was picked in the Files panel. */
+  function picked(path: string, channels: number): { channel_mix?: ChannelMixDoc } {
+    const k = pickedChannel(path, channels);
+    return k === null ? {} : { channel_mix: onlyChannel(k, channels) };
   }
 
   async function placeFiles(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string; asTracks?: boolean } = {}) {

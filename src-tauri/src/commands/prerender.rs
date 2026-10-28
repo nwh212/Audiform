@@ -149,6 +149,7 @@ pub fn heard(s: &Session) -> Cow<'_, Session> {
             start: 0,
             source_in: 0,
             source_out: len,
+            channel_mix: None,
         }
         .build()];
         t.midi_clips.clear();

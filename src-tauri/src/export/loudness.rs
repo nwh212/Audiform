@@ -141,6 +141,7 @@ mod tests {
                     start: 0,
                     source_in: 0,
                     source_out: 480_000,
+                    channel_mix: None,
                 }],
             },
         )

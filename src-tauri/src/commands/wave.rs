@@ -199,6 +199,7 @@ pub fn session_for(info: &codecs::AudioInfo) -> Result<Session, String> {
                     start: 0,
                     source_in: 0,
                     source_out: info.length,
+                    channel_mix: None,
                 }],
             },
         )

@@ -190,6 +190,7 @@ mod tests {
             start: 0,
             source_in: 0,
             source_out: 48_000,
+            channel_mix: None,
         }
         .build();
         c.channel_mix = mix;

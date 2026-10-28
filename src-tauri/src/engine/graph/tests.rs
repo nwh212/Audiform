@@ -86,6 +86,7 @@ fn track(s: &mut Session, path: &Path, start: u64, source_in: u64, len: u64) -> 
                 start,
                 source_in,
                 source_out: source_in + len,
+                channel_mix: None,
             }],
         },
     )
@@ -455,6 +456,7 @@ fn track_chain_reaches_every_clip() {
                         start,
                         source_in: 0,
                         source_out: 12_000,
+                        channel_mix: None,
                     }],
                 },
             )

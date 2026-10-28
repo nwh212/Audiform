@@ -9,6 +9,7 @@
   view draws the result and turns gestures into actions.
 -->
 <script lang="ts">
+  import { pickedChannel } from "../../stores/file-channels";
   import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
   import ColorPairPopover from "../../app/ColorPairPopover.svelte";
   import { SPECTRUM_HIGH, SPECTRUM_LOW, themeColor } from "../../app/colors";
@@ -54,13 +55,14 @@
     const w = width;
     laneWidths.update((l) => (l.waveform === w ? l : { ...l, waveform: w }));
   });
-  // Each file opens with every channel on.
+  // Each file opens with every channel on, or only the one picked in the Files panel.
   let channelFile: string | null = null;
   $effect(() => {
     const key = `${file?.path ?? ""}:${channels}`;
     if (key !== channelFile) {
       channelFile = key;
-      waveChannels.set(allOn(channels));
+      const k = file ? pickedChannel(file.path, channels) : null;
+      waveChannels.set(k === null ? allOn(channels) : allOn(channels).map((_, i) => i === k));
     }
   });
 

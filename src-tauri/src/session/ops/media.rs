@@ -100,6 +100,7 @@ mod tests {
             start: 0,
             source_in: 0,
             source_out: out,
+            channel_mix: None,
         };
         apply(
             &mut s,

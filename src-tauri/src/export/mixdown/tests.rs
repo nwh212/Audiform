@@ -124,6 +124,7 @@ fn a_surround_file_plays_each_channel_from_its_speaker() {
             start: 0,
             source_in: 0,
             source_out: 48_000,
+            channel_mix: None,
         }
         .build(),
     );
@@ -176,6 +177,7 @@ fn session_with(dir: &Path) -> (Session, Id, Id) {
                     start,
                     source_in: 0,
                     source_out: 48_000,
+                    channel_mix: None,
                 }],
             },
         )
@@ -251,6 +253,7 @@ fn sine_session(dir: &Path, peak: f32) -> Session {
                 start: 0,
                 source_in: 0,
                 source_out: 240_000,
+                channel_mix: None,
             }],
         },
     )

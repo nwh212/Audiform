@@ -24,6 +24,8 @@
   } from "./format";
   import { clickSelection, stepSelection } from "./selection";
   import { beginPathDrag } from "../../app/pathdrag";
+  import { fileChannels, pickChannel } from "../../stores/file-channels";
+  import { channelLabels } from "../properties/channel-mix";
   import { fileManagerName, revealLabel } from "../../lib/platform";
   import { previewPlay, previewStatus, previewStop } from "../../app/core";
   import { prefs } from "../../stores/prefs";
@@ -119,6 +121,18 @@
   let descending = $state(false);
   let anchor = $state<string | null>(null);
   let menu = $state<{ x: number; y: number } | null>(null);
+  /** The channel menu of one file: All, or one channel to work with or copy. */
+  let chanMenu = $state<{ x: number; y: number; path: string; channels: number } | null>(null);
+  const NAMES: Record<string, string> = { L: "Left", R: "Right", C: "Center", LFE: "Low frequency", M: "Mono" };
+  function chanItems(path: string, n: number): ContextItem[] {
+    const picked = $fileChannels[path];
+    const labels = channelLabels(n);
+    return [
+      { kind: "item", label: "All Channels", checked: picked === undefined, run: () => pickChannel(path, null) },
+      { kind: "sep" },
+      ...labels.map((l, k): ContextItem => ({ kind: "item", label: `${NAMES[l] ?? `Channel ${l}`} Only`, checked: picked === k, run: () => pickChannel(path, k) })),
+    ];
+  }
   /** Right-click on a session row: its own menu. */
   let sessionMenu = $state<{ x: number; y: number; id: string } | null>(null);
 
@@ -540,7 +554,21 @@
         onpointerdown={(e) => onRowPointer(e, it)}
         ondblclick={() => it.status === "ready" && onOpen(it.path)}
       >
-        <span class="col name">{it.name}</span>
+        <span class="col name"
+          >{#if it.info && it.info.channels > 1}{@const k = $fileChannels[it.path]}<button
+              type="button"
+              class="chan"
+              class:picked={k !== undefined}
+              title={k === undefined ? "Use one channel of this file (dropped clips play only it, the Waveform editor opens with only it on)" : `Only channel ${channelLabels(it.info.channels)[k]}: click to change`}
+              aria-label="Channels to use"
+              aria-haspopup="menu"
+              onpointerdown={(e) => e.stopPropagation()}
+              onclick={(e) => {
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                chanMenu = { x: r.left, y: r.bottom, path: it.path, channels: it.info!.channels };
+              }}>{k === undefined ? "▾" : channelLabels(it.info.channels)[k]}</button
+            >{/if}{it.name}</span
+        >
         <span class="col status {it.status}">
           <span class="dot" aria-hidden="true"></span>{statusText(it)}
         </span>
@@ -612,11 +640,32 @@
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => (menu = null)} />
 {/if}
+{#if chanMenu}
+  <ContextMenu x={chanMenu.x} y={chanMenu.y} items={chanItems(chanMenu.path, chanMenu.channels)} onClose={() => (chanMenu = null)} />
+{/if}
 {#if sessionMenu}
   <ContextMenu x={sessionMenu.x} y={sessionMenu.y} items={sessionItems(sessionMenu.id)} onClose={() => (sessionMenu = null)} />
 {/if}
 
 <style>
+  .chan {
+    margin-right: 4px;
+    min-width: 16px;
+    height: 14px;
+    padding: 0 3px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 9px;
+    line-height: 12px;
+    vertical-align: middle;
+  }
+  .chan.picked {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
   .row.session .name {
     font-weight: 600;
   }

@@ -155,6 +155,7 @@ mod tests {
                             start: 48_001,
                             source_in: 10,
                             source_out: 4_800,
+                            channel_mix: None,
                         }],
                     },
                 ],

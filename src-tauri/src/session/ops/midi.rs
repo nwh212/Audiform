@@ -163,6 +163,7 @@ mod tests {
                 start: 0,
                 source_in: 0,
                 source_out: 10,
+                channel_mix: None,
             }],
         };
         assert_eq!(apply(&mut s, &wrong), Err(OpError::WrongTrackKind));
