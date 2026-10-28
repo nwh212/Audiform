@@ -516,3 +516,134 @@ fn mixes_to_flac_and_mp3_at_another_rate() {
         assert!((secs - 3.0).abs() < 0.1, "{kind:?}: {secs} s");
     }
 }
+
+/// Runs an outside tool. None when it is not installed, unless the CI
+/// run says it must be.
+fn tool(name: &str, args: &[&std::ffi::OsStr]) -> Option<std::process::Output> {
+    match std::process::Command::new(name).args(args).output() {
+        Ok(o) => Some(o),
+        Err(_) => {
+            assert!(
+                std::env::var_os("AUDIFORM_REQUIRE_TOOLS").is_none(),
+                "{name} must be installed for this test"
+            );
+            None
+        }
+    }
+}
+
+#[test]
+fn every_format_passes_our_check_and_the_outside_tools() {
+    use crate::export::chapters::{embed_flac, embed_mp3, embed_wav, Chapter};
+    use crate::export::encode::{FormatKind, OutputFormat};
+    use crate::export::m4a_tags::write_m4a_chapters;
+    use crate::export::verify::{verify, Expect};
+    use std::ffi::OsStr;
+    let dir = tempfile::tempdir().unwrap();
+    let (s, _, _) = session_with(dir.path());
+    let chapters = vec![
+        Chapter {
+            title: "Intro".into(),
+            start_ms: 0,
+            end_ms: None,
+            url: None,
+        },
+        Chapter {
+            title: "Middle part".into(),
+            start_ms: 1_500,
+            end_ms: None,
+            url: None,
+        },
+        Chapter {
+            title: "Outro".into(),
+            start_ms: 2_700,
+            end_ms: None,
+            url: None,
+        },
+    ];
+    for kind in [
+        FormatKind::Wav,
+        FormatKind::Flac,
+        FormatKind::Mp3,
+        FormatKind::M4a,
+    ] {
+        // The Windows AAC encoder crashed the test process on a three second file
+        // (access violation), so it only runs when asked: AUDIFORM_TEST_AAC=1.
+        if kind == FormatKind::M4a
+            && cfg!(windows)
+            && std::env::var_os("AUDIFORM_TEST_AAC").is_none()
+        {
+            continue;
+        }
+        let out = dir.path().join(format!("mix.{}", kind.extension()));
+        let req = MixdownRequest {
+            format: Some(OutputFormat {
+                kind,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let r = match mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}) {
+            Ok(r) => r,
+            // AAC is written by the operating system's encoder; not every system has it.
+            Err(_) if kind == FormatKind::M4a => continue,
+            Err(e) => panic!("{kind:?}: {e}"),
+        };
+        match kind {
+            FormatKind::Wav => embed_wav(&out, &chapters).unwrap(),
+            FormatKind::Flac => embed_flac(&out, &chapters).unwrap(),
+            FormatKind::Mp3 => embed_mp3(&out, &chapters, 3_000).unwrap(),
+            FormatKind::M4a => write_m4a_chapters(&out, &chapters).unwrap(),
+        }
+        let rep = verify(
+            &out,
+            &Expect {
+                frames: r.frames,
+                sample_rate: r.sample_rate,
+                chapters: chapters.clone(),
+            },
+        );
+        assert!(rep.ok, "{kind:?}: {rep:?}");
+
+        if kind == FormatKind::Flac {
+            if let Some(o) = tool(
+                "flac",
+                &[OsStr::new("-t"), OsStr::new("--silent"), out.as_os_str()],
+            ) {
+                assert!(
+                    o.status.success(),
+                    "flac -t: {}",
+                    String::from_utf8_lossy(&o.stderr)
+                );
+            }
+        }
+        let args = [
+            OsStr::new("-v"),
+            OsStr::new("error"),
+            OsStr::new("-show_entries"),
+            OsStr::new("format=duration:stream=codec_type"),
+            OsStr::new("-show_chapters"),
+            OsStr::new("-of"),
+            OsStr::new("json"),
+            out.as_os_str(),
+        ];
+        if let Some(o) = tool("ffprobe", &args) {
+            let text = String::from_utf8_lossy(&o.stdout).into_owned();
+            assert!(
+                o.status.success() && o.stderr.is_empty(),
+                "{kind:?} ffprobe: {} {text}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+            assert!(text.contains("audio"), "{kind:?}: {text}");
+            // ffprobe reads chapters from MP3, FLAC and M4A, but takes no cue points as chapters.
+            if kind != FormatKind::Wav {
+                assert_eq!(
+                    text.matches("\"start_time\"").count(),
+                    3,
+                    "{kind:?}: {text}"
+                );
+                assert!(text.contains("Middle part"), "{kind:?}: {text}");
+            }
+        }
+    }
+}

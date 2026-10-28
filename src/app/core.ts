@@ -1124,6 +1124,21 @@ export function exportEmbedChapters(path: string, chapters: { title: string; sta
   return invoke<boolean>("export_embed_chapters", { path, chapters, totalMs });
 }
 
+/** One line of an export check. */
+export interface VerifyCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+/** Reads an exported file back and checks it: opens, decodes, length, chapters. */
+export function exportVerify(
+  path: string,
+  expect: { frames: number; sampleRate: number; chapters: { title: string; startMs: number; endMs: number | null }[] },
+): Promise<{ ok: boolean; checks: VerifyCheck[] }> {
+  return invoke<{ ok: boolean; checks: VerifyCheck[] }>("export_verify", { path, expect });
+}
+
 /** One control of a built-in effect, as the core describes it. */
 export interface EffectParamInfo {
   key: string;

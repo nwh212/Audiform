@@ -210,6 +210,7 @@ pub fn run() {
             commands::export::export_pick_path,
             commands::export::export_text,
             commands::export::export_embed_chapters,
+            commands::export::export_verify,
             commands::export::export_pick_folder,
             commands::export::paths_exist,
             commands::batch::batch_convert,

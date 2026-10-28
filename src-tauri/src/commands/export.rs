@@ -341,6 +341,19 @@ pub fn export_cancel(cancel: State<'_, ExportCancel>) {
     cancel.0.store(true, Ordering::Relaxed);
 }
 
+/// Reads a file just exported back and checks it against what the export
+/// should have made: it opens, decodes end to end, is the right length,
+/// and has its chapters.
+#[tauri::command]
+pub async fn export_verify(
+    path: PathBuf,
+    expect: crate::export::verify::Expect,
+) -> Result<crate::export::verify::Report, String> {
+    spawn_blocking(move || crate::export::verify::verify(&path, &expect))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Writes chapter markers into an exported MP3 (ID3 chapters), FLAC
 /// (Vorbis comments), WAV (cue points) or M4A (chapter list). Other formats are left as they are.
 #[tauri::command]

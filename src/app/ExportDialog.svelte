@@ -18,8 +18,10 @@
     folder: string;
     format: OutputFormat;
     addToFiles: boolean;
-    /** Write chapter markers into the file (MP3 and FLAC). */
+    /** Write chapter markers into the file (WAV, FLAC, MP3 and M4A). */
     chapters: boolean;
+    /** Read the file back after saving and check it. */
+    verify: boolean;
     /** A loudness target to bring the file to (an id from Check Loudness); "" leaves it as mixed. */
     normalize: string;
     /** 3D Space sessions: a speaker layout ("5.1", "7.1.4"...) or "binaural". */
@@ -171,6 +173,7 @@
 
     <section class="options">
       <label class="check"><input type="checkbox" bind:checked={s.addToFiles} /> Add the file to the Files panel</label>
+      <label class="check" title="Reads the finished file back from start to end: it opens, every sample decodes, it is the right length and the chapters are in it."><input type="checkbox" bind:checked={s.verify} /> Check the file after saving</label>
       {#if chapterCount > 0}
         <label class="check" class:off={!canChapter} title={canChapter ? "" : "Chapters go into WAV, FLAC, MP3 and M4A files. For other formats, use File > Export > Markers and Chapters."}>
           <input type="checkbox" bind:checked={s.chapters} disabled={!canChapter} /> Add the {chapterCount} chapter {chapterCount === 1 ? "marker" : "markers"} to the file
