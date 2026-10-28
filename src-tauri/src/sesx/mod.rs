@@ -27,9 +27,9 @@ use thiserror::Error;
 
 use crate::codecs::probe;
 use crate::session::model::{
-    new_id, Bus, ChannelLayout, Clip, ClipStretch, EffectChain, EffectSlot, Envelope,
-    EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id, MediaRef, Output, Session,
-    StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
+    new_id, Bus, ChannelLayout, ChannelMix, ChannelSend, Clip, ClipStretch, EffectChain,
+    EffectSlot, Envelope, EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id,
+    MediaRef, Output, Session, StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
 };
 
 #[derive(Debug, Error)]
@@ -78,6 +78,8 @@ pub struct Imported {
 struct FileEntry {
     absolute: Option<String>,
     relative: Option<String>,
+    /// The channel count the other editor noted for the file.
+    channels: Option<u16>,
 }
 
 fn attr<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
@@ -231,6 +233,79 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
         });
     }
     chain
+}
+
+/// The channel count in a `<file>`'s importer settings ("Channels:0:2").
+fn noted_channels(f: roxmltree::Node<'_, '_>) -> Option<u16> {
+    f.attribute("importerPrivateSettings")?
+        .split(';')
+        .find_map(|kv| kv.strip_prefix("Channels:"))?
+        .rsplit(':')
+        .next()?
+        .parse()
+        .ok()
+        .filter(|n| *n > 0)
+}
+
+/// A clip's `<channelMap>` as Source Channels: which of the file's
+/// channels feed the track's. None when it is the file's usual mix
+/// (each channel to its own side, or a mono file on both).
+///
+/// On a stereo track one listed channel plays on both sides (a mono
+/// source), as the other editor does when a clip uses only the left or
+/// right of a stereo file; two listed channels go left and right.
+fn channel_map(
+    c: roxmltree::Node<'_, '_>,
+    file_channels: u16,
+    stereo_track: bool,
+) -> Option<ChannelMix> {
+    let map: Vec<(usize, usize)> = child(c, "channelMap")?
+        .children()
+        .filter(|n| n.has_tag_name("channel"))
+        .filter_map(|n| {
+            Some((
+                n.attribute("index")?.parse().ok()?,
+                n.attribute("sourceIndex")?.parse().ok()?,
+            ))
+        })
+        .collect();
+    let n = usize::from(file_channels);
+    if map.is_empty() || n == 0 || map.iter().any(|&(_, src)| src >= n) {
+        return None;
+    }
+    let usual = if n == 1 {
+        map.iter().all(|&(_, src)| src == 0)
+    } else {
+        map.len() == n.min(2) && map.iter().all(|&(i, src)| i == src)
+    };
+    if usual {
+        return None;
+    }
+    let mut sends = vec![
+        ChannelSend {
+            left: 0.0,
+            right: 0.0
+        };
+        n
+    ];
+    let one = map.len() == 1 || !stereo_track;
+    for &(i, src) in &map {
+        let s = &mut sends[src];
+        if one {
+            *s = ChannelSend {
+                left: 1.0,
+                right: 1.0,
+            };
+        } else if i == 0 {
+            s.left = 1.0;
+        } else {
+            s.right = 1.0;
+        }
+    }
+    Some(ChannelMix {
+        sends,
+        to_speakers: false,
+    })
 }
 
 /// The component id of the other editor's Parametric Equalizer.
@@ -719,6 +794,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                     FileEntry {
                         absolute: f.attribute("absolutePath").map(str::to_string),
                         relative: f.attribute("relativePath").map(str::to_string),
+                        channels: noted_channels(f),
                     },
                 );
             }
@@ -856,6 +932,12 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                     m.length = m.length.max(source_out);
                 }
             }
+            let file_channels = session
+                .media
+                .iter()
+                .find(|m| m.id == media_id)
+                .map_or(2, |m| m.channels);
+            let channel_mix = channel_map(c, file_channels, stereo);
             let effects = racks(c, &mut report);
             let (gain_db, clip_line) = level(
                 &[Some(c)],
@@ -888,7 +970,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 looped: None,
                 stretch: clip_stretch,
                 audio_type: None,
-                channel_mix: None,
+                channel_mix,
                 reversed: false,
                 inverted: false,
                 invert_channel: None,
@@ -967,7 +1049,9 @@ fn resolve_media(
             path: PathBuf::from(stored),
             relative_path: None,
             sample_rate: session_rate,
-            channels: if stereo { 2 } else { 1 },
+            channels: entry
+                .and_then(|e| e.channels)
+                .unwrap_or(if stereo { 2 } else { 1 }),
             length: min_length,
         },
         false,
@@ -1118,7 +1202,10 @@ mod tests {
         let s = &out.session;
         assert_eq!(out.report.buses, 1);
         assert_eq!(out.report.plugins, 2);
-        assert_eq!(out.report.skipped_names, vec!["Built-in Reverb".to_string()]);
+        assert_eq!(
+            out.report.skipped_names,
+            vec!["Built-in Reverb".to_string()]
+        );
         assert_eq!(out.report.stretched, 1);
         let t = &s.tracks[0];
         assert_eq!(
@@ -1211,6 +1298,56 @@ mod tests {
         assert_eq!(p["b1_on"], 1.0);
         assert_eq!(p["gain"], 0.0);
         assert_eq!(p["hp_on"], 0.0);
+    }
+
+    #[test]
+    fn a_clip_using_one_side_of_a_stereo_file_keeps_to_that_side() {
+        let right = roxmltree::Document::parse(
+            r#"<audioClip><channelMap><channel index="0" sourceIndex="1"/></channelMap></audioClip>"#,
+        )
+        .unwrap();
+        let mix = channel_map(right.root_element(), 2, true).unwrap();
+        assert_eq!(
+            mix.sends[0],
+            ChannelSend {
+                left: 0.0,
+                right: 0.0
+            }
+        );
+        assert_eq!(
+            mix.sends[1],
+            ChannelSend {
+                left: 1.0,
+                right: 1.0
+            }
+        );
+        // Both sides as usual, or a mono file: nothing to set.
+        let both = roxmltree::Document::parse(
+            r#"<audioClip><channelMap><channel index="0" sourceIndex="0"/><channel index="1" sourceIndex="1"/></channelMap></audioClip>"#,
+        )
+        .unwrap();
+        assert!(channel_map(both.root_element(), 2, true).is_none());
+        let mono = roxmltree::Document::parse(
+            r#"<audioClip><channelMap><channel index="0" sourceIndex="0"/></channelMap></audioClip>"#,
+        )
+        .unwrap();
+        assert!(channel_map(mono.root_element(), 1, true).is_none());
+        // Left only of a stereo file.
+        let left = channel_map(mono.root_element(), 2, true).unwrap();
+        assert_eq!(
+            left.sends[0],
+            ChannelSend {
+                left: 1.0,
+                right: 1.0
+            }
+        );
+        assert_eq!(
+            left.sends[1],
+            ChannelSend {
+                left: 0.0,
+                right: 0.0
+            }
+        );
     }
 
     #[test]
