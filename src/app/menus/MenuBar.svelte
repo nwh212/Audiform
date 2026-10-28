@@ -19,6 +19,7 @@
 </script>
 
 <script lang="ts">
+  import { tick as nextTick } from "svelte";
   import type { ActionRegistry } from "../actions";
   import ContextMenu from "../ContextMenu.svelte";
   import { isTypingKey, typeahead } from "../typeahead";
@@ -243,6 +244,7 @@
         const dir = e.key === "ArrowDown" ? 1 : -1;
         if (openSub !== null) subActive = step(sub, subActive, dir);
         else active = step(items, active, dir);
+        showActive();
         break;
       }
       case "ArrowRight": {
@@ -275,6 +277,28 @@
     // A popup list lives at the end of the page (see ContextMenu), so it counts as inside too.
     const t = e.target as Element;
     if (openMenu !== null && !root.contains(t) && !t.closest?.(".context")) close();
+  }
+
+  /**
+   * Keeps a submenu on screen: capped to the window's height and scrolling
+   * inside when it is longer (the plug-in list can be), and moved up when it
+   * would run off the bottom.
+   */
+  function fit(node: HTMLElement) {
+    const margin = 8;
+    const room = window.innerHeight - margin * 2;
+    node.style.maxHeight = `${room}px`;
+    const rect = node.getBoundingClientRect();
+    const over = rect.top + rect.height - (window.innerHeight - margin);
+    if (over > 0) node.style.top = `${-5 - over}px`;
+  }
+
+  /** Brings the row the arrow keys are on into view in a scrolling submenu. */
+  function showActive() {
+    void nextTick().then(() => {
+      const row = root.querySelector(".dropdown.sub .row.active") ?? root.querySelector(".row.active");
+      row?.scrollIntoView({ block: "nearest" });
+    });
   }
 </script>
 
@@ -327,7 +351,7 @@
       </span>
     </button>
     {#if !inSub && it.kind === "submenu" && openSub === index}
-      <div class="dropdown sub" role="menu">
+      <div class="dropdown sub" role="menu" use:fit>
         {#each shown(it.items) as child, ci (ci)}
           {@render row(child, ci, true)}
         {/each}
@@ -484,6 +508,11 @@
     top: -5px;
     left: 100%;
     min-width: 220px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
 
   .row {
