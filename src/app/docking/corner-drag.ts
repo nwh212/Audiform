@@ -108,16 +108,20 @@ export function enableCornerDrag(host: HTMLElement): () => void {
     window.addEventListener("pointerup", onUp, true);
   };
 
-  // A hint: over a meeting point the pointer becomes a four-way mover.
-  let hinted: HTMLElement | null = null;
+  // A hint: over a meeting point the pointer becomes a four-way mover. This is
+  // a class on the docking area (a style rule gives the handles the move
+  // pointer), not a pointer set on a handle, so the theme pointers and the
+  // handles' own resize pointers never get tangled.
+  let hot = false;
+  const setHot = (on: boolean) => {
+    if (on === hot) return;
+    hot = on;
+    host.classList.toggle("corner-hot", on);
+  };
   const onMove = (e: PointerEvent) => {
     if (e.buttons !== 0) return;
     const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(SASH);
-    const together = !!target && others(target, e.clientX, e.clientY).length > 0;
-    const want = together ? target : null;
-    if (hinted && hinted !== want) hinted.style.removeProperty("cursor");
-    if (want) want.style.setProperty("cursor", "move", "important");
-    hinted = want;
+    setHot(!!target && others(target, e.clientX, e.clientY).length > 0);
   };
 
   host.addEventListener("pointerdown", onDown, true);
@@ -125,6 +129,6 @@ export function enableCornerDrag(host: HTMLElement): () => void {
   return () => {
     host.removeEventListener("pointerdown", onDown, true);
     host.removeEventListener("pointermove", onMove, true);
-    hinted?.style.removeProperty("cursor");
+    setHot(false);
   };
 }

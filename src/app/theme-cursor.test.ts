@@ -18,6 +18,13 @@ describe("theme pointers", () => {
     expect(themedFor("nwse-resize", "phosphor")).toMatch(/^url\(.+\) 9 9, nwse-resize$/);
   });
 
+  it("every themed set has a four-way move pointer", () => {
+    for (const t of ["prism", "aqua", "meadow", "moonlight", "phosphor", "mallpastel", "mallnight"]) {
+      expect(themedFor("move", t), t).toMatch(/, move$/);
+    }
+    expect(themedFor("move", "dark")).toBeNull();
+  });
+
   it("gives each pixel-art pointer its own hot spot", () => {
     expect(themedFor("text", "phosphor")).toMatch(/\) 7 10, text$/);
     expect(themedFor("ew-resize", "phosphor")).toMatch(/\) 11 5, ew-resize$/);

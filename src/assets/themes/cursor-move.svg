@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 32 32">
+  <!-- Audiform scene themes: a glowing blue glass four-way arrow. Center (16, 16). -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#d8f8ff"/>
+      <stop offset="0.35" stop-color="#5cc8ff"/>
+      <stop offset="0.75" stop-color="#1a86f0"/>
+      <stop offset="1" stop-color="#0a4fc8"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.1"/>
+    </filter>
+  </defs>
+  <g>
+    <path id="p" d="M16 2 L22 8.5 H18.4 V13.6 H23.5 V10 L30 16 L23.5 22 V18.4 H18.4 V23.5 H22 L16 30 L10 23.5 H13.6 V18.4 H8.5 V22 L2 16 L8.5 10 V13.6 H13.6 V8.5 H10 Z" fill="none" stroke="#5ec6ff" stroke-width="2.6" stroke-linejoin="round" filter="url(#glow)"/>
+    <path d="M16 2 L22 8.5 H18.4 V13.6 H23.5 V10 L30 16 L23.5 22 V18.4 H18.4 V23.5 H22 L16 30 L10 23.5 H13.6 V18.4 H8.5 V22 L2 16 L8.5 10 V13.6 H13.6 V8.5 H10 Z" fill="url(#body)" stroke="#8fdcff" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M16 5 L19 8.2 M14.6 12.6 V9.6 M12.6 14.6 H9.4" stroke="#ffffff" stroke-width="0.9" stroke-linecap="round" opacity="0.85"/>
+  </g>
+</svg>

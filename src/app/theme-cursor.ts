@@ -18,6 +18,7 @@ import glassEw from "../assets/themes/cursor-ew.svg";
 import glassNs from "../assets/themes/cursor-ns.svg";
 import glassNwse from "../assets/themes/cursor-nwse.svg";
 import glassNesw from "../assets/themes/cursor-nesw.svg";
+import glassMove from "../assets/themes/cursor-move.svg";
 import glassGrab from "../assets/themes/cursor-grab.svg";
 import glassGrabbing from "../assets/themes/cursor-grabbing.svg";
 import pxText from "../assets/themes/phosphor-text.svg";
@@ -25,6 +26,7 @@ import pxEw from "../assets/themes/phosphor-ew.svg";
 import pxNs from "../assets/themes/phosphor-ns.svg";
 import pxNwse from "../assets/themes/phosphor-nwse.svg";
 import pxNesw from "../assets/themes/phosphor-nesw.svg";
+import pxMove from "../assets/themes/phosphor-move.svg";
 import pxGrab from "../assets/themes/phosphor-grab.svg";
 import pxGrabbing from "../assets/themes/phosphor-grabbing.svg";
 import mpText from "../assets/themes/mallpastel-text.svg";
@@ -32,6 +34,7 @@ import mpEw from "../assets/themes/mallpastel-ew.svg";
 import mpNs from "../assets/themes/mallpastel-ns.svg";
 import mpNwse from "../assets/themes/mallpastel-nwse.svg";
 import mpNesw from "../assets/themes/mallpastel-nesw.svg";
+import mpMove from "../assets/themes/mallpastel-move.svg";
 import mpGrab from "../assets/themes/mallpastel-grab.svg";
 import mpGrabbing from "../assets/themes/mallpastel-grabbing.svg";
 import mpBusy from "../assets/themes/mallpastel-busy.svg";
@@ -43,6 +46,8 @@ interface PointerSet {
   ns: string;
   nwse: string;
   nesw: string;
+  /** Four-way move (several panel handles grabbed at once). */
+  move: string;
   grab: string;
   grabbing: string;
   /** Busy (waiting) pointer, for themes that draw one. */
@@ -51,7 +56,7 @@ interface PointerSet {
   hot: number | Record<Kind, [number, number]>;
 }
 
-type Kind = "text" | "ew" | "ns" | "nwse" | "nesw" | "grab" | "grabbing" | "busy";
+type Kind = "text" | "ew" | "ns" | "nwse" | "nesw" | "move" | "grab" | "grabbing" | "busy";
 
 const GLASS: PointerSet = {
   text: glassText,
@@ -59,6 +64,7 @@ const GLASS: PointerSet = {
   ns: glassNs,
   nwse: glassNwse,
   nesw: glassNesw,
+  move: glassMove,
   grab: glassGrab,
   grabbing: glassGrabbing,
   hot: 10,
@@ -69,6 +75,7 @@ const PHOSPHOR: PointerSet = {
   ns: pxNs,
   nwse: pxNwse,
   nesw: pxNesw,
+  move: pxMove,
   grab: pxGrab,
   grabbing: pxGrabbing,
   // Pixel art at 2 screen pixels per cell, so each picture has its own middle.
@@ -78,6 +85,7 @@ const PHOSPHOR: PointerSet = {
     ns: [5, 11],
     nwse: [9, 9],
     nesw: [9, 9],
+    move: [10, 10],
     grab: [10, 9],
     grabbing: [10, 7],
     busy: [10, 10],
@@ -90,6 +98,7 @@ const MALL_PASTEL: PointerSet = {
   ns: mpNs,
   nwse: mpNwse,
   nesw: mpNesw,
+  move: mpMove,
   grab: mpGrab,
   grabbing: mpGrabbing,
   busy: mpBusy,
@@ -125,6 +134,8 @@ const KIND: Record<string, Kind> = {
   "nesw-resize": "nesw",
   "ne-resize": "nesw",
   "sw-resize": "nesw",
+  move: "move",
+  "all-scroll": "move",
   grab: "grab",
   grabbing: "grabbing",
   wait: "busy",

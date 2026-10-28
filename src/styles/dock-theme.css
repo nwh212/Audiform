@@ -263,3 +263,8 @@ body.aa-small-tabs .dockview-theme-altaudio {
 .dv-context-menu-separator {
   background: var(--border);
 }
+
+/* Where several panel handles meet, grabbing them all: a four-way move pointer. */
+.corner-hot .dv-sash {
+  cursor: move !important;
+}
