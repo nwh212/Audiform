@@ -998,3 +998,28 @@
 :root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) footer.status .discord:hover {
   opacity: 1;
 }
+
+/*
+  Panes: the frosted look without a live blur. A backdrop-filter on every
+  panel is blurred again whenever anything in the panel repaints (the
+  playhead, meters, the Phase Wheel), which dropped these themes to a
+  fraction of the frame rate. Each pane paints a copy of its scene blurred
+  once (scripts/themes/make-glass-blur.py), fixed to the window like the
+  scene, under the same glass tint. Same look, nothing to redo per frame.
+*/
+:root[data-theme="meadow"] {
+  --a-scene-blur: url("../assets/themes/meadow-glass.webp");
+}
+:root[data-theme="aqua"] {
+  --a-scene-blur: url("../assets/themes/aqua-glass.webp");
+}
+:root[data-theme="moonlight"] {
+  --a-scene-blur: url("../assets/themes/moonlight-glass.webp");
+}
+:root[data-theme="prism"] {
+  --a-scene-blur: url("../assets/themes/prism-glass.webp");
+}
+:root:is([data-theme="meadow"], [data-theme="aqua"], [data-theme="moonlight"], [data-theme="prism"]) .dockview-theme-altaudio .dv-groupview {
+  background: var(--a-pane), var(--a-scene-blur) center / cover no-repeat fixed;
+  backdrop-filter: none;
+}
