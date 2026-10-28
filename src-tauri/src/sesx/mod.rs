@@ -27,8 +27,9 @@ use thiserror::Error;
 
 use crate::codecs::probe;
 use crate::session::model::{
-    new_id, Bus, ChannelLayout, Clip, ClipStretch, EffectChain, EffectSlot, Fade, FadeShape, Id,
-    MediaRef, Output, Session, StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
+    new_id, Bus, ChannelLayout, Clip, ClipStretch, EffectChain, EffectSlot, Envelope,
+    EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id, MediaRef, Output, Session,
+    StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
 };
 
 #[derive(Debug, Error)]
@@ -332,15 +333,84 @@ fn stretch(n: Option<roxmltree::Node<'_, '_>>) -> Option<ClipStretch> {
     })
 }
 
-/// Level, mute and pan of a track or bus from its parameters.
-fn mix_params(a: roxmltree::Node<'_, '_>) -> (f64, bool, f64) {
-    let muted = component_param(a, "Audition.Mute", "mute").is_some_and(|v| v >= 0.5);
-    let volume = component_param(a, "Audition.Fader", "volume").map_or(0.0, gain_to_db);
-    let pan = component_param(a, "Audition.StereoPanner", "Pan").map_or(0.0, |p| {
+/// Level, mute, pan and any drawn volume line of a track or bus. Its
+/// components sit in its audio parameters or straight inside the track,
+/// depending on the version that saved the file, so both are looked at.
+fn mix_params(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, bool, f64, Option<Envelope>) {
+    let first = |component: &str, param: &str| {
+        nodes
+            .iter()
+            .flatten()
+            .find_map(|n| component_param(*n, component, param))
+    };
+    let muted = first("Audition.Mute", "mute").is_some_and(|v| v >= 0.5);
+    let pan = first("Audition.StereoPanner", "Pan").map_or(0.0, |p| {
         let p = if p.abs() <= 1.0 { p * 100.0 } else { p };
         p.clamp(-100.0, 100.0).round()
     });
-    (volume, muted, pan)
+    let (volume, envelope) = level(nodes);
+    (volume, muted, pan, envelope)
+}
+
+/// The volume fader of a track, bus or clip: the first `Audition.Fader`
+/// component among the nodes' children.
+fn fader<'a, 'i>(nodes: &[Option<roxmltree::Node<'a, 'i>>]) -> Option<roxmltree::Node<'a, 'i>> {
+    nodes.iter().flatten().find_map(|n| {
+        n.children().find(|c| {
+            c.has_tag_name("component") && c.attribute("componentID") == Some("Audition.Fader")
+        })
+    })
+}
+
+/// A fader's level in dB, and its volume line when one was drawn.
+///
+/// The fader keeps two gains that multiply: `volume` (the level you see
+/// and draw on) and `static gain` (a fixed gain under it). A drawn line
+/// keeps its points as `parameterKeyframe`s under `volume`, positions
+/// counted from the start of the clip (or of the session, for a track),
+/// values as gains. Then the line is the level, imported as a volume
+/// envelope, and only the static gain stays as the fixed level.
+fn level(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> (f64, Option<Envelope>) {
+    let Some(f) = fader(nodes) else {
+        return (0.0, None);
+    };
+    let param = |name: &str| {
+        f.children()
+            .find(|p| p.has_tag_name("parameter") && p.attribute("name") == Some(name))
+    };
+    let value = |p: roxmltree::Node<'_, '_>, key: &str| {
+        p.attribute(key).and_then(|v| v.trim().parse::<f64>().ok())
+    };
+    let fixed = param("static gain")
+        .and_then(|p| value(p, "parameterValue"))
+        .unwrap_or(1.0);
+    let volume = param("volume");
+    let mut points: Vec<EnvelopePoint> = volume
+        .into_iter()
+        .flat_map(|v| v.children().filter(|k| k.has_tag_name("parameterKeyframe")))
+        .filter_map(|k| {
+            Some(EnvelopePoint {
+                position: value(k, "sampleOffset")?.max(0.0).round() as u64,
+                value: gain_to_db(value(k, "value")?),
+                curve: EnvelopeCurve::Linear,
+            })
+        })
+        .collect();
+    if points.is_empty() {
+        let v = volume
+            .and_then(|p| value(p, "parameterValue"))
+            .unwrap_or(1.0);
+        return (gain_to_db(v * fixed), None);
+    }
+    points.sort_by_key(|p| p.position);
+    let envelope = Envelope {
+        id: new_id(),
+        target: EnvelopeTarget::Volume,
+        enabled: true,
+        points,
+        height: None,
+    };
+    (gain_to_db(fixed), Some(envelope))
 }
 
 /// Where a track or bus sends its sound: a bus by its `.sesx` id, else the master.
@@ -455,9 +525,9 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 ChannelLayout::Stereo
             },
         );
-        if let Some(a) = audio {
-            (bus.volume_db, bus.muted, bus.pan) = mix_params(a);
-        }
+        let env;
+        (bus.volume_db, bus.muted, bus.pan, env) = mix_params(&[audio, Some(*b)]);
+        bus.envelopes.extend(env);
         if let Some(id) = b.attribute("id") {
             bus_ids.insert(id.to_string(), bus.id);
         }
@@ -506,8 +576,10 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         if let Some(a) = audio {
             track.solo = a.attribute("solo") == Some("true");
             track.record_armed = a.attribute("recordArmed") == Some("true");
-            (track.volume_db, track.muted, track.pan) = mix_params(a);
         }
+        let env;
+        (track.volume_db, track.muted, track.pan, env) = mix_params(&[audio, Some(t)]);
+        track.envelopes.extend(env);
         track.output = output_of(audio, &bus_ids);
         track.effects = racks(t, &mut report);
 
@@ -554,6 +626,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 }
             }
             let effects = racks(c, &mut report);
+            let (gain_db, clip_line) = level(&[Some(c)]);
             if clip_stretch.is_some() {
                 report.stretched += 1;
             }
@@ -564,13 +637,13 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 start: attr_u64(c, "startPoint").unwrap_or(0),
                 source_in,
                 source_out,
-                gain_db: 0.0,
-                muted: false,
+                gain_db,
+                muted: component_param(c, "Audition.Mute", "mute").is_some_and(|v| v >= 0.5),
                 locked: c.attribute("lockedInTime") == Some("true"),
                 color: None,
                 fade_in: fade(child(c, "fadeIn"), true),
                 fade_out: fade(child(c, "fadeOut"), false),
-                envelopes: Vec::new(),
+                envelopes: clip_line.into_iter().collect(),
                 effects,
                 group: None,
                 looped: None,
@@ -592,9 +665,10 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         .flat_map(|n| n.children())
         .find(|n| n.has_tag_name("masterTrack"))
     {
-        if let Some(a) = child(master, "trackAudioParameters") {
-            session.master.volume_db = mix_params(a).0;
-        }
+        let (volume, _, _, env) =
+            mix_params(&[child(master, "trackAudioParameters"), Some(master)]);
+        session.master.volume_db = volume;
+        session.master.envelopes.extend(env);
         session.master.effects = racks(master, &mut report);
     }
 
@@ -863,6 +937,57 @@ mod tests {
         assert!(matches!(import(&p), Err(SesxError::NoSession)));
         std::fs::write(&p, "not xml at all").unwrap();
         assert!(matches!(import(&p), Err(SesxError::Xml(_))));
+    }
+
+    #[test]
+    fn imports_clip_and_track_levels_and_drawn_volume_lines() {
+        const LEVELS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<sesx version="1.9">
+  <session sampleRate="44100" duration="400000">
+    <tracks>
+      <audioTrack id="10001" index="1">
+        <trackParameters><name>A</name></trackParameters>
+        <trackAudioParameters audioChannelType="stereo"/>
+        <component componentID="Audition.Fader" id="trackFader" name="volume" powered="true">
+          <parameter index="0" name="volume" parameterValue="0.5"/>
+          <parameter index="1" name="static gain" parameterValue="1"/>
+        </component>
+        <audioClip fileID="0" id="0" name="quiet" sourceInPoint="0" sourceOutPoint="44100" startPoint="0" endPoint="44100">
+          <component componentID="Audition.Fader" id="clipGain" name="volume" powered="true">
+            <parameter index="0" name="volume" parameterValue="0.5"/>
+            <parameter index="1" name="static gain" parameterValue="0.5"/>
+          </component>
+        </audioClip>
+        <audioClip fileID="0" id="1" name="drawn" sourceInPoint="0" sourceOutPoint="44100" startPoint="44100" endPoint="88200">
+          <component componentID="Audition.Fader" id="clipGain" name="volume" powered="true">
+            <parameter index="0" name="volume" parameterValue="1">
+              <parameterKeyframe sampleOffset="22050" value="0.5"/>
+              <parameterKeyframe sampleOffset="0" value="1"/>
+            </parameter>
+          </component>
+        </audioClip>
+      </audioTrack>
+    </tracks>
+  </session>
+  <files><file id="0" absolutePath="Z:\nowhere\a.wav"/></files>
+</sesx>"#;
+        let dir = tempfile::tempdir().unwrap();
+        let sesx = dir.path().join("Levels.sesx");
+        std::fs::write(&sesx, LEVELS).unwrap();
+        let s = import(&sesx).unwrap().session;
+        let t = &s.tracks[0];
+        // The track's fader sits straight inside the track in this file.
+        assert_eq!(t.volume_db, -6.0);
+        // Volume and static gain multiply: 0.5 x 0.5 is -12 dB.
+        assert_eq!(t.clips[0].gain_db, -12.0);
+        assert!(t.clips[0].envelopes.is_empty());
+        // A drawn line comes in as a volume envelope, points in order.
+        let drawn = &t.clips[1];
+        assert_eq!(drawn.gain_db, 0.0);
+        let env = &drawn.envelopes[0];
+        assert_eq!(env.target, EnvelopeTarget::Volume);
+        let pts: Vec<_> = env.points.iter().map(|p| (p.position, p.value)).collect();
+        assert_eq!(pts, vec![(0, 0.0), (22050, -6.0)]);
     }
 
     #[test]
