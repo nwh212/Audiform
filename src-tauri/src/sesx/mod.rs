@@ -311,12 +311,9 @@ fn channel_map(
 /// The component id of the other editor's Parametric Equalizer.
 const PARAMETRIC_EQ_ID: &str = "8edcd326-33de-4a4d-985b-f1bf48ed1427";
 
-/// Hertz for a 1.0 frequency knob: 0.000625 is 20 Hz, 0.5622 is 17,980 Hz.
-const EQ_HZ_SPAN: f64 = 31_980.0;
-/// dB from the flat middle (0.5) to either end of a band gain knob.
-/// Every gain in the tester's sessions sits on a 1/16 dB grid at this
-/// span; to be checked against the other editor's own readout.
-const EQ_DB_HALF_SPAN: f64 = 38.0;
+/// dB from the flat middle (0.5) to either end of a gain knob: ±48 dB,
+/// checked against the other editor's own readout (Band 2 at +6.3 dB).
+const EQ_DB_HALF_SPAN: f64 = 48.0;
 
 /// Parametric EQ settings from the other editor's equalizer (its knobs
 /// are written out as 0 to 1 values with their names).
@@ -327,9 +324,26 @@ fn parametric_eq_params(c: roxmltree::Node<'_, '_>) -> std::collections::BTreeMa
             .and_then(|p| p.attribute("parameterValue"))
             .and_then(|v| v.trim().parse::<f64>().ok())
     };
-    let hz = |v: f64| (v * EQ_HZ_SPAN).round();
+    // Frequencies run from 20 Hz to half the rate the effect was set up
+    // at, which it keeps as a share of 192 kHz (0.2297 is 44.1 kHz).
+    let nyquist = knob("Original Sample Rate")
+        .filter(|v| *v > 0.0)
+        .map_or(22_050.0, |v| v * 192_000.0 / 2.0);
+    let hz = |v: f64| (20.0 + v * (nyquist - 20.0)).round();
     let db = |v: f64| ((v - 0.5) * 2.0 * EQ_DB_HALF_SPAN * 100.0).round() / 100.0;
     let on = |v: f64| if v >= 0.5 { 1.0 } else { 0.0 };
+    // Pass filter slopes step by 6 dB/oct from 12 (0.4 is 24 dB/oct); ours
+    // are 12, 24 and 48, so the nearest of those.
+    let slope = |v: f64| {
+        let db = 12.0 + (v * 5.0).round() * 6.0;
+        if db < 18.0 {
+            0.0
+        } else if db < 36.0 {
+            1.0
+        } else {
+            2.0
+        }
+    };
     let mut out = std::collections::BTreeMap::new();
     let mut put = |key: &str, v: Option<f64>| {
         if let Some(v) = v {
@@ -343,6 +357,7 @@ fn parametric_eq_params(c: roxmltree::Node<'_, '_>) -> std::collections::BTreeMa
     );
     put("hp_on", knob("High-Pass Filter Enable").map(on));
     put("hp_freq", knob("High-Pass Cutoff Frequency").map(hz));
+    put("hp_slope", knob("High-Pass Slope").map(slope));
     put("ls_on", knob("Low Shelf Enable").map(on));
     put("ls_freq", knob("Low Shelf Frequency").map(hz));
     put("ls_gain", knob("Low Shelf Gain").map(db));
@@ -364,6 +379,7 @@ fn parametric_eq_params(c: roxmltree::Node<'_, '_>) -> std::collections::BTreeMa
     put("hs_gain", knob("High Shelf Gain").map(db));
     put("lp_on", knob("Low-Pass Filter Enable").map(on));
     put("lp_freq", knob("Low-Pass Cutoff Frequency").map(hz));
+    put("lp_slope", knob("Low-Pass Slope").map(slope));
     put("bypass", knob("Bypass"));
     out
 }
@@ -1280,24 +1296,42 @@ mod tests {
 
     #[test]
     fn the_other_editors_parametric_equalizer_comes_across() {
+        // Track 3 of a tester's session, with the other editor's readout:
+        // L 59 Hz +4.4 dB, Band 2 134 Hz +6.3 dB Q 1, Band 3 937 Hz -2.5 dB,
+        // H 8772 Hz -6.8 dB, high-pass 40 Hz at 24 dB/oct.
         let xml = r#"<component componentID="8edcd326-33de-4a4d-985b-f1bf48ed1427" name="Parametric Equalizer">
-            <parameter index="0" name="Low Shelf Frequency" parameterValue="0.0006253908504731953"/>
-            <parameter index="4" name="EQ Band 1 Center Frequency" parameterValue="0.0009380863048136234"/>
-            <parameter index="5" name="EQ Band 1 Q" parameterValue="0.00019998999778181314"/>
-            <parameter index="6" name="EQ Band 1 Gain" parameterValue="0.5"/>
-            <parameter index="7" name="EQ Band 1 Enable" parameterValue="1"/>
+            <parameter index="0" name="Low Shelf Frequency" parameterValue="0.0017696"/>
+            <parameter index="1" name="Low Shelf Gain" parameterValue="0.5460526"/>
+            <parameter index="2" name="High Shelf Frequency" parameterValue="0.3972737"/>
+            <parameter index="3" name="High Shelf Gain" parameterValue="0.4292763"/>
+            <parameter index="8" name="EQ Band 2 Center Frequency" parameterValue="0.0051921"/>
+            <parameter index="9" name="EQ Band 2 Q" parameterValue="0.0001"/>
+            <parameter index="10" name="EQ Band 2 Gain" parameterValue="0.5657895"/>
+            <parameter index="11" name="EQ Band 2 Enable" parameterValue="1"/>
+            <parameter index="12" name="EQ Band 3 Center Frequency" parameterValue="0.0416182"/>
+            <parameter index="14" name="EQ Band 3 Gain" parameterValue="0.4736842"/>
             <parameter index="24" name="Gain" parameterValue="0.6666669845581055"/>
+            <parameter index="31" name="Original Sample Rate" parameterValue="0.22968749701976776"/>
             <parameter index="37" name="High-Pass Filter Enable" parameterValue="0"/>
+            <parameter index="38" name="High-Pass Cutoff Frequency" parameterValue="0.0009078524"/>
+            <parameter index="39" name="High-Pass Slope" parameterValue="0.4"/>
         </component>"#;
         let doc = roxmltree::Document::parse(xml).unwrap();
         let p = parametric_eq_params(doc.root_element());
-        assert_eq!(p["ls_freq"], 20.0);
-        assert_eq!(p["b1_freq"], 30.0);
-        assert_eq!(p["b1_q"], 2.0);
-        assert_eq!(p["b1_gain"], 0.0);
-        assert_eq!(p["b1_on"], 1.0);
-        assert_eq!(p["gain"], 0.0);
+        assert_eq!(p["ls_freq"], 59.0);
+        assert_eq!(p["ls_gain"], 4.42);
+        assert_eq!(p["b2_freq"], 134.0);
+        assert_eq!(p["b2_gain"], 6.32);
+        assert_eq!(p["b2_q"], 1.0);
+        assert_eq!(p["b2_on"], 1.0);
+        assert_eq!(p["b3_freq"], 937.0);
+        assert_eq!(p["b3_gain"], -2.53);
+        assert_eq!(p["hs_freq"], 8772.0);
+        assert_eq!(p["hs_gain"], -6.79);
+        assert_eq!(p["hp_freq"], 40.0);
+        assert_eq!(p["hp_slope"], 1.0);
         assert_eq!(p["hp_on"], 0.0);
+        assert_eq!(p["gain"], 0.0);
     }
 
     #[test]
