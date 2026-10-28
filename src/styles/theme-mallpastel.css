@@ -305,10 +305,10 @@
 :root:is([data-theme="mallpastel"], [data-theme="mallnight"]),
 :root:is([data-theme="mallpastel"], [data-theme="mallnight"]) body,
 :root:is([data-theme="mallpastel"], [data-theme="mallnight"]) :is(button, select, a, summary, [role="button"], [role="menuitem"], .dv-tab, input[type="checkbox"], input[type="radio"]):not(:disabled) {
-  cursor: url("../assets/themes/mallpastel-arrow.svg") 3 2, default;
+  cursor: url("../assets/themes/mallpastel-arrow.svg") 2 1, default;
 }
 :root:is([data-theme="mallpastel"], [data-theme="mallnight"]) [data-aero-cursor] {
-  cursor: url("../assets/themes/mallpastel-arrow.svg") 3 2, default !important;
+  cursor: url("../assets/themes/mallpastel-arrow.svg") 2 1, default !important;
 }
 
 /* ---------- Night: the same plaza after closing ---------- */

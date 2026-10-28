@@ -83,7 +83,7 @@ const PHOSPHOR: PointerSet = {
     busy: [10, 10],
   },
 };
-/** Mall Pastel '95 (both versions): 24 pixel line art, hot spot in the middle. */
+/** Mall Pastel '95 (both versions): 16 pixel line art, hot spot in the middle. */
 const MALL_PASTEL: PointerSet = {
   text: mpText,
   ew: mpEw,
@@ -93,7 +93,7 @@ const MALL_PASTEL: PointerSet = {
   grab: mpGrab,
   grabbing: mpGrabbing,
   busy: mpBusy,
-  hot: 12,
+  hot: 8,
 };
 
 /** Themes with their own pointers. */

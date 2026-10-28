@@ -371,6 +371,7 @@ Rules:
 - Small commits, one task per branch, conventional commit messages.
 - Log every architecture decision in `/docs/decisions.md` with date and reason.
 - UI copy, docs, and comments: plain, short sentences, no em dashes, no other products' feature names.
+- Theme pointers are drawn at 16 by 16 pixels (about two thirds of the 24 pixel first drafts), hot spot in the middle except the arrow's tip. The project lead set this size on 2026-10-28; keep new pointer sets to it.
 
 ## Definition of done for any task
 

@@ -24,9 +24,9 @@ describe("theme pointers", () => {
   });
 
   it("draws a busy pointer only for themes that have one", () => {
-    expect(themedFor("progress", "mallnight")).toMatch(/^url\(.+\) 12 12, progress$/);
+    expect(themedFor("progress", "mallnight")).toMatch(/^url\(.+\) 8 8, progress$/);
     expect(themedFor("wait", "mallpastel")).toMatch(/, wait$/);
-    expect(themedFor("text", "mallpastel")).toMatch(/\) 12 12, text$/);
+    expect(themedFor("text", "mallpastel")).toMatch(/\) 8 8, text$/);
     expect(themedFor("wait", "prism")).toBeNull();
   });
 
