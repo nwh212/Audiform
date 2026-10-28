@@ -57,6 +57,8 @@
   import { drawRuler } from "./ruler-draw";
   import { fadeDrag, gestureLabel, slipChange, stretchDrag, trimDrag } from "./clip-drag";
   import EditorToolbar from "./EditorToolbar.svelte";
+  import SessionTabs from "./SessionTabs.svelte";
+  import type { SessionRow } from "../files/session-row";
   import HeaderViews from "./HeaderViews.svelte";
   import StartScreen from "./StartScreen.svelte";
   import TrackHeaders from "./TrackHeaders.svelte";
@@ -86,6 +88,10 @@
     onWaveLevel?: (db: number) => void | Promise<void>;
     /** Brings the Audio FX panel forward. */
     onShowChain?: () => void;
+    /** The open sessions, shown as tabs above the editor, and what a click and the x do. */
+    sessions?: Readable<SessionRow[]>;
+    onOpenSession?: (id: string) => void;
+    onCloseSession?: (id: string) => void;
   }
 
   const {
@@ -104,6 +110,9 @@
     waveTransport,
     onWaveLevel = () => {},
     onShowChain = () => {},
+    sessions,
+    onOpenSession,
+    onCloseSession,
   }: Props = $props();
 
   let wf = $state<WaveFile | null>(null);
@@ -1479,6 +1488,9 @@
   <WaveformView {wave} file={wf} transport={waveTransport} {peaks} {actions} {shortcutFor} onLevel={onWaveLevel} />
 {:else}
 <section class="editor" aria-label="Multitrack" data-area="multitrack">
+  {#if sessions && onOpenSession && onCloseSession}
+    <SessionTabs {sessions} onOpen={onOpenSession} onClose={onCloseSession} />
+  {/if}
   <EditorToolbar {rate} hasDoc={!!doc} {run} {tip} bind:height={toolbarH} />
 
   <div class="overview-row">

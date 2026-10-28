@@ -1107,6 +1107,9 @@
           component: asComponent(EditorPanel),
           props: {
             onShowChain: () => dock.show("voice-chain"),
+            sessions: sessionRows,
+            onOpenSession: (id: string) => void files.switchTo(id).catch(showError),
+            onCloseSession: (id: string) => files.closeSession(id).catch(showError),
             session,
             runner: sessionHistory,
             peaks,
