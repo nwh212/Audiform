@@ -10,16 +10,17 @@
 import type { SeparationModel } from "./core";
 import type { ClipDoc, TrackDoc } from "../stores/session";
 
-/** Models by category, categories in the order they first appear, best score first within each. */
+/** Models by category, categories in the order they first appear, best score first within each (unscored last). */
 export function byCategory(models: readonly SeparationModel[]): [string, SeparationModel[]][] {
   const groups = new Map<string, SeparationModel[]>();
   for (const m of models) groups.set(m.category, [...(groups.get(m.category) ?? []), m]);
-  return [...groups].map(([c, list]) => [c, [...list].sort((a, b) => b.sdr - a.sdr)]);
+  return [...groups].map(([c, list]) => [c, [...list].sort((a, b) => (b.sdr ?? -1) - (a.sdr ?? -1))]);
 }
 
-/** "SDR 11.00 dB". */
-export function sdrText(m: Pick<SeparationModel, "sdr">): string {
-  return `SDR ${m.sdr.toFixed(2)} dB`;
+/** "SDR 11.00 dB", or "SDR not published". A several-stem model lists each stem's score. */
+export function sdrText(m: Pick<SeparationModel, "sdr" | "stems">): string {
+  if (m.stems.length > 0) return `SDR ${m.stems.map(([n, v]) => `${n.toLowerCase()} ${v.toFixed(1)}`).join(", ")} dB`;
+  return m.sdr === null ? "SDR not published" : `SDR ${m.sdr.toFixed(2)} dB`;
 }
 
 /**

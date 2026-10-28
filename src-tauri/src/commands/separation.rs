@@ -59,10 +59,15 @@ struct Progress<'a> {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeparationResult {
-    pub target: PathBuf,
-    pub rest: PathBuf,
-    pub target_name: String,
-    pub rest_name: String,
+    /// The result files with their names, in the model's order (a target
+    /// and the rest, or one per stem).
+    pub outputs: Vec<SeparatedFile>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SeparatedFile {
+    pub name: String,
+    pub path: PathBuf,
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -303,8 +308,10 @@ pub async fn separation_run(
             &flag,
         );
         // The work folder only ever holds the files named here.
-        for f in ["input.wav", "target.wav", "rest.wav", "job.json"] {
-            let _ = std::fs::remove_file(work.join(f));
+        if let Ok(files) = std::fs::read_dir(&work) {
+            for f in files.flatten() {
+                let _ = std::fs::remove_file(f.path());
+            }
         }
         let _ = std::fs::remove_dir(&work);
         result
@@ -331,8 +338,11 @@ fn separate_in(
     let channels = usize::from(info.channels.clamp(1, 2));
     let input = work.join("input.wav");
     write_resampled(source, &input, channels, model_rate, None)?;
-    let (target, rest) = (work.join("target.wav"), work.join("rest.wav"));
-    let job = separation::job(m, checkpoint, &input, &target, &rest, gpu, overlap);
+    let names = m.output_names();
+    let raw: Vec<PathBuf> = (0..names.len())
+        .map(|k| work.join(format!("out{k}.wav")))
+        .collect();
+    let job = separation::job(m, checkpoint, &input, &raw, gpu, overlap);
     let job_path = work.join("job.json");
     std::fs::write(
         &job_path,
@@ -348,29 +358,17 @@ fn separate_in(
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Audio");
-    let out_target = unique_path(folder, &format!("{stem} ({})", m.target_name), "wav");
-    let out_rest = unique_path(folder, &format!("{stem} ({})", m.rest_name), "wav");
-    // Back to the source's own rate and exact length, so clips line up.
-    write_resampled(
-        &target,
-        &out_target,
-        channels,
-        info.sample_rate,
-        Some(info.length),
-    )?;
-    write_resampled(
-        &rest,
-        &out_rest,
-        channels,
-        info.sample_rate,
-        Some(info.length),
-    )?;
-    Ok(SeparationResult {
-        target: out_target,
-        rest: out_rest,
-        target_name: m.target_name.into(),
-        rest_name: m.rest_name.into(),
-    })
+    let mut outputs = Vec::new();
+    for (name, wav) in names.iter().zip(&raw) {
+        let path = unique_path(folder, &format!("{stem} ({name})"), "wav");
+        // Back to the source's own rate and exact length, so clips line up.
+        write_resampled(wav, &path, channels, info.sample_rate, Some(info.length))?;
+        outputs.push(SeparatedFile {
+            name: (*name).into(),
+            path,
+        });
+    }
+    Ok(SeparationResult { outputs })
 }
 
 fn run_engine(

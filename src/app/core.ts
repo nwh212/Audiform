@@ -1413,11 +1413,13 @@ export interface SeparationModel {
   name: string;
   /** The group it is listed under, such as "Vocals and instrumental". */
   category: string;
-  /** Published quality score of the separated target, in dB (higher is better). */
-  sdr: number;
+  /** Published quality score of the separated target, in dB (higher is better). Null when none is published. */
+  sdr: number | null;
   sdrNote: string;
   targetName: string;
   restName: string;
+  /** For a model that gives several sources at once: each one's name and published score. */
+  stems: [string, number][];
   author: string;
   page: string;
   bytes: number;
@@ -1436,10 +1438,8 @@ export interface SeparationStatus {
 }
 
 export interface SeparationResult {
-  target: string;
-  rest: string;
-  targetName: string;
-  restName: string;
+  /** The result files in the model's order: a target and the rest, or one per stem. */
+  outputs: { name: string; path: string }[];
 }
 
 export interface SeparationProgress {

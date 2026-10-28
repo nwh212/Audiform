@@ -30,12 +30,16 @@ pub struct ModelEntry {
     pub category: &'static str,
     /// Quality score of the separated target (signal-to-distortion ratio in
     /// dB, higher is better), as published for the model.
-    pub sdr: f32,
+    /// None when the author or a public benchmark gives no score.
+    pub sdr: Option<f32>,
     /// What the score was measured on.
     pub sdr_note: &'static str,
     /// Names of the two results.
     pub target_name: &'static str,
     pub rest_name: &'static str,
+    /// Models that give several sources at once (6 stems): each one's name
+    /// and published score. Empty for a model with one target and the rest.
+    pub stems: &'static [(&'static str, f32)],
     pub author: &'static str,
     /// Where the model is described by its author.
     pub page: &'static str,
@@ -59,11 +63,12 @@ pub fn catalog() -> Vec<ModelEntry> {
         ModelEntry {
             id: "bs-polarformer",
             name: "BS PolarFormer",
-            category: "Vocals and instrumental",
-            sdr: 11.00,
+            category: "Vocals",
+            sdr: Some(11.00),
             sdr_note: "vocals, Multisong test set",
             target_name: "Vocals",
             rest_name: "Instrumental",
+            stems: &[],
             author: "ZFTurbo",
             page: "https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/tag/v1.0.20",
             url: "https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.20/model_bs_polarformer_float16.ckpt",
@@ -84,11 +89,12 @@ pub fn catalog() -> Vec<ModelEntry> {
         ModelEntry {
             id: "mel-roformer-kim",
             name: "Mel-Band Roformer (Kim)",
-            category: "Vocals and instrumental",
-            sdr: 10.98,
+            category: "Vocals",
+            sdr: Some(10.98),
             sdr_note: "vocals, Multisong test set",
             target_name: "Vocals",
             rest_name: "Instrumental",
+            stems: &[],
             author: "Kimberley Jensen",
             page: "https://huggingface.co/KimberleyJSN/melbandroformer",
             url: "https://huggingface.co/KimberleyJSN/melbandroformer/resolve/main/MelBandRoformer.ckpt",
@@ -100,6 +106,143 @@ pub fn catalog() -> Vec<ModelEntry> {
                     "arch": "mel", "num_bands": 60,
                     "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
                     "heads": 8, "dim_head": 64, "chunk_size": 352800, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "bs-roformer-sw",
+            name: "BS-RoFormer SW (6 stems)",
+            category: "Instruments",
+            sdr: Some(11.30),
+            sdr_note: "vocals, MVSep Multisong set; bass 14.62, drums 14.11, guitar 9.05, piano 7.83, other 8.71",
+            target_name: "Vocals",
+            rest_name: "Instrumental",
+            stems: &[
+                ("Vocals", 11.30),
+                ("Drums", 14.11),
+                ("Bass", 14.62),
+                ("Guitar", 9.05),
+                ("Piano", 7.83),
+                ("Other", 8.71),
+            ],
+            author: "Community (original trainer unknown), fixed for UVR and MSST by jarredou",
+            page: "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed",
+            url: "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed/resolve/main/BS-Rofo-SW-Fixed.ckpt",
+            sha256: "24e7d35ee9c64415673d3fd33e06a67cac2c103c5df6267ba1576459c775916e",
+            bytes: 699_412_152,
+            licence: "No licence is stated for the weights (listed as unknown).",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 588800, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mega-bass",
+            name: "Bass (single instrument)",
+            category: "Instruments",
+            sdr: None,
+            sdr_note: "no public score for this single-instrument model",
+            target_name: "Bass",
+            rest_name: "Without bass",
+            stems: &[],
+            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
+            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_bass_mvsep.ckpt",
+            sha256: "b17600dd1c2027a72ab34180ff6191d3bdeb786db9fbb13c58337c33fc10163c",
+            bytes: 77_616_219,
+            licence: "No licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mega-drums",
+            name: "Drums (single instrument)",
+            category: "Instruments",
+            sdr: None,
+            sdr_note: "no public score for this single-instrument model",
+            target_name: "Drums",
+            rest_name: "Without drums",
+            stems: &[],
+            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
+            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_drums_mvsep.ckpt",
+            sha256: "abfa64203417f0874aa3936320b1666364ef1badd917f5613a3017d0ea73c7a2",
+            bytes: 77_616_988,
+            licence: "No licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mega-guitar",
+            name: "Guitar (single instrument)",
+            category: "Instruments",
+            sdr: None,
+            sdr_note: "no public score for this single-instrument model",
+            target_name: "Guitar",
+            rest_name: "Without guitar",
+            stems: &[],
+            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
+            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_guitar_mvsep.ckpt",
+            sha256: "9e4524d60cc7eb01eae4048ecda6e3fbf9a9a404e12838f4ed58b8dfb733762d",
+            bytes: 77_617_693,
+            licence: "No licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mega-piano",
+            name: "Piano (single instrument)",
+            category: "Instruments",
+            sdr: None,
+            sdr_note: "no public score for this single-instrument model",
+            target_name: "Piano",
+            rest_name: "Without piano",
+            stems: &[],
+            author: "MVSep (Mega 53 stems), as re-uploaded by noblebarkrr",
+            page: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems",
+            url: "https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/resolve/main/v1/bs_mega_53stem_piano_mvsep.ckpt",
+            sha256: "8e58ad544386136028ec1f5764bb95a235235492144112d94782ff1333905fe9",
+            bytes: 77_616_988,
+            licence: "No licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 2
                 })
             },
         },
@@ -149,21 +292,22 @@ pub fn engine_asset() -> Option<&'static str> {
 /// The engine release Audiform uses. Engines are released on their own
 /// (as pre-releases, so they never show as Audiform's latest version);
 /// change this when a new engine is needed.
-pub const ENGINE_TAG: &str = "engine-v0.1.0";
+pub const ENGINE_TAG: &str = "engine-v0.2.0";
 
 pub fn engine_url(asset: &str) -> String {
     format!("https://github.com/nwh212/Audiform/releases/download/{ENGINE_TAG}/{asset}")
 }
 
-/// The job file the engine reads.
+/// The job file the engine reads. `outputs` are the files to write, in
+/// the order the model's results are named (a model with `stems` gives
+/// one file per stem; any other gives the target and the rest).
 /// `overlap` replaces the model's own (how many times each moment is
 /// separated and blended: higher is smoother and slower).
 pub fn job(
     m: &ModelEntry,
     checkpoint: &Path,
     input: &Path,
-    target: &Path,
-    rest: &Path,
+    outputs: &[PathBuf],
     gpu: bool,
     overlap: Option<u32>,
 ) -> Value {
@@ -171,14 +315,36 @@ pub fn job(
     if let Some(o) = overlap {
         spec["num_overlap"] = json!(o.clamp(1, 8));
     }
+    let files: Vec<Value> = if m.stems.is_empty() {
+        vec![
+            json!({ "path": outputs[0], "stems": [0] }),
+            json!({ "path": outputs[1], "stems": [0], "rest": true }),
+        ]
+    } else {
+        outputs
+            .iter()
+            .enumerate()
+            .map(|(k, p)| json!({ "path": p, "stems": [k] }))
+            .collect()
+    };
     json!({
         "spec": spec,
         "checkpoint": checkpoint,
         "input": input,
-        "target": target,
-        "rest": rest,
+        "outputs": files,
         "device": if gpu { "gpu" } else { "cpu" },
     })
+}
+
+impl ModelEntry {
+    /// The names of the results, in order.
+    pub fn output_names(&self) -> Vec<&'static str> {
+        if self.stems.is_empty() {
+            vec![self.target_name, self.rest_name]
+        } else {
+            self.stems.iter().map(|(n, _)| *n).collect()
+        }
+    }
 }
 
 /// One line of engine output.
@@ -234,9 +400,39 @@ mod tests {
                 "{} is not on an allowed host",
                 m.id
             );
-            assert!(m.sdr > 0.0 && m.bytes > 0);
+            assert!(m.sdr.is_none_or(|v| v > 0.0) && m.bytes > 0);
             assert!((m.spec)()["arch"].is_string());
         }
+    }
+
+    #[test]
+    fn a_six_stem_model_writes_one_file_per_stem() {
+        let m = model("bs-roformer-sw").unwrap();
+        assert_eq!(m.output_names().len(), 6);
+        let outs: Vec<PathBuf> = (0..6).map(|k| PathBuf::from(format!("o{k}.wav"))).collect();
+        let j = job(
+            &m,
+            Path::new("m.ckpt"),
+            Path::new("in.wav"),
+            &outs,
+            false,
+            None,
+        );
+        let files = j["outputs"].as_array().unwrap();
+        assert_eq!(files.len(), 6);
+        assert_eq!(files[3]["stems"], json!([3]));
+        assert!(files[3].get("rest").is_none());
+        // A two-result model gives its target and the rest.
+        let v = model("bs-polarformer").unwrap();
+        let j = job(
+            &v,
+            Path::new("m.ckpt"),
+            Path::new("in.wav"),
+            &outs[..2],
+            false,
+            None,
+        );
+        assert_eq!(j["outputs"][1]["rest"], json!(true));
     }
 
     #[test]

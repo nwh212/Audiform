@@ -13,6 +13,7 @@ const model = (id: string, category: string, sdr: number): SeparationModel => ({
   category,
   sdr,
   sdrNote: "",
+  stems: [],
   targetName: "Vocals",
   restName: "Instrumental",
   author: "",
@@ -28,6 +29,11 @@ describe("audio separation", () => {
     expect(g.map(([c]) => c)).toEqual(["Vocals and instrumental", "Drums"]);
     expect(g[0]![1].map((m) => m.id)).toEqual(["c", "a"]);
     expect(sdrText(model("x", "", 11))).toBe("SDR 11.00 dB");
+    expect(sdrText({ sdr: null, stems: [] })).toBe("SDR not published");
+    expect(sdrText({ sdr: 11.3, stems: [["Vocals", 11.3], ["Bass", 14.62]] })).toBe("SDR vocals 11.3, bass 14.6 dB");
+    // Unscored models list after scored ones.
+    const g2 = byCategory([{ ...model("n", "Instruments", 0), sdr: null }, model("s", "Instruments", 5)]);
+    expect(g2[0]![1].map((m) => m.id)).toEqual(["s", "n"]);
   });
 
   it("copies a track's settings onto a results track with new ids", () => {

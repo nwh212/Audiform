@@ -241,13 +241,14 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
       if (!String(e).includes("cancelled")) showError(e);
       if (results.size === 0) return;
     }
-    const outs = [...results.values()].flatMap((r) => [r.target, r.rest]);
+    const names = [...results.values()][0]?.outputs.map((o) => o.name) ?? [];
+    const outs = [...results.values()].flatMap((r) => r.outputs.map((o) => o.path));
     const imported = await mediaPool.importPaths(outs, sessionHistory);
     await mediaPool.whenIdle();
-    showNotice(`Separated ${results.size === 1 ? fileName([...results.keys()][0]!) : `${results.size} files`} into ${m.targetName} and ${m.restName}; the results are in the Files panel.`);
+    showNotice(`Separated ${results.size === 1 ? fileName([...results.keys()][0]!) : `${results.size} files`} into ${names.join(", ")}; the results are in the Files panel.`);
     if (src.kind !== "clips" || !session.current) return;
 
-    const go = await ask("Add as new tracks?", `Put the ${m.targetName.toLowerCase()} and ${m.restName.toLowerCase()} on two new tracks below each clip's track? They copy that track's effects and settings.`, [
+    const go = await ask("Add as new tracks?", `Put ${names.length === 2 ? `the ${names[0]!.toLowerCase()} and ${names[1]!.toLowerCase()}` : `the ${names.length} results`} on ${names.length === 2 ? "two" : names.length} new tracks below each clip's track? They copy that track's effects and settings.`, [
       { label: "Add Tracks", value: "yes", primary: true },
       { label: "Files Only", value: "no" },
     ]);
@@ -279,15 +280,16 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     let added = 0;
     for (const g of groups) {
       const clips = g.clips.map((f) => f.clip);
-      const pick = (which: "target" | "rest") => (oldMedia: string) => {
-        const r = results.get(pathOfMedia(oldMedia) ?? "");
-        return r ? mediaFor(r[which]) : undefined;
-      };
-      const a = separatedTrack(g.track, clips, pick("target"), `${g.track.name} ${m.targetName}`, uuid);
-      const b = separatedTrack(g.track, clips, pick("rest"), `${g.track.name} ${m.restName}`, uuid);
-      if (a.clips.length === 0 && b.clips.length === 0) continue;
-      ops.push({ op: "restore_track", track: a, index: g.index + 1 }, { op: "restore_track", track: b, index: g.index + 2 });
-      added += 2;
+      const made = names.map((name, k) => {
+        const pick = (oldMedia: string) => {
+          const r = results.get(pathOfMedia(oldMedia) ?? "");
+          return r?.outputs[k] ? mediaFor(r.outputs[k]!.path) : undefined;
+        };
+        return separatedTrack(g.track, clips, pick, `${g.track.name} ${name}`, uuid);
+      });
+      const kept = made.filter((t) => t.clips.length > 0);
+      kept.forEach((track, k) => ops.push({ op: "restore_track", track, index: g.index + 1 + k }));
+      added += kept.length;
     }
     if (added === 0) return;
     // Media first, then tracks: restore_track needs the media to exist.

@@ -32,11 +32,18 @@
     void tools.refresh();
   });
   const status = $derived(tools.status);
-  const groups = $derived(status ? byCategory(status.models) : []);
-  const model = $derived(status?.models.find((m) => m.id === picked) ?? groups[0]?.[1][0] ?? null);
+  // Vocal models and instrument models each have a tab.
+  const TABS = ["Vocals", "Instruments"] as const;
+  let tab = $state<(typeof TABS)[number]>((prefs.raw("separation.tab") as (typeof TABS)[number] | null) ?? "Vocals");
+  const groups = $derived(status ? byCategory(status.models.filter((m) => m.category === tab)) : []);
+  const model = $derived(status?.models.find((m) => m.id === picked && m.category === tab) ?? groups[0]?.[1][0] ?? null);
   function pick(id: string) {
     picked = id;
     prefs.set(KEY, id);
+  }
+  function pickTab(t: (typeof TABS)[number]) {
+    tab = t;
+    prefs.set("separation.tab", t);
   }
 
   // What Separate works on follows the selection and the editor in front.
@@ -86,8 +93,12 @@
           </div>
         </li>
       </ul>
+      <div class="tabs" role="tablist" aria-label="Kind of separation">
+        {#each TABS as t (t)}
+          <button type="button" role="tab" aria-selected={tab === t} class:on={tab === t} onclick={() => pickTab(t)}>{t}</button>
+        {/each}
+      </div>
       {#each groups as [category, models] (category)}
-        <h3>{category}</h3>
         <ul>
           {#each models as m (m.id)}
             <li class:on={model?.id === m.id}>
@@ -97,7 +108,7 @@
                 <span class="sdr" title={`Published score: ${m.sdrNote}. Higher is better.`}>{sdrText(m)}</span>
               </label>
               <div class="meta">
-                <span>{m.targetName} and {m.restName}</span>
+                <span>{m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`}</span>
                 <span>{sizeText(m.bytes)}</span>
                 {#if m.installed}
                   <span class="ok">Downloaded</span>
@@ -138,6 +149,24 @@
 </div>
 
 <style>
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin: 6px 0 4px;
+  }
+  .tabs button {
+    flex: 1;
+    padding: 3px 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-dim);
+  }
+  .tabs button.on {
+    border-color: var(--accent);
+    color: var(--text);
+    font-weight: 600;
+  }
   .panel {
     display: grid;
     grid-template-rows: 1fr auto;
