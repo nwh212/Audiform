@@ -322,6 +322,23 @@
           <p class="note">Some plug-ins only work while audio plays at normal speed: pitch correction, immersive panners and other tools that follow the clock. With this on, any mixdown, stem export or Mix Down to New File of a session with VST3 plug-ins runs at playback speed, so an hour takes an hour. Built-in effects never need it.</p>
           <label class="off"><input type="checkbox" disabled checked /> Bypassed effects are skipped on playback <span class="why">Always on: a bypassed effect costs nothing.</span></label>
           <label class="off"><select disabled><option>By category</option></select> Effects menu order <span class="why">Grouped by category.</span></label>
+        {:else if page === "Audio Separation"}
+          <fieldset>
+            <legend>Run separation on</legend>
+            <label><input type="radio" name="separation-device" value="gpu" bind:group={d.app.separationDevice} /> The graphics card (GPU) when one can be used</label>
+            <label><input type="radio" name="separation-device" value="cpu" bind:group={d.app.separationDevice} /> The processor (CPU) only</label>
+          </fieldset>
+          <label class="row">Overlap
+            <select bind:value={d.app.separationOverlap}>
+              <option value={1}>1: fastest</option>
+              <option value={2}>2: standard</option>
+              <option value={4}>4: smoother, twice as long</option>
+              <option value={8}>8: smoothest, four times as long</option>
+            </select>
+          </label>
+          <p class="note">Each moment is separated this many times in overlapping pieces and blended, which hides the seams between pieces. 2 is what the models were measured with.</p>
+          <p class="note">Audio separation is handled locally on your own hardware, and speeds and results depend on your hardware. A graphics card is usually many times faster. If it cannot be used, Audiform offers the processor instead.</p>
+          <p class="note">Audiform only pulls the model you choose for demixing, plus the separation engine the first time, and only when you click Download in the Audio Separation panel. Downloads and removals are managed there.</p>
         {:else if page === "Cache and Files"}
           {#if cache}
             <p class="note">Working files live in <code>{cache.path}</code></p>
@@ -436,6 +453,7 @@
         {:else if page === "Privacy"}
           <p class="note">Audiform never goes online by itself. No account, no sign-in, no tracking, no usage data, no crash reports, no update checks. Everything stays on this computer.</p>
           <p class="note">The only web pages it opens are the ones you pick in the Help menu, in your own browser.</p>
+          <p class="note">One exception, only when you ask for it: Audio Separation downloads the separation engine and the model you choose, when you click Download. It only pulls the necessary model for demixing; audio separation is handled locally on your own hardware, and nothing about you or your audio is sent.</p>
           <label class="off"><input type="checkbox" disabled /> Check for updates once a week <span class="why">Arrives after the first public release, and stays off unless you turn it on.</span></label>
         {/if}
       </section>

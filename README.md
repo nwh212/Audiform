@@ -77,6 +77,7 @@ Audiform is young (version 0.x). Expect rough edges and keep backups of your rec
 ## More of what Audiform adds
 
 - **3D Space sessions:** place each track and bus in a room instead of panning it, hear it on stereo speakers or headphones (binaural), and export to any speaker layout (5.1, 7.1, 7.1.2, 7.1.4 and more) as a multichannel WAV, or to stereo. Per track: height (above and below ear level), size, spread, width, rotation, spatialize (opens a stereo sound into the surrounds and heights) and an LFE send. Levels and the Mixer show every speaker channel.
+- **Audio Separation (optional add-on):** split a song into vocals and instrumental with the best public models, listed by type with their published quality score (SDR). Nothing ships in the installer: the model you pick, and a small separation engine the first time, download only when you click Download, and are kept for next time. Separation runs on your own computer, on the graphics card or the processor, so speed and results depend on your hardware. Results land in the Files panel, and separated clips can go on two new tracks under their track with its effects and settings.
 - **Automation lanes:** volume, pan, any effect setting and every 3D Space setting over time, drawn under each track.
 - **MIDI:** MIDI tracks with VST3 instruments, a piano roll with easy zoom and scroll, notes in the track's color.
 - **Metronome and tempo:** a Metronome track, tempo and time signature changes, bars and beats on the ruler and snapping to them.

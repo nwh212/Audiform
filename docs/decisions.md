@@ -1808,3 +1808,16 @@ Reported: M4A files did not open. Stereo AAC, ALAC, FLAC, MP3 and Opus in M4A al
 - A neon "Night Drive" theme was built first and dropped by the project lead in favor of the Night version.
 - Menus, lists, dialogs, buttons and scroll bars are square bevelled panels in the spirit of 1990s desktop computers, built from generic bevels only: no operating system's artwork, icons or logos.
 - Their own pointers (arrow, text, resize, grab and a new busy pointer). Japanese lettering uses the system's Japanese fonts; nothing loads from the network. The theme font (Nunito) is bundled, SIL Open Font License.
+
+## 2026-10-28: Audio Separation is a download, run in its own program
+
+Audio Separation splits a file into a target (for now vocals) and the rest (instrumental) with published models. To keep the editor light for people who never use it, none of it ships in the installer:
+
+- **The engine** is a separate, closed program kept outside this repository (the project lead's call, 2026-10-28, so the separation code cannot simply be copied into a fork). It is attached to each release next to the installers, with a SHA-256, and downloaded the first time someone separates. Audiform talks to it only through a job file and its progress lines, as separate programs. It runs only while separating, in its own process, so it costs nothing at startup and a crash cannot take the editor down. It reads each model's original checkpoint file, as its author published it, so Audiform never converts or re-hosts anyone's weights.
+- **Models** come from their authors' own pages, downloaded only on the user's click, checked against a SHA-256 kept in `src-tauri/src/separation/mod.rs`, and kept in the app's data folder. The panel lists them by type with their published SDR and removes them.
+- **Network**: this is the one exception to "never goes online", allowed by PRIVACY.md's rule for features that truly need it: off until the user clicks Download, clearly labelled, never required. It uses the system `curl` from one file (`separation/download.rs`), HTTPS only, two hosts; `scripts/check-privacy.mjs` fails the build if downloading appears anywhere else or the hosts change. Wording shown to people: it only pulls the necessary model for demixing; audio separation is handled locally on user hardware, and speeds and results depend on that hardware.
+- **Processing**: the engine runs on the graphics card (any vendor, through wgpu) or the processor (Settings > Audio Separation). If the graphics card cannot start, Audiform offers the processor. On the processor a song takes several times its own length.
+- **Models offered**: the best two public vocal/instrumental models by published SDR on the Multisong set when this was written: BS PolarFormer (ZFTurbo, 11.00) and Mel-Band Roformer (Kimberley Jensen, 10.98). Neither author states a licence for the weights; the panel says so, and Audiform never redistributes them. At every major release, check for a better public model (docs/RELEASING.md).
+- **Results** go into the Files panel. For clips in a session, Audiform offers two new tracks under each clip's track, copying its effects, levels, routing, sends and automation, with copies of the clips playing the results. One undo removes them.
+- **Layout**: the panel docks beside 3D Space (the second tab in the Music layout).
+

@@ -27,6 +27,18 @@ Features Altered Audio Editor added after Audiform's starting point (0.2.0), bro
 | Sophocles J. Orfanidis, "Lecture Notes on Elliptic Filter Design" (Rutgers University, freely published) | The textbook elliptic design method: Landen's transformation for the Jacobi elliptic functions, the degree equation, and the pole and zero formulas. Method only; the code is our own. | `src-tauri/src/dsp/elliptic.rs` |
 | MP4 file format (ISO/IEC 14496-12 box layout, as publicly documented) | The box layout for writing M4A tags (`moov/udta/meta/ilst`). Our own writer. | `src-tauri/src/export/m4a_tags.rs` |
 
+## Models and methods for Audio Separation
+
+Models are not bundled or re-hosted. Audiform downloads each one from its author's own page when the user asks. They run in the separation engine, a separate program that is not part of Audiform's source (it is downloaded on first use and lists its own open-source components in its THIRD-PARTY-NOTICES.txt). The engine was written from the published papers and the authors' reference code (MIT licensed).
+
+| Work | By | Use |
+| --- | --- | --- |
+| BS-RoFormer (band-split transformer, "Music Source Separation with Band-Split RoPE Transformer") | Wei-Tsung Lu, Ju-Chiang Wang, Qiuqiang Kong, Yun-Ning Hung (ByteDance) | The model design the engine runs. |
+| Mel-Band RoFormer ("Mel-Band RoFormer for Music Source Separation") | Ju-Chiang Wang, Wei-Tsung Lu, Minz Won (ByteDance) | The mel-band variant. |
+| PoPE (polar coordinate position embeddings) | Paper by its authors; reference code by Phil Wang (lucidrains, MIT) | The position scheme BS PolarFormer uses. |
+| Reference implementations and training code | Phil Wang (lucidrains, MIT); Roman Solovyev, ZFTurbo (Music-Source-Separation-Training, MIT) | Checked against for layer layout, chunking and overlap. |
+| BS PolarFormer weights | ZFTurbo (Music-Source-Separation-Training, release v1.0.20) | Offered for download from the author's release. No licence is stated for the weights. |
+
 ## Bundled assets
 
 | Asset | Source | License | Use |
@@ -52,6 +64,7 @@ Most dependencies are MIT or Apache-2.0 and are listed in `Cargo.lock` and `pack
 | FFmpeg DTS core decoder (`libavcodec/dca_core.c`, `dcadsp.c`, `dcadct.c`, `synth_filter.c`, tables from `dcadata.c` and `dcahuff.c`, FFmpeg 6.1.1; Copyright (C) 2016 foo86, 2004 Gildas Bazin and others) | LGPL-2.1-or-later | Ported to Rust in `src-tauri/src/codecs/dts/` (core.rs and the generated tables.rs keep the LGPL-2.1-or-later notice), to decode DTS WAV and `.dts` files. Fixed-point core only; output matches FFmpeg's bit-exact decode. LGPL-2.1-or-later is compatible with the app's GPL-3.0-or-later. |
 | ASIO SDK 2.3 (Steinberg, via `cpal`'s `asio` feature, Windows release builds only) | GPL-3.0 (dual licensed by Steinberg; we use the GPLv3 option) | Talking to ASIO audio drivers. ASIO is a trademark of Steinberg Media Technologies GmbH. We do not use the ASIO logo. |
 | `zip` | MIT | Reading zip downloads of recordings. |
+| `sha2` | MIT or Apache-2.0 | Checking Audio Separation downloads. |
 | `vst3` (bindings generated from the VST 3 SDK headers) and `com-scrape-types` | MIT or Apache-2.0 | Hosting VST3 plug-ins, in a separate process (`src-tauri/plughost`). The VST 3 SDK itself is MIT licensed by Steinberg (since 2025). VST is a trademark of Steinberg Media Technologies GmbH; we do not use the VST logo. VST2 is not supported (its SDK is no longer licensed). |
 | `libloading` | ISC | Loading a plug-in's library inside the plug-in host process. |
 | `windows-sys` (Windows only, plug-in host) | MIT or Apache-2.0 | The window a plug-in draws its own controls in. |

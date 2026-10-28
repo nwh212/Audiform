@@ -57,9 +57,26 @@ const crateBanned = /^\s*(reqwest|ureq|hyper|isahc|surf|attohttpc|curl|tauri-plu
 const cargo = readFileSync(join(root, "src-tauri", "Cargo.toml"), "utf8");
 const m = cargo.match(crateBanned);
 if (m) problems.push(`src-tauri/Cargo.toml: depends on ${m[1]}`);
+// The one exception: Audio Separation's downloads, which only happen when
+// the user clicks Download (see PRIVACY.md). They live in one file, use the
+// system's curl, and only reach the hosts listed there.
+const DOWNLOADS = join("src-tauri", "src", "separation", "download.rs");
 for (const f of walk(join(root, "src-tauri", "src"), [".rs"])) {
   const text = readFileSync(f, "utf8");
-  if (/std::net::|TcpStream|UdpSocket/.test(text)) problems.push(`${relative(root, f)}: opens network sockets`);
+  const rel = relative(root, f);
+  if (/std::net::|TcpStream|UdpSocket/.test(text)) problems.push(`${rel}: opens network sockets`);
+  if (rel !== DOWNLOADS && /["'](curl|curl\.exe|wget|bitsadmin)["']|Invoke-WebRequest|Start-BitsTransfer/.test(text)) {
+    problems.push(`${rel}: downloads something; only ${DOWNLOADS} may, on the user's click`);
+  }
+}
+{
+  const text = readFileSync(join(root, DOWNLOADS), "utf8");
+  const hosts = text.match(/const HOSTS: &\[&str\] = &\[([^\]]*)\]/);
+  const allowed = ["https://github.com/", "https://huggingface.co/"];
+  const listed = hosts ? [...hosts[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]) : null;
+  if (!listed || listed.some((h) => !allowed.includes(h))) {
+    problems.push(`${DOWNLOADS}: the download hosts changed; update PRIVACY.md and this check together`);
+  }
 }
 
 // Tauri config: the page may only load the app's own files.

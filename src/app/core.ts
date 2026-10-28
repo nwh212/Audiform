@@ -1406,3 +1406,71 @@ export function transportAuditionClip(trackId: string, db: number, start: number
 export function transportAuditionLevel(db: number, start: number, end: number): Promise<void> {
   return invoke<void>("transport_audition_level", { db, start, end });
 }
+
+/** A separation model in the Audio Separation list. */
+export interface SeparationModel {
+  id: string;
+  name: string;
+  /** The group it is listed under, such as "Vocals and instrumental". */
+  category: string;
+  /** Published quality score of the separated target, in dB (higher is better). */
+  sdr: number;
+  sdrNote: string;
+  targetName: string;
+  restName: string;
+  author: string;
+  page: string;
+  bytes: number;
+  licence: string;
+  installed: boolean;
+}
+
+export interface SeparationStatus {
+  engineInstalled: boolean;
+  /** False when no engine is published for this computer. */
+  engineAvailable: boolean;
+  models: SeparationModel[];
+  folder: string;
+}
+
+export interface SeparationResult {
+  target: string;
+  rest: string;
+  targetName: string;
+  restName: string;
+}
+
+export interface SeparationProgress {
+  /** The model, or "engine". */
+  id: string;
+  stage: "download" | "separate";
+  done: number;
+  /** 0 when the size is not known. */
+  total: number;
+}
+
+export function separationStatus(): Promise<SeparationStatus> {
+  return invoke<SeparationStatus>("separation_status");
+}
+
+/** Downloads the engine (`id` "engine") or a model. Only ever on the user's click. */
+export function separationDownload(id: string): Promise<void> {
+  return invoke<void>("separation_download", { id });
+}
+
+export function separationRemove(id: string): Promise<void> {
+  return invoke<void>("separation_remove", { id });
+}
+
+/** Separates `source` into two files in `folder`. An error starting "GPU:" means the graphics card could not be used. */
+export function separationRun(source: string, model: string, gpu: boolean, overlap: number, folder: string): Promise<SeparationResult> {
+  return invoke<SeparationResult>("separation_run", { source, model, gpu, overlap, folder });
+}
+
+export function separationCancel(): Promise<void> {
+  return invoke<void>("separation_cancel");
+}
+
+export function onSeparationProgress(fn: (p: SeparationProgress) => void): Promise<() => void> {
+  return listen<SeparationProgress>("separation-progress", (e) => fn(e.payload));
+}

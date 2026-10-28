@@ -30,6 +30,7 @@ export const PAGES = [
   "Session Media",
   "Editing",
   "Effects",
+  "Audio Separation",
   "Cache and Files",
   "Markers",
   "Multitrack",

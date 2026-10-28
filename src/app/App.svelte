@@ -74,6 +74,7 @@
   import { createViewTools } from "./view-tools.svelte";
   import { createWaveTools } from "./wave-tools.svelte";
   import { createExportTools } from "./export-tools.svelte";
+  import { createSeparationTools } from "./separation-tools.svelte";
   import type { AddTracksValues } from "./AddTracksDialog.svelte";
   import { PluginSync } from "./plugin-sync";
   import { markStopped, pluginsVersion } from "../stores/plugins";
@@ -971,6 +972,7 @@
   const loadDriveManagerPanel = () => import("../panels/drive-manager/DriveManagerPanel.svelte");
   const loadMixerPanel = () => import("../panels/mixer/MixerPanel.svelte");
   const loadSpacePanel = () => import("../panels/space/SpacePanel.svelte");
+  const loadSeparationPanel = () => import("../panels/separation/SeparationPanel.svelte");
   const loadPhaseWheelPanel = () => import("../panels/phase/PhaseWheelPanel.svelte");
   const loadBatchConvertPanel = () => import("../panels/batch/BatchConvertPanel.svelte");
   const loadQuickPassPanel = () => import("../panels/quickpass/QuickPassPanel.svelte");
@@ -1025,6 +1027,8 @@
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter, session } };
       case "space":
         return { component: asComponent(LazyPanel), props: { load: loadSpacePanel, session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown") } };
+      case "separation":
+        return { component: asComponent(LazyPanel), props: { load: loadSeparationPanel, tools: separationTools } };
       case "phase-wheel":
         return { component: asComponent(LazyPanel), props: { load: loadPhaseWheelPanel, transport, wave: waveTransport } };
       case "batch-convert":
@@ -1277,6 +1281,9 @@
     placeFiles,
   });
   const { KEY_CHAPTER_FORMAT, mixRange, exportPlaylist, markerDoc, saveMarkers, finishExportDialog, mixDown, bounceRange, bounce, exportStems } = exp;
+
+  // Audio Separation (see separation-tools.svelte.ts).
+  const separationTools = createSeparationTools({ showError, showNotice, ask, inWave });
 
   // Clip commands (see clip-tools.svelte.ts).
   const clipTools = createClipTools({

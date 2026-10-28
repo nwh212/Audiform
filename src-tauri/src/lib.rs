@@ -17,6 +17,7 @@ pub mod export;
 pub mod library;
 pub mod peaks;
 pub mod plugins;
+pub mod separation;
 pub mod session;
 pub mod sesx;
 
@@ -41,6 +42,7 @@ pub fn run() {
             }
         }))
         .manage(commands::app::LaunchPaths(std::sync::Mutex::new(launch)))
+        .manage(commands::separation::SeparationCancel::default())
         .manage(engine::PreviewPlayer::default())
         .manage(engine::Transport::default())
         .manage(engine::Recorder::default())
@@ -120,6 +122,11 @@ pub fn run() {
             commands::firewall::firewall_status,
             commands::app::alt_down,
             commands::app::launch_paths,
+            commands::separation::separation_status,
+            commands::separation::separation_download,
+            commands::separation::separation_remove,
+            commands::separation::separation_run,
+            commands::separation::separation_cancel,
             commands::firewall::firewall_block,
             commands::reverb::reverb_pick,
             commands::reverb::reverb_load,

@@ -296,6 +296,7 @@ Zero logins, zero telemetry, zero tracking. The app is fully usable offline with
 - A support link for Steve Phillips (the original author) and his book, Altered Audio: Podcasting Demystified, live in the Help menu only, under Based on Altered Audio Editor. Never in the user's face, never a nag, never forced.
 - Updates (decided 2026-10-14, build after the first GitHub release): Help > Check for Updates, plus an optional weekly check that is OFF by default, set in Preferences and on the first-run screen as an unticked box. The check fetches one signed `latest.json` from GitHub Releases through the Tauri updater; no login, no API calls. A found update shows one line in the status bar, never a pop-up, never during playback or recording, never installs without a click. The privacy guard allows only the updater plugin and that one host.
 - Any future feature that needs the network (for example Podcast Manager sync) must be off by default, clearly labeled, and never required. See `PRIVACY.md`.
+- Audio Separation downloads (decided 2026-10-28) are the one such exception so far: the engine and a model, only when the user clicks Download, from `src-tauri/src/separation/download.rs` only (system curl, HTTPS, github.com and huggingface.co), each checked against a pinned SHA-256. `scripts/check-privacy.mjs` enforces it. Wording: it only pulls the necessary model for demixing; audio separation is handled locally on user hardware and speeds / results depend on that hardware.
 
 ## Loudness defaults
 
@@ -371,6 +372,8 @@ Rules:
 - Small commits, one task per branch, conventional commit messages.
 - Log every architecture decision in `/docs/decisions.md` with date and reason.
 - UI copy, docs, and comments: plain, short sentences, no em dashes, no other products' feature names.
+- Optional heavy features are add-ons: nothing in the installer, downloaded only when the user first uses them, run in their own process, so the core stays light for people who never use them. Audio Separation is the model: the panel and downloads are in `src-tauri/src/separation/`; the engine itself is a closed program kept outside this repository, talked to only through its job file and output lines.
+- Audio Separation: at every major update, check for a better best publicly available model per type (vocals and instrumental for now) and update the list; always show each model's SDR in the list (docs/RELEASING.md step 2).
 - Theme pointers are drawn at 16 by 16 pixels (about two thirds of the 24 pixel first drafts), hot spot in the middle except the arrow's tip. The project lead set this size on 2026-10-28; keep new pointer sets to it.
 
 ## Definition of done for any task

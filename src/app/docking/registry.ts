@@ -26,7 +26,8 @@ export type PanelId =
   | "loudness-match"
   | "properties"
   | "phase-wheel"
-  | "space";
+  | "space"
+  | "separation";
 
 export type Side = "left" | "right" | "above" | "below";
 
@@ -177,6 +178,14 @@ export const PANELS: readonly PanelDef[] = [
     inDefault: false,
     // Beside the Editor and Mixer: the room needs room.
     home: [{ reference: "editor", direction: "within" }, { reference: "mixer", direction: "within" }, { edge: "right" }],
+    pending: null,
+  },
+  {
+    id: "separation",
+    title: "Audio Separation",
+    inDefault: false,
+    // Beside 3D Space when it is open.
+    home: [{ reference: "space", direction: "within" }, { reference: "phase-wheel", direction: "within" }, { reference: "editor", direction: "right" }, { edge: "right" }],
     pending: null,
   },
 ];
@@ -342,7 +351,7 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
     name: "Music",
     description:
       "Tracks in the center; effects, properties and history on the left; Phase Wheel and 3D Space on the right.",
-    version: 1,
+    version: 2,
     steps: [
       { id: "editor", placement: null },
       { id: "mixer", placement: { reference: "editor", direction: "within" }, inactive: true },
@@ -352,6 +361,7 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
         width: S.rightWidth,
       },
       { id: "space", placement: { reference: "phase-wheel", direction: "below" } },
+      { id: "separation", placement: { reference: "space", direction: "within" }, inactive: true },
       { id: "libraries", placement: { reference: "space", direction: "within" }, inactive: true },
       { id: "levels", placement: { edge: "below" }, height: S.levelsHeight },
       {

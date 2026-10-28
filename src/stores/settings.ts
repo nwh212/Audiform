@@ -89,6 +89,10 @@ export interface AppSettings {
   metronome: MetronomePrefs;
   /** 3D Space: dots snap to speakers, the center lines and a grid; turns snap to 15 degrees. */
   spaceSnap: boolean;
+  /** Audio Separation runs on the graphics card when one can be used, or on the processor only. */
+  separationDevice: "gpu" | "cpu";
+  /** Audio Separation: how many times each moment is separated and blended (1, 2, 4 or 8). Higher is smoother and slower. */
+  separationOverlap: number;
 }
 
 export type MetronomeSound = "tick" | "wood" | "beep" | "shaker";
@@ -180,6 +184,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timecodeFps: 30,
   phaseWheel: { size: 4096, fps: 60, a: "left", b: "right", details: true },
   spaceSnap: true,
+  separationDevice: "gpu",
+  separationOverlap: 2,
   metronome: { on: false, muted: false, when: "always", levelDb: -6, sound: "tick", accent: true, subdivide: "none" },
 };
 
@@ -274,6 +280,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     phaseWheel: phasePrefs(o.phaseWheel),
     metronome: metronomePrefs(o.metronome),
     spaceSnap: bool(o.spaceSnap, d.spaceSnap),
+    separationDevice: o.separationDevice === "cpu" ? "cpu" : "gpu",
+    separationOverlap: [1, 2, 4, 8].includes(o.separationOverlap as number) ? (o.separationOverlap as number) : d.separationOverlap,
   };
 }
 

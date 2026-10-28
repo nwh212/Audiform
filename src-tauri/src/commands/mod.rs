@@ -29,6 +29,7 @@ pub mod prerender;
 pub mod quickpass;
 pub mod record;
 pub mod reverb;
+pub mod separation;
 pub mod session;
 pub mod spectral;
 pub mod template;
