@@ -27,8 +27,10 @@ export interface ThemeProblem {
 }
 
 export interface ThemeCatalog {
-  /** Built-in themes first, then the user's, each in name order. Secret ones not unlocked are left out. */
+  /** Built-in themes first, then the user's, each in name order. Secret themes are never listed. */
   themes: ThemeEntry[];
+  /** The ids of secret themes, so a picker can tell one in use from a theme that is missing. */
+  secretIds: string[];
   /** Files that could not be used, with the reason. */
   problems: ThemeProblem[];
 }
@@ -129,7 +131,7 @@ function builtinIdOf(path: string): string {
 }
 
 /** Reads every built-in and user theme file and lists the ones that may be used. Pass `refresh` to look at the Themes folder again. */
-export async function listThemes(unlocked: readonly string[], refresh = false): Promise<ThemeCatalog> {
+export async function listThemes(_unlocked: readonly string[], refresh = false): Promise<ThemeCatalog> {
   const s = source;
   if (refresh) userCache = null;
   const built = await Promise.all(Object.entries(s.builtin()).map(([path, read]) => loadBuiltin(path, read)));
@@ -139,7 +141,8 @@ export async function listThemes(unlocked: readonly string[], refresh = false): 
   const user = await userCache;
   problems.push(...user.problems);
   return {
-    themes: [...builtinThemes.filter((t) => isAvailable(t, unlocked)).sort(byName), ...user.themes.filter((t) => isAvailable(t, unlocked)).sort(byName)],
+    themes: [...builtinThemes.filter((t) => !t.secret).sort(byName), ...user.themes.filter((t) => !t.secret).sort(byName)],
+    secretIds: [...builtinThemes, ...user.themes].filter((t) => t.secret).map((t) => t.id),
     problems,
   };
 }

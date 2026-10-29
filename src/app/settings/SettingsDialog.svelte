@@ -41,7 +41,7 @@
   const userThemes = $derived(catalog?.themes.filter((t) => !t.builtin) ?? []);
   const pickedTheme = $derived(catalog?.themes.find((t) => t.id === d.app.theme));
   async function loadThemes(refresh: boolean) {
-    catalog = await listThemes(d.app.unlockedThemes, refresh).catch(() => ({ themes: [], problems: [] }));
+    catalog = await listThemes(d.app.unlockedThemes, refresh).catch(() => ({ themes: [], secretIds: [], problems: [] }));
   }
   async function openThemesFolder() {
     try {
@@ -222,7 +222,8 @@
             <select value={d.app.theme} onchange={(e) => (d.app.theme = themeId(e.currentTarget.value))}>
               <option value="dark">Dark</option>
               {#if catalog && d.app.theme !== "dark" && !pickedTheme}
-                <option value={d.app.theme}>{d.app.theme} (not found, shown as Dark)</option>
+                <!-- A theme that is not listed stays as it is; it only reads as Dark here. -->
+                <option value={d.app.theme}>{catalog.secretIds.includes(d.app.theme) ? "Dark" : `${d.app.theme} (not found, shown as Dark)`}</option>
               {/if}
               {#if shippedThemes.length}
                 <optgroup label="Built in">

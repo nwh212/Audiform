@@ -49,9 +49,6 @@ pub fn plugin_slots(s: &Session) -> HashSet<Id> {
         }
     };
     for t in &s.tracks {
-        if t.clips.is_empty() && t.instrument.is_none() {
-            continue;
-        }
         add(&t.effects);
         for c in &t.clips {
             add(&c.effects);

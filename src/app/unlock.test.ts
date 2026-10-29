@@ -34,12 +34,15 @@ describe("unlock", () => {
 });
 
 describe("extra theme file", () => {
-  it("is listed only once unlocked", async () => {
-    const { listThemes } = await import("../themes/loader");
+  it("is never listed, and can still be used once unlocked", async () => {
+    const { listThemes, findTheme } = await import("../themes/loader");
     const hidden = await listThemes([]);
     expect(hidden.themes.some((t) => t.id === EXTRA_THEME_ID)).toBe(false);
     expect(hidden.problems).toEqual([]);
     const shown = await listThemes([EXTRA_THEME_ID]);
-    expect(shown.themes.find((t) => t.id === EXTRA_THEME_ID)?.name).toBe("Secret Theme");
+    expect(shown.themes.some((t) => t.id === EXTRA_THEME_ID)).toBe(false);
+    expect(shown.secretIds).toContain(EXTRA_THEME_ID);
+    expect(await findTheme(EXTRA_THEME_ID, [])).toBeNull();
+    expect((await findTheme(EXTRA_THEME_ID, [EXTRA_THEME_ID]))?.id).toBe(EXTRA_THEME_ID);
   });
 });

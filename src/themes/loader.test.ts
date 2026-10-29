@@ -129,11 +129,11 @@ describe("theme list", () => {
 describe("secret themes", () => {
   const s = () => fake({ "plain.audtheme": file("plain"), "hidden.audtheme": file("hidden", { secret: true }) }, { "mine.audtheme": file("quiet", { secret: true }) });
 
-  it("are not listed until unlocked", async () => {
+  it("are never listed, unlocked or not", async () => {
     useThemeSource(s());
     expect((await listThemes([])).themes.map((t) => t.id)).toEqual(["plain"]);
-    expect((await listThemes(["hidden"])).themes.map((t) => t.id)).toEqual(["hidden", "plain"]);
-    expect((await listThemes(["hidden", "quiet"])).themes.map((t) => t.id)).toEqual(["hidden", "plain", "quiet"]);
+    expect((await listThemes(["hidden", "quiet"])).themes.map((t) => t.id)).toEqual(["plain"]);
+    expect((await listThemes([])).secretIds.sort()).toEqual(["hidden", "quiet"]);
   });
 
   it("cannot be used by id until unlocked", async () => {
