@@ -3,15 +3,14 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The Channel Mixer's window: a tab for each output side; on each, how
-  much of the left and right inputs goes into it, and whether that part
-  is flipped. A drawing under it shows where each input goes.
+  The Channel Mixer's window: a small tab for each output side (L, R);
+  on each, one row per input channel with how much of it goes in and
+  whether that part is flipped (Invert).
 -->
 <script lang="ts">
   import type { EffectInfo, EffectParamInfo } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
   import { paramValue } from "./chain";
-  import KindTabs from "./KindTabs.svelte";
   import SliderRow from "./SliderRow.svelte";
 
   interface Props {
@@ -27,88 +26,85 @@
     const p = P(k);
     onParams([[p, Math.max(p.min, Math.min(p.max, v))]], `${info.name} ${p.name}`, done);
   };
-  let side = $state(0);
-  const out = $derived(side === 0 ? "l" : "r");
-  const MARKS = [0, 25, 50, 75, 100];
-  /** The four parts, for the drawing: [from, to, amount, flipped]. */
-  const parts = $derived(
-    (["l", "r"] as const).flatMap((o) =>
-      (["l", "r"] as const).map((i) => ({ from: i, to: o, amt: val(`${o}${i}`) / 100, inv: val(`${o}${i}_inv`) >= 0.5 })),
-    ),
-  );
+  let side = $state<"l" | "r">("l");
 </script>
 
-<div class="mix">
-  <KindTabs kinds={["Left output", "Right output"]} current={side} label="Output side" pick={(i) => (side = i)} />
-  <div class="body">
-    {#each [["l", "Left input"], ["r", "Right input"]] as const as [i, name] (i)}
+<div class="mixer">
+  <fieldset>
+    <div class="tabs" role="tablist" aria-label="Output channel">
+      {#each [["l", "L"], ["r", "R"]] as const as [k, name] (k)}
+        <button type="button" role="tab" class:on={side === k} aria-selected={side === k} title="{k === 'l' ? 'Left' : 'Right'} output: what goes into it" onclick={() => (side = k)}>{name}</button>
+      {/each}
+    </div>
+    <div class="head">
+      <span>Input Channel</span>
+      <span>Invert</span>
+    </div>
+    {#each [["l", "L"], ["r", "R"]] as const as [i, name] (i)}
       <div class="line">
-        <SliderRow param={P(`${out}${i}`)} value={val(`${out}${i}`)} marks={MARKS} label={name} set={set(`${out}${i}`)} />
-        <label class="inv" title="Flip the polarity of this part">
-          <input type="checkbox" checked={val(`${out}${i}_inv`) >= 0.5} onchange={(e) => set(`${out}${i}_inv`)(e.currentTarget.checked ? 1 : 0, true)} />
-          Invert
-        </label>
+        <SliderRow param={P(`${side}${i}`)} value={val(`${side}${i}`)} marks={[0, 50, 100]} label={name} labelWidth={14} set={set(`${side}${i}`)} />
+        <input
+          type="checkbox"
+          aria-label="Invert {name} into {side === 'l' ? 'left' : 'right'}"
+          title="Flip the polarity of this part"
+          checked={val(`${side}${i}_inv`) >= 0.5}
+          onchange={(e) => set(`${side}${i}_inv`)(e.currentTarget.checked ? 1 : 0, true)}
+        />
       </div>
     {/each}
-    <svg viewBox="0 0 200 64" class="map" role="img" aria-label="Where each input goes">
-      <text x="8" y="20">L in</text>
-      <text x="8" y="52">R in</text>
-      <text x="160" y="20">L out</text>
-      <text x="160" y="52">R out</text>
-      {#each parts as p (p.from + p.to)}
-        {#if p.amt > 0}
-          <line
-            x1="44"
-            y1={p.from === "l" ? 16 : 48}
-            x2="152"
-            y2={p.to === "l" ? 16 : 48}
-            stroke-width={0.6 + p.amt * 3}
-            stroke-opacity={0.25 + p.amt * 0.75}
-            stroke-dasharray={p.inv ? "4 3" : "none"}
-          />
-        {/if}
-      {/each}
-    </svg>
-  </div>
+  </fieldset>
 </div>
 
 <style>
-  .mix {
-    display: grid;
-    gap: 0;
+  .mixer {
+    padding: 12px 14px 14px;
   }
-  .body {
+  fieldset {
     display: grid;
-    gap: 12px;
-    padding: 14px 14px 12px;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .tabs {
+    display: flex;
+    gap: 14px;
+    padding-left: 2px;
+  }
+  .tabs button {
+    padding: 0 2px 2px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tabs button.on {
+    border-bottom-color: var(--accent);
+    color: var(--text);
+  }
+  .head {
+    display: grid;
+    grid-template-columns: 1fr 44px;
+    padding: 4px 0 0 24px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .head span:last-child {
+    text-align: center;
   }
   .line {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
+    grid-template-columns: 1fr 44px;
     align-items: center;
   }
-  .inv {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-  input[type="checkbox"] {
-    accent-color: var(--accent);
-  }
-  .map {
-    width: 100%;
-    max-width: 320px;
-    height: 64px;
+  .line input {
     justify-self: center;
-  }
-  .map text {
-    fill: var(--text-dim);
-    font-size: 10px;
-  }
-  .map line {
-    stroke: var(--accent);
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
   }
 </style>

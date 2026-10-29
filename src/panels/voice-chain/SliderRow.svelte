@@ -22,16 +22,18 @@
     /** Shown instead of the setting's own name. */
     label?: string;
     disabled?: boolean;
+    /** Width of the name column, in pixels. */
+    labelWidth?: number;
     set: (v: number, done: boolean) => void;
   }
 
-  const { param, value, marks, words = [], label, disabled = false, set }: Props = $props();
+  const { param, value, marks, words = [], label, disabled = false, labelWidth = 112, set }: Props = $props();
   const STEPS = 1000;
   const at = (v: number) => Math.min(100, Math.max(0, toSlider(param, v) * 100));
   const short = (m: number) => (Math.abs(m) >= 1000 ? `${m / 1000}k` : String(m));
 </script>
 
-<div class="row" class:disabled>
+<div class="row" class:disabled style:--label="{labelWidth}px">
   <span class="name">{label ?? param.name}</span>
   <div class="scale">
     <div class="nums" aria-hidden="true">
@@ -65,8 +67,8 @@
 <style>
   .row {
     display: grid;
-    grid-template-columns: 112px 1fr 76px;
-    gap: 12px;
+    grid-template-columns: var(--label, 112px) minmax(140px, 1fr) 72px;
+    gap: 10px;
     align-items: center;
   }
   .row.disabled {
@@ -80,6 +82,13 @@
   .scale {
     position: relative;
     padding: 13px 0 8px;
+    container-type: inline-size;
+  }
+  /* A short scale keeps only its end numbers, so they never pile up. */
+  @container (max-width: 240px) {
+    .nums span:not(:first-child):not(:last-child) {
+      display: none;
+    }
   }
   .row:has(.words) .scale {
     padding-bottom: 16px;
