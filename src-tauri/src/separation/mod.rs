@@ -110,6 +110,76 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
+            id: "mel-roformer-deux",
+            name: "Mel-Band Roformer Deux (vocals and instrumental)",
+            category: "Vocals",
+            sdr: Some(11.37),
+            sdr_note: "vocals 11.37, instrumental 17.55, as given on the author's page",
+            target_name: "Vocals",
+            rest_name: "Instrumental",
+            // Both come from the model itself, in the order it was trained with.
+            stems: &[("Vocals", 11.37), ("Instrumental", 17.55)],
+            author: "becruily",
+            page: "https://huggingface.co/becruily/mel-band-roformer-deux",
+            url: "https://huggingface.co/becruily/mel-band-roformer-deux/resolve/main/becruily_deux.ckpt",
+            sha256: "10255c02295bf3e3865d4ee50ff752d7b19b124ed5fd93b147babc4333eda3aa",
+            bytes: 435_006_815,
+            licence: "CC BY-NC 4.0 (non-commercial use), as stated on the author's page.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 573300, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mel-denoise",
+            name: "Mel-Band Roformer Denoise",
+            category: "Denoise",
+            sdr: Some(27.9959),
+            sdr_note: "as given in the file's name, on the author's own test",
+            target_name: "Clean",
+            rest_name: "Removed noise",
+            stems: &[],
+            author: "aufr33, as mirrored by poiqazwsx",
+            page: "https://huggingface.co/poiqazwsx/melband-roformer-denoise",
+            url: "https://huggingface.co/poiqazwsx/melband-roformer-denoise/resolve/main/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt",
+            sha256: "7c1c39191edc34e942ca7f2346ce6b6c0e1208a5f76349ffce6f696bd12910de",
+            bytes: 913_097_300,
+            licence: "No licence is stated for the weights; the mirror credits aufr33.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 352800, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
+            id: "mel-denoise-aggressive",
+            name: "Mel-Band Roformer Denoise (aggressive)",
+            category: "Denoise",
+            sdr: Some(27.9768),
+            sdr_note: "as given in the file's name, on the author's own test; takes out more noise, and can take some of the voice with it",
+            target_name: "Clean",
+            rest_name: "Removed noise",
+            stems: &[],
+            author: "aufr33, as mirrored by poiqazwsx",
+            page: "https://huggingface.co/poiqazwsx/melband-roformer-denoise",
+            url: "https://huggingface.co/poiqazwsx/melband-roformer-denoise/resolve/main/denoise_mel_band_roformer_aufr33_aggr_sdr_27.9768.ckpt",
+            sha256: "a25e3b233722cd81e2de7b8e798a3fef29d4b9799ccacda60b0dc958a1e2a5bb",
+            bytes: 913_097_300,
+            licence: "No licence is stated for the weights; the mirror credits aufr33.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 352800, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
             id: "bs-roformer-sw",
             name: "BS-RoFormer SW (6 stems)",
             category: "Instruments",

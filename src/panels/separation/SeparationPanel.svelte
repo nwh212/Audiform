@@ -32,8 +32,8 @@
     void tools.refresh();
   });
   const status = $derived(tools.status);
-  // Vocal models and instrument models each have a tab.
-  const TABS = ["Vocals", "Instruments"] as const;
+  // Vocal models, instrument models and denoisers each have a tab.
+  const TABS = ["Vocals", "Instruments", "Denoise"] as const;
   let tab = $state<(typeof TABS)[number]>((prefs.raw("separation.tab") as (typeof TABS)[number] | null) ?? "Vocals");
   const groups = $derived(status ? byCategory(status.models.filter((m) => m.category === tab)) : []);
   const model = $derived(status?.models.find((m) => m.id === picked && m.category === tab) ?? groups[0]?.[1][0] ?? null);
