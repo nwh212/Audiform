@@ -71,7 +71,7 @@
   const msText = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${Math.round(v)} ms`);
 </script>
 
-<div class="unit kind{kind}">
+<div class="shell"><div class="unit kind{kind}">
   <div class="top">
     <div class="kinds" role="tablist" aria-label="Kind of delay">
       {#each KINDS as k, i (k.name)}
@@ -126,8 +126,8 @@
     <div class="group">
       <span class="gname">Filters</span>
       <div class="knobs">
-        <BigKnob param={P("low_cut")} value={val("low_cut")} size={56} label="Low cut" oninput={(v) => set("low_cut", v, false)} oncommit={(v) => set("low_cut", v, true)} />
-        <BigKnob param={P("tone")} value={val("tone")} size={56} label="High cut" oninput={(v) => set("tone", v, false)} oncommit={(v) => set("tone", v, true)} />
+        <BigKnob param={P("low_cut")} value={val("low_cut")} size={56} label="Lo cut" oninput={(v) => set("low_cut", v, false)} oncommit={(v) => set("low_cut", v, true)} />
+        <BigKnob param={P("tone")} value={val("tone")} size={56} label="Hi cut" oninput={(v) => set("tone", v, false)} oncommit={(v) => set("tone", v, true)} />
       </div>
     </div>
     <div class="group">
@@ -139,9 +139,12 @@
       </div>
     </div>
   </div>
-</div>
+</div></div>
 
 <style>
+  .shell {
+    container-type: inline-size;
+  }
   .unit {
     --face: #1f262c;
     --face2: #141a1f;
@@ -187,13 +190,18 @@
     display: flex;
     gap: 4px;
   }
-  .top button {
-    padding: 4px 10px;
-    border: 1px solid #000;
-    border-radius: 4px;
-    background: linear-gradient(180deg, #3b3b3b, #232323);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    color: color-mix(in srgb, var(--panel-ink) 70%, transparent);
+  /* A faceplate's own switches: the theme's button look stays out. */
+  .unit .top button {
+    min-width: 0;
+    height: auto;
+    padding: 4px 10px !important;
+    border: 1px solid #000 !important;
+    border-radius: 4px !important;
+    background: linear-gradient(180deg, #3b3b3b, #232323) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    color: color-mix(in srgb, var(--panel-ink) 70%, transparent) !important;
+    text-shadow: none !important;
+    white-space: nowrap;
     font: inherit;
     font-size: 11px;
     font-weight: 700;
@@ -201,12 +209,12 @@
     text-transform: uppercase;
     cursor: pointer;
   }
-  .top button.lit {
-    color: #111;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--glow) 90%, #fff), var(--glow));
+  .unit .top button.lit {
+    color: #111 !important;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--glow) 90%, #fff), var(--glow)) !important;
     box-shadow:
       0 0 8px color-mix(in srgb, var(--glow) 60%, transparent),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
   }
   .mid {
     display: grid;
@@ -231,7 +239,11 @@
     align-items: baseline;
     justify-content: space-between;
   }
+  .readout {
+    flex-wrap: wrap;
+  }
   .big {
+    white-space: nowrap;
     color: var(--glow);
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-size: 26px;
@@ -271,8 +283,8 @@
   }
   .row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-wrap: nowrap;
+    gap: 8px;
     justify-content: center;
     padding-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -299,5 +311,24 @@
   }
   .knobs :global(.box) {
     width: 60px;
+  }
+  .unit :global(.bk .name) {
+    white-space: nowrap;
+  }
+  /* Narrow windows: the display gets its own row above the two big dials,
+     and the small dials go two groups to a row. */
+  @container (max-width: 600px) {
+    .mid {
+      grid-template-columns: 1fr 1fr;
+      justify-items: center;
+    }
+    .screen {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      justify-self: stretch;
+    }
+    .row {
+      flex-wrap: wrap;
+    }
   }
 </style>
