@@ -158,7 +158,7 @@
           </select>
         </label>
         {#if multi}<p class="summary">{bedFormats?.includes("flac") ? "Written with one channel per speaker, as WAV or FLAC." : "Written as a WAV with one channel per speaker. FLAC carries 5.1 and 7.1 only."}</p>{/if}
-        {#if multi}<p class="warn" role="note">For speakers and surround players only. Players built on a web browser (chat apps, many websites) add every channel into left and right without turning them down, so this file can play over 10 dB too loud there and distort, loud enough to harm speakers. To share it, also export 2.0 or Headphones.</p>{/if}
+        {#if multi}<p class="warn" role="note">For speakers and surround players only. Players built on a web browser (chat apps, many websites) add every channel into left and right without turning them down, so this file can play over 10 dB too loud there and distort, loud enough to harm speakers. Some players also misread 32-bit float files with this many channels as loud noise. To share it, export 2.0 or Headphones, or at least pick 24-bit.</p>{/if}
       </section>
     {/if}
 

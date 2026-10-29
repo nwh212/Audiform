@@ -58,6 +58,13 @@ impl MultiWav {
         out.write_all(&mask.to_le_bytes())?;
         out.write_all(&(if float { 3u16 } else { 1u16 }).to_le_bytes())?;
         out.write_all(&GUID_TAIL)?;
+        if float {
+            // The frame count, which the format asks of float files: some
+            // players look for it to read the samples as float at all.
+            out.write_all(b"fact")?;
+            out.write_all(&4u32.to_le_bytes())?;
+            out.write_all(&0u32.to_le_bytes())?; // filled in at the end
+        }
         out.write_all(b"data")?;
         out.write_all(&0u32.to_le_bytes())?; // filled in at the end
         Ok(MultiWav {
@@ -109,10 +116,15 @@ impl MultiWav {
             .map_err(|_| std::io::Error::other("The file is too long for WAV (over 4 GB)."))?;
         self.out.flush()?;
         let mut f = self.out.into_inner().map_err(|e| e.into_error())?;
-        let riff = 4 + 8 + 40 + 8 + data + (data % 2);
+        let fact: u32 = if self.bits == 32 { 12 } else { 0 };
+        let riff = 4 + 8 + 40 + fact + 8 + data + (data % 2);
         f.seek(SeekFrom::Start(4))?;
         f.write_all(&riff.to_le_bytes())?;
-        f.seek(SeekFrom::Start(4 + 4 + 4 + 8 + 40 + 4))?;
+        if fact > 0 {
+            f.seek(SeekFrom::Start(4 + 4 + 4 + 8 + 40 + 8))?;
+            f.write_all(&(self.frames.min(u64::from(u32::MAX)) as u32).to_le_bytes())?;
+        }
+        f.seek(SeekFrom::Start(4 + 4 + 4 + 8 + 40 + u64::from(fact) + 4))?;
         f.write_all(&data.to_le_bytes())?;
         f.flush()?;
         Ok(self.frames)
@@ -143,5 +155,8 @@ mod tests {
             u32::from_le_bytes(bytes[40..44].try_into().unwrap()),
             0x2D63F
         );
+        // Float files carry their frame count in a fact chunk.
+        assert_eq!(&bytes[60..64], b"fact");
+        assert_eq!(u32::from_le_bytes(bytes[68..72].try_into().unwrap()), 100);
     }
 }
