@@ -84,7 +84,8 @@ export function createEffectsTools(deps: EffectsToolsDeps) {
     "notch",
     "pitch_shift",
     "center_extractor",
-    "convolution_reverb",
+    "reverb",
+    "channel_mixer",
     "echo",
     "phase_curve",
   ];

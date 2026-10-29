@@ -9,7 +9,7 @@
 
 use std::collections::VecDeque;
 
-use super::{db_to_gain, num, toggle, EffectInfo, Params, Processor};
+use super::{choice, db_to_gain, num, toggle, EffectInfo, Params, Processor};
 use crate::dsp::biquad::{Coeffs, Shape, StereoBiquad};
 
 /// Smoothing coefficient for a time constant in milliseconds.
@@ -45,10 +45,11 @@ pub fn limiter_info() -> EffectInfo {
         id: "altaudio.limiter",
         name: "Limiter",
         category: "Dynamics",
-        description: "Keeps peaks from going over the ceiling, looking ahead so it never clips.",
+        description: "A brick-wall limiter: nothing goes over the ceiling. It looks ahead so it never clips, and in True peak mode it also catches the peaks between samples that players and converters make.",
         params: vec![
-            num("ceiling", "Ceiling", "dB", -24.0, 0.0, -6.0, 0.1),
-            num("input_boost", "Input boost", "dB", 0.0, 24.0, 0.0, 0.1),
+            choice("detect", "Detect", &["Peak", "True peak"], 0),
+            num("ceiling", "Maximum level", "dB", -60.0, 0.0, -6.0, 0.1),
+            num("input_boost", "Input boost", "dB", -24.0, 24.0, 0.0, 0.1),
             num("lookahead", "Look-ahead", "ms", 0.0, 20.0, 5.0, 0.1),
             num("release", "Release", "ms", 10.0, 1000.0, 100.0, 1.0).log(),
             toggle("linked", "Link channels", true),
@@ -260,12 +261,60 @@ pub struct Limiter {
     paths: [LimitPath; 2],
     delay: Vec<f32>,
     delay_at: usize,
+    /// True peak: the last four input frames, for the level between samples.
+    true_peak: bool,
+    hist: [[f32; TP_TAPS]; 2],
+    weights: [[f32; TP_TAPS]; 3],
+}
+
+/// Taps either side of the point being drawn, for the level between samples.
+const TP_HALF: usize = 4;
+const TP_TAPS: usize = TP_HALF * 2;
+
+/// Band-limited interpolation weights (a Lanczos-windowed sinc) for the
+/// points a quarter, half and three quarters between two samples.
+fn tp_weights() -> [[f32; TP_TAPS]; 3] {
+    let mut w = [[0f32; TP_TAPS]; 3];
+    for (k, t) in [0.25f64, 0.5, 0.75].into_iter().enumerate() {
+        for (i, v) in w[k].iter_mut().enumerate() {
+            // Sample i sits at i - (TP_HALF - 1); the point at t.
+            let x = t - (i as f64 - (TP_HALF as f64 - 1.0));
+            let sinc = |x: f64| {
+                if x.abs() < 1e-9 {
+                    1.0
+                } else {
+                    (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x)
+                }
+            };
+            *v = (sinc(x) * sinc(x / TP_HALF as f64)) as f32;
+        }
+    }
+    w
+}
+
+/// The highest level a signal reaches between the middle two of `h`
+/// (eight samples in a row), at four points per sample, as a player's
+/// reconstruction would draw it.
+fn interval_peak(h: &[f32; TP_TAPS], w: &[[f32; TP_TAPS]; 3]) -> f32 {
+    let mut m = h[TP_HALF - 1].abs().max(h[TP_HALF].abs());
+    for wk in w {
+        let v: f32 = h.iter().zip(wk).map(|(a, b)| a * b).sum();
+        m = m.max(v.abs());
+    }
+    m
 }
 
 impl Limiter {
     pub fn new(p: &Params, rate: u32) -> Self {
-        let lookahead = (p.get("lookahead") * f64::from(rate) / 1000.0).round() as usize;
+        let true_peak = p.index("detect") == 1;
+        // True peak: the level between two samples is known a few frames
+        // later, so the sound is held back that much more.
+        let lookahead = (p.get("lookahead") * f64::from(rate) / 1000.0).round() as usize
+            + if true_peak { TP_HALF + 1 } else { 0 };
         Self {
+            true_peak,
+            hist: [[0.0; TP_TAPS]; 2],
+            weights: tp_weights(),
             ceiling: db_to_gain(p.get("ceiling")),
             boost: db_to_gain(p.get("input_boost")),
             release: coef(p.get("release"), rate),
@@ -292,12 +341,24 @@ impl Processor for Limiter {
         for f in buf.as_chunks_mut::<2>().0 {
             let l = f[0] * self.boost;
             let r = f[1] * self.boost;
+            let (pl, pr) = if self.true_peak {
+                for (h, v) in self.hist.iter_mut().zip([l, r]) {
+                    h.rotate_left(1);
+                    h[TP_TAPS - 1] = v;
+                }
+                (
+                    interval_peak(&self.hist[0], &self.weights),
+                    interval_peak(&self.hist[1], &self.weights),
+                )
+            } else {
+                (l.abs(), r.abs())
+            };
             let (gl, gr) = if self.linked {
-                let g = self.paths[0].step(self.need(l.abs().max(r.abs())), self.release);
+                let g = self.paths[0].step(self.need(pl.max(pr)), self.release);
                 (g, g)
             } else {
-                let nl = self.need(l.abs());
-                let nr = self.need(r.abs());
+                let nl = self.need(pl);
+                let nr = self.need(pr);
                 (
                     self.paths[0].step(nl, self.release),
                     self.paths[1].step(nr, self.release),
@@ -328,6 +389,7 @@ impl Processor for Limiter {
         }
         self.delay.fill(0.0);
         self.delay_at = 0;
+        self.hist = [[0.0; TP_TAPS]; 2];
     }
 }
 
@@ -574,6 +636,27 @@ mod tests {
             p.process(chunk);
         }
         b
+    }
+
+    #[test]
+    fn true_peak_also_holds_the_level_between_samples() {
+        // A tone at a quarter of the rate, sampled 45 degrees off its
+        // peaks: every sample is at 0.707 of the level the curve reaches.
+        let b: Vec<f32> = (0..9600)
+            .flat_map(|i| {
+                let v = 0.9
+                    * (std::f32::consts::FRAC_PI_2 * i as f32 + std::f32::consts::FRAC_PI_4).sin();
+                [v, v]
+            })
+            .collect();
+        let tail = |o: &[f32]| peak(&o[o.len() / 2..]);
+        let sample = run("altaudio.limiter", &[("ceiling", -6.0)], b.clone());
+        let truep = run("altaudio.limiter", &[("ceiling", -6.0), ("detect", 1.0)], b);
+        // Peak mode holds the samples at the ceiling, so the curve goes over.
+        assert!((tail(&sample) - 0.5).abs() < 0.01, "{}", tail(&sample));
+        // True peak holds the curve: the samples sit about 3 dB lower.
+        assert!(tail(&truep) < 0.5 * 0.75, "{}", tail(&truep));
+        assert!(tail(&truep) > 0.5 * 0.6, "{}", tail(&truep));
     }
 
     #[test]

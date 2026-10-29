@@ -6,16 +6,48 @@
 //! control that darkens the repeats and an optional ping-pong that
 //! bounces them between the left and the right.
 //!
+//! Three kinds: Digital repeats cleanly; Tape wobbles (wow and
+//! flutter), saturates and darkens each pass the way a tape loop does;
+//! Analog is the darker, softly clipping sound of a bucket-brigade
+//! delay. The time can follow the tempo as a note value. Low cut and
+//! Tone filter the repeats inside the loop, Modulation sways the time,
+//! and Drive pushes the repeats into saturation.
+//!
 //! Each side keeps a ring of the last two seconds. The repeats are read
 //! back `time` ago, darkened by a one-pole low-pass, and fed back in,
 //! so each repeat is `feedback` as loud as the one before. Changing the
 //! time while playing glides the read point, so it bends the repeats
 //! like tape instead of clicking.
 
-use super::{num, toggle, EffectInfo, Params, Processor};
+use super::{choice, num, toggle, EffectInfo, Params, Processor};
 
 /// The longest delay, in seconds.
-const MAX_SECONDS: f64 = 2.0;
+const MAX_SECONDS: f64 = 4.0;
+
+pub const KINDS: [&str; 3] = ["Digital", "Tape", "Analog"];
+/// Note values for a time that follows the tempo, and their length in beats.
+pub const NOTES: [&str; 16] = [
+    "1/64", "1/32T", "1/32", "1/16T", "1/16", "1/16D", "1/8T", "1/8", "1/8D", "1/4T", "1/4",
+    "1/4D", "1/2", "1/2D", "1 bar", "2 bars",
+];
+const BEATS: [f64; 16] = [
+    1.0 / 16.0,
+    1.0 / 12.0,
+    1.0 / 8.0,
+    1.0 / 6.0,
+    0.25,
+    0.375,
+    1.0 / 3.0,
+    0.5,
+    0.75,
+    2.0 / 3.0,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    8.0,
+];
 
 /// How fast the read point glides to a new time, per frame (about 40 ms).
 const GLIDE: f64 = 0.0005;
@@ -25,13 +57,22 @@ pub fn echo_info() -> EffectInfo {
         id: "altaudio.echo",
         name: "Delay and Echo",
         category: "Delay and Reverb",
-        description: "Repeats the sound after a set time, each repeat quieter than the last. Tone darkens the repeats, and Ping-pong bounces them between left and right.",
+        description: "Repeats the sound after a set time, each repeat quieter than the last. Digital, Tape or Analog; the time can follow the tempo. Tone darkens the repeats, and Ping-pong bounces them between left and right.",
         params: vec![
-            num("time", "Delay time", "ms", 1.0, 2000.0, 350.0, 1.0).log(),
-            num("feedback", "Feedback", "%", 0.0, 95.0, 35.0, 1.0),
-            num("tone", "Tone", "Hz", 500.0, 16_000.0, 6000.0, 10.0).log(),
-            num("wet", "Echo level", "%", 0.0, 100.0, 30.0, 1.0),
-            toggle("pingpong", "Ping-pong", false),
+            choice("kind", "Type", &KINDS, 0),
+            num("time", "Delay time", "ms", 1.0, MAX_SECONDS * 1000.0, 350.0, 1.0).log().group("Time"),
+            toggle("sync", "Follow tempo", false).group("Time"),
+            choice("note", "Note", &NOTES, 7).group("Time"),
+            num("tempo", "Tempo", "BPM", 30.0, 300.0, 120.0, 0.1).group("Time"),
+            num("feedback", "Feedback", "%", 0.0, 120.0, 35.0, 1.0).group("Repeats"),
+            toggle("pingpong", "Ping-pong", false).group("Repeats"),
+            num("low_cut", "Low cut", "Hz", 20.0, 2000.0, 20.0, 1.0).log().group("Repeats"),
+            num("tone", "Tone", "Hz", 500.0, 16_000.0, 6000.0, 10.0).log().group("Repeats"),
+            num("depth", "Modulation", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
+            num("rate", "Rate", "Hz", 0.05, 10.0, 0.6, 0.01).log().group("Color"),
+            num("drive", "Drive", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
+            num("dry", "Dry", "%", 0.0, 100.0, 100.0, 1.0).group("Output"),
+            num("wet", "Echo level", "%", 0.0, 100.0, 30.0, 1.0).group("Output"),
         ],
     }
 }
@@ -50,6 +91,27 @@ pub struct Echo {
     /// The low-pass on the repeats: its coefficient and each side's memory.
     lp: f32,
     lp_state: [f32; 2],
+    /// The low cut on the repeats (a one-pole high-pass): coefficient and memory.
+    hp: f32,
+    hp_state: [f32; 2],
+    kind: usize,
+    dry: f32,
+    /// Modulation: depth in frames, phase and step of the slow sway (wow),
+    /// and of the fast one (flutter, tape only).
+    depth: f64,
+    phase: f64,
+    step: f64,
+    flutter: f64,
+    drive: f32,
+}
+
+/// Soft saturation that leaves quiet sound almost as it is.
+fn soft(x: f32, drive: f32) -> f32 {
+    if drive <= 0.0 {
+        return x;
+    }
+    let k = 1.0 + 6.0 * drive;
+    (x * k).tanh() / k.tanh().max(1e-6) * (1.0 / (1.0 + 0.3 * drive))
 }
 
 /// Reads between two neighbouring frames of a ring.
@@ -80,6 +142,15 @@ impl Echo {
             pingpong: false,
             lp: 0.0,
             lp_state: [0.0; 2],
+            hp: 0.0,
+            hp_state: [0.0; 2],
+            kind: 0,
+            dry: 1.0,
+            depth: 0.0,
+            phase: 0.0,
+            step: 0.0,
+            flutter: 0.0,
+            drive: 0.0,
         };
         e.set(p);
         e.cur = e.want;
@@ -88,11 +159,38 @@ impl Echo {
 
     fn set(&mut self, p: &Params) {
         let longest = (self.ring[0].len() - 2) as f64;
-        self.want = (p.get("time") / 1000.0 * self.rate).clamp(1.0, longest);
+        self.kind = p.index("kind").min(KINDS.len() - 1);
+        let ms = if p.on("sync") {
+            let beats = BEATS[p.index("note").min(BEATS.len() - 1)];
+            beats * 60_000.0 / p.get("tempo").clamp(30.0, 300.0)
+        } else {
+            p.get("time")
+        };
+        // Room for the sway on both sides.
+        let sway =
+            p.get("depth") / 100.0 * if self.kind == 1 { 8.0 } else { 4.0 } / 1000.0 * self.rate;
+        self.want = (ms / 1000.0 * self.rate).clamp(1.0 + sway, longest - sway - 2.0);
         self.feedback = (p.get("feedback") / 100.0) as f32;
         self.wet = (p.get("wet") / 100.0) as f32;
+        self.dry = (p.get("dry") / 100.0) as f32;
         self.pingpong = p.on("pingpong");
-        self.lp = (-std::f64::consts::TAU * p.get("tone") / self.rate).exp() as f32;
+        // Analog repeats are darker still.
+        let tone = if self.kind == 2 {
+            p.get("tone").min(5500.0)
+        } else {
+            p.get("tone")
+        };
+        self.lp = (-std::f64::consts::TAU * tone / self.rate).exp() as f32;
+        self.hp = (-std::f64::consts::TAU * p.get("low_cut") / self.rate).exp() as f32;
+        self.depth = sway;
+        self.step = std::f64::consts::TAU * p.get("rate") / self.rate;
+        let base = (p.get("drive") / 100.0) as f32;
+        // Tape and analog always saturate a little.
+        self.drive = match self.kind {
+            1 => 0.2 + 0.8 * base,
+            2 => 0.1 + 0.9 * base,
+            _ => base,
+        };
     }
 }
 
@@ -104,7 +202,18 @@ impl Processor for Echo {
             if (self.want - self.cur).abs() < 0.01 {
                 self.cur = self.want;
             }
-            let pos = self.at as f64 + n as f64 - self.cur;
+            // Modulation: a slow sway, and for tape a fast flutter too.
+            let mut d = self.cur;
+            if self.depth > 0.0 {
+                self.phase = (self.phase + self.step) % std::f64::consts::TAU;
+                let mut m = self.phase.sin();
+                if self.kind == 1 {
+                    self.flutter = (self.flutter + self.step * 11.0) % std::f64::consts::TAU;
+                    m = 0.8 * m + 0.2 * self.flutter.sin();
+                }
+                d += self.depth * m;
+            }
+            let pos = self.at as f64 + n as f64 - d;
             let whole = pos.floor();
             let frac = (pos - whole) as f32;
             let i0 = whole as usize % n;
@@ -115,7 +224,20 @@ impl Processor for Echo {
             // are not, so the first repeat is a clean copy.
             self.lp_state[0] = dl + self.lp * (self.lp_state[0] - dl);
             self.lp_state[1] = dr + self.lp * (self.lp_state[1] - dr);
-            let (fl, fr) = (self.lp_state[0], self.lp_state[1]);
+            let (mut fl, mut fr) = (self.lp_state[0], self.lp_state[1]);
+            if self.hp > 0.0 && self.hp < 0.9999 {
+                // Low cut: what the high-pass memory tracks is taken away.
+                self.hp_state[0] = fl + self.hp * (self.hp_state[0] - fl);
+                self.hp_state[1] = fr + self.hp * (self.hp_state[1] - fr);
+                fl -= self.hp_state[0];
+                fr -= self.hp_state[1];
+            }
+            if self.drive > 0.0 || self.feedback > 0.95 {
+                // Saturation keeps feedback past 100% from running away.
+                let dr_ = self.drive.max(0.05);
+                fl = soft(fl, dr_);
+                fr = soft(fr, dr_);
+            }
             let (xl, xr) = (f[0], f[1]);
             let (wl, wr) = if self.pingpong {
                 // The input enters on the left; each repeat crosses sides.
@@ -125,8 +247,8 @@ impl Processor for Echo {
             };
             self.ring[0][self.at] = flush(wl);
             self.ring[1][self.at] = flush(wr);
-            f[0] = xl + self.wet * dl;
-            f[1] = xr + self.wet * dr;
+            f[0] = self.dry * xl + self.wet * dl;
+            f[1] = self.dry * xr + self.wet * dr;
             self.at = (self.at + 1) % n;
         }
     }
@@ -136,6 +258,7 @@ impl Processor for Echo {
             r.fill(0.0);
         }
         self.lp_state = [0.0; 2];
+        self.hp_state = [0.0; 2];
         self.at = 0;
         self.cur = self.want;
     }
@@ -232,6 +355,35 @@ mod tests {
         assert!(near(&out, 2400, 1) < 1e-4, "and not on the right");
         assert!(near(&out, 4800, 1) > 0.1, "second repeat on the right");
         assert!(near(&out, 4800, 0) < 1e-4, "and not on the left");
+    }
+
+    #[test]
+    fn follows_the_tempo_and_every_kind_stays_finite() {
+        // A quarter note at 120 BPM is half a second.
+        let p = params(&[
+            ("sync", 1.0),
+            ("note", 10.0),
+            ("tempo", 120.0),
+            ("wet", 100.0),
+            ("feedback", 0.0),
+        ]);
+        let out = run(&p, impulse(30_000, 1.0, 1.0));
+        assert!(near(&out, 24_000, 0) > 0.9, "the repeat lands on the beat");
+        for (kind, name) in KINDS.iter().enumerate() {
+            let p = params(&[
+                ("kind", kind as f64),
+                ("feedback", 120.0),
+                ("depth", 60.0),
+                ("drive", 80.0),
+                ("wet", 100.0),
+            ]);
+            let out = run(&p, impulse(200_000, 1.0, 1.0));
+            assert!(
+                out.iter().all(|v| v.is_finite() && v.abs() < 3.0),
+                "{} runs away",
+                name
+            );
+        }
     }
 
     #[test]

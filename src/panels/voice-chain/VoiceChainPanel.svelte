@@ -15,6 +15,7 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
+  import { fromImpulse, IMPULSE_ID, REVERB_ID, REVERB_KINDS, toImpulse } from "./reverb-kinds";
   import EffectPresetBar from "./EffectPresetBar.svelte";
   import ChannelRouting from "./ChannelRouting.svelte";
   import { STEREO } from "./routing";
@@ -570,7 +571,7 @@
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
   const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
-  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width"]);
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width", "altaudio.limiter", "altaudio.channel_mixer", "altaudio.reverb", "altaudio.echo"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -839,9 +840,31 @@
             {onError}
           />
           {/await}
+        {:else if winSlot.effect === "altaudio.limiter"}
+          {#await import("./LimiterPanel.svelte") then { default: LimiterPanel }}
+          <LimiterPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
+        {:else if winSlot.effect === "altaudio.channel_mixer"}
+          {#await import("./MixerPanel.svelte") then { default: MixerPanel }}
+          <MixerPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
+        {:else if winSlot.effect === "altaudio.echo"}
+          {#await import("./DelayPanel.svelte") then { default: DelayPanel }}
+          <DelayPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
+        {:else if winSlot.effect === REVERB_ID}
+          {#await import("./VerbPanel.svelte") then { default: VerbPanel }}
+          <VerbPanel
+            slot={winSlot}
+            info={winInfo}
+            onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
+            onImpulse={() => commit("Reverb: Impulse Response", setSlot(chain, winSlot.id, { effect: IMPULSE_ID, params: toImpulse(winSlot.params) }))}
+          />
+          {/await}
         {:else if winSlot.effect === "altaudio.convolution_reverb"}
           {#await import("./ReverbPanel.svelte") then { default: ReverbPanel }}
           <ReverbPanel
+            onKind={(kind) => commit(`Reverb: ${REVERB_KINDS[kind]}`, setSlot(chain, winSlot.id, { effect: REVERB_ID, params: fromImpulse(winSlot.params, kind), data: null }))}
             slot={winSlot}
             info={winInfo}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
@@ -918,7 +941,21 @@
       {/if}
           {#if !winInfo}<p class="hint">This effect is not built in. It stays in the file and is skipped on playback.</p>{/if}
         </div>
-        <footer>{label} · Slot {winIndex + 1}</footer>
+        <footer>
+          <button
+            type="button"
+            class="power"
+            class:on={winSlot?.enabled}
+            title={winSlot?.enabled ? "On: click to bypass (the same switch as on the rack)" : "Bypassed: click to turn on"}
+            aria-label={winSlot?.enabled ? "Bypass effect" : "Turn on effect"}
+            aria-pressed={winSlot?.enabled}
+            onclick={() => winSlot && commit(winSlot.enabled ? "Bypass Effect" : "Turn On Effect", setSlot(chain, winSlot.id, { enabled: !winSlot.enabled }))}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+            {winSlot?.enabled ? "On" : "Bypassed"}
+          </button>
+          <span>{label} · Slot {winIndex + 1}</span>
+        </footer>
       </div>
     {/if}
 
@@ -1281,6 +1318,9 @@
     overflow: auto;
   }
   .fxwin footer {
+    display: flex;
+    gap: 10px;
+    align-items: center;
     padding: 4px 10px;
     border-top: 1px solid var(--border);
     color: var(--text-dim);
@@ -1288,6 +1328,26 @@
   }
   .pad {
     padding: 6px 8px;
+  }
+  .fxwin footer .power {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    padding: 2px 8px 2px 5px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    cursor: pointer;
+  }
+  .fxwin footer .power svg {
+    width: 14px;
+    height: 14px;
+  }
+  .fxwin footer .power.on {
+    border-color: color-mix(in srgb, var(--ok, #3fb950) 60%, transparent);
+    color: var(--ok, #3fb950);
   }
   .editor,
   .bottom {

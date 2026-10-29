@@ -397,7 +397,7 @@ export const MENUS: readonly Menu[] = [
       sep,
       item("fx.add.vox_strip", "Vox Strip (vocal chain)"),
       sortedSub("Delay and Reverb", [
-        item("fx.add.convolution_reverb", "Convolution Reverb"),
+        item("fx.add.reverb", "Reverb (rooms, halls, plates, springs, tape, impulse responses)"),
         item("fx.add.echo", "Delay and Echo"),
       ]),
       sortedSub("Dynamics", [
@@ -448,6 +448,7 @@ export const MENUS: readonly Menu[] = [
         item("fx.add.phase_curve", "Phase Curve"),
         item("fx.add.center_extractor", "Center Channel Extractor (remove or keep vocals)"),
         item("fx.add.stereo_width", "Stereo Width"),
+        item("fx.add.channel_mixer", "Channel Mixer"),
       ]),
       sep,
       item("fx.vst", "VST", {

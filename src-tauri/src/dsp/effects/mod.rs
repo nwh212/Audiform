@@ -20,6 +20,7 @@ mod dynamics;
 mod echo;
 mod eq;
 mod filters;
+pub mod mixer;
 mod phase;
 pub mod phase_curve;
 mod pitch;
@@ -29,6 +30,7 @@ pub mod reverb;
 pub mod routing;
 pub mod shaped;
 pub mod tube;
+pub mod verb;
 pub mod vocal;
 pub mod width;
 
@@ -196,7 +198,9 @@ pub fn catalog() -> Vec<EffectInfo> {
         filters::center_info(),
         center::center_extractor_info(),
         width::width_info(),
+        verb::verb_info(),
         reverb::reverb_info(),
+        mixer::mixer_info(),
         pitch::pitch_info(),
         echo::echo_info(),
         restore::noise_info(),
@@ -425,7 +429,12 @@ pub(crate) fn db_to_gain(db: f64) -> f32 {
 /// Effects no longer offered (Phase Curve does what Phase Rotate did, and
 /// the Center Channel Extractor what the Center Remover did, and more).
 /// Sessions that use them still play them.
-pub const RETIRED: [&str; 2] = ["altaudio.phase_rotate", "altaudio.center_remover"];
+/// The Convolution Reverb is the Reverb's Impulse Response tab now.
+pub const RETIRED: [&str; 3] = [
+    "altaudio.phase_rotate",
+    "altaudio.center_remover",
+    "altaudio.convolution_reverb",
+];
 
 /// Builds the processor for one slot, or None for an unknown effect (or a
 /// plug-in that is not installed or would not start).
@@ -483,6 +492,8 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.phase_curve" => Box::new(phase_curve::PhaseCurve::new(&p, rate)),
         center::ID => Box::new(center::CenterExtractor::new(&p, rate)),
         width::WIDTH => Box::new(width::StereoWidth::new(&p, rate)),
+        verb::ID => Box::new(verb::Reverb::new(&p, rate)),
+        mixer::ID => Box::new(mixer::ChannelMixer::new(&p)),
         reverb::ID => Box::new(reverb::ConvolutionReverb::new(
             &p,
             rate,

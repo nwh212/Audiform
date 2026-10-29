@@ -15,6 +15,8 @@
   import { reverbLoad, reverbPick, type EffectInfo, type EffectParamInfo, type ReverbIr } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
   import BigKnob from "./BigKnob.svelte";
+  import KindTabs from "./KindTabs.svelte";
+  import { REVERB_KINDS, REVERB_TIPS } from "./reverb-kinds";
   import { paramValue } from "./chain";
   import VSlider from "./VSlider.svelte";
 
@@ -24,10 +26,12 @@
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
     /** Saves new slot data (or none) as one undoable edit. */
     onData: (data: string | null, label: string) => void;
+    /** Another tab: the slot becomes the made Reverb of that kind. */
+    onKind?: (kind: number) => void;
     onError?: (e: unknown) => void;
   }
 
-  const { slot, info, onParams, onData, onError = console.error }: Props = $props();
+  const { slot, info, onParams, onData, onKind, onError = console.error }: Props = $props();
 
   const byKey = $derived(new Map(info.params.map((p) => [p.key, p])));
   const P = (k: string) => byKey.get(k)!;
@@ -114,6 +118,7 @@
   <div class="dial"><BigKnob param={p} value={val(k)} size={64} {label} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} /></div>
 {/snippet}
 
+{#if onKind}<KindTabs kinds={REVERB_KINDS} current={REVERB_KINDS.length - 1} tips={REVERB_TIPS} label="Kind of reverb" pick={(i) => i < REVERB_KINDS.length - 1 && onKind(i)} />{/if}
 <div class="verb">
   <div class="plate">
     <span class="title">Convolution Reverb</span>
