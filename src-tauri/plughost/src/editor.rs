@@ -85,15 +85,14 @@ mod win {
     use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
     use windows_sys::Win32::Graphics::Gdi::{
         Arc as ArcTo, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject,
-        DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MonitorFromWindow,
-        MoveToEx, SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_RIGHT, DT_SINGLELINE,
-        DT_VCENTER, MONITOR_DEFAULTTONEAREST, NULL_BRUSH, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+        DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MoveToEx,
+        SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_RIGHT, DT_SINGLELINE, DT_VCENTER,
+        NULL_BRUSH, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
     };
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::HiDpi::{
-        AdjustWindowRectExForDpi, GetDpiForMonitor, GetDpiForSystem, GetDpiForWindow,
-        SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-        MDT_EFFECTIVE_DPI,
+        AdjustWindowRectExForDpi, GetDpiForWindow, SetThreadDpiAwarenessContext,
+        DPI_AWARENESS_CONTEXT_UNAWARE,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
@@ -133,26 +132,6 @@ mod win {
 
     fn strip_for(dpi: u32) -> i32 {
         (STRIP * dpi as i32 + 48) / 96
-    }
-
-    /// The scale of the monitor a window is on (1.0 is 96 DPI).
-    unsafe fn monitor_dpi(hwnd: HWND) -> u32 {
-        if hwnd.is_null() {
-            return GetDpiForSystem();
-        }
-        let (mut x, mut y) = (0u32, 0u32);
-        if GetDpiForMonitor(
-            MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
-            MDT_EFFECTIVE_DPI,
-            &mut x,
-            &mut y,
-        ) == 0
-            && x > 0
-        {
-            x
-        } else {
-            GetDpiForSystem()
-        }
     }
 
     /// Tells a plug-in the display scale, when it wants to know.
@@ -397,19 +376,17 @@ mod win {
             if resizable {
                 style |= WS_THICKFRAME;
             }
-            // Plug-in windows follow each monitor's scale (per-monitor DPI
-            // aware), so a plug-in sizes and draws in real pixels. Plug-ins
-            // that take the VST3 content scale are told it before they size
-            // themselves; the rest read the window's DPI.
-            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            // Plug-in windows are not DPI aware, as in most DAWs: Windows draws
+            // them at the system scale and stretches them on a 125% screen,
+            // so a plug-in that does not scale itself still shows whole.
+            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
             let owner_hwnd: HWND = if owner == 0 {
                 ptr::null_mut()
             } else {
                 owner as usize as _
             };
-            let dpi = monitor_dpi(owner_hwnd);
+            let dpi = 96;
             let strip = strip_for(dpi);
-            tell_scale(&view, dpi);
             let mut size: ViewRect = std::mem::zeroed();
             view.getSize(&mut size);
             let (w, h) = (
