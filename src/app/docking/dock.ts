@@ -99,6 +99,8 @@ export interface SessionTabsSource {
   rows: Readable<SessionRow[]>;
   open: (id: string) => void;
   close: (id: string) => void;
+  /** Puts a session's tab at a new place in the row. */
+  move: (id: string, to: number) => void;
 }
 
 export interface WorkspaceState {
@@ -201,7 +203,28 @@ function panelTab(sessions?: SessionTabsSource): ITabRenderer {
   element.append(chips, title, menu);
   const subs: { dispose(): void }[] = [];
   /** One chip per open session, like documents in an image editor. */
+  // Dragging a chip along the row moves its session; a drag does not count as a click.
+  let dragging: { id: string; moved: boolean } | null = null;
+  let shown: SessionRow[] = [];
+  const onDrag = (e: PointerEvent) => {
+    if (!dragging || !sessions) return;
+    const rects = [...chips.children].map((c) => c.getBoundingClientRect());
+    let to = rects.findIndex((rc) => e.clientX < rc.left + rc.width / 2);
+    if (to < 0) to = rects.length - 1;
+    const from = shown.findIndex((r) => r.id === dragging?.id);
+    if (to !== from && from >= 0) {
+      dragging.moved = true;
+      sessions.move(dragging.id, to);
+    }
+  };
+  const endDrag = () => {
+    window.removeEventListener("pointermove", onDrag);
+    window.removeEventListener("pointerup", endDrag);
+    // Keep the flag until the click that follows the release has been ignored.
+    setTimeout(() => (dragging = null), 0);
+  };
   const drawChips = (rows: SessionRow[]) => {
+    shown = rows;
     chips.replaceChildren();
     for (const r of rows) {
       const chip = document.createElement("span");
@@ -221,7 +244,17 @@ function panelTab(sessions?: SessionTabsSource): ITabRenderer {
         e.stopPropagation();
         sessions?.close(r.id);
       });
-      chip.addEventListener("click", () => sessions?.open(r.id));
+      chip.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0 || !sessions) return;
+        e.stopPropagation();
+        dragging = { id: r.id, moved: false };
+        window.addEventListener("pointermove", onDrag);
+        window.addEventListener("pointerup", endDrag);
+      });
+      chip.addEventListener("click", () => {
+        if (dragging?.moved) return;
+        sessions?.open(r.id);
+      });
       chip.append(name, x);
       chips.append(chip);
     }
