@@ -694,32 +694,67 @@
           </select>
         {/if}
       </div>
-      {#if onTrackTab && doc && (doc.tracks.length > 1 || (doc.buses?.length ?? 0) > 0 || onMaster)}
-        {@const count = (c: EffectChainDoc | undefined) => ((c?.slots.length ?? 0) > 0 ? ` (${c!.slots.length})` : "")}
-        <label class="line target">
-          <span>{onMaster ? "Master" : bus ? "Bus" : "Track"}</span>
-          <select class="grow" aria-label="Track, bus or master" value={onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? "")} onchange={(e) => {
-            const id = e.currentTarget.value;
-            // Select it in the Editor too, so the row marked there is the one shown here.
-            editor.selectTrack(id);
-            pickedTrack = id;
-          }}>
-            <optgroup label="Tracks">
-              {#each doc.tracks as t (t.id)}<option value={t.id}>{t.name}{count(t.effects)}</option>{/each}
-            </optgroup>
-            {#if doc.buses?.length}
-              <optgroup label="Buses">
-                {#each doc.buses as b (b.id)}<option value={b.id}>{b.name}{count(b.effects)}</option>{/each}
-              </optgroup>
-            {/if}
-            <option value={MASTER_ID}>Master{count(doc.master?.effects)}</option>
-          </select>
-        </label>
-      {:else if onTrackTab && track}
-        <div class="line target"><span>Track:</span><span class="grow">{track.name}</span></div>
-      {:else}
-        <div class="target" title={label}>{label}</div>
-      {/if}
+      <div class="levels">
+        <span class="target" title="Pick a track, bus or the master in the session to see its chain here">{label}</span>
+      {#snippet bars(name: string, k: number)}
+          <div class="mbars" aria-label="{name} level">
+            {#each [k, k + 1] as ch (ch)}
+              {@const m = chainMeter?.[ch]}
+              <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
+                <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
+                {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
+              </div>
+            {/each}
+          </div>
+        {/snippet}
+        {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
+          {@const key = p.key as "input_gain_db" | "output_gain_db"}
+          {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
+          <div class="io">
+            <span class="pname">{p.name}:</span>
+            {@render bars(k === 0 ? "In" : "Out", k)}
+            <Knob
+              label="{p.name} gain"
+              value={toSlider(p, cur)}
+              home={toSlider(p, 0)}
+              text={formatParam(p, cur)}
+              title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
+              oninput={(t) => {
+                const v = fromSlider(p, t);
+                dragChain(key, `Audio FX ${p.name} Gain`, v, v);
+              }}
+              oncommit={(t) => setChain(key, `Audio FX ${p.name} Gain`, fromSlider(p, t))}
+            />
+            <span class="val">{formatParam(p, cur)}</span>
+          </div>
+        {/each}
+        <div class="io mixrow">
+          <span class="pname" title="How much of the effected sound you hear">Mix:</span>
+          <span class="end">Dry</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            aria-label="Mix"
+            value={mixShown}
+            oninput={(e) => dragChain("mix", "Audio FX Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
+            onchange={(e) => setChain("mix", "Audio FX Mix", Number(e.currentTarget.value) / 100)}
+            ondblclick={() => setChain("mix", "Audio FX Mix", 1)}
+            title="Double-click for 100 %"
+          />
+          <span class="end">Wet</span>
+          <span class="val">{formatParam(MIX, mixShown)}</span>
+        </div>
+        <p class="hint levelhint">
+          {#if onMaster || bus}{#if !ts?.playing}Meters move while playing.{:else if !chainMeter}This chain does nothing yet, or nothing feeds the {onMaster ? "master" : "bus"}.{:else}{onMaster ? "Master" : "Bus"} chain level going in and coming out.{/if}
+        {:else if !meterTrack}Meters show a track's chain while playing.
+        {:else if tab === "clip" && !inWave}Meters show the track chain of {meterTrack.name}. Clip chains are not metered yet.
+        {:else if !ts?.playing}Meters move while playing.
+        {:else if !chainMeter}This track's chain does nothing yet, so there is nothing to meter.
+        {:else}Track chain level going in and coming out.{/if}
+        </p>
+      </div>
     </div>
 
     <ol class="slots" class:off={!chain.enabled}>
@@ -959,66 +994,8 @@
       </div>
     {/if}
 
+    {#if inWave}
     <div class="bottom">
-      {#snippet bars(name: string, k: number)}
-        <div class="mbars" aria-label="{name} level">
-          {#each [k, k + 1] as ch (ch)}
-            {@const m = chainMeter?.[ch]}
-            <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
-              <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
-              {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
-            </div>
-          {/each}
-        </div>
-      {/snippet}
-      {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
-        {@const key = p.key as "input_gain_db" | "output_gain_db"}
-        {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
-        <div class="io">
-          <span class="pname">{p.name}:</span>
-          {@render bars(k === 0 ? "In" : "Out", k)}
-          <Knob
-            label="{p.name} gain"
-            value={toSlider(p, cur)}
-            home={toSlider(p, 0)}
-            text={formatParam(p, cur)}
-            title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
-            oninput={(t) => {
-              const v = fromSlider(p, t);
-              dragChain(key, `Audio FX ${p.name} Gain`, v, v);
-            }}
-            oncommit={(t) => setChain(key, `Audio FX ${p.name} Gain`, fromSlider(p, t))}
-          />
-          <span class="val">{formatParam(p, cur)}</span>
-        </div>
-      {/each}
-      <div class="io mixrow">
-        <span class="pname" title="How much of the effected sound you hear">Mix:</span>
-        <span class="end">Dry</span>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          aria-label="Mix"
-          value={mixShown}
-          oninput={(e) => dragChain("mix", "Audio FX Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
-          onchange={(e) => setChain("mix", "Audio FX Mix", Number(e.currentTarget.value) / 100)}
-          ondblclick={() => setChain("mix", "Audio FX Mix", 1)}
-          title="Double-click for 100 %"
-        />
-        <span class="end">Wet</span>
-        <span class="val">{formatParam(MIX, mixShown)}</span>
-      </div>
-      <p class="hint">
-        {#if onMaster || bus}{#if !ts?.playing}Meters move while playing.{:else if !chainMeter}This chain does nothing yet, or nothing feeds the {onMaster ? "master" : "bus"}.{:else}{onMaster ? "Master" : "Bus"} chain level going in and coming out.{/if}
-        {:else if !meterTrack}Meters show a track's chain while playing.
-        {:else if tab === "clip" && !inWave}Meters show the track chain of {meterTrack.name}. Clip chains are not metered yet.
-        {:else if !ts?.playing}Meters move while playing.
-        {:else if !chainMeter}This track's chain does nothing yet, so there is nothing to meter.
-        {:else}Track chain level going in and coming out.{/if}
-      </p>
-      {#if inWave}
         <div class="apply">
           <p class="hint">You hear this chain when you play the file. The file changes only when you apply it, and Undo takes it back.</p>
           <div class="line">
@@ -1028,8 +1005,8 @@
             <button type="button" disabled={applying || chain.slots.length === 0} onclick={() => commit("Clear", chainOf(null))}>Clear Preview</button>
           </div>
         </div>
-      {/if}
     </div>
+    {/if}
   {/if}
 </section>
 
@@ -1410,6 +1387,30 @@
   }
   .io.mixrow {
     grid-template-columns: 52px auto minmax(0, 1fr) auto 44px;
+  }
+  /* In and out levels and the mix, condensed under the presets. */
+  .levels {
+    display: grid;
+    gap: 1px;
+    padding-top: 2px;
+  }
+  .levels .target {
+    overflow: hidden;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .levels .io {
+    grid-template-columns: 40px minmax(0, 1fr) 22px 52px;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .levels .io.mixrow {
+    grid-template-columns: 40px auto minmax(0, 1fr) auto 40px;
+  }
+  .levels .levelhint {
+    font-size: 10px;
   }
   .end {
     color: var(--text-faint);
