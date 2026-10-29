@@ -44,17 +44,24 @@ export class Analyser {
   private sinceBeat = 1;
   private time = 0;
   private smooth = new Float32Array(BANDS);
+  /** The loudest band lately: pictures are scaled against it, so quiet music still moves them. */
+  private ceiling = 0.35;
 
   /** `db` may be empty (nothing playing): everything reads as silence. `calm` (0 to 1) scales it down, for when stopped. */
   feed(db: Float32Array, sensitivity: number, dt: number, calm = 1): Analysis {
     this.time += dt;
     this.sinceBeat += dt;
+    // The ceiling jumps up to a loud band and drifts down slowly, never below a floor.
+    let top = 0;
+    for (let i = 0; i < BANDS; i++) top = Math.max(top, levelOf(db[i] ?? -120, 1));
+    this.ceiling = top > this.ceiling ? top : Math.max(0.3, this.ceiling - dt * 0.12);
+    const gain = (0.9 / this.ceiling) * sensitivity;
     const levels = new Float32Array(BANDS);
     for (let i = 0; i < BANDS; i++) {
-      const raw = levelOf(db[i] ?? -120, sensitivity) * calm;
+      const raw = Math.min(1, levelOf(db[i] ?? -120, 1) * gain) * calm;
       // Rise fast, fall slowly, so pictures breathe instead of flicker.
       const prev = this.smooth[i] ?? 0;
-      const next = raw > prev ? prev + (raw - prev) * 0.7 : prev + (raw - prev) * Math.min(1, dt * 6);
+      const next = raw > prev ? prev + (raw - prev) * 0.85 : prev + (raw - prev) * Math.min(1, dt * 7);
       this.smooth[i] = next;
       levels[i] = next;
     }
@@ -64,7 +71,7 @@ export class Analyser {
     const level = mean(levels, 0, BANDS);
     this.bassAverage += (bass - this.bassAverage) * Math.min(1, dt * 1.5);
     let beat = false;
-    if (calm >= 0.5 && bass > 0.22 && bass > this.bassAverage * 1.3 + 0.05 && this.sinceBeat > 0.2) {
+    if (calm >= 0.5 && bass > 0.15 && bass > this.bassAverage * 1.18 + 0.03 && this.sinceBeat > 0.17) {
       beat = true;
       this.sinceBeat = 0;
     }

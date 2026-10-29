@@ -60,11 +60,11 @@ class Lava implements Visual {
     for (const b of this.blobs) {
       const bottom = smooth(0.7, 1, b.y);
       const top = smooth(0.3, 0, b.y);
-      b.heat += (bottom * (0.55 + a.level) - top * 0.5 - 0.06) * dt * 0.9;
+      b.heat += (bottom * (0.45 + a.level * 2) - top * 0.5 - 0.06) * dt * 1.2;
       b.heat = Math.max(0, Math.min(1, b.heat));
-      const lift = (b.heat - 0.5) * 0.22 + a.bass * 0.12;
+      const lift = (b.heat - 0.5) * 0.22 + a.bass * 0.34;
       b.vy += (-lift - b.vy) * Math.min(1, dt * 1.6);
-      if (a.beat) b.vy -= 0.1 + this.rand() * 0.12;
+      if (a.beat) b.vy -= 0.18 + this.rand() * 0.2;
       b.y += b.vy * dt;
       if (b.y < -0.05) {
         b.y = -0.05;
@@ -82,7 +82,7 @@ class Lava implements Visual {
     const W = fld.w;
     const H = fld.h;
     const aspect = f.w / f.h;
-    const sw = 1 + a.bass * 0.35;
+    const sw = 1 + a.bass * 0.8 + a.level * 0.3;
     const d = fld.data;
     for (let py = 0; py < H; py++) {
       const y = py / H;
@@ -100,7 +100,7 @@ class Lava implements Visual {
           hue += v * b.hue;
           wsum += v;
         }
-        const c = f.pal(((wsum > 0 ? hue / wsum : 0) + a.time * 0.02 + a.mid * 0.15) % 1);
+        const c = f.pal(((wsum > 0 ? hue / wsum : 0) + a.time * 0.02 + a.mid * 0.4) % 1);
         const body = smooth(0.85, 1.25, sum);
         const glow = smooth(0.25, 0.95, sum) * 0.55;
         // Lit from below: the glass glows warm at the bottom, dark wax shows against it.
