@@ -3,10 +3,16 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  A MIDI clip's notes, on a piano roll. Click empty space to add a note
-  one grid step long; drag a note's middle to move it, drag either end to
-  stretch it that way, and double-click or right-click it to delete it
-  (hold the right button and drag to erase every note it passes over).
+  A MIDI clip's notes, on a piano roll. Three tools sit at the top. Draw
+  (the default): click empty space to add a note one grid step long, and
+  keep the button down to move it up, down, left or right; it never
+  stretches. Select: click a note to pick it, drag on empty space to pick
+  all in a box. Erase: click or drag over notes to remove them. In every
+  tool, drag a note's middle to move it, drag either end to stretch it
+  that way, and double-click or right-click it to delete it (hold the
+  right button and drag to erase every note it passes over). Undo and
+  Redo (Ctrl+Z, Ctrl+Y) step back and forward through the changes made in
+  this window.
   Each note sounds through the track's instrument as it is drawn, picked
   up, moved to another pitch or given a new velocity, and the keys on the
   left play their note when clicked.
@@ -147,6 +153,8 @@
   let lane = $state<"velocity" | "pan">("velocity");
   /** The Tools panel, and its values. */
   let toolsOpen = $state(false);
+  /** The tool in hand: Draw adds notes, Select picks them, Erase removes them. */
+  let pen = $state<"draw" | "select" | "erase">("draw");
   let tool = $state({ velocity: 100, scale: 110, velRandom: 10, pan: 0, panRandom: 30, strayMs: 10 });
   /** Applies a note edit to the picked notes, or every note when none are picked, keeping the pick. */
   function applyTool(edit: (notes: NoteDoc[], which: Set<number>) => NoteDoc[]) {
@@ -371,6 +379,66 @@
     return -1;
   }
 
+  // Undo and redo for this window: each finished change (a button, a key, or a drag that ends) is one step.
+  let undoStack: string[] = [];
+  let redoStack: string[] = [];
+  // svelte-ignore state_referenced_locally
+  let committed = JSON.stringify($state.snapshot(clip));
+  let pointerHeld = false;
+  let canUndo = $state(false);
+  let canRedo = $state(false);
+  function commit() {
+    const now = JSON.stringify($state.snapshot(clip));
+    if (now === committed) return;
+    undoStack.push(committed);
+    if (undoStack.length > 200) undoStack.shift();
+    redoStack = [];
+    committed = now;
+    canUndo = true;
+    canRedo = false;
+  }
+  function restore(text: string) {
+    committed = text;
+    clip = JSON.parse(text) as MidiClipDoc;
+    picked = new Set();
+    canUndo = undoStack.length > 0;
+    canRedo = redoStack.length > 0;
+  }
+  function undo() {
+    commit();
+    const prev = undoStack.pop();
+    if (prev === undefined) return;
+    redoStack.push(committed);
+    restore(prev);
+  }
+  function redo() {
+    const next = redoStack.pop();
+    if (next === undefined) return;
+    undoStack.push(committed);
+    restore(next);
+  }
+  $effect(() => {
+    const down = () => (pointerHeld = true);
+    const up = () => {
+      pointerHeld = false;
+      // After the handlers that finish the drag have run.
+      setTimeout(commit, 0);
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+  });
+  $effect(() => {
+    // Changes made with the pointer up (buttons, keys, number fields) are steps at once.
+    void $state.snapshot(clip);
+    if (!pointerHeld) queueMicrotask(commit);
+  });
+
   /** Notes are kept in order; after a change, pick the same notes again by value. */
   function setNotes(next: NoteDoc[], keep: NoteDoc[] = []) {
     const sortedNotes = [...next].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
@@ -401,6 +469,10 @@
       return;
     }
     if (e.button !== 0) return;
+    if (pen === "erase") {
+      startErase(e, e.currentTarget as HTMLElement);
+      return;
+    }
     const el = e.currentTarget as HTMLElement;
     const p = at(e, el);
     let i = noteAt(p.beat, p.pitch);
@@ -408,12 +480,13 @@
     const startY = e.clientY;
     cursor = step > 0 ? snapDown(p.beat, step) : p.beat;
     let mode: "move" | "end" | "start";
-    if (i < 0 && e.shiftKey) {
-      // Shift-drag on empty space: pick every note the box touches.
+    if (i < 0 && (e.shiftKey || pen === "select")) {
+      // Shift-drag on empty space, or any drag with the Select tool: pick every note the box touches.
       const r = el.getBoundingClientRect();
       const x0 = e.clientX - r.left;
       const y0 = e.clientY - r.top;
-      const before = new Set(picked);
+      const before = e.shiftKey ? new Set(picked) : new Set<number>();
+      if (!e.shiftKey) picked = new Set();
       box = { x0, y0, x1: x0, y1: y0 };
       const moveBox = (ev: PointerEvent) => {
         if (!box) return;
@@ -445,7 +518,8 @@
       clip = { ...clip, notes };
       i = notes.findIndex((x) => x.start === n.start && x.pitch === n.pitch);
       picked = new Set([i]);
-      mode = "end";
+      // Keep the button down and drag: the new note moves, on both axes. It never stretches.
+      mode = "move";
       hold(n);
     } else {
       const n = clip.notes[i]!;
@@ -586,7 +660,13 @@
       e.preventDefault();
       void play();
     } else if (e.key === "Escape") done();
-    else if (e.key === "Delete" || e.key === "Backspace") {
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+      e.preventDefault();
+      redo();
+    } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       deletePicked();
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
@@ -627,6 +707,15 @@
         <button type="button" class:on={loop} aria-pressed={loop} title="Loop: play the clip again and again" aria-label="Loop" onclick={() => (loop = !loop)}>
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 6.5a3.5 3.5 0 0 1 3.5-3.5h5l-2-2M13 9.5a3.5 3.5 0 0 1-3.5 3.5h-5l2 2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
         </button>
+      </span>
+      <span class="zoom" role="group" aria-label="Tools">
+        <button type="button" class:on={pen === "draw"} aria-pressed={pen === "draw"} title="Draw: click empty space to add a note, and drag to move it up, down, left or right" onclick={() => (pen = "draw")}>Draw</button>
+        <button type="button" class:on={pen === "select"} aria-pressed={pen === "select"} title="Select: click a note to pick it, drag on empty space to pick every note in a box" onclick={() => (pen = "select")}>Select</button>
+        <button type="button" class:on={pen === "erase"} aria-pressed={pen === "erase"} title="Erase: click or drag over notes to remove them" onclick={() => (pen = "erase")}>Erase</button>
+      </span>
+      <span class="zoom" role="group" aria-label="Undo">
+        <button type="button" disabled={!canUndo} title="Undo the last change in this window (Ctrl+Z)" onclick={undo}>Undo</button>
+        <button type="button" disabled={!canRedo} title="Redo (Ctrl+Y)" onclick={redo}>Redo</button>
       </span>
       <label title="Snap notes to the grid while drawing, moving and stretching (hold Alt to place freely)">
         <input type="checkbox" bind:checked={snapOn} />
@@ -807,7 +896,7 @@
     <footer>
       <span class="note-text">
         {clip.notes.length}
-        {clip.notes.length === 1 ? "note" : "notes"}{instrument ? `. Plays on ${instrument}.` : ". Pick an instrument in the track header to hear them."} Click to add. Drag the middle to move, an end to stretch. Shift-click or Shift-drag to pick several. Double-click to delete.
+        {clip.notes.length === 1 ? "note" : "notes"}{instrument ? `. Plays on ${instrument}.` : ". Pick an instrument in the track header to hear them."} Draw: click to add a note, and keep the button down to move it up, down, left or right. Drag a note's middle to move it, an end to stretch. Shift-click or Shift-drag to pick several. Double-click to delete.
       </span>
       <button type="button" onclick={onClose}>Cancel</button>
       <button type="button" class="primary" onclick={done}>Done</button>
