@@ -8,7 +8,7 @@
   anything is written. Enter exports, Escape cancels.
 -->
 <script lang="ts" module>
-  import type { OutputFormat } from "./output-format";
+  import type { FormatKind, OutputFormat } from "./output-format";
 
   export type ExportScope = "all" | "selection" | "clips";
 
@@ -72,10 +72,12 @@
   });
 
   const current = $derived(scopes.find((x) => x.scope === s.scope));
-  /** A layout with more than two speakers is written as a WAV with one channel per speaker. */
+  /** A layout with more than two speakers is written with one channel per speaker. */
   const multi = $derived(!!spaceLayout && s.speakers !== undefined && s.speakers !== "binaural" && s.speakers !== "2.0");
+  /** FLAC carries 5.1 and 7.1 (8 channels at most, no height speakers); the larger layouts are WAV only. */
+  const bedFormats = $derived<FormatKind[] | undefined>(multi ? (s.speakers === "5.1" || s.speakers === "7.1" ? ["wav", "flac"] : ["wav"]) : undefined);
   $effect(() => {
-    if (multi && s.format.kind !== "wav") s.format = { ...s.format, kind: "wav" };
+    if (bedFormats && !bedFormats.includes(s.format.kind)) s.format = { ...s.format, kind: "wav" };
   });
   const targets = targetsFor();
   const ext = $derived(extensionOf(s.format.kind));
@@ -148,20 +150,20 @@
     {#if spaceLayout}
       <section>
         <h2>Speakers</h2>
-        <label class="line" title="The same session plays in any layout: pick one for this file. Layouts with more than two speakers are written as WAV with one channel per speaker, labeled for other software. Headphones writes a stereo binaural mix.">
+        <label class="line" title="The same session plays in any layout: pick one for this file. Layouts with more than two speakers are written with one channel per speaker: WAV (labeled for other software), or FLAC for 5.1 and 7.1. Headphones writes a stereo binaural mix.">
           <span>Layout</span>
           <select bind:value={s.speakers}>
             {#each SPACE_LAYOUTS as l (l)}<option value={l}>{LAYOUT_NAMES[l]}{l === spaceLayout ? " (the session's)" : ""}</option>{/each}
             <option value="binaural">Headphones (binaural stereo)</option>
           </select>
         </label>
-        {#if multi}<p class="summary">Written as a WAV with one channel per speaker.</p>{/if}
+        {#if multi}<p class="summary">{bedFormats?.includes("flac") ? "Written with one channel per speaker, as WAV or FLAC." : "Written as a WAV with one channel per speaker. FLAC carries 5.1 and 7.1 only."}</p>{/if}
       </section>
     {/if}
 
     <section>
       <h2>Audio</h2>
-      <OutputFormatFields bind:format={s.format} sourceLabel="Session" />
+      <OutputFormatFields bind:format={s.format} sourceLabel="Session" only={bedFormats} fixedChannels={multi} />
       <p class="summary">
         <strong>{summary}</strong>{#if size}<span>&nbsp;· about {size}</span>{/if}
       </p>

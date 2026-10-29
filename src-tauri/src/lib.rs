@@ -7,6 +7,7 @@
 //! The interface never touches audio. It sends commands to this core
 //! and renders the state it gets back.
 
+pub mod aup3;
 pub mod browse;
 mod carry_over;
 pub mod codecs;
@@ -15,7 +16,6 @@ pub mod dsp;
 pub mod engine;
 pub mod export;
 pub mod library;
-pub mod aup3;
 pub mod peaks;
 pub mod plugins;
 pub mod separation;

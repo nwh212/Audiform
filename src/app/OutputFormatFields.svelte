@@ -10,15 +10,21 @@
 <script lang="ts">
   import { PLATFORM } from "../lib/platform";
   import { formatRate } from "../panels/files/format";
-  import { AAC_BITRATES, depthsFor, formatAvailable, FORMAT_KINDS, MP3_BITRATES, MP3_MAX_RATE, OUTPUT_RATES, type OutputFormat } from "./output-format";
+  import { AAC_BITRATES, depthsFor, formatAvailable, FORMAT_KINDS, MP3_BITRATES, MP3_MAX_RATE, OUTPUT_RATES, type FormatKind, type OutputFormat } from "./output-format";
 
   interface Props {
     format: OutputFormat;
     /** What "Same as source" means here, for example "Session" or "Same as each file". */
     sourceLabel: string;
+    /** Formats offered. All when unset. */
+    only?: FormatKind[] | undefined;
+    /** The channel count comes from elsewhere (a speaker layout), so the choice is hidden. */
+    fixedChannels?: boolean;
   }
 
-  let { format = $bindable(), sourceLabel }: Props = $props();
+  let { format = $bindable(), sourceLabel, only, fixedChannels = false }: Props = $props();
+
+  const kinds = $derived(only ? FORMAT_KINDS.filter((k) => only.includes(k.value)) : FORMAT_KINDS);
 
   const depths = $derived(depthsFor(format.kind));
   const lossy = $derived(FORMAT_KINDS.find((k) => k.value === format.kind)?.lossy ?? false);
@@ -36,7 +42,7 @@
   <label>
     <span>Format</span>
     <select bind:value={format.kind}>
-      {#each FORMAT_KINDS as k (k.value)}
+      {#each kinds as k (k.value)}
         <option value={k.value} disabled={!available(k.value)}>{k.label}{available(k.value) ? "" : " (Windows only for now)"}</option>
       {/each}
     </select>
@@ -50,14 +56,16 @@
       {/each}
     </select>
   </label>
-  <label>
-    <span>Channels</span>
-    <select bind:value={format.channels}>
-      <option value={null}>{sourceLabel}</option>
-      <option value={1}>Mono</option>
-      <option value={2}>Stereo</option>
-    </select>
-  </label>
+  {#if !fixedChannels}
+    <label>
+      <span>Channels</span>
+      <select bind:value={format.channels}>
+        <option value={null}>{sourceLabel}</option>
+        <option value={1}>Mono</option>
+        <option value={2}>Stereo</option>
+      </select>
+    </label>
+  {/if}
   {#if format.kind === "m4a"}
     <label>
       <span>Kbps</span>

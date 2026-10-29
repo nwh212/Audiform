@@ -605,7 +605,9 @@ pub struct SesxImported {
 #[tauri::command]
 pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxImported, String> {
     let imported = spawn_blocking(move || {
-        let is_project = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("aup3"));
+        let is_project = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("aup3"));
         if is_project {
             crate::aup3::import(&path, &crate::aup3::audio_folder(&path)).map_err(|e| e.to_string())
         } else {

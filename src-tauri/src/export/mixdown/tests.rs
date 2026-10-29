@@ -83,6 +83,42 @@ fn a_3d_session_writes_every_speaker_or_stereo_as_asked() {
 }
 
 #[test]
+fn a_speaker_layout_can_be_flac_when_flac_can_carry_it() {
+    use crate::export::encode::{FormatKind, OutputFormat};
+    use crate::session::model::{Space, SpaceLayout, SpaceListen};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut s, _, _) = session_with(dir.path());
+    s.space = Some(Space {
+        layout: SpaceLayout::Surround51,
+        listen: SpaceListen::Stereo,
+    });
+    let flac = |layout| MixdownRequest {
+        space_layout: Some(layout),
+        format: Some(OutputFormat {
+            kind: FormatKind::Flac,
+            ..OutputFormat::default()
+        }),
+        ..MixdownRequest::default()
+    };
+    for (layout, ch) in [(SpaceLayout::Surround51, 6), (SpaceLayout::Surround71, 8)] {
+        let p = dir.path().join(format!("o{ch}.flac"));
+        mixdown(&s, &flac(layout), &p, &AtomicBool::new(false), |_, _| {}).unwrap();
+        assert_eq!(crate::codecs::probe(&p).unwrap().channels, ch);
+    }
+    // Height speakers pass FLAC's 8 channels: refused with a reason.
+    let p = dir.path().join("o12.flac");
+    let e = mixdown(
+        &s,
+        &flac(SpaceLayout::Surround714),
+        &p,
+        &AtomicBool::new(false),
+        |_, _| {},
+    );
+    assert!(e.unwrap_err().to_string().contains("WAV"));
+    assert!(!p.exists());
+}
+
+#[test]
 fn a_surround_file_plays_each_channel_from_its_speaker() {
     use crate::session::model::{Space, SpaceLayout, SpaceListen, Track};
     let dir = tempfile::tempdir().unwrap();

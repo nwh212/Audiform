@@ -152,11 +152,20 @@ fn tree(names: &HashMap<u16, String>, doc: &[u8]) -> Result<El, Aup3Error> {
                         let len = u32::from_le_bytes(take(doc, i + 3)?) as usize;
                         (Val::Text(utf16(doc, i + 7, len)?), 7 + len)
                     }
-                    0x04 | 0x06 => (Val::Num(f64::from(i32::from_le_bytes(take(doc, i + 3)?))), 7),
+                    0x04 | 0x06 => (
+                        Val::Num(f64::from(i32::from_le_bytes(take(doc, i + 3)?))),
+                        7,
+                    ),
                     0x05 => (Val::Num(f64::from(doc.get(i + 3).copied().unwrap_or(0))), 4),
                     0x07 => (Val::Num(i64::from_le_bytes(take(doc, i + 3)?) as f64), 11),
-                    0x08 => (Val::Num(f64::from(u32::from_le_bytes(take(doc, i + 3)?))), 7),
-                    0x09 => (Val::Num(f64::from(f32::from_le_bytes(take(doc, i + 3)?))), 11),
+                    0x08 => (
+                        Val::Num(f64::from(u32::from_le_bytes(take(doc, i + 3)?))),
+                        7,
+                    ),
+                    0x09 => (
+                        Val::Num(f64::from(f32::from_le_bytes(take(doc, i + 3)?))),
+                        11,
+                    ),
                     0x0a => (Val::Num(f64::from_le_bytes(take(doc, i + 3)?)), 15),
                     _ => return Err(bad("unknown value kind in the project data")),
                 };
@@ -237,7 +246,10 @@ fn raw_tracks(root: &El) -> Vec<RawTrack> {
     root.each("wavetrack")
         .map(|t| {
             let name = t.text("name").unwrap_or("Track").to_string();
-            let mut clips: Vec<Raw> = t.each("waveclip").filter_map(|c| raw_clip(c, &name)).collect();
+            let mut clips: Vec<Raw> = t
+                .each("waveclip")
+                .filter_map(|c| raw_clip(c, &name))
+                .collect();
             clips.sort_by(|a, b| (a.offset + a.trim_left).total_cmp(&(b.offset + b.trim_left)));
             RawTrack {
                 channel: t.num("channel").unwrap_or(2.0) as i32,
@@ -328,7 +340,8 @@ impl<'a> Reader<'a> {
                             )
                             .ok();
                         if let Some((code, bytes)) = row {
-                            let f = Format::of(code).ok_or_else(|| bad("an unsupported sample format"))?;
+                            let f = Format::of(code)
+                                .ok_or_else(|| bad("an unsupported sample format"))?;
                             f.decode(&bytes, &mut self.pending);
                         }
                     }
@@ -364,7 +377,8 @@ fn write_source(db: &Connection, s: &Source, path: &Path) -> Result<u64, Aup3Err
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
-    let mut w = hound::WavWriter::create(path, spec).map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut w =
+        hound::WavWriter::create(path, spec).map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut readers: Vec<Reader> = s.channels.iter().map(|b| Reader::new(db, b)).collect();
     let frames = s.channels.iter().map(|b| b.frames).min().unwrap_or(0);
     let mut done = 0u64;
@@ -378,12 +392,14 @@ fn write_source(db: &Connection, s: &Source, path: &Path) -> Result<u64, Aup3Err
         }
         for i in 0..n {
             for c in &cols {
-                w.write_sample(c[i]).map_err(|e| std::io::Error::other(e.to_string()))?;
+                w.write_sample(c[i])
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
             }
         }
         done += n as u64;
     }
-    w.finalize().map_err(|e| std::io::Error::other(e.to_string()))?;
+    w.finalize()
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(frames)
 }
 
@@ -419,7 +435,12 @@ fn cut_line(points: &[(f64, f64)], origin: f64, length: f64) -> Vec<(f64, f64)> 
         }
     };
     let mut out = vec![(0.0, at(0.0))];
-    out.extend(moved.iter().copied().filter(|&(p, _)| p > 0.0 && p < length));
+    out.extend(
+        moved
+            .iter()
+            .copied()
+            .filter(|&(p, _)| p > 0.0 && p < length),
+    );
     if length > 0.0 {
         out.push((length, at(length)));
     }
@@ -428,7 +449,9 @@ fn cut_line(points: &[(f64, f64)], origin: f64, length: f64) -> Vec<(f64, f64)> 
 
 /// Where the audio of an import goes: a folder beside the project.
 pub fn audio_folder(project: &Path) -> PathBuf {
-    let stem = project.file_stem().map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
+    let stem = project
+        .file_stem()
+        .map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
     project.with_file_name(format!("{stem} audio"))
 }
 
@@ -437,14 +460,18 @@ pub fn audio_folder(project: &Path) -> PathBuf {
 pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let (dict, doc): (Vec<u8>, Vec<u8>) = db
-        .query_row("SELECT dict, doc FROM project LIMIT 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_row("SELECT dict, doc FROM project LIMIT 1", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
         .map_err(|_| bad("it has no saved project data (it may only hold an autosave)"))?;
     let root = tree(&names(&dict)?, &doc)?;
     if root.name != "project" {
         return Err(bad("the project data does not start as expected"));
     }
     let project_rate = root.num("rate").unwrap_or(44100.0).clamp(8000.0, 384_000.0) as u32;
-    let stem = path.file_stem().map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
+    let stem = path
+        .file_stem()
+        .map_or_else(|| "Project".into(), |s| s.to_string_lossy().into_owned());
     let mut session = Session::new(stem.clone(), project_rate);
     let mut report = ImportReport::default();
     let raw = raw_tracks(&root);
@@ -455,7 +482,12 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
     while i < raw.len() {
         let t = &raw[i];
         match raw.get(i + 1) {
-            Some(r) if t.channel == 0 && t.linked && r.channel == 1 && r.clips.len() == t.clips.len() => {
+            Some(r)
+                if t.channel == 0
+                    && t.linked
+                    && r.channel == 1
+                    && r.clips.len() == t.clips.len() =>
+            {
                 layout.push((i, Some(i + 1)));
                 i += 2;
             }
@@ -474,7 +506,10 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
     let mut sources: Vec<Source> = Vec::new();
     let mut lookup: HashMap<Vec<i64>, usize> = HashMap::new();
     let mut source_of = |chs: Vec<&Blocks>, rate: u32| -> usize {
-        let key: Vec<i64> = chs.iter().map(|b| b.ids.first().copied().unwrap_or(-1)).collect();
+        let key: Vec<i64> = chs
+            .iter()
+            .map(|b| b.ids.first().copied().unwrap_or(-1))
+            .collect();
         match lookup.get(&key) {
             Some(&k) => {
                 for (have, new) in sources[k].channels.iter_mut().zip(chs) {
@@ -510,7 +545,11 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
                 Some(r) => vec![&c.blocks, &raw[r].clips[k].blocks],
                 None => vec![&c.blocks],
             };
-            plans.push(Plan { track: n, clip: k, source: source_of(chs, raw[l].rate) });
+            plans.push(Plan {
+                track: n,
+                clip: k,
+                source: source_of(chs, raw[l].rate),
+            });
         }
     }
 
@@ -533,7 +572,11 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
         let t = &raw[l];
         let mut track = Track::new(
             t.name.clone(),
-            if r.is_some() { ChannelLayout::Stereo } else { ChannelLayout::Mono },
+            if r.is_some() {
+                ChannelLayout::Stereo
+            } else {
+                ChannelLayout::Mono
+            },
         );
         track.volume_db = to_db(t.gain).max(-60.0);
         track.pan = (t.pan * 100.0).clamp(-100.0, 100.0);
@@ -545,7 +588,11 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
             let src = &sources[p.source];
             let media = src.media.as_ref().ok_or_else(|| bad("missing audio"))?;
             let mrate = f64::from(media.sample_rate);
-            let ratio = if c.ratio.is_finite() && c.ratio > 0.0 { c.ratio.clamp(STRETCH_MIN, STRETCH_MAX) } else { 1.0 };
+            let ratio = if c.ratio.is_finite() && c.ratio > 0.0 {
+                c.ratio.clamp(STRETCH_MIN, STRETCH_MAX)
+            } else {
+                1.0
+            };
             let natural = c.blocks.frames as f64 / mrate;
             let mut left = c.trim_left.max(0.0);
             let mut at = c.offset + left;
@@ -556,7 +603,8 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
             }
             let seen = (natural * ratio - left - c.trim_right.max(0.0)).max(0.0);
             let source_in = ((left / ratio) * mrate).round() as u64;
-            let source_out = (source_in + ((seen / ratio) * mrate).round() as u64).min(c.blocks.frames.min(media.length));
+            let source_out = (source_in + ((seen / ratio) * mrate).round() as u64)
+                .min(c.blocks.frames.min(media.length));
             if source_out <= source_in {
                 continue;
             }
@@ -618,7 +666,11 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
         session.tracks.push(track);
         report.tracks += 1;
     }
-    Ok(Imported { session, report, missing: Vec::new() })
+    Ok(Imported {
+        session,
+        report,
+        missing: Vec::new(),
+    })
 }
 
 #[cfg(test)]
@@ -644,7 +696,9 @@ mod tests {
     #[test]
     #[ignore]
     fn real_project() {
-        let Ok(p) = std::env::var("AUP3_TEST") else { return };
+        let Ok(p) = std::env::var("AUP3_TEST") else {
+            return;
+        };
         let out = std::env::temp_dir().join("aup3-test-audio");
         let got = import(Path::new(&p), &out).unwrap();
         eprintln!("{:?}", got.report);

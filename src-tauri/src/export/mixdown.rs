@@ -441,6 +441,50 @@ fn normalize_gain(report: &LoudnessReport, n: Normalize, mono: bool) -> f32 {
     10f64.powf(want.min(room).clamp(-60.0, 60.0) / 20.0) as f32
 }
 
+/// Layouts a FLAC file can carry with every channel in its standard place:
+/// stereo, 5.1 and 7.1 (FLAC stops at 8 channels and has no height speakers).
+pub fn bed_flac_ok(layout: crate::session::model::SpaceLayout) -> bool {
+    use crate::session::model::SpaceLayout::{Stereo20, Surround51, Surround71};
+    matches!(layout, Stereo20 | Surround51 | Surround71)
+}
+
+/// A 3D Space session to a multichannel FLAC, one channel per speaker, in
+/// the order FLAC defines for 2.0, 5.1 and 7.1.
+fn mixdown_bed_flac(
+    session: &Session,
+    req: &MixdownRequest,
+    path: &Path,
+    cancel: &AtomicBool,
+    progress: impl FnMut(u64, u64),
+    layout: crate::session::model::SpaceLayout,
+) -> Result<MixdownResult, MixdownError> {
+    let enc_err = |e: EncodeError| MixdownError::Write(e.to_string());
+    let ch = crate::dsp::space::speakers(layout).len() as u16;
+    let mut want = req.format.clone().unwrap_or_default();
+    want.channels = Some(ch);
+    let fmt = want
+        .resolve(session.sample_rate, ch, session.bit_depth)
+        .map_err(enc_err)?;
+    let mut w =
+        super::encode::Writer::create(path, &fmt, session.sample_rate, ch).map_err(enc_err)?;
+    let r = render_mix(session, req, cancel, progress, |bed| {
+        w.write(bed).map_err(enc_err)
+    })?;
+    if r.cancelled {
+        drop(w);
+        let _ = std::fs::remove_file(path);
+    } else {
+        w.finish().map_err(enc_err)?;
+    }
+    Ok(MixdownResult {
+        frames: r.frames,
+        sample_rate: r.sample_rate,
+        bit_depth: fmt.bits,
+        peak: r.peak,
+        cancelled: r.cancelled,
+    })
+}
+
 /// A 3D Space session to a multichannel WAV, one channel per speaker of
 /// `layout`, labeled so other software knows which is which.
 fn mixdown_bed(
@@ -452,15 +496,25 @@ fn mixdown_bed(
     layout: crate::session::model::SpaceLayout,
     bits: u16,
 ) -> Result<MixdownResult, MixdownError> {
-    if req
+    let kind = req
         .format
         .as_ref()
-        .is_some_and(|f| f.kind != super::encode::FormatKind::Wav)
-    {
-        return Err(MixdownError::Write(
-            "Speaker layouts are written as WAV. Pick WAV, or 2.0 or binaural for other formats."
-                .into(),
-        ));
+        .map_or(super::encode::FormatKind::Wav, |f| f.kind);
+    match kind {
+        super::encode::FormatKind::Wav => {}
+        super::encode::FormatKind::Flac if bed_flac_ok(layout) => {
+            return mixdown_bed_flac(session, req, path, cancel, progress, layout);
+        }
+        super::encode::FormatKind::Flac => {
+            return Err(MixdownError::Write(
+                "FLAC carries up to 8 channels, in the standard 5.1 and 7.1 orders. Pick WAV for this layout, or 2.0 or binaural.".into(),
+            ));
+        }
+        _ => {
+            return Err(MixdownError::Write(
+                "This format can't carry a speaker layout. Pick WAV (or FLAC for 5.1 and 7.1), or 2.0 or binaural.".into(),
+            ));
+        }
     }
     let werr = |e: std::io::Error| MixdownError::Write(e.to_string());
     let ch = crate::dsp::space::speakers(layout).len() as u16;

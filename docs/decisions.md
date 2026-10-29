@@ -1877,3 +1877,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - The stored track layout is a binary tree of names and values. Our own parser reads it from the observable structure; nothing from the other application is reused.
 - Left and right tracks of a pair become one stereo track. Clips that share recorded audio share one WAV file, written to `<project name> audio` beside the project (32-bit float, so nothing is lost). Moving the project without that folder leaves the session with missing files.
 - Brought across: track name, mute, solo, level, pan; clip position, trims, time stretch (pitch kept), pitch shift in cents, and the volume line. Left behind: effects, labels, and clips lying entirely before time zero.
+
+## 2026-10-29: FLAC for 5.1 and 7.1 exports
+- A 3D Space export can be WAV, or FLAC for the 2.0, 5.1 and 7.1 layouts. FLAC stops at 8 channels and has no height speakers, so the 5.1.2, 7.1.2, 5.1.4 and 7.1.4 layouts stay WAV only.
+- The Export dialog lists only the formats the chosen layout can use, and hides the Channels choice, since the layout sets it.
+- MP3 cannot carry more than two channels. AAC in M4A is limited by the encoder built into Windows, which writes mono or stereo only, so multichannel M4A needs a bundled encoder and is not built.
