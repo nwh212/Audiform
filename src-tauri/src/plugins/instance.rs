@@ -25,8 +25,8 @@ use std::thread;
 use std::time::Duration;
 
 use altered_plughost::protocol::{
-    decode_samples, encode_audio_ch, read_frame, write_frame, Message, NoteEvent, ParamInfo,
-    Request, AUDIO, CONTROL, SELECT,
+    decode_samples, encode_audio_ch, encode_samples, read_frame, write_frame, Message, NoteEvent,
+    ParamInfo, Request, AUDIO, CONTROL, KEY, SELECT,
 };
 use serde::Serialize;
 
@@ -325,6 +325,7 @@ pub struct Host {
     pub params: Vec<ParamInfo>,
     pub has_editor: bool,
     buf: Vec<u8>,
+    key_buf: Vec<u8>,
     rate: u32,
     /// The stretch of the tempo map the plug-in was last told.
     told: Option<TempoSegment>,
@@ -390,6 +391,7 @@ impl Host {
             params: Vec::new(),
             has_editor: false,
             buf: Vec::new(),
+            key_buf: Vec::new(),
             rate,
             told: None,
             last_state: state.clone(),
@@ -475,6 +477,20 @@ impl Host {
         io: &mut [f32],
         channels: usize,
     ) -> bool {
+        self.process_keyed_ch(changes, notes, io, channels, None)
+    }
+
+    /// [`Host::process_ch`] with a sidechain key: interleaved stereo, as
+    /// many frames as `io`. A plug-in with a second audio input hears it
+    /// there; others ignore it.
+    pub fn process_keyed_ch(
+        &mut self,
+        changes: &[(u32, f64)],
+        notes: &[NoteEvent],
+        io: &mut [f32],
+        channels: usize,
+        key: Option<&[f32]>,
+    ) -> bool {
         if self.is_dead() || io.is_empty() {
             return false;
         }
@@ -494,6 +510,13 @@ impl Host {
                 if self.told != Some(seg) {
                     self.tell_tempo(seg);
                 }
+            }
+        }
+        if let Some(k) = key.filter(|k| k.len() == io.len() / channels.max(1) * 2) {
+            encode_samples(&mut self.key_buf, k);
+            if !self.conn.write(self.id, KEY, &self.key_buf) {
+                self.stop("The plug-in crashed and is bypassed.");
+                return false;
             }
         }
         encode_audio_ch(&mut self.buf, position, changes, notes, io, channels);
@@ -1024,8 +1047,13 @@ pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
 
 impl Processor for PluginProcessor {
     fn process(&mut self, buf: &mut [f32]) {
+        self.process_keyed(buf, &[]);
+    }
+
+    fn process_keyed(&mut self, buf: &mut [f32], key: &[f32]) {
+        let key = (!key.is_empty()).then_some(key);
         let done = match self.host.lock() {
-            Ok(mut h) => h.process_ch(&self.pending, &[], buf, self.width),
+            Ok(mut h) => h.process_keyed_ch(&self.pending, &[], buf, self.width, key),
             Err(_) => false,
         };
         if done {

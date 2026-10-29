@@ -41,7 +41,8 @@ pub fn effects_catalog() -> Vec<CatalogEntry> {
         .map(|info| {
             let found = crate::plugins::find(info.id);
             CatalogEntry {
-                sidechain: KEYED.contains(&info.id),
+                sidechain: KEYED.contains(&info.id)
+                    || found.as_ref().is_some_and(|f| f.info.sidechain),
                 plugin: found.is_some(),
                 has_window: found.is_some_and(|f| f.info.has_editor),
                 retired: crate::dsp::effects::RETIRED.contains(&info.id),

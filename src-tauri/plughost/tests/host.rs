@@ -72,7 +72,12 @@ struct Host {
 
 impl Host {
     fn start() -> Host {
+        Host::start_with(&[])
+    }
+
+    fn start_with(env: &[(&str, &str)]) -> Host {
         let mut child = Command::new(env!("CARGO_BIN_EXE_altered-plughost"))
+            .envs(env.iter().copied())
             .arg("--plugin-host")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -449,4 +454,40 @@ fn one_process_runs_several_plugins_each_on_its_own() {
     let mut y = Vec::new();
     decode_samples(&out, &mut y);
     assert_eq!((from, peak_at(&y).1), (1, 0.25));
+}
+
+#[test]
+fn a_plugin_with_a_sidechain_input_hears_the_key() {
+    let bundle = test_bundle();
+    let env = [("ALTERED_TESTPLUG_SIDECHAIN", "1")];
+    // The scan notes the second input.
+    let out = Command::new(env!("CARGO_BIN_EXE_altered-plughost"))
+        .arg("--plugin-scan")
+        .arg(&bundle)
+        .envs(env)
+        .output()
+        .unwrap();
+    let scan = scan_result(&out);
+    let gain = scan.classes.iter().find(|c| c.name == "Altered Test Gain").unwrap();
+    assert!(gain.sidechain);
+
+    let mut h = Host::start_with(&env);
+    assert!(matches!(h.load(&bundle, None, vec![]), Message::Loaded { .. }));
+    let frames = 64;
+    let silence = vec![0.0f32; frames * 2];
+    let key: Vec<f32> = (0..frames * 2).map(|i| if i % 2 == 0 { 0.25 } else { -0.5 }).collect();
+    let send = |h: &mut Host, key: Option<&[f32]>| -> Vec<f32> {
+        if let Some(k) = key {
+            let mut body = Vec::new();
+            encode_samples(&mut body, k);
+            write_frame(&mut h.stdin, KEY, &body).unwrap();
+        }
+        h.process(&[], &silence).unwrap()
+    };
+    // The key comes out beside the (silent) main input.
+    let y = send(&mut h, Some(&key));
+    assert_eq!(y, key);
+    // A key counts for one block only.
+    let y = send(&mut h, None);
+    assert!(y.iter().all(|v| *v == 0.0));
 }

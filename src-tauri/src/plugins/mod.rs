@@ -48,8 +48,9 @@ const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 const SCAN_THREADS: usize = 4;
 
 /// Version of `plugins.json`. 2: instruments are listed too. 3: scans
-/// before it crashed on many plug-ins, so everything is read again.
-const SCHEMA_VERSION: u32 = 3;
+/// before it crashed on many plug-ins, so everything is read again. 4: a
+/// plug-in's sidechain input is noted, so everything is read again.
+const SCHEMA_VERSION: u32 = 4;
 
 /// A plug-in the scan found.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -667,6 +668,7 @@ mod tests {
             latency: 0,
             has_editor: false,
             instrument: false,
+            sidechain: false,
             note: None,
         };
         let line = |l: &ScanLine| format!("{SCAN_PREFIX}{}\n", serde_json::to_string(l).unwrap());
@@ -741,6 +743,7 @@ mod tests {
                 latency: 0,
                 has_editor: true,
                 instrument: false,
+                sidechain: false,
                 note: note.map(Into::into),
             },
         };
@@ -769,6 +772,7 @@ mod tests {
                 version: "1".into(),
                 sub_categories: "Fx".into(),
                 instrument: false,
+                sidechain: false,
                 note: None,
                 params: vec![
                     altered_plughost::protocol::ParamInfo {

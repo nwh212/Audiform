@@ -20,11 +20,11 @@
   import { monoCheck } from "../../stores/mono-check";
   import { isMidi, type BusDoc, type EffectSlotDoc, type EnvelopeDoc, type Op, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
   import { quiet, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
-  import { busChoices, busOp, MASTER_ID } from "../mixer/routing";
+  import { busChoices, busOp, keyChoices, MASTER_ID } from "../mixer/routing";
   import SendList from "../mixer/SendList.svelte";
   import { trackOp } from "../mixer/solo";
   import { channelNames } from "../space/space";
-  import type { MenuPlugin } from "../voice-chain/chain";
+  import { chainOf, setSlot, type MenuPlugin } from "../voice-chain/chain";
   import { effectWindowRequest } from "../voice-chain/effect-window";
   import { rowTarget } from "../voice-chain/slot-drag";
   import { autoChoices, autoMode, dropLane, isOrphan, nextTarget, putLane, setMode, shownLanes, targetKey } from "./automation";
@@ -55,7 +55,7 @@
     tp: TransportState | null;
     ed: EditorState;
     /** What the headers show: mix controls (with input, output and sends as room allows) or the effects. */
-    headerView: "mix" | "fx";
+    headerView: "mix" | "io" | "fx";
     /** The track or bus whose name is being edited. */
     renaming: string | null;
     instruments: Instrument[];
@@ -130,6 +130,14 @@
   }
   function headerEdit(label: string, op: Op) {
     void session.edit(label, op, runner).catch(onError);
+  }
+  /** The effects on a chain that can listen to another track or bus (a detector, or a plug-in with a sidechain input). */
+  function keySlots(chain: Parameters<typeof chainOf>[0]) {
+    return chainOf(chain).slots.filter((s) => fxCatalog.find((e) => e.id === s.effect)?.sidechain);
+  }
+  const slotName = (s: EffectSlotDoc) => fxCatalog.find((e) => e.id === s.effect)?.name ?? s.effect;
+  function setKey(owner: string, isBus: boolean, chain: Parameters<typeof chainOf>[0], slotId: string, from: string) {
+    headerEdit("Set Sidechain", { op: "set_effects", target: rowTarget(owner, isBus), chain: setSlot(chainOf(chain), slotId, { sidechain: from || null }) });
   }
   /** Where a track's or bus's sound goes: the master or a bus. */
   function setOutput(kind: "track" | "bus", id: string, value: string) {
@@ -378,7 +386,7 @@
           </div>
         </div>
       {/if}
-      {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_INPUT && !isMidi(track)}
+      {#if !track.collapsed && (headerView === "io" || (headerView === "mix" && shownHeight(track) >= ROW_INPUT)) && !isMidi(track)}
         <div class="line">
           <button type="button" class="pick" title="The input this track records from" onclick={(e) => void openInputMenu(e, track)}>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
@@ -387,7 +395,7 @@
           </button>
         </div>
       {/if}
-      {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_OUTPUT && doc}
+      {#if !track.collapsed && (headerView === "io" || (headerView === "mix" && shownHeight(track) >= ROW_OUTPUT)) && doc}
         {@const out = track.output ?? { type: "master" }}
         <div class="line">
           <label class="pick outpick" title="Where this track's sound goes after its fader: the master or a bus">
@@ -400,6 +408,9 @@
           </label>
           {#if shownHeight(track) < ROW_AUTO}{@render lanesToggle(track)}{/if}
         </div>
+      {/if}
+      {#if !track.collapsed && headerView === "io" && doc}
+        {@render keyRows(track.id, false, track.effects, track.name)}
       {/if}
       {#if !track.collapsed && headerView === "mix" && shownHeight(track) >= ROW_AUTO}
         <div class="line">
@@ -543,6 +554,17 @@
             <SendList {doc} {session} {runner} {onError} kind="bus" id={b.id} name={b.name} output={b.output} sends={b.sends} noOutput />
           </div>
         {/if}
+      {:else if headerView === "io" && doc}
+        <div class="line">
+          <label class="pick outpick" title="Where this bus's sound goes after its fader: the master or another bus">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
+            <select aria-label="{b.name} output" value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
+              <option value={MASTER_ID}>Master</option>
+              {#each busChoices(doc, b.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
+            </select>
+          </label>
+        </div>
+        {@render keyRows(b.id, true, b.effects, b.name)}
       {:else if doc}
         <HeaderFx
           {doc}
@@ -592,6 +614,22 @@
     </div>
   {/if}
 </div>
+
+{#snippet keyRows(owner: string, isBus: boolean, chain: Parameters<typeof chainOf>[0], name: string)}
+  {#if doc}
+    {#each keySlots(chain) as s (s.id)}
+      <div class="line">
+        <label class="pick outpick" title="Sidechain: let another track's or bus's sound drive {slotName(s)} on {name}. It listens before that track's fader.">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 12h4l2-8 2 8h5" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
+          <select aria-label="{slotName(s)} sidechain" value={s.sidechain ?? ""} onchange={(e) => setKey(owner, isBus, chain, s.id, e.currentTarget.value)}>
+            <option value="">{slotName(s)}: own input</option>
+            {#each keyChoices(doc, owner) as k (k.id)}<option value={k.id}>{slotName(s)}: {k.bus ? "Bus " : ""}{k.name}</option>{/each}
+          </select>
+        </label>
+      </div>
+    {/each}
+  {/if}
+{/snippet}
 
 {#snippet lanesToggle(track: TrackDoc)}
 <button

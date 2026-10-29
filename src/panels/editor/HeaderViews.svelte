@@ -15,7 +15,7 @@
   interface Props {
     ed: EditorState;
     /** What the track headers show. */
-    headerView?: "mix" | "fx";
+    headerView?: "mix" | "io" | "fx";
     /** The metronome is on. */
     metOn: boolean;
     hasDoc: boolean;
@@ -27,14 +27,14 @@
   let { ed, headerView = $bindable("mix"), metOn, hasDoc, run, tip }: Props = $props();
 </script>
 
-<!-- What the track headers show. Only the mix controls exist so far; the
-     other views arrive with recording (P4) and effects (P5). -->
+<!-- What the track headers show: mix controls, inputs and outputs with
+     sidechains, or the effects. -->
 {#if ed.selectedClips.size > 1}<span class="selcount" aria-live="polite">{ed.selectedClips.size} clips selected</span>{/if}
 <div class="views" role="radiogroup" aria-label="Track header view">
   <button type="button" class="view" class:on={headerView === "mix"} role="radio" aria-checked={headerView === "mix"} title="Mix: volume, pan, mute, solo and arm, then input, output and sends as the track gets taller" onclick={() => (headerView = "mix")}>
     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2v12M8 2v12M12 2v12" stroke="currentColor" stroke-width="1" opacity="0.6" /><rect x="2.5" y="8" width="3" height="2" fill="currentColor" /><rect x="6.5" y="4.5" width="3" height="2" fill="currentColor" /><rect x="10.5" y="10" width="3" height="2" fill="currentColor" /></svg>
   </button>
-  <button type="button" class="view" role="radio" aria-checked="false" disabled title="Inputs and Outputs: arrives with recording (P4)">
+  <button type="button" class="view" class:on={headerView === "io"} role="radio" aria-checked={headerView === "io"} title="Inputs and Outputs: each track's input and output, and which track or bus drives an effect's sidechain input (a plug-in like a vocal aligner, or a ducking compressor)" onclick={() => (headerView = "io")}>
     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
   </button>
   <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's Audio FX chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>

@@ -162,7 +162,7 @@
   const buses = $derived(showStart ? [] : (doc?.buses ?? []));
   /** What the track headers show: the mix controls, or the output and sends. */
   /** What the headers show: mix controls (with input, output and sends as room allows) or the effects. */
-  let headerView = $state<"mix" | "fx">("mix");
+  let headerView = $state<"mix" | "io" | "fx">("mix");
   const can = (id: string) => {
     void tick;
     return actions.isEnabled(id);

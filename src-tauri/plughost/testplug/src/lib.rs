@@ -101,6 +101,11 @@ impl IPluginBaseTrait for GainProcessor {
     }
 }
 
+/// A second (sidechain) audio input, when asked for by the environment.
+fn with_sidechain() -> bool {
+    std::env::var_os("ALTERED_TESTPLUG_SIDECHAIN").is_some()
+}
+
 impl IComponentTrait for GainProcessor {
     unsafe fn getControllerClassId(&self, class_id: *mut TUID) -> tresult {
         *class_id = GainController::CID;
@@ -114,7 +119,7 @@ impl IComponentTrait for GainProcessor {
     unsafe fn getBusCount(&self, mediaType: MediaType, dir: BusDirection) -> i32 {
         match mediaType as BusDirections {
             MediaTypes_::kAudio => match dir as BusDirections {
-                BusDirections_::kInput => 1,
+                BusDirections_::kInput => 1 + i32::from(with_sidechain()),
                 BusDirections_::kOutput => 1,
                 _ => 0,
             },
@@ -142,6 +147,18 @@ impl IComponentTrait for GainProcessor {
                         copy_wstring("Input", &mut bus.name);
                         bus.busType = BusTypes_::kMain as BusType;
                         bus.flags = BusInfo_::BusFlags_::kDefaultActive as u32;
+
+                        kResultOk
+                    }
+                    1 if with_sidechain() => {
+                        let bus = &mut *bus;
+
+                        bus.mediaType = MediaTypes_::kAudio as MediaType;
+                        bus.direction = BusDirections_::kInput as BusDirection;
+                        bus.channelCount = 2;
+                        copy_wstring("Sidechain", &mut bus.name);
+                        bus.busType = BusTypes_::kAux as BusType;
+                        bus.flags = 0;
 
                         kResultOk
                     }
@@ -219,11 +236,13 @@ impl IAudioProcessorTrait for GainProcessor {
         outputs: *mut SpeakerArrangement,
         num_outs: i32,
     ) -> tresult {
-        if num_ins != 1 || num_outs != 1 {
+        let ins = 1 + i32::from(with_sidechain());
+        if num_ins != ins || num_outs != 1 {
             return kResultFalse;
         }
 
-        if *inputs != SpeakerArr::kStereo || *outputs != SpeakerArr::kStereo {
+        let all_stereo = (0..num_ins as usize).all(|i| *inputs.add(i) == SpeakerArr::kStereo);
+        if !all_stereo || *outputs != SpeakerArr::kStereo {
             return kResultFalse;
         }
 
@@ -238,7 +257,7 @@ impl IAudioProcessorTrait for GainProcessor {
     ) -> tresult {
         match dir as BusDirections {
             BusDirections_::kInput => {
-                if index == 0 {
+                if index == 0 || (index == 1 && with_sidechain()) {
                     *arr = SpeakerArr::kStereo;
                     kResultOk
                 } else {
@@ -322,7 +341,8 @@ impl IAudioProcessorTrait for GainProcessor {
 
         let num_samples = process_data.numSamples as usize;
 
-        if process_data.numInputs != 1 || process_data.numOutputs != 1 {
+        let ins = 1 + i32::from(with_sidechain());
+        if process_data.numInputs != ins || process_data.numOutputs != 1 {
             return kResultOk;
         }
 
@@ -348,6 +368,23 @@ impl IAudioProcessorTrait for GainProcessor {
         let input_r = slice::from_raw_parts(input_channels[1], num_samples);
         let output_l = slice::from_raw_parts_mut(output_channels[0], num_samples);
         let output_r = slice::from_raw_parts_mut(output_channels[1], num_samples);
+
+        // With a sidechain input, the key is added to the output as it is.
+        if with_sidechain() {
+            let key = slice::from_raw_parts(
+                input_buses[1].__field0.channelBuffers32,
+                input_buses[1].numChannels as usize,
+            );
+            let (kl, kr) = (
+                slice::from_raw_parts(key[0], num_samples),
+                slice::from_raw_parts(key[1], num_samples),
+            );
+            for i in 0..num_samples {
+                output_l[i] = gain * input_l[i] + kl[i];
+                output_r[i] = gain * input_r[i] + kr[i];
+            }
+            return kResultOk;
+        }
 
         let mut d = self.delay.lock().unwrap();
         let (dl, dr, at) = &mut *d;

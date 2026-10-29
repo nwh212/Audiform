@@ -81,6 +81,8 @@ pub struct Plugin {
     /// Takes notes and has no audio input: it makes sound rather than
     /// processing it.
     pub instrument: bool,
+    /// Has a second audio input (a sidechain) beside its main one.
+    pub sidechain: bool,
     /// The main input's and output's speakers, by name.
     pub main_in: Vec<String>,
     pub main_out: Vec<String>,
@@ -246,6 +248,7 @@ impl Plugin {
             crate::stage("setting up its inputs and outputs");
             let (ins, outs, events, main_in, main_out) = setup_buses(&component, &processor, main);
             let instrument = events && ins.is_empty();
+            let sidechain = ins.len() > 1;
             let mut setup = ProcessSetup {
                 processMode: kRealtime as i32,
                 symbolicSampleSize: kSample32 as i32,
@@ -288,6 +291,7 @@ impl Plugin {
                     latency,
                     params,
                     instrument,
+                    sidechain,
                     main_in,
                     main_out,
                     _handler: handler,
@@ -583,6 +587,7 @@ impl Audio {
         notes: &[NoteEvent],
         io: &mut [f32],
         channels: usize,
+        key: Option<&[f32]>,
     ) {
         if position >= 0 {
             self.time = position;
@@ -602,7 +607,9 @@ impl Audio {
                 .filter(|n| self.events && n.offset >= from && n.offset < to)
                 .flat_map(|n| vst_events(n, n.offset - from))
                 .collect();
-            self.block(&all, events, chunk, ch);
+            // The key for these frames: stereo, so two samples a frame.
+            let key = key.and_then(|k| k.get(from as usize * 2..to as usize * 2));
+            self.block(&all, events, chunk, ch, key);
         }
     }
 
@@ -616,7 +623,14 @@ impl Audio {
         };
     }
 
-    fn block(&mut self, changes: &[(u32, f64)], events: Vec<Event>, io: &mut [f32], width: usize) {
+    fn block(
+        &mut self,
+        changes: &[(u32, f64)],
+        events: Vec<Event>,
+        io: &mut [f32],
+        width: usize,
+        key: Option<&[f32]>,
+    ) {
         let n = io.len() / width;
         if n == 0 {
             return;
@@ -625,6 +639,24 @@ impl Audio {
         for (b, bus) in self.in_bufs.iter_mut().enumerate() {
             for (c, ch) in bus.iter_mut().enumerate() {
                 let ch = &mut ch[..n];
+                // The first extra input is the sidechain: the key, as it is
+                // (stereo), or its average on a mono input.
+                if b == 1 {
+                    match key {
+                        Some(k) if self.ins[1] == 1 => {
+                            for (i, s) in ch.iter_mut().enumerate() {
+                                *s = (k[i * 2] + k[i * 2 + 1]) * 0.5;
+                            }
+                        }
+                        Some(k) => {
+                            for (i, s) in ch.iter_mut().enumerate() {
+                                *s = k[i * 2 + c.min(1)];
+                            }
+                        }
+                        None => ch.fill(0.0),
+                    }
+                    continue;
+                }
                 if b != 0 || c >= width {
                     ch.fill(0.0);
                     continue;

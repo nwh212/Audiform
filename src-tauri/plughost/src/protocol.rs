@@ -30,6 +30,9 @@ pub const AUDIO: u8 = 2;
 /// any SELECT are for plug-in 0, so a process with one plug-in never
 /// needs one.
 pub const SELECT: u8 = 3;
+/// A sidechain key for the next AUDIO block of the selected plug-in: the
+/// same number of frames as that block, as interleaved stereo f32.
+pub const KEY: u8 = 4;
 
 fn quarter() -> u32 {
     4
@@ -59,6 +62,9 @@ pub struct ClassInfo {
     /// processing audio.
     #[serde(default)]
     pub instrument: bool,
+    /// Has a second audio input (a sidechain) it can listen to.
+    #[serde(default)]
+    pub sidechain: bool,
     /// Why it was not fully read, when the scan only got its name (its
     /// controls and look-ahead are then learned when it runs).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -535,6 +541,7 @@ mod tests {
             latency: 0,
             has_editor: true,
             instrument: false,
+            sidechain: false,
             note: None,
         }
     }

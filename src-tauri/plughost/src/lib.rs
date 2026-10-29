@@ -39,7 +39,7 @@ use std::time::Duration;
 use com::Edit;
 use editor::EditorWindow;
 use plugin::{Audio, Plugin, SendPtr};
-use protocol::{read_frame, write_frame, Message, Request, ScanLine, AUDIO, CONTROL};
+use protocol::{read_frame, write_frame, Message, Request, ScanLine, AUDIO, CONTROL, KEY};
 
 /// Runs a host or a scan when the command line asks for one. Returns the
 /// exit code, or None for a normal start of the editor.
@@ -139,8 +139,14 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
     let mut samples = Vec::new();
     let mut reply = Vec::new();
     let mut position = -1i64;
+    // A sidechain key waiting for the next block of each plug-in.
+    let mut keys: HashMap<u32, Vec<f32>> = HashMap::new();
     loop {
         match read_frame(&mut stdin, &mut buf) {
+            Ok(Some(KEY)) => {
+                let k = keys.entry(cur).or_default();
+                protocol::decode_samples(&buf, k);
+            }
             Ok(Some(protocol::SELECT)) => {
                 let Some(b) = buf.get(..4) else { break };
                 cur = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
@@ -155,8 +161,10 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                 ) else {
                     break;
                 };
+                // A key only counts for the block it came with.
+                let key = keys.remove(&cur).filter(|k| k.len() == samples.len() / channels * 2);
                 if let Some(a) = audio.get_mut(&cur) {
-                    a.process(position, &changes, &notes, &mut samples, channels);
+                    a.process(position, &changes, &notes, &mut samples, channels, key.as_deref());
                 }
                 if !changes.is_empty() {
                     let _ = tx.send(ToMain::Changes(cur, changes.clone()));
@@ -542,6 +550,7 @@ pub fn scan(bundle: &Path) -> i32 {
                 // Unknown until it runs; the window button says so if there is none.
                 has_editor: true,
                 instrument: named(&c.sub_categories),
+                sidechain: false,
                 note: None,
             })
             .collect(),
@@ -564,6 +573,7 @@ pub fn scan(bundle: &Path) -> i32 {
                     params: p.params.clone(),
                     latency: p.latency,
                     has_editor: p.controller.is_some(),
+                    sidechain: p.sidechain,
                     note: None,
                 }));
                 keep.push((p, a));

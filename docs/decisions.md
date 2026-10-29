@@ -1882,3 +1882,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - A 3D Space export can be WAV, or FLAC for the 2.0, 5.1 and 7.1 layouts. FLAC stops at 8 channels and has no height speakers, so the 5.1.2, 7.1.2, 5.1.4 and 7.1.4 layouts stay WAV only.
 - The Export dialog lists only the formats the chosen layout can use, and hides the Channels choice, since the layout sets it.
 - MP3 cannot carry more than two channels. AAC in M4A is limited by the encoder built into Windows, which writes mono or stereo only, so multichannel M4A needs a bundled encoder and is not built.
+
+## 2026-10-29: Sidechain input for plug-ins, and the Inputs and Outputs view
+- A VST3 plug-in with a second audio input (a sidechain) can listen to another track or bus. The scan notes the input; the Audio FX window shows the same "Listen to" choice the built-in ducking effects have, and a rescan happens once after the update.
+- The key travels to the plug-in host process as its own frame just before the block it belongs to. It is stereo, taken before the source track's fader, delayed to line up like the built-in keys, and used for that block only. A plug-in with no second input ignores it.
+- The track-header button for Inputs and Outputs (it was waiting for recording) now shows each track's input and output, and one row per effect with a sidechain input, to pick its source. Buses show their output and sidechain rows too.
