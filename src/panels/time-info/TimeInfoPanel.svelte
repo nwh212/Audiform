@@ -119,6 +119,7 @@
   const size = $derived(mixdownBytes(length, doc?.bit_depth ?? 32));
 </script>
 
+<div class="box">
 <section class="info" aria-label="Time Info">
   <div class="head">
     <span class="k">Playhead</span>
@@ -147,11 +148,20 @@
     <span title="Size of a stereo WAV mixdown at the session bit depth">{formatSize(size)}</span>
   </div>
 </section>
+</div>
 
 <style>
+  .box {
+    height: 100%;
+    container-type: size;
+  }
   .info {
     display: grid;
-    grid-template-rows: auto auto;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "grid"
+      "foot";
     align-content: start;
     gap: 2px;
     height: 100%;
@@ -160,16 +170,17 @@
     line-height: 1.2;
     box-sizing: border-box;
     background: var(--surface-1);
-    container-type: inline-size;
   }
 
   .head {
+    grid-area: head;
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 0 10px;
     align-items: center;
   }
   .grid {
+    grid-area: grid;
     display: grid;
     grid-template-columns: auto repeat(3, minmax(max-content, 1fr));
     gap: 1px 6px;
@@ -207,6 +218,7 @@
   }
 
   .foot {
+    grid-area: foot;
     display: flex;
     flex-wrap: wrap;
     gap: 2px 10px;
@@ -214,5 +226,48 @@
     border-top: 1px solid var(--border);
     color: var(--text-faint);
     font-size: 10px;
+  }
+
+  /* A short panel (the default is one): playhead and format share the top row, and the
+     rows are tighter, so the whole thing takes about half the height. */
+  @container (max-height: 150px) {
+    .info {
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        "head foot"
+        "grid grid";
+      align-items: center;
+      gap: 0 8px;
+      padding: 2px 8px;
+    }
+    .foot {
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      gap: 0 8px;
+      padding-top: 0;
+      border-top: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    /* The session length and mixdown size are in the tooltips of the fields above, and in the full-height panel. */
+    .foot > :first-child,
+    .foot > :last-child {
+      display: none;
+    }
+    .grid {
+      gap: 0 6px;
+    }
+    .info :global(.tf) {
+      height: 14px;
+      line-height: 12px;
+    }
+    .info :global(.tf.big) {
+      height: 18px;
+      line-height: 16px;
+      font-size: 13px;
+    }
+    .h {
+      line-height: 11px;
+    }
   }
 </style>
