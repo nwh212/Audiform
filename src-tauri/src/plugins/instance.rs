@@ -335,7 +335,22 @@ pub struct Host {
     /// The settings the plug-in last reported or was given, so the same
     /// settings coming back from the session are not sent again.
     last_state: Option<String>,
+    /// Settings the plug-in itself reported in the last moments (when, and a
+    /// hash). They come back through the session a beat later, by which
+    /// time the plug-in may have moved on; sending them back would set the
+    /// plug-in to a stale copy of itself (and some rebuild their window).
+    reported: Vec<(std::time::Instant, u64)>,
 }
+
+fn state_hash(data: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    data.hash(&mut h);
+    h.finish()
+}
+
+/// How long a plug-in's own report counts as still travelling back.
+const REPORT_ECHO: Duration = Duration::from_secs(3);
 
 impl Host {
     /// Starts `found` in a host process (its own, or its maker's shared one).
@@ -378,6 +393,7 @@ impl Host {
             rate,
             told: None,
             last_state: state.clone(),
+            reported: Vec::new(),
             inputs: vec!["L".into(), "R".into()],
             outputs: vec!["L".into(), "R".into()],
         };
@@ -521,6 +537,10 @@ impl Host {
         match self.request(&Request::GetState, REQUEST_TIMEOUT)? {
             Message::State { data } => {
                 self.last_state = Some(data.clone());
+                let now = std::time::Instant::now();
+                self.reported
+                    .retain(|(t, _)| now.duration_since(*t) < REPORT_ECHO);
+                self.reported.push((now, state_hash(&data)));
                 Some(data)
             }
             _ => None,
@@ -531,6 +551,14 @@ impl Host {
     /// already has exactly these.
     pub fn set_state(&mut self, data: &str) -> Result<(), String> {
         if self.last_state.as_deref() == Some(data) {
+            return Ok(());
+        }
+        let (now, hash) = (std::time::Instant::now(), state_hash(data));
+        if self
+            .reported
+            .iter()
+            .any(|(t, h)| *h == hash && now.duration_since(*t) < REPORT_ECHO)
+        {
             return Ok(());
         }
         match self.request(&Request::SetState { data: data.into() }, REQUEST_TIMEOUT) {
