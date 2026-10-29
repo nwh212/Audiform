@@ -78,7 +78,8 @@ mod win {
 
     use vst3::Steinberg::Vst::{IEditController, IEditControllerTrait, ViewType};
     use vst3::Steinberg::{
-        kPlatformTypeHWND, kResultTrue, IPlugFrame, IPlugView, IPlugViewTrait, ViewRect,
+        kPlatformTypeHWND, kResultTrue, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
+        IPlugViewContentScaleSupportTrait, IPlugViewTrait, ViewRect,
     };
     use vst3::{ComPtr, ComWrapper};
     use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -95,13 +96,13 @@ mod win {
         MDT_EFFECTIVE_DPI,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumChildWindows,
-        GetClientRect, GetWindowLongPtrW, GetWindowRect, LoadCursorW, MoveWindow, PeekMessageW,
-        RegisterClassW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-        TranslateMessage, CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE, SWP_NOMOVE,
-        SWP_NOZORDER, SW_HIDE, SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND,
-        WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
-        WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
+        GetWindowLongPtrW, LoadCursorW, MoveWindow, PeekMessageW, RegisterClassW,
+        SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
+        CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE,
+        SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_LBUTTONDOWN,
+        WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+        WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
     };
 
     use super::EditorWindow;
@@ -154,6 +155,13 @@ mod win {
         }
     }
 
+    /// Tells a plug-in the display scale, when it wants to know.
+    unsafe fn tell_scale(view: &ComPtr<IPlugView>, dpi: u32) {
+        if let Some(cs) = view.cast::<IPlugViewContentScaleSupport>() {
+            cs.setContentScaleFactor(dpi as f32 / 96.0);
+        }
+    }
+
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(Some(0)).collect()
     }
@@ -166,28 +174,6 @@ mod win {
         let mut r: RECT = std::mem::zeroed();
         GetClientRect(hwnd, &mut r);
         r
-    }
-
-    /// How far the plug-in's own windows reach inside `child`: its real
-    /// size when it draws bigger than it said (a plug-in that scales itself
-    /// to the screen but reports its unscaled size).
-    unsafe fn reach_of_children(child: HWND) -> Option<(i32, i32)> {
-        unsafe extern "system" fn each(hwnd: HWND, lp: LPARAM) -> i32 {
-            let acc = &mut *(lp as *mut (i32, i32, i32, i32));
-            let mut r: RECT = std::mem::zeroed();
-            if GetWindowRect(hwnd, &mut r) != 0 {
-                acc.2 = acc.2.max(r.right - acc.0);
-                acc.3 = acc.3.max(r.bottom - acc.1);
-            }
-            1
-        }
-        let mut origin: RECT = std::mem::zeroed();
-        if GetWindowRect(child, &mut origin) == 0 {
-            return None;
-        }
-        let mut acc = (origin.left, origin.top, 0, 0);
-        EnumChildWindows(child, Some(each), &mut acc as *mut _ as LPARAM);
-        (acc.2 > 0 && acc.3 > 0).then_some((acc.2, acc.3))
     }
 
     /// The power button and its label, from the strip's left edge.
@@ -357,47 +343,6 @@ mod win {
         style: u32,
         resizable: bool,
         state: Box<State>,
-        opened: std::time::Instant,
-        settled: bool,
-    }
-
-    impl Win {
-        /// Reads the plug-in's size once and sizes the window to it. A
-        /// plug-in that scales itself when it attaches says its real size
-        /// only then, so the first size can be too small. Asked once or
-        /// twice, never in a loop, so a window cannot keep growing.
-        unsafe fn adopt_size(&mut self) {
-            let Some(v) = &self.view else { return };
-            let mut now: ViewRect = std::mem::zeroed();
-            if v.getSize(&mut now) != vst3::Steinberg::kResultOk {
-                return;
-            }
-            let (mut w, mut h) = (now.right - now.left, now.bottom - now.top);
-            // Its own windows can reach past what it said. Never more than
-            // double, so a plug-in whose window follows ours cannot make
-            // this run away.
-            if let Some((rw, rh)) = reach_of_children(self.child) {
-                if rw > w && rw <= w * 2 {
-                    w = rw;
-                }
-                if rh > h && rh <= h * 2 {
-                    h = rh;
-                }
-            }
-            let r = client(self.hwnd);
-            if w > 0 && h > 0 && (w, h) != (r.right, (r.bottom - self.state.strip).max(1)) {
-                self.resize(w, h);
-                if let Some(v) = &self.view {
-                    let mut vr = ViewRect {
-                        left: 0,
-                        top: 0,
-                        right: w,
-                        bottom: h,
-                    };
-                    v.onSize(&mut vr);
-                }
-            }
-        }
     }
 
     impl Win {
@@ -464,6 +409,7 @@ mod win {
             };
             let dpi = monitor_dpi(owner_hwnd);
             let strip = strip_for(dpi);
+            tell_scale(&view, dpi);
             let mut size: ViewRect = std::mem::zeroed();
             view.getSize(&mut size);
             let (w, h) = (
@@ -534,7 +480,9 @@ mod win {
                 DestroyWindow(hwnd);
                 return Err("The plug-in could not open its window.".into());
             }
-            let mut win = Win {
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+            Ok(Box::new(Win {
                 hwnd,
                 child,
                 view: Some(view),
@@ -542,13 +490,7 @@ mod win {
                 style,
                 resizable,
                 state,
-                opened: std::time::Instant::now(),
-                settled: false,
-            };
-            win.adopt_size();
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-            Ok(Box::new(win))
+            }))
         }
     }
 
@@ -560,15 +502,11 @@ mod win {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
-                // Once more after the plug-in has had a moment to settle.
-                if !self.settled && self.opened.elapsed() > std::time::Duration::from_millis(600) {
-                    self.settled = true;
-                    self.adopt_size();
-                }
                 // Moved to a monitor with another scale: tell the plug-in,
                 // then size the window to what it asks for.
                 if let (Some((dpi, suggested)), Some(v)) = (self.state.dpi.take(), &self.view) {
                     self.state.strip = strip_for(dpi);
+                    tell_scale(v, dpi);
                     let mut size: ViewRect = std::mem::zeroed();
                     v.getSize(&mut size);
                     let mut r = RECT {
