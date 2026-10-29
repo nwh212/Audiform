@@ -18,7 +18,7 @@
   import { mixdownBytes } from "../../app/session-properties";
   import { settings } from "../../stores/settings";
   import TimeField from "./TimeField.svelte";
-  import { tryUnlockSecretTheme } from "../../app/secret-theme";
+  import { tryUnlock } from "../../app/unlock";
   import { editSelection, laneWidths, parseTime, viewFor, viewRange } from "./time-info";
 
   interface Props {
@@ -122,7 +122,7 @@
 <section class="info" aria-label="Time Info">
   <div class="head">
     <span class="k">Playhead</span>
-    <TimeField big value={doc ? playhead : null} text={t(playhead)} label="Playhead" {step} {parse} secret={(t) => void tryUnlockSecretTheme(t)} onset={doc ? (v) => void player.seek(v) : null} />
+    <TimeField big value={doc ? playhead : null} text={t(playhead)} label="Playhead" {step} {parse} onenter={(t) => void tryUnlock(t)} onset={doc ? (v) => void player.seek(v) : null} />
   </div>
   <div class="grid">
     <span></span>

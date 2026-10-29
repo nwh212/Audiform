@@ -22,10 +22,10 @@
     onset: ((v: number) => void) | null;
     big?: boolean;
     /** Given the typed text when Enter is pressed, before it is read as a time. */
-    secret?: (text: string) => void;
+    onenter?: (text: string) => void;
   }
 
-  const { value, text, label, step, parse, onset, big = false, secret }: Props = $props();
+  const { value, text, label, step, parse, onset, big = false, onenter }: Props = $props();
 
   let editing = $state(false);
   let draft = $state("");
@@ -33,13 +33,13 @@
   let drag: { x: number; start: number; moved: boolean } | null = null;
 
   function startEdit() {
-    if (!onset && !secret) return;
+    if (!onset && !onenter) return;
     draft = value === null ? "" : text;
     editing = true;
     queueMicrotask(() => input?.select());
   }
   function down(e: PointerEvent) {
-    if (!onset && secret && e.button === 0 && !editing) {
+    if (!onset && onenter && e.button === 0 && !editing) {
       e.preventDefault();
       startEdit();
       return;
@@ -71,7 +71,7 @@
   function finish(keep: boolean, enter = false) {
     if (!editing) return;
     editing = false;
-    if (enter) secret?.(draft);
+    if (enter) onenter?.(draft);
     if (!keep || !onset) return;
     const v = parse(draft);
     if (v !== null) onset(v);
@@ -98,7 +98,7 @@
     class:big
     class:live={onset && value !== null}
     role="spinbutton"
-    tabindex={onset || secret ? 0 : -1}
+    tabindex={onset || onenter ? 0 : -1}
     aria-readonly={!onset}
     aria-label={label}
     aria-valuenow={value ?? undefined}

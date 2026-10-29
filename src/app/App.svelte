@@ -31,7 +31,7 @@
   import { MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
   import { applyThemeId, themeLook } from "../themes/loader";
-  import { forgetSecretTheme } from "./secret-theme";
+  import { relock } from "./unlock";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
@@ -1988,11 +1988,10 @@
             prefs.set(KEY_SETTINGS, v);
           }),
         );
-        // The hidden theme is found by typing its phrase and forgotten when another theme is chosen.
         let lastTheme = settings.current.theme;
         offs.push(
           settings.subscribe((v) => {
-            const left = forgetSecretTheme(v);
+            const left = relock(v);
             if (left) {
               settings.set(left);
               return;
