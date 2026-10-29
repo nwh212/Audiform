@@ -377,6 +377,8 @@ struct Running {
     /// Fingerprints of the chains playing, and the chains themselves.
     chains: plan::Chains,
     chain_docs: HashMap<(Id, Owner), EffectChain>,
+    /// Whether the metronome plays with it.
+    click: bool,
 }
 
 impl Running {
@@ -432,12 +434,32 @@ impl Transport {
     /// Starts playing `session` from session sample `from`, looping or
     /// skipping as `jump` says.
     pub fn play(&self, session: &Session, from: u64, jump: Option<Jump>) -> Result<(), String> {
+        self.play_with_click(session, from, jump, true)
+    }
+
+    /// Like `play`, for a file heard on its own (the Waveform editor): no metronome.
+    pub fn play_without_click(
+        &self,
+        session: &Session,
+        from: u64,
+        jump: Option<Jump>,
+    ) -> Result<(), String> {
+        self.play_with_click(session, from, jump, false)
+    }
+
+    fn play_with_click(
+        &self,
+        session: &Session,
+        from: u64,
+        jump: Option<Jump>,
+        click: bool,
+    ) -> Result<(), String> {
         let mut cur = self.current.lock().map_err(|e| e.to_string())?;
         if let Some(mut r) = cur.take() {
             r.stop();
         }
         let session = super::speaker_feed::expanded(session).into_owned();
-        *cur = Some(start(session, from, jump)?);
+        *cur = Some(start(session, from, jump, click)?);
         Ok(())
     }
 
@@ -590,9 +612,10 @@ impl Transport {
             pos = plan::to_out(pos, r.session_rate, session.sample_rate);
         }
         let jump = r.jump;
+        let click = r.click;
         let mut old = cur.take().expect("checked above");
         old.stop();
-        *cur = Some(start(session.clone(), pos, jump)?);
+        *cur = Some(start(session.clone(), pos, jump, click)?);
         Ok(())
     }
 }
@@ -646,7 +669,7 @@ impl Drop for Transport {
     }
 }
 
-fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, String> {
+fn start(session: Session, from: u64, jump: Option<Jump>, click: bool) -> Result<Running, String> {
     let from = jump.map_or(from, |j| j.first(from));
     let jump = jump.filter(|j| j.points(from).is_some());
     let routed = crate::session::routing::is_routed(&session);
@@ -674,7 +697,7 @@ fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, Str
     let thread_shared = shared.clone();
     let thread = thread::Builder::new()
         .name("transport".into())
-        .spawn(move || run(session, from, jump, thread_shared, ready_tx))
+        .spawn(move || run(session, from, jump, click, thread_shared, ready_tx))
         .map_err(|e| e.to_string())?;
     // Plug-ins and instruments may still be loading (licence checks,
     // samples): give them longer than a plain session needs.
@@ -704,6 +727,7 @@ fn start(session: Session, from: u64, jump: Option<Jump>) -> Result<Running, Str
         routed,
         chains,
         chain_docs: docs,
+        click,
     })
 }
 
@@ -711,6 +735,7 @@ fn run(
     mut session: Session,
     from: u64,
     jump: Option<Jump>,
+    click_on: bool,
     shared: Arc<Shared>,
     ready: mpsc::Sender<Result<u32, String>>,
 ) {
@@ -768,6 +793,7 @@ fn run(
     // The metronome, on its own ring so faders and meters leave it alone.
     let mut click = Ticker {
         click: Click::new(&session.tempo, out_rate),
+        on: click_on,
         start: start_frame,
         jump: jump.map(|j| {
             let r = session.sample_rate;
@@ -911,6 +937,8 @@ fn push_all(producers: &mut [Producer<f32>], blocks: &[Vec<f32>]) {
 /// position (output frames), through loops and skips.
 struct Ticker {
     click: Click,
+    /// False for a file heard on its own: silence, whatever the metronome says.
+    on: bool,
     start: u64,
     jump: Option<Jump>,
     buf: Vec<f32>,
@@ -934,6 +962,9 @@ impl Ticker {
     fn render(&mut self, rendered: u64, frames: usize) {
         self.buf.clear();
         self.buf.resize(frames * 2, 0.0);
+        if !self.on {
+            return;
+        }
         let mut done = 0;
         while done < frames {
             let pos = Jump::position(self.jump, self.start, rendered + done as u64);

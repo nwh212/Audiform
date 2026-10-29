@@ -432,7 +432,7 @@ pub fn wave_play(
         .as_ref()
         .ok_or("No file is open in the Waveform editor.")?;
     playing.set(PlayingDoc::Wave);
-    transport.play(
+    transport.play_without_click(
         &audible(&state.session, &channels_off(&off)),
         from.unwrap_or(state.session.view.playhead),
         super::transport::jump_for(&state.session, mode),
