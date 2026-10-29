@@ -694,61 +694,7 @@
           </select>
         {/if}
       </div>
-      <div class="levels">
-        <span class="target" title="Pick a track, bus or the master in the session to see its chain here">{label}</span>
-      {#snippet bars(name: string, k: number)}
-          <div class="mbars" aria-label="{name} level">
-            {#each [k, k + 1] as ch (ch)}
-              {@const m = chainMeter?.[ch]}
-              <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
-                <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
-                {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
-              </div>
-            {/each}
-          </div>
-        {/snippet}
-        <div class="iopair">
-        {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
-          {@const key = p.key as "input_gain_db" | "output_gain_db"}
-          {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
-          <div class="io">
-            <span class="pname">{k === 0 ? "In" : "Out"}</span>
-            {@render bars(k === 0 ? "In" : "Out", k)}
-            <Knob
-              label="{p.name} gain"
-              value={toSlider(p, cur)}
-              home={toSlider(p, 0)}
-              text={formatParam(p, cur)}
-              title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
-              oninput={(t) => {
-                const v = fromSlider(p, t);
-                dragChain(key, `Audio FX ${p.name} Gain`, v, v);
-              }}
-              oncommit={(t) => setChain(key, `Audio FX ${p.name} Gain`, fromSlider(p, t))}
-            />
-            <span class="val">{formatParam(p, cur)}</span>
-          </div>
-        {/each}
-        </div>
-        <div class="io mixrow">
-          <span class="pname" title="How much of the effected sound you hear">Mix</span>
-          <span class="end">Dry</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            aria-label="Mix"
-            value={mixShown}
-            oninput={(e) => dragChain("mix", "Audio FX Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
-            onchange={(e) => setChain("mix", "Audio FX Mix", Number(e.currentTarget.value) / 100)}
-            ondblclick={() => setChain("mix", "Audio FX Mix", 1)}
-            title="Double-click for 100 %"
-          />
-          <span class="end">Wet</span>
-          <span class="val">{formatParam(MIX, mixShown)}</span>
-        </div>
-      </div>
+      <span class="target" title="Pick a track, bus or the master in the session to see its chain here">{label}</span>
     </div>
 
     <ol class="slots" class:off={!chain.enabled}>
@@ -802,6 +748,62 @@
         </li>
       {/each}
     </ol>
+
+    <!-- In and out levels and the mix, pinned to the bottom over the effects list. -->
+      <div class="levels pinned">
+      {#snippet bars(name: string, k: number)}
+          <div class="mbars" aria-label="{name} level">
+            {#each [k, k + 1] as ch (ch)}
+              {@const m = chainMeter?.[ch]}
+              <div class="mbar" role="meter" aria-label="{name} {ch % 2 === 0 ? 'left' : 'right'}" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={m && m.peak > 0 ? Math.max(-60, Math.round(20 * Math.log10(m.peak))) : -60}>
+                <div class="mcover" style:width="{(1 - meterFraction(m?.level ?? 0)) * 100}%"></div>
+                {#if m && m.peak > 0}<div class="mpeak" style:left="{meterFraction(m.peak) * 100}%"></div>{/if}
+              </div>
+            {/each}
+          </div>
+        {/snippet}
+        <div class="iopair">
+        {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
+          {@const key = p.key as "input_gain_db" | "output_gain_db"}
+          {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
+          <div class="io">
+            <span class="pname">{k === 0 ? "In" : "Out"}</span>
+            {@render bars(k === 0 ? "In" : "Out", k)}
+            <Knob
+              label="{p.name} gain"
+              value={toSlider(p, cur)}
+              home={toSlider(p, 0)}
+              text={formatParam(p, cur)}
+              title="Drag to turn (Ctrl for fine, Shift for coarse). Double-click for 0 dB."
+              oninput={(t) => {
+                const v = fromSlider(p, t);
+                dragChain(key, `Audio FX ${p.name} Gain`, v, v);
+              }}
+              oncommit={(t) => setChain(key, `Audio FX ${p.name} Gain`, fromSlider(p, t))}
+            />
+            <span class="val">{formatParam(p, cur)}</span>
+          </div>
+        {/each}
+        </div>
+        <div class="io mixrow">
+          <span class="pname" title="How much of the effected sound you hear">Mix</span>
+          <span class="end">Dry</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            aria-label="Mix"
+            value={mixShown}
+            oninput={(e) => dragChain("mix", "Audio FX Mix", Number(e.currentTarget.value), Number(e.currentTarget.value) / 100)}
+            onchange={(e) => setChain("mix", "Audio FX Mix", Number(e.currentTarget.value) / 100)}
+            ondblclick={() => setChain("mix", "Audio FX Mix", 1)}
+            title="Double-click for 100 %"
+          />
+          <span class="end">Wet</span>
+          <span class="val">{formatParam(MIX, mixShown)}</span>
+        </div>
+      </div>
 
     {#if chain.slots.length === 0}
       <p class="hint pad">Add an effect or pick a preset. Effects run top to bottom. Each effect opens in its own window.</p>
@@ -1388,7 +1390,17 @@
     gap: 1px;
     padding-top: 2px;
   }
-  .levels .target {
+  .levels.pinned {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: auto;
+    padding: 5px 8px 6px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-1);
+    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.25);
+  }
+  .top > .target {
     overflow: hidden;
     color: var(--text-dim);
     font-size: 11px;
