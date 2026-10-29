@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { BusDoc, EffectChainDoc, SessionDoc, TrackDoc } from "../../stores/session";
-import { busChoices, busOp, feeders, isRouted, keyChoices, MASTER_ID, newSend, outputName, reaches, removeSend, setSend } from "./routing";
+import { busChoices, busOp, feeders, isRouted, keyChoices, keyOp, keyTargets, MASTER_ID, newSend, outputName, reaches, removeSend, setSend } from "./routing";
 
 const chain = (sidechain?: string): EffectChainDoc => ({
   enabled: true,
@@ -107,5 +107,22 @@ describe("routing choices", () => {
         { op: "set_bus", id: "sub", changes: { solo: false } },
       ],
     });
+  });
+});
+
+describe("sidechain sends", () => {
+  it("lists effects a sound can drive, and points one at it", () => {
+    const doc = session([track("guide"), track("dub", { effects: chain() }), track("other", { effects: chain("guide") })], [bus("mix")]);
+    (doc.tracks[1]!.effects as EffectChainDoc).slots.push({ id: "va", effect: "vst3:va", enabled: true, params: {}, preset: null });
+    const keyed = (e: string) => e === "vst3:va" || e === "altaudio.dynamics";
+    const t = keyTargets(doc, "guide", keyed);
+    expect(t.map((k) => [k.owner, k.slotId, k.on])).toEqual([
+      ["dub", "va", false],
+      ["other", "s", true],
+    ]);
+    const op = keyOp(doc, t[0]!, "guide");
+    expect(op && op.op === "set_effects" && op.chain.slots[0]!.sidechain).toBe("guide");
+    // Its own effects are not offered.
+    expect(keyTargets(doc, "dub", keyed).map((k) => k.owner)).toEqual(["other"]);
   });
 });

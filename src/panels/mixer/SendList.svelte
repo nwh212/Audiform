@@ -3,13 +3,14 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  A track's or bus's output picker and aux sends, used by the Mixer
-  strips and the Editor's track headers. Each send has a level (drag
+  A track's or bus's output picker, aux sends and sidechain sends, used by
+  the Mixer strips and the Editor's track headers. Each send has a level (drag
   sideways, Shift for fine steps, double-click for 0 dB), pre or post
   fader, on and off, and remove. Choices that would loop are left out.
 -->
 <script lang="ts">
-  import { busChoices, busOp, MASTER_ID, newSend, removeSend, setSend } from "./routing";
+  import { busChoices, busOp, keyOp, keyTargets, MASTER_ID, newSend, removeSend, setSend, type KeyTarget } from "./routing";
+  import { effectsCatalog, type EffectInfo } from "../../app/core";
   import { dbToFader, formatDb } from "./fader";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Op, OutputDoc, SendDoc, SessionDoc, SessionStore } from "../../stores/session";
@@ -32,6 +33,22 @@
   const { doc, session, runner, kind, id, name, output, sends, noOutput = false, onError = console.error }: Props = $props();
 
   const choices = $derived(busChoices(doc, id));
+
+  // Effects with a sidechain input this sound can drive (built-in ducking
+  // effects, plug-ins with a second input).
+  let catalog = $state<EffectInfo[]>([]);
+  $effect(() => {
+    effectsCatalog()
+      .then((c) => (catalog = c))
+      .catch(() => {});
+  });
+  const keyed = (effect: string) => catalog.some((e) => e.id === effect && e.sidechain);
+  const keys = $derived(catalog.length ? keyTargets(doc, id, keyed) : []);
+  const keyName = (k: KeyTarget) => `${catalog.find((e) => e.id === k.effect)?.name ?? k.effect} on ${k.owner}`;
+  function setKey(k: KeyTarget, on: boolean) {
+    const op = keyOp(doc, k, on ? id : null);
+    if (op) edit(on ? "Send to Sidechain" : "Remove Sidechain Send", op);
+  }
   const busName = (b: string) => doc.buses?.find((x) => x.id === b)?.name ?? "Missing bus";
 
   function edit(label: string, op: Op) {
@@ -113,7 +130,16 @@
       </div>
     </div>
   {/each}
-  {#if choices.length > 0}
+  {#each keys.filter((k) => k.on) as k (k.slotId)}
+    <div class="send">
+      <div class="srow">
+        <span class="sbtn on" title="Sidechain: this sound drives the effect's sidechain input, before this {kind}'s fader">⤳</span>
+        <span class="sname" title="Sidechain of {keyName(k)}">{keyName(k)}</span>
+        <button type="button" class="sbtn" title="Stop sending to this sidechain" aria-label="Remove sidechain send" onclick={() => setKey(k, false)}>✕</button>
+      </div>
+    </div>
+  {/each}
+  {#if choices.length > 0 || keys.some((k) => !k.on)}
     <select
       class="out add"
       aria-label="Add a send"
@@ -122,11 +148,14 @@
       onchange={(e) => {
         const b = e.currentTarget.value;
         e.currentTarget.value = "";
-        if (b) setSends([...sends, newSend(b, crypto.randomUUID())], "Add Send");
+        const key = keys.find((k) => `key:${k.slotId}` === b);
+        if (key) setKey(key, true);
+        else if (b) setSends([...sends, newSend(b, crypto.randomUUID())], "Add Send");
       }}
     >
       <option value="" disabled>+ Send</option>
       {#each choices as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
+      {#each keys.filter((k) => !k.on) as k (k.slotId)}<option value="key:{k.slotId}">Sidechain: {keyName(k)}</option>{/each}
     </select>
   {:else if (doc.buses?.length ?? 0) === 0}
     <span class="hint" title="Add a bus first: Multitrack > Add > Bus Track (Alt+B)">No buses yet</span>

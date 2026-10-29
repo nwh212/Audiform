@@ -810,12 +810,19 @@ impl Audio {
         }
     }
 
-    /// Clears the plug-in's memory, as after a jump.
+    /// Clears the plug-in's memory, as after a jump. Effects are paused
+    /// and resumed, as most hosts do on a jump; switching an effect off
+    /// and on makes some (vocal aligners and the like) start over and
+    /// rebuild their window. Instruments are switched off and on, so
+    /// every held note is let go.
     pub fn reset(&mut self) {
+        let instrument = self.events && self.ins.is_empty();
         unsafe {
             self.processor.setProcessing(0);
-            self.component.setActive(0);
-            self.component.setActive(1);
+            if instrument {
+                self.component.setActive(0);
+                self.component.setActive(1);
+            }
             self.processor.setProcessing(1);
         }
         self.time = 0;

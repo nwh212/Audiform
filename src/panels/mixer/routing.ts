@@ -9,7 +9,7 @@
  * so the user never meets the refusal.
  */
 
-import type { BusDoc, EffectChainDoc, Op, OutputDoc, SendDoc, SessionDoc } from "../../stores/session";
+import type { BusDoc, EffectChainDoc, EffectTarget, Op, OutputDoc, SendDoc, SessionDoc } from "../../stores/session";
 import { settings } from "../../stores/settings";
 
 /** Id the Mixer and Audio FX use for the master. */
@@ -154,4 +154,39 @@ export function busOp(doc: SessionDoc | null, id: string, changes: Record<string
     } else if (solo && exclusive && b.solo) ops.push({ op: "set_bus", id: b.id, changes: { solo: false } } as Op);
   }
   return ops.length === 1 ? op : { op: "batch", ops };
+}
+
+/** An effect, on another track's, bus's or the master's chain, that a sound could drive through its sidechain. */
+export interface KeyTarget {
+  target: EffectTarget;
+  /** Whose chain it is, by name ("Master" for the master). */
+  owner: string;
+  slotId: string;
+  effect: string;
+  /** It already listens to this sound. */
+  on: boolean;
+}
+
+/**
+ * Sidechain inputs `source` (a track or bus) can feed: effects that can
+ * listen (`keyed`) on chains that would not loop back to it.
+ */
+export function keyTargets(doc: SessionDoc, source: string, keyed: (effect: string) => boolean): KeyTarget[] {
+  const out: KeyTarget[] = [];
+  const add = (target: EffectTarget, ownerId: string, owner: string, chain: EffectChainDoc | undefined) => {
+    if (!keyChoices(doc, ownerId).some((k) => k.id === source)) return;
+    for (const s of chain?.slots ?? []) if (keyed(s.effect)) out.push({ target, owner, slotId: s.id, effect: s.effect, on: s.sidechain === source });
+  };
+  for (const t of doc.tracks) add({ kind: "track", id: t.id }, t.id, t.name, t.effects);
+  for (const b of doc.buses ?? []) add({ kind: "bus", id: b.id }, b.id, b.name, b.effects);
+  add({ kind: "master" }, MASTER_ID, "Master", doc.master?.effects);
+  return out;
+}
+
+/** The edit that points an effect's sidechain at `source` (or back to its own input with null). */
+export function keyOp(doc: SessionDoc, t: KeyTarget, source: string | null): Op | null {
+  const chain =
+    t.target.kind === "master" ? doc.master?.effects : t.target.kind === "bus" ? doc.buses?.find((b) => b.id === (t.target as { id: string }).id)?.effects : doc.tracks.find((x) => x.id === (t.target as { id: string }).id)?.effects;
+  if (!chain) return null;
+  return { op: "set_effects", target: t.target, chain: { ...chain, slots: chain.slots.map((s) => (s.id === t.slotId ? { ...s, sidechain: source } : s)) } };
 }
