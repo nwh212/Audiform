@@ -21,7 +21,7 @@
   import { monoCheck } from "../../stores/mono-check";
   import { isMidi, type BusDoc, type EffectSlotDoc, type EnvelopeDoc, type Op, type SessionDoc, type SessionStore, type TrackChanges, type TrackDoc } from "../../stores/session";
   import { quiet, type MeterLevel, type TransportState, type TransportStore } from "../../stores/transport";
-  import { busChoices, busOp, keyChoices, MASTER_ID } from "../mixer/routing";
+  import { busChoices, busOp, keyChoices, keyOp, keyTargets, MASTER_ID, type KeyTarget } from "../mixer/routing";
   import SendList from "../mixer/SendList.svelte";
   import { trackOp } from "../mixer/solo";
   import { channelNames } from "../space/space";
@@ -142,6 +142,14 @@
   const slotName = (s: EffectSlotDoc) => fxCatalog.find((e) => e.id === s.effect)?.name ?? s.effect;
   function setKey(owner: string, isBus: boolean, chain: Parameters<typeof chainOf>[0], slotId: string, from: string) {
     headerEdit("Set Sidechain", { op: "set_effects", target: rowTarget(owner, isBus), chain: setSlot(chainOf(chain), slotId, { sidechain: from || null }) });
+  }
+  /** Effects elsewhere this track or bus can drive through their sidechain input. */
+  const isKeyed = (effect: string) => !!fxCatalog.find((e) => e.id === effect)?.sidechain;
+  const feeds = (source: string) => (doc ? keyTargets(doc, source, isKeyed) : []);
+  const feedName = (k: KeyTarget) => `${fxCatalog.find((e) => e.id === k.effect)?.name ?? k.effect} on ${k.owner}`;
+  function setFeed(source: string, k: KeyTarget, on: boolean) {
+    const op = doc && keyOp(doc, k, on ? source : null);
+    if (op) headerEdit(on ? "Send to Sidechain" : "Remove Sidechain Send", op);
   }
   /** Where a track's or bus's sound goes: the master or a bus. */
   function setOutput(kind: "track" | "bus", id: string, value: string) {
@@ -621,6 +629,36 @@
 
 {#snippet keyRows(owner: string, isBus: boolean, chain: Parameters<typeof chainOf>[0], name: string)}
   {#if doc}
+    <!-- This sound into other tracks' sidechain inputs. -->
+    {#each feeds(owner).filter((k) => k.on) as k (k.slotId)}
+      <div class="line">
+        <span class="pick outpick" title="{name} drives the sidechain input of {feedName(k)}, before {name}'s fader">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 4v8" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1.5" /></svg>
+          <span class="feed">Sidechain: {feedName(k)}</span>
+          <button type="button" class="unfeed" title="Stop sending {name} to this sidechain" aria-label="Remove sidechain send" onclick={() => setFeed(owner, k, false)}>✕</button>
+        </span>
+      </div>
+    {/each}
+    {#if feeds(owner).some((k) => !k.on)}
+      <div class="line">
+        <label class="pick outpick" title="Send {name} into another track's sidechain input: a plug-in that listens to a guide (like a vocal aligner) or a ducking compressor">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8h9M7.5 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M13 4v8" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1.5" /></svg>
+          <select
+            aria-label="{name}: send to a sidechain"
+            value=""
+            onchange={(e) => {
+              const id = e.currentTarget.value;
+              e.currentTarget.value = "";
+              const k = feeds(owner).find((x) => x.slotId === id);
+              if (k) setFeed(owner, k, true);
+            }}
+          >
+            <option value="" disabled>Sidechain to...</option>
+            {#each feeds(owner).filter((k) => !k.on) as k (k.slotId)}<option value={k.slotId}>{feedName(k)}</option>{/each}
+          </select>
+        </label>
+      </div>
+    {/if}
     {#each keySlots(chain) as s (s.id)}
       <div class="line">
         <label class="pick outpick" title="Sidechain: let another track's or bus's sound drive {slotName(s)} on {name}. It listens before that track's fader.">
@@ -1109,6 +1147,20 @@
 
   .outpick {
     position: relative;
+  }
+  .feed {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .unfeed {
+    padding: 0 3px;
+    border: 0;
+    background: transparent;
+    color: var(--text-dim, inherit);
+    cursor: pointer;
   }
   .outpick select {
     flex: 1;
