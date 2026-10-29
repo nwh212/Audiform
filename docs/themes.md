@@ -1,6 +1,6 @@
 # Themes
 
-A theme is one file with the extension `.audtheme`. It holds a style sheet and the pictures the style sheet uses, so a theme is a single file you can copy, share and drop in a folder. Audiform ships eight of them (Meadow Aero, Aqua Aero, Moonlight Aero, Prism, Phosphor, Analog and the two Mall Pastel '95 themes). You can add your own.
+A theme is one file with the extension `.audtheme`. It holds a style sheet and the pictures the style sheet uses, so a theme is a single file you can copy, share and drop in a folder. Audiform ships nine of them (Meadow Aero, Aqua Aero, Moonlight Aero, Prism, Phosphor, Analog, Grey Desktop '95 and the two Mall Pastel '95 themes). You can add your own.
 
 ## Install a theme
 

@@ -221,7 +221,7 @@ describe("shipped themes", () => {
   it("all pass the check, match their file names and cover the old themes", async () => {
     const c = await listThemes([]);
     expect(c.problems).toEqual([]);
-    expect(c.themes.map((t) => t.id).sort()).toEqual(["analog", "aqua", "mallnight", "mallpastel", "meadow", "moonlight", "phosphor", "prism"]);
+    expect(c.themes.map((t) => t.id).sort()).toEqual(["analog", "aqua", "grey95", "mallnight", "mallpastel", "meadow", "moonlight", "phosphor", "prism"]);
     for (const t of c.themes) {
       expect(t.css).toContain(`:root[data-theme="${t.id}"]`);
       expect(t.css).not.toMatch(new RegExp(`data-theme="(?!${t.id}")`));

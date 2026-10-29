@@ -25,6 +25,13 @@ describe("unlock", () => {
     expect(settings.current.unlockedThemes).toEqual([EXTRA_THEME_ID]);
   });
 
+  it("knows each phrase's theme", async () => {
+    const { themeForPhrase } = await import("./unlock");
+    expect(await themeForPhrase("Smile")).toBe("marigold");
+    expect(await themeForPhrase("parissmith")).toBe(EXTRA_THEME_ID);
+    expect(await themeForPhrase("smiles")).toBeNull();
+  });
+
   it("relocks once another theme is in use", () => {
     expect(relock({ ...DEFAULT_SETTINGS, theme: EXTRA_THEME_ID, unlockedThemes: [EXTRA_THEME_ID] })).toBeNull();
     const left = relock({ ...DEFAULT_SETTINGS, theme: "meadow", unlockedThemes: [EXTRA_THEME_ID, "other"] });
