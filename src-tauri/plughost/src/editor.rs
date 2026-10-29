@@ -343,6 +343,36 @@ mod win {
         style: u32,
         resizable: bool,
         state: Box<State>,
+        opened: std::time::Instant,
+        settled: bool,
+    }
+
+    impl Win {
+        /// Reads the plug-in's size once and sizes the window to it. A
+        /// plug-in that scales itself when it attaches says its real size
+        /// only then, so the first size can be too small. Asked once or
+        /// twice, never in a loop, so a window cannot keep growing.
+        unsafe fn adopt_size(&mut self) {
+            let Some(v) = &self.view else { return };
+            let mut now: ViewRect = std::mem::zeroed();
+            if v.getSize(&mut now) != vst3::Steinberg::kResultOk {
+                return;
+            }
+            let (w, h) = (now.right - now.left, now.bottom - now.top);
+            let r = client(self.hwnd);
+            if w > 0 && h > 0 && (w, h) != (r.right, (r.bottom - self.state.strip).max(1)) {
+                self.resize(w, h);
+                if let Some(v) = &self.view {
+                    let mut vr = ViewRect {
+                        left: 0,
+                        top: 0,
+                        right: w,
+                        bottom: h,
+                    };
+                    v.onSize(&mut vr);
+                }
+            }
+        }
     }
 
     impl Win {
@@ -480,9 +510,7 @@ mod win {
                 DestroyWindow(hwnd);
                 return Err("The plug-in could not open its window.".into());
             }
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-            Ok(Box::new(Win {
+            let mut win = Win {
                 hwnd,
                 child,
                 view: Some(view),
@@ -490,7 +518,13 @@ mod win {
                 style,
                 resizable,
                 state,
-            }))
+                opened: std::time::Instant::now(),
+                settled: false,
+            };
+            win.adopt_size();
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+            Ok(Box::new(win))
         }
     }
 
@@ -501,6 +535,11 @@ mod win {
                 while PeekMessageW(&mut msg, ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
+                }
+                // Once more after the plug-in has had a moment to settle.
+                if !self.settled && self.opened.elapsed() > std::time::Duration::from_millis(600) {
+                    self.settled = true;
+                    self.adopt_size();
                 }
                 // Moved to a monitor with another scale: tell the plug-in,
                 // then size the window to what it asks for.

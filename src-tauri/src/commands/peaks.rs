@@ -291,8 +291,9 @@ pub async fn scope_phase(
     b: crate::engine::scope::Signal,
 ) -> Result<Response, String> {
     use crate::engine::scope;
-    let p = spawn_blocking(move || scope::analyse(&scope::latest(window(size)), a, b, scope::rate()))
-        .await
-        .map_err(|e| e.to_string())?;
+    let p =
+        spawn_blocking(move || scope::analyse(&scope::latest(window(size)), a, b, scope::rate()))
+            .await
+            .map_err(|e| e.to_string())?;
     Ok(phase_bytes(&p))
 }
