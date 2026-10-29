@@ -144,7 +144,8 @@ jobs:
 
   macos:
     name: macOS Apple silicon (experimental, unsigned)
-    runs-on: macos-latest
+    # macos-latest was not handed a runner (arm64 capacity) in two releases.
+    runs-on: macos-14
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5

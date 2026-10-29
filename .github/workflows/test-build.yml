@@ -20,6 +20,10 @@ on:
         description: "Also build for Linux (AppImage and deb)"
         type: boolean
         default: false
+      macos:
+        description: "Also build for macOS (Apple silicon, unsigned)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -113,5 +117,43 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: audiform-test-linux
+          path: ${{ runner.temp }}/test-build/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS test build (on request)
+    if: github.event_name == 'workflow_dispatch' && inputs.macos
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npm run tauri build -- --bundles app,dmg
+
+      - name: Package
+        run: |
+          out="$RUNNER_TEMP/test-build"
+          mkdir -p "$out"
+          cp src-tauri/target/release/bundle/dmg/*.dmg "$out/Audiform-test-macos-arm64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audiform-test-macos
           path: ${{ runner.temp }}/test-build/*
           if-no-files-found: error
