@@ -14,6 +14,7 @@
   import { audioInputs, openSoundSettings, pluginOpenWindow, type AudioInput, type EffectInfo } from "../../app/core";
   import { keepLast } from "../../app/settings/device-cache";
   import { chainTarget } from "../../stores/chain-target";
+  import { pluginsVersion } from "../../stores/plugins";
   import { prerenderStates, prerenderWords, watchPrerenders, type PrerenderState } from "../../stores/prerender";
   import { editor, type EditorState } from "../../stores/editor";
   import type { CommandRunner } from "../../stores/media-pool";
@@ -121,7 +122,10 @@
   function openHeaderEffect(rowId: string, rowName: string, slot: EffectSlotDoc) {
     const info = fxCatalog.find((e) => e.id === slot.effect);
     if (info?.plugin && info.hasWindow) {
-      void pluginOpenWindow(slot, `${info.name} - ${rowName}`).catch(onError);
+      // Opening it may show inputs the scan missed (a sidechain): the lists are read again.
+      void pluginOpenWindow(slot, `${info.name} - ${rowName}`)
+        .then(() => pluginsVersion.update((n) => n + 1))
+        .catch(onError);
       return;
     }
     editor.selectTrack(rowId);

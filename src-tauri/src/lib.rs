@@ -140,6 +140,7 @@ pub fn run() {
             commands::plugins::plugins_scan,
             commands::plugins::plugins_set_folder,
             commands::plugins::plugins_scan_stop,
+            commands::plugins::plugins_needs_rescan,
             commands::plugins::midi_audition,
             commands::plugins::midi_play_notes,
             commands::plugins::plugin_open_window,

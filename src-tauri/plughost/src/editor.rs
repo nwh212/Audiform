@@ -82,7 +82,9 @@ mod win {
         IPlugViewContentScaleSupportTrait, IPlugViewTrait, ViewRect,
     };
     use vst3::{ComPtr, ComWrapper};
-    use windows_sys::Win32::Foundation::{GetLastError, COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
+    use windows_sys::Win32::Foundation::{
+        GetLastError, COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM,
+    };
     use windows_sys::Win32::Graphics::Gdi::{
         Arc as ArcTo, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject,
         DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MoveToEx,
@@ -418,7 +420,10 @@ mod win {
                 ptr::null(),
             );
             if hwnd.is_null() {
-                return Err(format!("Could not open a window for the plug-in (error {}).", GetLastError()));
+                return Err(format!(
+                    "Could not open a window for the plug-in (error {}).",
+                    GetLastError()
+                ));
             }
             let mut state = Box::new(State {
                 closed: false,
@@ -447,7 +452,9 @@ mod win {
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 let code = GetLastError();
                 DestroyWindow(hwnd);
-                return Err(format!("Could not open a window for the plug-in (error {code})."));
+                return Err(format!(
+                    "Could not open a window for the plug-in (error {code})."
+                ));
             }
             let frame = ComWrapper::new(Frame { edits });
             if let Some(f) = frame.as_com_ref::<IPlugFrame>() {

@@ -468,14 +468,23 @@ fn a_plugin_with_a_sidechain_input_hears_the_key() {
         .output()
         .unwrap();
     let scan = scan_result(&out);
-    let gain = scan.classes.iter().find(|c| c.name == "Altered Test Gain").unwrap();
+    let gain = scan
+        .classes
+        .iter()
+        .find(|c| c.name == "Altered Test Gain")
+        .unwrap();
     assert!(gain.sidechain);
 
     let mut h = Host::start_with(&env);
-    assert!(matches!(h.load(&bundle, None, vec![]), Message::Loaded { .. }));
+    assert!(matches!(
+        h.load(&bundle, None, vec![]),
+        Message::Loaded { .. }
+    ));
     let frames = 64;
     let silence = vec![0.0f32; frames * 2];
-    let key: Vec<f32> = (0..frames * 2).map(|i| if i % 2 == 0 { 0.25 } else { -0.5 }).collect();
+    let key: Vec<f32> = (0..frames * 2)
+        .map(|i| if i % 2 == 0 { 0.25 } else { -0.5 })
+        .collect();
     let send = |h: &mut Host, key: Option<&[f32]>| -> Vec<f32> {
         if let Some(k) = key {
             let mut body = Vec::new();

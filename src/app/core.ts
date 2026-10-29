@@ -1240,6 +1240,11 @@ export function onPluginScanProgress(fn: (p: PluginScanProgress) => void): Promi
 }
 
 /** Stops the scan in progress; what it read so far is kept. */
+/** True once after an update that reads more from plug-ins: scan again by itself. */
+export function pluginsNeedRescan(): Promise<boolean> {
+  return invoke<boolean>("plugins_needs_rescan");
+}
+
 export function pluginsScanStop(): Promise<void> {
   return invoke<void>("plugins_scan_stop");
 }

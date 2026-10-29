@@ -315,6 +315,9 @@ pub enum Message {
         inputs: Vec<String>,
         #[serde(default)]
         outputs: Vec<String>,
+        /// It has a second audio input (a sidechain).
+        #[serde(default)]
+        sidechain: bool,
     },
     /// Settings: base64 of the plug-in's component and controller state.
     State {

@@ -112,6 +112,8 @@ pub fn load(config_dir: &Path) {
     if reg.schema_version < SCHEMA_VERSION {
         // Older scans left instruments out or failed: the next scan reads every bundle again.
         reg.stamps.clear();
+        // ...and the editor starts that scan itself, once, as there are plug-ins to read again.
+        STALE.store(!reg.plugins.is_empty(), std::sync::atomic::Ordering::SeqCst);
     }
     dedupe(&mut reg.plugins);
     if let Ok(mut f) = config_file().lock() {
@@ -124,6 +126,33 @@ pub fn load(config_dir: &Path) {
     );
     if let Ok(mut r) = registry().write() {
         *r = reg;
+    }
+}
+
+/// The list on disk came from an older scan that misses things a scan now
+/// reads (sidechain inputs, for one).
+static STALE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True once after loading an outdated list: the editor should scan again.
+pub fn take_stale() -> bool {
+    STALE.swap(false, std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A running plug-in showed a sidechain input its scan did not note: noted and saved.
+pub fn note_sidechain(cid: &str) {
+    let mut reg = snapshot();
+    let mut changed = false;
+    for p in reg
+        .plugins
+        .iter_mut()
+        .filter(|p| p.info.cid.eq_ignore_ascii_case(cid))
+    {
+        changed |= !p.info.sidechain;
+        p.info.sidechain = true;
+    }
+    if changed {
+        save(&reg);
+        set(reg);
     }
 }
 

@@ -136,7 +136,10 @@
   /** Opens a plug-in's own window (it runs in its own process). */
   function openPluginWindow(s: EffectSlotDoc) {
     const name = byId.get(s.effect)?.name ?? "Plug-in";
-    void pluginOpenWindow($state.snapshot(s) as EffectSlotDoc, label ? `${name} - ${label}` : name).catch(onError);
+    // Opening it may show inputs the scan missed (a sidechain): the lists are read again.
+    void pluginOpenWindow($state.snapshot(s) as EffectSlotDoc, label ? `${name} - ${label}` : name)
+      .then(() => pluginsVersion.update((n) => n + 1))
+      .catch(onError);
   }
 
   /** Starts a stopped plug-in again; it comes back with the next playback. */

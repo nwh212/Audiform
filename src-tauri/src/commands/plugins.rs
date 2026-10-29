@@ -231,6 +231,13 @@ pub async fn plugins_scan(
     .map_err(|e| e.to_string())
 }
 
+/// True once after an update whose scans read more than the saved list
+/// has: the editor then scans again by itself.
+#[tauri::command]
+pub fn plugins_needs_rescan() -> bool {
+    plugins::take_stale()
+}
+
 /// Stops the scan in progress, keeping what it read so far.
 #[tauri::command]
 pub fn plugins_scan_stop() {

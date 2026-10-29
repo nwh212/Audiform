@@ -128,6 +128,8 @@
     onOpenPaths,
     pluginHideWindows,
     effectsCatalog,
+    pluginsNeedRescan,
+    pluginsScan,
     pluginsRegistry,
     musicFit,
     quickpassRepairCopy,
@@ -1913,6 +1915,18 @@
   // Running plug-ins are kept in step with the session while the app is open.
   $effect(() => {
     pluginSync.start();
+    // After an update that reads more from plug-ins (sidechain inputs), the
+    // list is read again once, in the background.
+    if (isTauri())
+      void pluginsNeedRescan()
+        .then(async (stale) => {
+          if (!stale) return;
+          showNotice("Reading your plug-ins again, once, to find which have a sidechain input...");
+          const [report] = await pluginsScan(false);
+          pluginsVersion.update((n) => n + 1);
+          showNotice(`Plug-ins read again: ${report.found} found.`);
+        })
+        .catch(() => {});
     const stopCatalog = pluginsVersion.subscribe(() => {
       void pluginsRegistry()
         .then((r) => {

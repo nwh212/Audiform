@@ -162,9 +162,18 @@ fn audio_loop(out: Out, tx: Sender<ToMain>) {
                     break;
                 };
                 // A key only counts for the block it came with.
-                let key = keys.remove(&cur).filter(|k| k.len() == samples.len() / channels * 2);
+                let key = keys
+                    .remove(&cur)
+                    .filter(|k| k.len() == samples.len() / channels * 2);
                 if let Some(a) = audio.get_mut(&cur) {
-                    a.process(position, &changes, &notes, &mut samples, channels, key.as_deref());
+                    a.process(
+                        position,
+                        &changes,
+                        &notes,
+                        &mut samples,
+                        channels,
+                        key.as_deref(),
+                    );
                 }
                 if !changes.is_empty() {
                     let _ = tx.send(ToMain::Changes(cur, changes.clone()));
@@ -371,6 +380,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                                 instrument: p.instrument,
                                 inputs: p.main_in.clone(),
                                 outputs: p.main_out.clone(),
+                                sidechain: p.sidechain,
                             },
                         );
                         let to_audio = a.from_editor.clone();

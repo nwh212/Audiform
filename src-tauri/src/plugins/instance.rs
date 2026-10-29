@@ -414,8 +414,12 @@ impl Host {
                 has_editor,
                 inputs,
                 outputs,
+                sidechain,
                 ..
             }) => {
+                if sidechain && !found.info.sidechain {
+                    super::note_sidechain(&found.info.cid);
+                }
                 host.latency = latency as usize;
                 host.params = params;
                 host.has_editor = has_editor;
