@@ -1871,3 +1871,9 @@ The project lead found the interface sluggish with one file open, the Phase Whee
 - Smaller: the Phase Wheel reads the ring color from the style sheet when the look changes, not on every picture.
 
 Not changed: Mall Pastel and Analog cost about three times the dark theme's raster time while panels are being resized (headless, software), from their many background images and gradients; playing is as cheap as dark. A real GPU should hide that, so it is left until someone reports it.
+
+## 2026-10-29: `.aup3` project import
+- File > Import Session, File > Open and dropping a file accept `.aup3`. The project is an SQLite database; it is opened read-only and never changed. SQLite comes from the `rusqlite` crate with a bundled build (public domain).
+- The stored track layout is a binary tree of names and values. Our own parser reads it from the observable structure; nothing from the other application is reused.
+- Left and right tracks of a pair become one stereo track. Clips that share recorded audio share one WAV file, written to `<project name> audio` beside the project (32-bit float, so nothing is lost). Moving the project without that folder leaves the session with missing files.
+- Brought across: track name, mute, solo, level, pan; clip position, trims, time stretch (pitch kept), pitch shift in cents, and the volume line. Left behind: effects, labels, and clips lying entirely before time zero.

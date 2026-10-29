@@ -15,6 +15,7 @@ pub mod dsp;
 pub mod engine;
 pub mod export;
 pub mod library;
+pub mod aup3;
 pub mod peaks;
 pub mod plugins;
 pub mod separation;

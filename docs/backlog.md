@@ -166,10 +166,6 @@ Markers in the Waveform editor (saved in the WAV as cue points, moved by cuts, p
 
 Next: the effects phase (P5). Still open: ASIO and per-channel routing (needs the project lead's interface to test and an SDK licence check), automatic latency measurement, M4A tags, AAC on macOS and Linux, HE-AAC.
 
-## Parked: `.aup3` import
-
-Parked by the project lead on 2026-10-18 as a possible later feature. What it would take: an `.aup3` file is an SQLite database holding the project layout and the audio in compressed blocks. Import would read the track and clip layout and rebuild each clip's audio into WAV files beside the session, then open it like a `.sesx` import. Needs real sample projects to test against, an SQLite reader (a bundled build of the SQLite library, public domain), and our own parser written from the file's observable structure. Effects in the project would be skipped with a notice, as with `.sesx`.
-
 ## Effects (P5), first batch built 2026-10-18
 
 Built: Voice Chain on clips and tracks, eight effects (Parametric EQ, Hum Cut, Dynamics, Limiter, Breath Gate, De-Esser, Speech Leveler, Gain), built-in and user presets, Effects menu entries, look-ahead compensation.

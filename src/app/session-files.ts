@@ -390,7 +390,7 @@ export function planOpen(paths: readonly string[]): OpenPlan {
   for (const p of paths) {
     const e = ext(p);
     if ((e === "audfrm" || e === "altaudio") && !plan.session) plan.session = p;
-    else if (e === "sesx" && !plan.sesx) plan.sesx = p;
+    else if ((e === "sesx" || e === "aup3") && !plan.sesx) plan.sesx = p;
     else if (AUDIO_EXTENSIONS.has(e)) plan.audio.push(p);
     else plan.skipped.push(p);
   }

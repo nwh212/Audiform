@@ -241,7 +241,7 @@ export async function bindNativeFileDrop(router: FileDropRouter): Promise<() => 
   };
 }
 
-/** A session file the app opens: our own or a .sesx. */
+/** A session file the app opens: our own, a .sesx or a .aup3. */
 export function isSessionFile(path: string): boolean {
-  return /\.(audfrm|altaudio|sesx)$/i.test(path);
+  return /\.(audfrm|altaudio|sesx|aup3)$/i.test(path);
 }

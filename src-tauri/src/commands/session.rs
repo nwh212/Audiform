@@ -549,7 +549,7 @@ pub async fn session_pick_open(app: AppHandle, sesx: bool) -> Result<Option<Path
         let mut d = app.dialog().file();
         d = if sesx {
             d.set_title("Import Session")
-                .add_filter("Multitrack session (.sesx)", &["sesx"])
+                .add_filter("Multitrack session or project", &["sesx", "aup3"])
         } else {
             d.set_title("Open Session")
                 .add_filter("Audiform session", &[EXTENSION, file::OLD_EXTENSION])
@@ -570,7 +570,7 @@ pub async fn session_pick_open(app: AppHandle, sesx: bool) -> Result<Option<Path
 pub async fn file_pick_open(app: AppHandle) -> Result<Vec<PathBuf>, String> {
     let parent = app.get_webview_window("main");
     spawn_blocking(move || {
-        let mut all: Vec<&str> = vec![EXTENSION, file::OLD_EXTENSION, "sesx"];
+        let mut all: Vec<&str> = vec![EXTENSION, file::OLD_EXTENSION, "sesx", "aup3"];
         all.extend_from_slice(crate::codecs::SUPPORTED_EXTENSIONS);
         let mut d = app
             .dialog()
@@ -579,6 +579,7 @@ pub async fn file_pick_open(app: AppHandle) -> Result<Vec<PathBuf>, String> {
             .add_filter("Sessions and audio files", &all)
             .add_filter("Audiform session", &[EXTENSION, file::OLD_EXTENSION])
             .add_filter("Multitrack session (.sesx)", &["sesx"])
+            .add_filter("Multitrack project (.aup3)", &["aup3"])
             .add_filter("Audio files", crate::codecs::SUPPORTED_EXTENSIONS);
         if let Some(w) = parent.as_ref() {
             d = d.set_parent(w);
@@ -603,10 +604,16 @@ pub struct SesxImported {
 /// Imports a .sesx session as a new, unsaved session.
 #[tauri::command]
 pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxImported, String> {
-    let imported = spawn_blocking(move || crate::sesx::import(&path))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+    let imported = spawn_blocking(move || {
+        let is_project = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("aup3"));
+        if is_project {
+            crate::aup3::import(&path, &crate::aup3::audio_folder(&path)).map_err(|e| e.to_string())
+        } else {
+            crate::sesx::import(&path).map_err(|e| e.to_string())
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     app.state::<crate::engine::Transport>().stop();
     let open = app.state::<OpenSession>();
     let mut s = open.0.lock().map_err(|e| e.to_string())?;

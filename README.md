@@ -109,6 +109,7 @@ Audiform is young (version 0.x). Expect rough edges and keep backups of your rec
 - **Settings:** zoom, fades, colors, output device, autosave, solo, meter colors, recording offset, time format loudness defaults, session backups and a record count-in in one place (Edit > Settings).
 - **Session templates:** start every episode from your show's track layout.
 - **Imports `.sesx` sessions:** brings in tracks, clips and positions from `.sesx` multitrack session files.
+- **Imports `.aup3` projects:** reads the project file (never changes it), writes its audio to WAV files in a folder beside it, and opens the tracks and clips as a new session with their levels, pan, trims, time stretch, pitch and volume lines. Effects stay behind.
 
 ## Private by design
 
