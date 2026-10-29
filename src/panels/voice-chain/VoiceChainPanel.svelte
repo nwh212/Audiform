@@ -707,11 +707,12 @@
             {/each}
           </div>
         {/snippet}
+        <div class="iopair">
         {#each [[GAIN("input_gain_db", "Input"), 0], [GAIN("output_gain_db", "Output"), 2]] as const as [p, k] (p.key)}
           {@const key = p.key as "input_gain_db" | "output_gain_db"}
           {@const cur = draft?.key === `chain.${key}` ? draft.value : chain[key]}
           <div class="io">
-            <span class="pname">{p.name}:</span>
+            <span class="pname">{k === 0 ? "In" : "Out"}</span>
             {@render bars(k === 0 ? "In" : "Out", k)}
             <Knob
               label="{p.name} gain"
@@ -728,8 +729,9 @@
             <span class="val">{formatParam(p, cur)}</span>
           </div>
         {/each}
+        </div>
         <div class="io mixrow">
-          <span class="pname" title="How much of the effected sound you hear">Mix:</span>
+          <span class="pname" title="How much of the effected sound you hear">Mix</span>
           <span class="end">Dry</span>
           <input
             type="range"
@@ -746,14 +748,6 @@
           <span class="end">Wet</span>
           <span class="val">{formatParam(MIX, mixShown)}</span>
         </div>
-        <p class="hint levelhint">
-          {#if onMaster || bus}{#if !ts?.playing}Meters move while playing.{:else if !chainMeter}This chain does nothing yet, or nothing feeds the {onMaster ? "master" : "bus"}.{:else}{onMaster ? "Master" : "Bus"} chain level going in and coming out.{/if}
-        {:else if !meterTrack}Meters show a track's chain while playing.
-        {:else if tab === "clip" && !inWave}Meters show the track chain of {meterTrack.name}. Clip chains are not metered yet.
-        {:else if !ts?.playing}Meters move while playing.
-        {:else if !chainMeter}This track's chain does nothing yet, so there is nothing to meter.
-        {:else}Track chain level going in and coming out.{/if}
-        </p>
       </div>
     </div>
 
@@ -1401,16 +1395,18 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .levels .iopair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
   .levels .io {
-    grid-template-columns: 40px minmax(0, 1fr) 22px 52px;
-    gap: 5px;
+    grid-template-columns: 22px minmax(0, 1fr) 20px 46px;
+    gap: 4px;
     font-size: 11px;
   }
   .levels .io.mixrow {
-    grid-template-columns: 40px auto minmax(0, 1fr) auto 40px;
-  }
-  .levels .levelhint {
-    font-size: 10px;
+    grid-template-columns: 22px auto minmax(0, 1fr) auto 40px;
   }
   .end {
     color: var(--text-faint);

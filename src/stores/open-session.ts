@@ -37,7 +37,9 @@ export const peaks = new PeakStore({
 });
 
 /** Play, pause, stop and meters for the open session. */
-export const transport = new TransportStore(
-  { play: (from) => transportPlay(from, editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip" },
+export const transport: TransportStore = new TransportStore(
+  // While recording, playback runs straight on: it never loops back or
+  // skips, so a take can go on past the end of the old audio.
+  { play: (from) => transportPlay(from, transport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip" },
   session,
 );
