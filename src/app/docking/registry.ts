@@ -26,6 +26,7 @@ export type PanelId =
   | "loudness-match"
   | "properties"
   | "phase-wheel"
+  | "visualizer"
   | "space"
   | "separation";
 
@@ -170,6 +171,14 @@ export const PANELS: readonly PanelDef[] = [
     title: "Phase Wheel",
     inDefault: false,
     home: [{ reference: "libraries", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
+    pending: null,
+  },
+  {
+    id: "visualizer",
+    title: "Visualizer",
+    inDefault: false,
+    // Behind the Phase Wheel, or History.
+    home: [{ reference: "phase-wheel", direction: "within" }, { reference: "history", direction: "within" }, { reference: "libraries", direction: "within" }, { reference: "levels", direction: "right" }, { edge: "right" }],
     pending: null,
   },
   {
@@ -350,8 +359,8 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
     id: "music",
     name: "Music",
     description:
-      "Tracks in the center; effects, properties and history on the left; Phase Wheel, 3D Space and Audio Separation on the right.",
-    version: 3,
+      "Tracks in the center; effects, properties and history on the left; Phase Wheel, Visualizer, 3D Space and Audio Separation on the right.",
+    version: 4,
     steps: [
       { id: "editor", placement: null },
       { id: "mixer", placement: { reference: "editor", direction: "within" }, inactive: true },
@@ -362,6 +371,7 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
       },
       { id: "space", placement: { reference: "phase-wheel", direction: "below" } },
       { id: "separation", placement: { reference: "space", direction: "within" }, inactive: true },
+      { id: "visualizer", placement: { reference: "phase-wheel", direction: "within" }, inactive: true },
       { id: "levels", placement: { edge: "below" }, height: S.levelsHeight },
       {
         id: "time-info",

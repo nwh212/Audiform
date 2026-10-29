@@ -1020,6 +1020,7 @@
   const loadSpacePanel = () => import("../panels/space/SpacePanel.svelte");
   const loadSeparationPanel = () => import("../panels/separation/SeparationPanel.svelte");
   const loadPhaseWheelPanel = () => import("../panels/phase/PhaseWheelPanel.svelte");
+  const loadVisualizerPanel = () => import("../panels/visualizer/VisualizerPanel.svelte");
   const loadBatchConvertPanel = () => import("../panels/batch/BatchConvertPanel.svelte");
   const loadQuickPassPanel = () => import("../panels/quickpass/QuickPassPanel.svelte");
   const loadPropertiesPanel = () => import("../panels/properties/PropertiesPanel.svelte");
@@ -1077,6 +1078,8 @@
         return { component: asComponent(LazyPanel), props: { load: loadSeparationPanel, tools: separationTools } };
       case "phase-wheel":
         return { component: asComponent(LazyPanel), props: { load: loadPhaseWheelPanel, transport, wave: waveTransport } };
+      case "visualizer":
+        return { component: asComponent(LazyPanel), props: { load: loadVisualizerPanel, transport, wave: waveTransport } };
       case "batch-convert":
         return {
           component: asComponent(LazyPanel),
