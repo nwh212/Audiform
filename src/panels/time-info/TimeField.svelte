@@ -21,9 +21,11 @@
     /** Null leaves it read-only. */
     onset: ((v: number) => void) | null;
     big?: boolean;
+    /** Given the typed text when Enter is pressed, before it is read as a time. */
+    secret?: (text: string) => void;
   }
 
-  const { value, text, label, step, parse, onset, big = false }: Props = $props();
+  const { value, text, label, step, parse, onset, big = false, secret }: Props = $props();
 
   let editing = $state(false);
   let draft = $state("");
@@ -31,12 +33,17 @@
   let drag: { x: number; start: number; moved: boolean } | null = null;
 
   function startEdit() {
-    if (!onset) return;
+    if (!onset && !secret) return;
     draft = value === null ? "" : text;
     editing = true;
     queueMicrotask(() => input?.select());
   }
   function down(e: PointerEvent) {
+    if (!onset && secret && e.button === 0 && !editing) {
+      e.preventDefault();
+      startEdit();
+      return;
+    }
     if (!onset || value === null || e.button !== 0 || editing) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag = { x: e.clientX, start: value, moved: false };
@@ -61,9 +68,10 @@
     const scale = e.ctrlKey ? 1 : e.shiftKey ? 100 : 10;
     onset(Math.max(0, Math.round(value + (e.deltaY < 0 ? 1 : -1) * step * scale)));
   }
-  function finish(keep: boolean) {
+  function finish(keep: boolean, enter = false) {
     if (!editing) return;
     editing = false;
+    if (enter) secret?.(draft);
     if (!keep || !onset) return;
     const v = parse(draft);
     if (v !== null) onset(v);
@@ -78,7 +86,7 @@
     aria-label={label}
     bind:value={draft}
     onkeydown={(e) => {
-      if (e.key === "Enter") finish(true);
+      if (e.key === "Enter") finish(true, true);
       else if (e.key === "Escape") finish(false);
       e.stopPropagation();
     }}
@@ -90,7 +98,7 @@
     class:big
     class:live={onset && value !== null}
     role="spinbutton"
-    tabindex={onset ? 0 : -1}
+    tabindex={onset || secret ? 0 : -1}
     aria-readonly={!onset}
     aria-label={label}
     aria-valuenow={value ?? undefined}

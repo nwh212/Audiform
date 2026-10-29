@@ -112,7 +112,7 @@ function installStub({ theme, phaseMs }) {
   };
   const wavePath = "/perf/voice.flac";
   const handlers = {
-    preferences_load: () => ({ "app.settings": { theme } }),
+    preferences_load: () => ({ "app.settings": { theme, unlockedThemes: [theme] } }),
     app_info: () => ({ version: "0.0.0", sessionSchemaVersion: 1 }),
     session_get: () => ({ session: session(3, "s1"), path: "/perf/perf.audfrm" }),
     keymap_load: () => ({}),

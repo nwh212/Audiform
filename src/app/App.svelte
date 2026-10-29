@@ -31,6 +31,7 @@
   import { MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
   import { applyThemeId, themeLook } from "../themes/loader";
+  import { forgetSecretTheme } from "./secret-theme";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
   import EditorPanel from "../panels/editor/EditorPanel.svelte";
@@ -1985,6 +1986,21 @@
             if (now === lastSettings) return;
             lastSettings = now;
             prefs.set(KEY_SETTINGS, v);
+          }),
+        );
+        // The hidden theme is found by typing its phrase and forgotten when another theme is chosen.
+        let lastTheme = settings.current.theme;
+        offs.push(
+          settings.subscribe((v) => {
+            const left = forgetSecretTheme(v);
+            if (left) {
+              settings.set(left);
+              return;
+            }
+            if (v.theme !== lastTheme) {
+              lastTheme = v.theme;
+              void applyThemeId(v.theme, v.unlockedThemes).then(() => appearanceChanged());
+            }
           }),
         );
         let last = JSON.stringify(settingsOf(editor.current()));

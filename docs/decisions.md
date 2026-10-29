@@ -1871,3 +1871,12 @@ The project lead found the interface sluggish with one file open, the Phase Whee
 - Smaller: the Phase Wheel reads the ring color from the style sheet when the look changes, not on every picture.
 
 Not changed: Mall Pastel and Analog cost about three times the dark theme's raster time while panels are being resized (headless, software), from their many background images and gradients; playing is as cheap as dark. A real GPU should hide that, so it is left until someone reports it.
+
+## 2026-10-29: A hidden theme
+
+The project lead asked for a theme that is found, not listed: a swirled-paint water backdrop, clear panels, a wavy title, and every other part of the look following the water's blues, aqua, lime and coral.
+
+- It is `src/themes/undercurrent.audtheme`, marked secret and named "Secret Theme", so the list never says what it is. Its pictures are drawn by scripts in `scripts/themes/` (nothing is copied from any cover); the title's letters come from Inter Black (see ATTRIBUTION.md).
+- It is found by typing a phrase in Time Info's playhead box and pressing Enter. Only a hash of the phrase is kept in the source (`src/app/secret-theme.ts`), and the phrase is not written down in the docs.
+- It is forgotten when another theme is chosen: the unlock is removed from the settings, so it has to be found again.
+- Panels use clear tinted fills rather than a live blur, so playback stays smooth (see the frame rate entry above).
