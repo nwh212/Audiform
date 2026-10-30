@@ -1909,3 +1909,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - The Effects menu's effect families are built from the same catalog as the Audio FX rack's Add effect menu, so both show the same families (Amplitude, Delay and Reverb, Dynamics, Filter and EQ, Restoration, Stereo, Time and Pitch, Vocal), names and order. The menu's other commands (Amplify, Normalize, fades, Time Stretch, Fit Music to Length) moved into a Process submenu.
 - In a session, an effect from the Effects menu goes into the first empty numbered slot of the selected clip's or track's rack.
 - In the Waveform editor, an effect from the Effects menu is a trial: heard on the file while its window is open, written in by Apply (selection or whole file), and gone when the window closes. Applying only takes that effect out of the preview chain; anything else in it stays.
+
+## 2026-10-30: 3D Space track buttons, empty tracks hidden, dots follow automation
+- Tracks with no clips (audio or MIDI) are left out of the 3D Space room; they have nothing to place.
+- A column of buttons beside the room lists every placed track and bus in its own color; a click picks it, as a click on its dot does.
+- The dots show each spot's automated settings at the playhead (while playing, and where the playhead rests), so the room moves with what you hear.

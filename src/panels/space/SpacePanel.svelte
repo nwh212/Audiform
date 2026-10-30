@@ -18,9 +18,11 @@
 <script lang="ts">
   import type { CommandRunner } from "../../stores/media-pool";
   import { editor, type EditorState } from "../../stores/editor";
-  import { SPACE_LAYOUTS, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
+  import { SPACE_LAYOUTS, type EnvelopeDoc, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
-  import { angleOf, fromView, lastLayout, LAYOUT_NAMES, sides, spaceToggle, snapAngle, snapSpot, SPATIALIZE_MODES, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
+  import { transport } from "../../stores/open-session";
+  import type { TransportState } from "../../stores/transport";
+  import { angleOf, automatedPos, fromView, lastLayout, LAYOUT_NAMES, sides, spaceToggle, snapAngle, snapSpot, SPATIALIZE_MODES, speakerSpots, tidyPos, toView, wrapDeg } from "./space";
   import { settings } from "../../stores/settings";
   import SpaceFader from "./SpaceFader.svelte";
 
@@ -46,6 +48,15 @@
       ed = s;
     }),
   );
+
+  // While playing, spots follow their automation at the playhead.
+  let tp = $state<TransportState | null>(null);
+  $effect(() =>
+    transport.subscribe((s) => {
+      tp = s;
+    }),
+  );
+  const at = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
 
   const space = $derived(doc?.space ?? null);
   let snapOn = $state(settings.current.spaceSnap);
@@ -81,18 +92,20 @@
     const out: Source[] = [];
     doc.tracks.forEach((t, i) => {
       if (t.output && t.output.type !== "master") return;
+      // A track with nothing on it has nothing to place.
+      if (t.clips.length === 0 && !(t.midi_clips?.length ?? 0)) return;
       out.push({
         id: t.id,
         kind: "track",
         name: t.name,
         color: cssColor(t.color ?? defaultTrackColor(i)),
         stereo: t.channels !== "mono" && !t.mono,
-        pos: live?.id === t.id ? live.pos : tidyPos(t.space),
+        pos: live?.id === t.id ? live.pos : automatedPos(tidyPos(t.space), t.envelopes, at),
       });
     });
     for (const b of doc.buses ?? []) {
       if (b.output && b.output.type !== "master") continue;
-      out.push({ id: b.id, kind: "bus", name: b.name, color: b.color ? cssColor(b.color) : "var(--clip-3)", stereo: b.channels !== "mono" && !b.mono, pos: live?.id === b.id ? live.pos : tidyPos(b.space) });
+      out.push({ id: b.id, kind: "bus", name: b.name, color: b.color ? cssColor(b.color) : "var(--clip-3)", stereo: b.channels !== "mono" && !b.mono, pos: live?.id === b.id ? live.pos : automatedPos(tidyPos(b.space), b.envelopes as EnvelopeDoc[] | undefined, at) });
     }
     return out;
   });
@@ -304,6 +317,23 @@
       {/if}
     </div>
     <div class="body">
+      <!-- Every placed track and bus, in its color: click to pick it. -->
+      <div class="picks" role="listbox" aria-label="Tracks and buses in the room">
+        {#each sources as s (s.id)}
+          <button
+            type="button"
+            role="option"
+            class="pick"
+            class:on={ed.selectedTrack === s.id}
+            aria-selected={ed.selectedTrack === s.id}
+            style:--c={s.color}
+            title={s.name}
+            onclick={() => editor.selectTrack(s.id)}
+          >
+            <span class="swatch"></span><span class="pname">{s.name}</span>
+          </button>
+        {/each}
+      </div>
       <div class="roombox" bind:clientWidth={boxW} bind:clientHeight={boxH}>
         <svg bind:this={room} width={size} height={size} class="room" role="application" aria-label="Room, seen from above. Front is at the top.">
           <defs>
@@ -514,6 +544,52 @@
     display: flex;
     flex: 1;
     min-height: 0;
+  }
+  .picks {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 96px;
+    flex: none;
+    padding: 6px 4px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .pick {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    min-width: 0;
+    padding: 3px 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--c) 10%, transparent);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .pick:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--c) 22%, transparent);
+  }
+  .pick.on {
+    border-color: var(--c);
+    background: color-mix(in srgb, var(--c) 32%, transparent);
+    color: var(--text);
+  }
+  .swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--c);
+  }
+  .pick .pname {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .roombox {
     flex: 1;

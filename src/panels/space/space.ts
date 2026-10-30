@@ -9,7 +9,7 @@
  * view's sums.
  */
 
-import { DEFAULT_SPACE_POS, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
+import { DEFAULT_SPACE_POS, type EnvelopeDoc, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
 
 export interface SpeakerSpot {
   name: string;
@@ -193,4 +193,33 @@ export function spaceToggle(doc: { id: string; space?: SpaceDoc | null }, layout
 /** The layout 3D Space comes back with in `doc` (the last one it had). */
 export function lastLayout(id: string): SpaceLayout | null {
   return lastSpace.get(id)?.layout ?? null;
+}
+
+/**
+ * An automation lane's value at timeline sample `pos`: flat before the
+ * first point and after the last, straight lines between (a hold point
+ * keeps its value until the next). Null with no points.
+ */
+export function laneAt(points: readonly { position: number; value: number; curve: string }[], pos: number): number | null {
+  if (!points.length) return null;
+  if (pos <= points[0]!.position) return points[0]!.value;
+  for (let i = 1; i < points.length; i++) {
+    const b = points[i]!;
+    if (pos > b.position) continue;
+    const a = points[i - 1]!;
+    if (a.curve === "hold" || b.position <= a.position) return a.value;
+    return a.value + ((b.value - a.value) * (pos - a.position)) / (b.position - a.position);
+  }
+  return points[points.length - 1]!.value;
+}
+
+/** A spot with its automated settings at timeline sample `pos` in place. */
+export function automatedPos(pos: SpacePosDoc, envelopes: readonly EnvelopeDoc[] | undefined, at: number): SpacePosDoc {
+  let out = pos;
+  for (const e of envelopes ?? []) {
+    if (!e.enabled || e.target.type !== "space") continue;
+    const v = laneAt(e.points, at);
+    if (v !== null) out = { ...out, [e.target.param]: v };
+  }
+  return out;
 }
