@@ -781,7 +781,11 @@
       {/each}
     </ol>
 
-    <!-- In and out levels and the mix, pinned to the bottom over the effects list. -->
+    {#if chain.slots.length === 0}
+      <p class="hint pad">Add an effect or pick a preset. Effects run top to bottom. Each effect opens in its own window.</p>
+    {/if}
+
+    <!-- In and out levels and the mix (and in the Waveform editor, Apply), pinned to the bottom over the effects list. -->
       <div class="levels pinned">
       {#snippet bars(name: string, k: number)}
           <div class="mbars" aria-label="{name} level">
@@ -835,11 +839,19 @@
           <span class="end">Wet</span>
           <span class="val">{formatParam(MIX, mixShown)}</span>
         </div>
+        {#if inWave}
+        <div class="apply">
+            <p class="hint">You hear this chain when you play the file. The file changes only when you apply it, and Undo takes it back.</p>
+            <div class="line">
+              <button type="button" class="primary" disabled={!onApplyWave || applying || !chain.enabled || chain.slots.length === 0} onclick={() => void applyWave()}>
+                {applying ? "Applying…" : waveSel ? "Apply to Selection" : "Apply to Whole File"}
+              </button>
+              <button type="button" disabled={applying || chain.slots.length === 0} onclick={() => commit("Clear", chainOf(null))}>Clear Preview</button>
+            </div>
+          </div>
+        {/if}
       </div>
 
-    {#if chain.slots.length === 0}
-      <p class="hint pad">Add an effect or pick a preset. Effects run top to bottom. Each effect opens in its own window.</p>
-    {/if}
     {#if winSlot}
       <div class="fxwin" use:portal bind:this={winEl} style:left="{winBox.x}px" style:top="{winBox.y}px" role="dialog" aria-label="{winInfo?.name ?? winSlot.effect} settings" tabindex="-1" onkeydown={(e) => e.key === "Escape" && (winOpen = false)}>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1028,19 +1040,6 @@
       </div>
     {/if}
 
-    {#if inWave}
-    <div class="bottom">
-        <div class="apply">
-          <p class="hint">You hear this chain when you play the file. The file changes only when you apply it, and Undo takes it back.</p>
-          <div class="line">
-            <button type="button" class="primary" disabled={!onApplyWave || applying || !chain.enabled || chain.slots.length === 0} onclick={() => void applyWave()}>
-              {applying ? "Applying…" : waveSel ? "Apply to Selection" : "Apply to Whole File"}
-            </button>
-            <button type="button" disabled={applying || chain.slots.length === 0} onclick={() => commit("Clear", chainOf(null))}>Clear Preview</button>
-          </div>
-        </div>
-    </div>
-    {/if}
   {/if}
 </section>
 
@@ -1369,14 +1368,6 @@
     color: var(--ok, #3fb950);
   }
   .editor,
-  .bottom {
-    display: grid;
-    gap: 3px;
-    padding: 6px 8px;
-  }
-  .bottom {
-    border-top: 1px solid var(--border);
-  }
   .param {
     display: grid;
     grid-template-columns: 88px minmax(0, 1fr) 72px;

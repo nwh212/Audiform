@@ -1923,3 +1923,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-30: Mix Down to New File from the 3D Space panel
 - Mix Down to New File already renders a 3D Space session in its own speaker layout (one channel per speaker) and opens the file in the Waveform editor, which shows every channel. The 3D Space panel now has the button beside Export Mixdown, so a bed can be made and checked without the export window.
+
+## 2026-10-30: Save As shortcut; Waveform editor Apply pinned
+- Ctrl+Shift+S is Save As, approved by the project lead.
+- In the Waveform editor, the Audio FX rack's Apply to Selection (or Whole File) and Clear Preview sit in the strip pinned to the bottom of the rack with the levels and mix, so they are always in view.

@@ -14,6 +14,7 @@ const APPROVED: Record<string, string[]> = {
   "edit.undo": ["Ctrl+Z"],
   "edit.redo": ["Ctrl+Y"],
   "file.save": ["Ctrl+S"],
+  "file.save-as": ["Ctrl+Shift+S"],
   "file.open": ["Ctrl+O"],
   "file.new-session": ["Ctrl+N"],
   "edit.select-all": ["Ctrl+A"],

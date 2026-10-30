@@ -210,6 +210,7 @@ Standard Windows shortcuts only. No application-specific keymap beyond these:
 | Undo | Ctrl+Z |
 | Redo | Ctrl+Y |
 | Save | Ctrl+S |
+| Save As | Ctrl+Shift+S (approved by the Audiform project lead, 2026-10-30) |
 | Open | Ctrl+O |
 | New session | Ctrl+N |
 | Select all | Ctrl+A |
