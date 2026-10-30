@@ -1927,5 +1927,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-30: Save As shortcut; Waveform editor Apply pinned
 - Ctrl+Shift+S is Save As, approved by the project lead.
 - In the Waveform editor, the Audio FX rack's Apply to Selection (or Whole File) and Clear Preview sit in the strip pinned to the bottom of the rack with the levels and mix, so they are always in view.
-- 2026-10-30: Cutting the end off a file while the whole file is in view fits the Waveform view to the new length, so no blank space is left until a zoom.
-- 2026-10-30: The unbuilt EQ view button above the track headers is gone; the Mix, Inputs and Outputs, and Effects buttons are larger in the space it left.
+
+## 2026-10-30: Waveform view fits a shortened file; EQ header button removed
+- Cutting the end off a file while the whole file is in view fits the Waveform view to the new length, so no blank space is left until a zoom.
+- The unbuilt EQ view button above the track headers is gone; the Mix, Inputs and Outputs, and Effects buttons are larger in the space it left.
