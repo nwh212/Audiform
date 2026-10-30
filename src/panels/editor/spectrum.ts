@@ -36,7 +36,15 @@ export interface FreqView {
   log: number;
 }
 
-export const FULL_VIEW: FreqView = { lo: MIN_HZ, hi: null, log: 1 };
+/**
+ * The view a file opens with: every frequency, on a scale only a quarter
+ * of the way to logarithmic, so the mids and highs get room and the bass
+ * does not fill most of the height (1 kHz sits about an eighth of the way
+ * up, 10 kHz about two thirds).
+ */
+export const FULL_VIEW: FreqView = { lo: 0, hi: null, log: 0.25 };
+/** The fully logarithmic view (even in pitch). */
+export const LOG_VIEW: FreqView = { lo: MIN_HZ, hi: null, log: 1 };
 /** Lowest frequency a log scale shows. */
 const LOG_FLOOR = 10;
 /** The narrowest range zooming in goes to, in Hz. */

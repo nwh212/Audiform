@@ -1914,3 +1914,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - Tracks with no clips (audio or MIDI) are left out of the 3D Space room; they have nothing to place.
 - A column of buttons beside the room lists every placed track and bus in its own color; a click picks it, as a click on its dot does.
 - The dots show each spot's automated settings at the playhead (while playing, and where the playhead rests), so the room moves with what you hear.
+
+## 2026-10-30: Spectral display opens a quarter logarithmic
+- The project lead found the fully logarithmic default gave the bass most of the height. Files now open with the scale a quarter of the way from linear to logarithmic, from 0 Hz: 1 kHz about an eighth of the way up, 10 kHz about two thirds. Right-click > More Logarithmic or Full Logarithmic still give the old view.

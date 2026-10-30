@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { fracOf, freqAt, freqTicks, FULL_VIEW, MIN_HZ, MIN_SPAN, rasterize, shapesBounds, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq } from "./spectrum";
+import { fracOf, freqAt, freqTicks, LOG_VIEW as FULL_VIEW, FULL_VIEW as OPEN_VIEW, MIN_HZ, MIN_SPAN, rasterize, shapesBounds, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq } from "./spectrum";
 
 describe("spectrum axis", () => {
   it("is log spaced and round-trips", () => {
@@ -97,5 +97,14 @@ describe("the spectrum view's frequency axis", () => {
     expect(near.every((f) => f > 400 && f < 600 && Number.isInteger(f / 10))).toBe(true);
     // Never crowded: marks keep their spacing.
     expect(full.length).toBeLessThan(300 / 16 + 1);
+  });
+});
+
+describe("the view a file opens with", () => {
+  it("gives the mids and highs room", () => {
+    const ny = 22_050;
+    expect(viewFrac(1_000, OPEN_VIEW, ny)).toBeGreaterThan(0.08);
+    expect(viewFrac(1_000, OPEN_VIEW, ny)).toBeLessThan(0.16);
+    expect(viewFrac(10_000, OPEN_VIEW, ny)).toBeGreaterThan(0.6);
   });
 });
