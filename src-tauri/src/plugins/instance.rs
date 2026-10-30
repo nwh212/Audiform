@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
@@ -36,6 +36,11 @@ use crate::session::model::{EffectSlot, Id, Tempo, TempoSegment};
 
 /// Longest a plug-in may take to process one block before it counts as hung.
 pub const PROCESS_TIMEOUT: Duration = Duration::from_secs(4);
+
+/// Longest a plug-in may stay behind on its blocks (say, while it opens
+/// its window during playback) before it counts as hung. Until then it is
+/// bypassed block by block and catches up.
+const STALL_LIMIT: Duration = Duration::from_secs(20);
 
 /// Longest a plug-in may take to load (licence checks can be slow).
 const LOAD_TIMEOUT: Duration = Duration::from_secs(90);
@@ -341,6 +346,9 @@ pub struct Host {
     /// time the plug-in may have moved on; sending them back would set the
     /// plug-in to a stale copy of itself (and some rebuild their window).
     reported: Vec<(std::time::Instant, u64)>,
+    /// Blocks sent whose answer has not come back yet, and since when.
+    late: usize,
+    late_since: Option<std::time::Instant>,
 }
 
 fn state_hash(data: &str) -> u64 {
@@ -396,6 +404,8 @@ impl Host {
             told: None,
             last_state: state.clone(),
             reported: Vec::new(),
+            late: 0,
+            late_since: None,
             inputs: vec!["L".into(), "R".into()],
             outputs: vec!["L".into(), "R".into()],
         };
@@ -498,6 +508,21 @@ impl Host {
         if self.is_dead() || io.is_empty() {
             return false;
         }
+        // Behind: take the late answers that came in, and bypass this block
+        // until all are back, so the next answer belongs to the next block.
+        while self.late > 0 {
+            match self.audio.try_recv() {
+                Ok(_) => self.late -= 1,
+                Err(TryRecvError::Empty) => {
+                    if self.late_since.is_some_and(|t| t.elapsed() > STALL_LIMIT) {
+                        self.stop("The plug-in stopped answering and is bypassed.");
+                    }
+                    return false;
+                }
+                Err(TryRecvError::Disconnected) => return false,
+            }
+        }
+        self.late_since = None;
         if !changes.is_empty() {
             if let Ok(mut k) = self.known.lock() {
                 k.extend(changes.iter().copied());
@@ -535,7 +560,10 @@ impl Host {
             }
             Ok(_) => false,
             Err(RecvTimeoutError::Timeout) => {
-                self.stop("The plug-in stopped answering and is bypassed.");
+                // Busy for a moment (a window opening, a licence check):
+                // bypassed until it catches up, stopped only past STALL_LIMIT.
+                self.late += 1;
+                self.late_since.get_or_insert_with(std::time::Instant::now);
                 false
             }
             Err(RecvTimeoutError::Disconnected) => false,
@@ -1022,6 +1050,28 @@ pub struct PluginProcessor {
     /// When the plug-in has stopped, the dry sound still arrives as late
     /// as the plug-in's would have, so the track stays in time.
     bypass: crate::dsp::effects::Delay,
+    /// Playing live: when the plug-in is busy with a request (its window
+    /// opening), the block is bypassed instead of holding playback up. A
+    /// mixdown waits instead, so nothing is left out of the file.
+    live: bool,
+}
+
+/// The host's lock if it comes free within a few milliseconds (quick
+/// reads from the interface pass), None while a long request holds it.
+fn lock_briefly(host: &Mutex<Host>) -> Option<std::sync::MutexGuard<'_, Host>> {
+    let deadline = std::time::Instant::now() + Duration::from_millis(30);
+    loop {
+        match host.try_lock() {
+            Ok(h) => return Some(h),
+            Err(std::sync::TryLockError::Poisoned(_)) => return None,
+            Err(std::sync::TryLockError::WouldBlock) => {
+                if std::time::Instant::now() > deadline {
+                    return None;
+                }
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+    }
 }
 
 /// The processor for a plug-in slot, or None when it is not installed or
@@ -1046,6 +1096,7 @@ pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
         width,
         pending,
         bypass: crate::dsp::effects::Delay::with_channels(latency, width),
+        live: !FRESH.with(|c| c.get()),
     })
 }
 
@@ -1056,9 +1107,14 @@ impl Processor for PluginProcessor {
 
     fn process_keyed(&mut self, buf: &mut [f32], key: &[f32]) {
         let key = (!key.is_empty()).then_some(key);
-        let done = match self.host.lock() {
-            Ok(mut h) => h.process_keyed_ch(&self.pending, &[], buf, self.width, key),
-            Err(_) => false,
+        let host = if self.live {
+            lock_briefly(&self.host)
+        } else {
+            self.host.lock().ok()
+        };
+        let done = match host {
+            Some(mut h) => h.process_keyed_ch(&self.pending, &[], buf, self.width, key),
+            None => false,
         };
         if done {
             self.pending.clear();

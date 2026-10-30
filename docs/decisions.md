@@ -1931,3 +1931,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-30: Waveform view fits a shortened file; EQ header button removed
 - Cutting the end off a file while the whole file is in view fits the Waveform view to the new length, so no blank space is left until a zoom.
 - The unbuilt EQ view button above the track headers is gone; the Mix, Inputs and Outputs, and Effects buttons are larger in the space it left.
+
+## 2026-10-30: A plug-in busy opening its window keeps running
+- Opening a plug-in's window while the session plays could hold the plug-in's audio for a few seconds; after 4 s it was taken as hung, its process was stopped, and it had to be reloaded.
+- Now a block that does not come back in time is bypassed and the plug-in catches up: late answers are taken in as they arrive and the plug-in plays again once it is current. It is stopped only if it stays behind for 20 s.
+- During playback, a block that finds the plug-in held by a request (its window opening) waits up to 30 ms, then plays bypassed instead of holding the whole mix up. A mixdown still waits, so nothing is left out of the file.
