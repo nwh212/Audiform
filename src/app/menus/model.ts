@@ -56,6 +56,9 @@ const sub = (label: string, items: MenuItem[]): MenuItem => ({
 const sep: MenuItem = { kind: "sep" };
 const popup = (id: string, label: string): MenuItem => ({ kind: "popup", id, label });
 
+/** The built-in effect families, as the effects catalog names them. */
+export const EFFECT_FAMILIES = ["Amplitude", "Delay and Reverb", "Dynamics", "Filter and EQ", "Restoration", "Stereo", "Time and Pitch", "Vocal"] as const;
+
 const P2 = "Arrives with playback (P2).";
 const P3 = "Arrives with editing (P3).";
 const P5 = "Arrives with effects (P5).";
@@ -381,54 +384,11 @@ export const MENUS: readonly Menu[] = [
         item("fx.spectrum.remove", "Remove Selected Area"),
         item("fx.spectrum.repair", "Repair Selected Area"),
       ]),
-      sub("Amplitude", [
-        item("fx.add.gain", "Gain (in the Audio FX chain)"),
+      sub("Process", [
         item("fx.amplify", "Amplify..."),
         item("fx.normalize", "Normalize..."),
         item("fx.fade-in", "Fade In"),
         item("fx.fade-out", "Fade Out"),
-      ]),
-      sub("Generate", [
-        item("fx.gen.tone", "Tone..."),
-        item("fx.gen.noise", "Noise..."),
-        item("fx.gen.silence", "Silence..."),
-      ]),
-      item("fx.loudness-match", "Loudness Match..."),
-      sep,
-      item("fx.add.vox_strip", "Vox Strip (vocal chain)"),
-      sortedSub("Delay and Reverb", [
-        item("fx.add.reverb", "Reverb (rooms, halls, plates, springs, tape, impulse responses)"),
-        item("fx.add.echo", "Delay and Echo"),
-      ]),
-      sortedSub("Dynamics", [
-        item("fx.add.dynamics", "Dynamics"),
-        item("fx.add.limiter", "Limiter"),
-        item("fx.add.breath_gate", "Breath Gate"),
-        item("fx.add.deesser", "De-Esser"),
-        item("fx.add.speech_leveler", "Speech Leveler"),
-      ]),
-      sortedSub("EQ and Filters", [
-        item("fx.add.parametric_eq", "Parametric EQ"),
-        item("fx.add.band_eq_10", "Band EQ (10 bands)"),
-        item("fx.add.band_eq_20", "Band EQ (20 bands)"),
-        item("fx.add.band_eq_30", "Band EQ (30 bands)"),
-        item("fx.add.curve_eq", "Curve EQ"),
-        item("fx.add.precision_filter", "Precision Filter"),
-        item("fx.add.notch", "Notch Filter"),
-        item("fx.add.hum_cut", "Hum Cut"),
-      ]),
-      sortedSub("Noise and Repair", [
-        item("fx.add.noise_reducer", "Noise Reducer"),
-        item("fx.add.noise_print", "Noise Print Reducer"),
-        item("fx.add.hiss_reducer", "Hiss Reducer"),
-        item("fx.add.room_reducer", "Room Reducer"),
-        item("fx.add.click_repair", "Click Repair"),
-        item("fx.add.clip_repair", "Clip Repair"),
-        item("fx.add.dc_offset", "DC Offset Fix"),
-        item("fx.add.sound_eraser", "Sound Eraser"),
-      ]),
-      sortedSub("Pitch and Time", [
-        item("fx.add.pitch_shift", "Pitch Shift"),
         item("clip.stretch", "Time Stretch..."),
         item("clip.music-fit", "Fit Music to Length..."),
         item("fx.pitch-tune", "Pitch Tune (automatic correction)", {
@@ -438,12 +398,16 @@ export const MENUS: readonly Menu[] = [
           pending: NEXT_FX,
         }),
       ]),
-      sortedSub("Stereo", [
-        item("fx.add.phase_curve", "Phase Curve"),
-        item("fx.add.center_extractor", "Center Channel Extractor (remove or keep vocals)"),
-        item("fx.add.stereo_width", "Stereo Width"),
-        item("fx.add.channel_mixer", "Channel Mixer"),
+      sub("Generate", [
+        item("fx.gen.tone", "Tone..."),
+        item("fx.gen.noise", "Noise..."),
+        item("fx.gen.silence", "Silence..."),
       ]),
+      item("fx.loudness-match", "Loudness Match..."),
+      sep,
+      // The effect families, filled from the same list as the Audio FX
+      // rack's Add effect menu, so both read the same.
+      ...EFFECT_FAMILIES.map((f) => popup(`fx.family.${f}`, f)),
       sep,
       item("fx.vst", "VST", {
         pending: "Not supported: Steinberg no longer licenses VST2. Most plug-ins also come as VST3.",

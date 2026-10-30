@@ -28,7 +28,7 @@
   import DockShell from "./docking/DockShell.svelte";
   import LazyPanel from "./docking/LazyPanel.svelte";
   import { ActionRegistry } from "./actions";
-  import { MENUS } from "./menus/model";
+  import { EFFECT_FAMILIES, MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
   import { applyThemeId, themeLook } from "../themes/loader";
   import { relock } from "./unlock";
@@ -1197,6 +1197,18 @@
     return { items };
   }
 
+  /** One effect family in the Effects menu: the same effects, names and order as the Audio FX rack's Add effect menu. */
+  function familyPopup(family: string): PopupList {
+    const items: ContextItem[] = (fxCatalog ?? [])
+      .filter((e) => e.category === family && !e.retired && !e.plugin)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+      .map((e): ContextItem => ({ kind: "item", label: e.name, run: () => void addEffectFromMenu(e.id) }));
+    if (!items.length) return { items, reason: "Effects are still loading." };
+    if (!fxTarget()) return { items: [], reason: inWave() ? "Open a file in the Waveform editor first." : "Select a track or one clip first." };
+    return { items };
+  }
+  const familyPopups = Object.fromEntries(EFFECT_FAMILIES.map((f) => [`fx.family.${f}`, () => familyPopup(f)]));
+
   /** The Effects menu's search box: built-in effects and plug-ins by name, added like the menu's own entries. */
   const effectsMenuSearch = {
     placeholder: "Search effects and plug-ins",
@@ -2030,7 +2042,7 @@
 
 <div class="shell">
   <header class="top">
-    <MenuBar menus={MENUS} {actions} {shortcutFor} onError={showError} popups={{ "fx.vst3": vst3Popup }} searches={{ Effects: effectsMenuSearch }} />
+    <MenuBar menus={MENUS} {actions} {shortcutFor} onError={showError} popups={{ "fx.vst3": vst3Popup, ...familyPopups }} searches={{ Effects: effectsMenuSearch }} />
   </header>
   <ToolStrip {actions} {shortcutFor} />
 
