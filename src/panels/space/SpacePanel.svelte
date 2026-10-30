@@ -32,9 +32,11 @@
     onError?: (e: unknown) => void;
     /** Opens Export Mixdown, where the speaker layout for the file is picked. */
     onExport?: () => void;
+    /** Mixes the session down to a new file in its own speaker layout and opens it. */
+    onMixdown?: () => void;
   }
 
-  const { session, runner, onError = console.error, onExport }: Props = $props();
+  const { session, runner, onError = console.error, onExport, onMixdown }: Props = $props();
 
   let doc = $state<SessionDoc | null>(null);
   $effect(() =>
@@ -312,6 +314,9 @@
         Snap
       </button>
       <span class="spacer"></span>
+      {#if onMixdown}
+        <button type="button" title="Mix the session down to a new file in this layout (one channel per speaker), list it in the Files panel and open it in the Waveform editor" onclick={onMixdown}>Mix Down to New File</button>
+      {/if}
       {#if onExport}
         <button type="button" title="Export the mix in any speaker layout (5.1, 7.1.2, 7.1.4 and so on, one channel per speaker), stereo, or headphones. Pick the layout under Speakers in the export window." onclick={onExport}>Export Mixdown...</button>
       {/if}

@@ -1009,7 +1009,7 @@
       case "levels":
         return { component: asComponent(LevelsPanel), props: { transport, wave: waveTransport, preview: previewMeter, session } };
       case "space":
-        return { component: asComponent(LazyPanel), props: { load: loadSpacePanel, session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown") } };
+        return { component: asComponent(LazyPanel), props: { load: loadSpacePanel, session, runner: sessionHistory, onError: showError, onExport: () => void actions.run("file.export.mixdown"), onMixdown: () => void actions.run("multitrack.mixdown.all") } };
       case "separation":
         return { component: asComponent(LazyPanel), props: { load: loadSeparationPanel, tools: separationTools } };
       case "phase-wheel":

@@ -1920,3 +1920,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-30: Quick separation model
 - A star beside each Audio Separation model marks it as the quick model (one at a time, kept in the app's settings). Clip > Separate Stems (quick model) and the same entry in a clip's right-click menu separate the selected clips with it, as Separate in the panel does. No shortcut yet; one can be added with the project lead's approval.
+
+## 2026-10-30: Mix Down to New File from the 3D Space panel
+- Mix Down to New File already renders a 3D Space session in its own speaker layout (one channel per speaker) and opens the file in the Waveform editor, which shows every channel. The 3D Space panel now has the button beside Export Mixdown, so a bed can be made and checked without the export window.
