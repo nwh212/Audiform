@@ -1904,3 +1904,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-30: QuickPass removed
 - The project lead removed the QuickPass panel: for a music-first editor its one-click podcast clean-up passes do not earn their place. The panel, its Effects menu entry, its place in the layouts and its commands are gone. Saved layouts drop its tab when they load. Click Repair, Clip Repair and the noise tools stay as Audio FX effects; the detectors in `dsp/effects/restore.rs` stay with them.
+
+## 2026-10-30: Effects menu matches the rack; where a menu effect goes
+- The Effects menu's effect families are built from the same catalog as the Audio FX rack's Add effect menu, so both show the same families (Amplitude, Delay and Reverb, Dynamics, Filter and EQ, Restoration, Stereo, Time and Pitch, Vocal), names and order. The menu's other commands (Amplify, Normalize, fades, Time Stretch, Fit Music to Length) moved into a Process submenu.
+- In a session, an effect from the Effects menu goes into the first empty numbered slot of the selected clip's or track's rack.
+- In the Waveform editor, an effect from the Effects menu is a trial: heard on the file while its window is open, written in by Apply (selection or whole file), and gone when the window closes. Applying only takes that effect out of the preview chain; anything else in it stays.

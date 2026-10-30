@@ -352,7 +352,10 @@ export function createWaveTools(deps: WaveToolsDeps) {
       return false;
     }
     await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
-    await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: chainOf(null) });
+    // What was applied leaves the preview; anything else in it stays.
+    const now = wave.current?.tracks[0]?.effects;
+    const rest = (now?.slots ?? []).filter((x) => !chain.slots.some((y) => y.id === x.id));
+    await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: rest.length ? { ...chainOf(now), slots: rest } : chainOf(null) });
     if (!wholeFile) showNotice(`${label}: done. Undo takes it back.`);
     return true;
   }

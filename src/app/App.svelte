@@ -145,9 +145,9 @@
   import type { ChannelMixDoc, EffectChainDoc, EffectTarget, MediaRefDoc, SessionDoc } from "../stores/session";
   import PendingPanel from "../panels/PendingPanel.svelte";
   import VoiceChainPanel from "../panels/voice-chain/VoiceChainPanel.svelte";
-  import { addSlot, chainOf, newSlot, type MenuPlugin } from "../panels/voice-chain/chain";
+  import { addSlot, addSlotFirstFree, chainOf, newSlot, type MenuPlugin } from "../panels/voice-chain/chain";
   import { effectSearch, vst3Items } from "../panels/voice-chain/slot-drag";
-  import { effectWindowRequest } from "../panels/voice-chain/effect-window";
+  import { effectWindowRequest, trialSlot } from "../panels/voice-chain/effect-window";
   import { setFxCatalog } from "../panels/editor/envelope";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
   import { prefs } from "../stores/prefs";
@@ -1227,7 +1227,9 @@
     const made = newSlot(info, uuid());
     // A plug-in on the master of a 3D Space session runs with its own channels.
     const slot = info.plugin && at.target.kind === "master" && session.current?.space ? { ...made, routing: { wide: true } } : made;
-    const next = addSlot(chainOf(at.chain), slot);
+    // A track's or clip's chain: the first empty numbered slot. The Waveform
+    // editor: a trial heard while its window is open (Apply writes it).
+    const next = at.wave ? addSlot(chainOf(at.chain), slot) : addSlotFirstFree(chainOf(at.chain), slot);
     if (!next) {
       showNotice("That Audio FX is full: it holds 16 effects.");
       return;
@@ -1237,8 +1239,9 @@
     if (at.wave) await wave.apply(op);
     else await session.edit(`Add ${info.name}`, op, sessionHistory);
     if (settings.current.openChainOnAdd) dock.show("voice-chain");
+    if (at.wave) trialSlot.set(slot.id);
     effectWindowRequest.set(slot.id);
-    showNotice(at.wave ? `Added ${info.name}. Save writes it into the file; bypass the chain to save without it.` : `Added ${info.name} to ${at.name}.`);
+    showNotice(at.wave ? `${info.name}: you hear it on the file while its window is open. Apply writes it in; closing the window drops it.` : `Added ${info.name} to ${at.name}.`);
   }
 
   // The Waveform editor's commands (see wave-tools.svelte.ts).

@@ -314,3 +314,13 @@ describe("instrument menu groups", () => {
   });
 
 });
+
+describe("first free slot", () => {
+  it("fills the first empty numbered slot, not the end", async () => {
+    const { addSlotFirstFree, layoutSlots } = await import("./chain");
+    const s = (id: string, position?: number) => ({ id, effect: "altaudio.gain", enabled: true, params: {}, preset: null, ...(position === undefined ? {} : { position }) });
+    const chain = { enabled: true, input_gain_db: 0, output_gain_db: 0, mix: 1, slots: [s("a", 0), s("c", 2)] };
+    const next = addSlotFirstFree(chain, s("b"))!;
+    expect(layoutSlots(next).slice(0, 3).map((x) => x?.id ?? null)).toEqual(["a", "b", "c"]);
+  });
+});

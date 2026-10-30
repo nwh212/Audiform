@@ -56,6 +56,12 @@ export function addSlot(
   return { ...chain, slots };
 }
 
+/** Puts an effect in the first empty numbered slot. Null when the chain is full. */
+export function addSlotFirstFree(chain: EffectChainDoc, slot: EffectSlotDoc): EffectChainDoc | null {
+  const free = layoutSlots(chain).findIndex((s) => s === null);
+  return free < 0 ? null : addSlotAt(chain, slot, free);
+}
+
 /**
  * The chain as its numbered slots: each effect in the slot it asked for
  * (its `position`), or the one after the effect before it. Effects run

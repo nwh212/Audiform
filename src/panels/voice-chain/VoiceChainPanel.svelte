@@ -65,7 +65,7 @@
   import EffectControls from "./EffectControls.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
   import { GRAPHED } from "./graph";
-  import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, type WindowBox } from "./effect-window";
+  import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, trialSlot, type WindowBox } from "./effect-window";
   import { dropEdit, effectMenu, ownerKey, slotOver, startSlotDrag, type SlotSpot } from "./slot-drag";
 
   interface Props {
@@ -296,6 +296,38 @@
     if (winOpen && !hold) hold = { owner: onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null), clip: tab === "clip" ? (clip?.id ?? null) : null };
     if (!winOpen && hold) hold = null;
   });
+  // A trial effect (picked from the Effects menu in the Waveform editor)
+  // leaves the preview once its window closes, applied or not.
+  let trialSeen = false;
+  $effect(() => {
+    const t = $trialSlot;
+    if (!t) {
+      trialSeen = false;
+      return;
+    }
+    if (winOpen && winSlot?.id === t) {
+      trialSeen = true;
+      return;
+    }
+    if (!trialSeen) return;
+    trialSeen = false;
+    untrack(() => {
+      if (inWave && chain.slots.some((x) => x.id === t)) commit("Close Effect", removeSlot(chain, t));
+    });
+    trialSlot.set(null);
+  });
+  async function applyTrial() {
+    if (!onApplyWave || applying || !winSlot) return;
+    applying = true;
+    try {
+      await onApplyWave({ ...($state.snapshot(chain) as EffectChainDoc), slots: [$state.snapshot(winSlot) as EffectSlotDoc] });
+      winOpen = false;
+    } catch (e) {
+      onError(e);
+    } finally {
+      applying = false;
+    }
+  }
   // Effects added from the Effects menu open here too.
   $effect(() => {
     const id = $effectWindowRequest;
@@ -985,7 +1017,13 @@
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
             {winSlot?.enabled ? "On" : "Bypassed"}
           </button>
-          <span>{label} · Slot {winIndex + 1}</span>
+          {#if inWave && $trialSlot === winSlot?.id}
+            <span class="grow">Heard on the file while this window is open.</span>
+            <button type="button" class="primary" disabled={applying || !onApplyWave} title={waveSel ? "Write this effect into the selection" : "Write this effect into the whole file"} onclick={() => void applyTrial()}>{applying ? "Applying…" : "Apply"}</button>
+            <button type="button" onclick={() => (winOpen = false)}>Close</button>
+          {:else}
+            <span>{label} · Slot {winIndex + 1}</span>
+          {/if}
         </footer>
       </div>
     {/if}
@@ -1313,6 +1351,14 @@
     color: var(--text-dim);
     font: inherit;
     cursor: pointer;
+  }
+  .fxwin footer .grow {
+    flex: 1;
+  }
+  .fxwin footer .primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent, #fff);
   }
   .fxwin footer .power svg {
     width: 14px;

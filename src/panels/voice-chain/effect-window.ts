@@ -16,6 +16,13 @@ export const HIDE_EFFECT_WINDOWS = "audiform:hide-effect-windows";
 /** Slot id to open in the effect window. The Audio FX panel takes it and clears it. */
 export const effectWindowRequest = writable<string | null>(null);
 
+/**
+ * An effect picked from the Effects menu in the Waveform editor: heard on
+ * the file while its window is open, written into the file with Apply,
+ * and gone when the window closes. It never stays in the chain.
+ */
+export const trialSlot = writable<string | null>(null);
+
 export interface WindowBox {
   x: number;
   y: number;
