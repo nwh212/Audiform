@@ -211,6 +211,7 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
       act("Clip Gain...", "clip.gain"),
       act("Clip Color...", "clip.color"),
       ...clipFlipItems(ctx),
+      act("Separate Stems (quick model)", "clip.separate-quick"),
       act("Group Clips", "clip.group"),
       act("Ungroup Clips", "clip.ungroup"),
       {

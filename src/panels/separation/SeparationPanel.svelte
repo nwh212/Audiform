@@ -105,6 +105,16 @@
               <label class="pick">
                 <input type="radio" name="separation-model" checked={model?.id === m.id} onchange={() => pick(m.id)} />
                 <span class="name">{m.name}</span>
+                <button
+                  type="button"
+                  class="star"
+                  class:on={tools.quickId === m.id}
+                  aria-pressed={tools.quickId === m.id}
+                  title={tools.quickId === m.id ? "The quick model: a clip's right-click > Separate Stems uses it. Click to clear." : "Make this the quick model, for a clip's right-click > Separate Stems"}
+                  onclick={(e) => {
+                    e.preventDefault();
+                    tools.setQuick(tools.quickId === m.id ? null : m.id);
+                  }}>{tools.quickId === m.id ? "★" : "☆"}</button>
                 {#if m.installed}
                   <button type="button" class="link" disabled={!!job} onclick={(e) => { e.preventDefault(); void tools.remove(m); }}>Remove</button>
                 {:else}
@@ -323,5 +333,17 @@
   .job button {
     grid-row: 2;
     grid-column: 2;
+  }
+  .star {
+    padding: 0 3px;
+    border: 0;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .star.on {
+    color: var(--accent);
   }
 </style>

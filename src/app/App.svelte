@@ -1762,6 +1762,14 @@
     ];
     offs.push(
       ...visibilityActions(),
+      // Separate Stems with the model starred in the Audio Separation panel.
+      actions.register({
+        id: "clip.separate-quick",
+        run: () => void separationTools.separateQuick(),
+        enabled: () => !inWave() && editor.current().selectedClips.size > 0 && !separationTools.job && !!separationTools.quickId,
+        reason: () =>
+          !separationTools.quickId ? "Star a model in the Audio Separation panel to use it here." : separationTools.job ? "A separation is already running." : "Select one or more clips first.",
+      }),
       // Files panel right-click.
       actions.register({
         id: "files.edit",

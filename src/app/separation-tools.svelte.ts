@@ -19,6 +19,7 @@ import { sizeText } from "./settings/pages";
 import { editor } from "../stores/editor";
 import { sessionHistory } from "../stores/history";
 import { mediaPool } from "../stores/media";
+import { prefs } from "../stores/prefs";
 import { session } from "../stores/open-session";
 import type { Op, TrackDoc } from "../stores/session";
 import { settings } from "../stores/settings";
@@ -301,6 +302,27 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     }
   }
 
+  /** Settings key of the model Separate Stems uses from a clip's right-click and the Clip menu. */
+  const QUICK = "separation.quick";
+  let quickId = $state<string | null>((prefs.raw(QUICK) as string | null) ?? null);
+  function setQuick(id: string | null) {
+    quickId = id;
+    prefs.set(QUICK, id);
+  }
+  /** The quick model, once the model list is known. */
+  function quick(): SeparationModel | null {
+    return status?.models.find((m) => m.id === quickId) ?? null;
+  }
+  async function separateQuick() {
+    if (!status) await refresh();
+    const m = quick();
+    if (!m) {
+      showNotice("Pick a quick model first: star one in the Audio Separation panel.");
+      return;
+    }
+    await separate(m);
+  }
+
   return {
     get status() {
       return status;
@@ -318,6 +340,12 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     remove,
     removeEngine,
     separate,
+    get quickId() {
+      return quickId;
+    },
+    setQuick,
+    quick,
+    separateQuick,
     cancel: () => void separationCancel(),
   };
 }

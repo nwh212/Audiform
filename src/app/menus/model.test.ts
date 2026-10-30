@@ -299,6 +299,7 @@ describe("menu model", () => {
       "clip.split-channels",
       "fx.capture-noise-print",
       "help.discord",
+      "clip.separate-quick",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

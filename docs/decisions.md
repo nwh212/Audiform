@@ -1917,3 +1917,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-30: Spectral display opens a quarter logarithmic
 - The project lead found the fully logarithmic default gave the bass most of the height. Files now open with the scale a quarter of the way from linear to logarithmic, from 0 Hz: 1 kHz about an eighth of the way up, 10 kHz about two thirds. Right-click > More Logarithmic or Full Logarithmic still give the old view.
+
+## 2026-10-30: Quick separation model
+- A star beside each Audio Separation model marks it as the quick model (one at a time, kept in the app's settings). Clip > Separate Stems (quick model) and the same entry in a clip's right-click menu separate the selected clips with it, as Separate in the panel does. No shortcut yet; one can be added with the project lead's approval.

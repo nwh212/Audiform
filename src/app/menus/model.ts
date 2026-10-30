@@ -358,6 +358,7 @@ export const MENUS: readonly Menu[] = [
       item("clip.music-fit", "Fit Music to Length..."),
       item("clip.stretch-reset", "Remove Stretch"),
       item("clip.phase-align", "Phase Align"),
+      item("clip.separate-quick", "Separate Stems (quick model)"),
       sep,
       item("clip.to-track-above", "Move to Track Above"),
       item("clip.to-track-below", "Move to Track Below"),
