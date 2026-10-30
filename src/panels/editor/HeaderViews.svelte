@@ -40,9 +40,6 @@
   <button type="button" class="view" class:on={headerView === "fx"} role="radio" aria-checked={headerView === "fx"} title="Effects: each track's Audio FX chain in its header. Drag an effect to move it, or onto another track to copy it." onclick={() => (headerView = "fx")}>
     <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1.5" y="12" font-size="10" font-style="italic" font-family="serif" fill="currentColor">fx</text></svg>
   </button>
-  <button type="button" class="view" role="radio" aria-checked="false" disabled title="EQ: arrives with the Audio FX chain (P5)">
-    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="7" width="2.5" height="7" fill="currentColor" /><rect x="6.75" y="3" width="2.5" height="11" fill="currentColor" /><rect x="11.5" y="9" width="2.5" height="5" fill="currentColor" /></svg>
-  </button>
 </div>
 <div class="toggles" role="group" aria-label="Timeline options">
   <button
@@ -115,6 +112,16 @@
   .view svg {
     width: 13px;
     height: 13px;
+  }
+
+  .views .view {
+    width: 28px;
+    height: 22px;
+  }
+
+  .views .view svg {
+    width: 16px;
+    height: 16px;
   }
 
   .view.on {

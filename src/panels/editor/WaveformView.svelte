@@ -168,6 +168,21 @@
     setView({ spp: f.spp, scroll: 0 });
   });
 
+  // A file made shorter (its end cut) while the whole of it was in view
+  // fits again, so no blank space is left where the end was.
+  let lastTotal = 0;
+  $effect(() => {
+    const t = total;
+    const prev = lastTotal;
+    lastTotal = t;
+    if (!doc || width <= 0 || t <= 0 || prev <= 0 || t >= prev) return;
+    const showedAll = untrack(() => doc!.view.scroll === 0 && doc!.view.samples_per_pixel >= fit(prev, width, 1).spp * 0.95);
+    if (!showedAll) return;
+    const f = fit(t, width, 1);
+    fittedSpp = f.spp;
+    untrack(() => setView({ spp: f.spp, scroll: 0 }));
+  });
+
   // Keep the playhead in view while playing, unless the view was scrolled
   // or zoomed by hand: then leave it be until playback starts again or the
   // playhead is moved.
