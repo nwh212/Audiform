@@ -438,12 +438,6 @@ export const MENUS: readonly Menu[] = [
           pending: NEXT_FX,
         }),
       ]),
-      sortedSub("QuickPass", [
-        item("fx.quickpass", "Presets arrive in P5", {
-          pending: P5,
-          placeholder: true,
-        }),
-      ]),
       sortedSub("Stereo", [
         item("fx.add.phase_curve", "Phase Curve"),
         item("fx.add.center_extractor", "Center Channel Extractor (remove or keep vocals)"),

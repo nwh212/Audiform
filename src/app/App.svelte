@@ -132,8 +132,6 @@
     pluginsScan,
     pluginsRegistry,
     musicFit,
-    quickpassRepairCopy,
-    type SpotsRequest,
     type EffectInfo,
     type Recoverable,
     previewStatus,
@@ -151,7 +149,6 @@
   import { effectSearch, vst3Items } from "../panels/voice-chain/slot-drag";
   import { effectWindowRequest } from "../panels/voice-chain/effect-window";
   import { setFxCatalog } from "../panels/editor/envelope";
-  import type { Finding } from "../panels/quickpass/quickpass";
   import FilesPanel from "../panels/files/FilesPanel.svelte";
   import { prefs } from "../stores/prefs";
   import { LINKS } from "./links";
@@ -349,69 +346,7 @@
     return `${sp.slice(0, cut)}${sep}${name}`;
   }
 
-  /**
-   * QuickPass Repair: each clip with chosen clicks or clipped spots gets a
-   * copy of its audio with just those spots repaired, and plays that copy.
-   * The original file is never changed; one undo puts every clip back.
-   * Returns the ids of the findings that were fixed.
-   */
-  async function repairSpots(spots: SpotsRequest, list: Finding[]): Promise<string[]> {
-    const doc0 = session.current;
-    if (!doc0 || exporting) return [];
-    const byClip = new Map<string, Finding[]>();
-    for (const f of list) if (f.clipId) byClip.set(f.clipId, [...(byClip.get(f.clipId) ?? []), f]);
-    const found = findClips(doc0, new Set(byClip.keys())).filter((f) => !f.clip.locked);
-    const skipped = found.filter((f) => f.clip.looped || f.clip.stretch);
-    const work = found.filter((f) => !f.clip.looped && !f.clip.stretch);
-    if (skipped.length) showNotice(`Skipped ${skipped.length === 1 ? `"${skipped[0]!.clip.name}"` : `${skipped.length} clips`}: repair needs a clip that is not looped or stretched.`);
-    if (work.length === 0) return [];
-    const folder = await folderBesideSession("Repaired", "Repaired audio is kept in a folder next to it.");
-    if (!folder) return [];
-    exporting = { title: work.length === 1 ? "Repairing clip audio" : `Repairing audio for ${work.length} clips`, progress: 0 };
-    try {
-      const paths: string[] = [];
-      for (const [i, f] of work.entries()) {
-        const m = doc0.media.find((x) => x.id === f.clip.media_id);
-        if (!m) throw new Error(`The file for "${f.clip.name}" is missing from this session.`);
-        const ratio = (m.sample_rate || doc0.sample_rate) / doc0.sample_rate;
-        const spans = byClip.get(f.clip.id)!.map((g): [number, number] => [
-          Math.max(0, Math.round((g.start - f.clip.start) * ratio)),
-          Math.max(0, Math.round((g.end - f.clip.start) * ratio)),
-        ]);
-        paths.push(await quickpassRepairCopy(m.path, f.clip.source_in, f.clip.source_out, folder, `${f.clip.name} Repaired`, spots, spans));
-        exporting = { ...exporting!, progress: (i + 1) / work.length };
-      }
-      const imported = await mediaPool.importPaths(paths, sessionHistory);
-      await mediaPool.whenIdle();
-      const doc = session.current!;
-      const known = new Set(doc.media.map((x) => x.id));
-      const ops: Op[] = [];
-      const restored: [string, ClipDoc][] = [];
-      for (const [i, f] of work.entries()) {
-        const it = mediaPool.get(imported.ids[i]!);
-        if (!it || it.status !== "ready" || !it.info) throw new Error(`The repaired copy of "${f.clip.name}" could not be read back.`);
-        if (!known.has(it.id)) {
-          known.add(it.id);
-          ops.push({
-            op: "add_media",
-            media: { id: it.id, path: it.path, relative_path: null, sample_rate: it.info.sampleRate, channels: it.info.channels, length: it.info.length },
-          });
-        }
-        restored.push([f.track.id, { ...f.clip, media_id: it.id, source_in: 0, source_out: it.info.length }]);
-      }
-      ops.push({ op: "remove_clips", ids: work.map((f) => f.clip.id) }, { op: "restore_clips", clips: restored });
-      const n = work.reduce((a, f) => a + byClip.get(f.clip.id)!.length, 0);
-      await session.edit(spots.kind === "clicks" ? `Repair ${n === 1 ? "Click" : `${n} Clicks`}` : `Repair ${n === 1 ? "Clipped Spot" : `${n} Clipped Spots`}`, { op: "batch", ops }, sessionHistory);
-      showNotice(`Repaired ${n} ${spots.kind === "clicks" ? (n === 1 ? "click" : "clicks") : n === 1 ? "clipped spot" : "clipped spots"} in ${work.length === 1 ? `"${work[0]!.clip.name}"` : `${work.length} clips`}.`);
-      const ok = new Set(work.map((f) => f.clip.id));
-      return list.filter((f) => f.clipId && ok.has(f.clipId)).map((f) => f.id);
-    } catch (e) {
-      showError(e);
-      return [];
-    } finally {
-      exporting = null;
-    }
-  }
+
 
   /** Opens picked or dropped files: a session (ours or .sesx), plus any audio files. */
   async function openPaths(picked: string[]): Promise<void> {
@@ -1024,7 +959,6 @@
   const loadPhaseWheelPanel = () => import("../panels/phase/PhaseWheelPanel.svelte");
   const loadVisualizerPanel = () => import("../panels/visualizer/VisualizerPanel.svelte");
   const loadBatchConvertPanel = () => import("../panels/batch/BatchConvertPanel.svelte");
-  const loadQuickPassPanel = () => import("../panels/quickpass/QuickPassPanel.svelte");
   const loadPropertiesPanel = () => import("../panels/properties/PropertiesPanel.svelte");
   const loadPlaylistPanel = () => import("../panels/playlist/PlaylistPanel.svelte");
   const loadMarkersPanel = () => import("../panels/markers/MarkersPanel.svelte");
@@ -1091,11 +1025,6 @@
         return {
           component: asComponent(VoiceChainPanel),
           props: { session, runner: sessionHistory, prefs, ask: promptText, transport, wave, waveTransport, onApplyWave: applyWaveChain, onNotice: showNotice, onError: showError },
-        };
-      case "quickpass":
-        return {
-          component: asComponent(LazyPanel),
-          props: { load: loadQuickPassPanel, session, transport, runner: sessionHistory, prefs, ask: promptText, onRepair: repairSpots, onNotice: showNotice, onError: showError, wave, waveTransport, waveRunner: waveHistory },
         };
       case "libraries":
         return {

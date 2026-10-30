@@ -13,7 +13,6 @@ export type PanelId =
   | "files"
   | "voice-chain"
   | "batch-convert"
-  | "quickpass"
   | "editor"
   | "mixer"
   | "levels"
@@ -50,7 +49,6 @@ export interface PanelDef {
 const LEFT_TABS: Placement[] = [
   { reference: "voice-chain", direction: "within" },
   { reference: "batch-convert", direction: "within" },
-  { reference: "quickpass", direction: "within" },
   { reference: "files", direction: "below" },
   { reference: "editor", direction: "left" },
   { edge: "left" },
@@ -78,13 +76,6 @@ export const PANELS: readonly PanelDef[] = [
   {
     id: "batch-convert",
     title: "Batch Convert",
-    inDefault: true,
-    home: LEFT_TABS,
-    pending: null,
-  },
-  {
-    id: "quickpass",
-    title: "QuickPass",
     inDefault: true,
     home: LEFT_TABS,
     pending: null,
@@ -269,11 +260,6 @@ export const DEFAULT_LAYOUT: readonly LayoutStep[] = [
     placement: { reference: "voice-chain", direction: "within" },
     inactive: true,
   },
-  {
-    id: "quickpass",
-    placement: { reference: "voice-chain", direction: "within" },
-    inactive: true,
-  },
 ];
 
 /**
@@ -380,7 +366,6 @@ export const WORKSPACE_PRESETS: readonly WorkspacePreset[] = [
       },
       { id: "files", placement: { edge: "left" }, width: S.leftWidth },
       { id: "voice-chain", placement: { reference: "files", direction: "below" } },
-      { id: "quickpass", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
       { id: "properties", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
       { id: "batch-convert", placement: { reference: "voice-chain", direction: "within" }, inactive: true },
       { id: "history", placement: { reference: "voice-chain", direction: "below" } },

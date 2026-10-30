@@ -1103,22 +1103,6 @@ export function unzipMedia(path: string): Promise<string[]> {
   return invoke<string[]>("media_unzip", { path });
 }
 
-/** How loud one clip is, window by window, for QuickPass. */
-export interface ClipLevels {
-  clipId: string;
-  /** Timeline position of the first window, in session samples. */
-  start: number;
-  /** Session samples in each window. */
-  window: number;
-  /** RMS level of each window in dBFS. */
-  db: number[];
-  /** Highest sample in each window in dBFS. */
-  peak: number[];
-}
-
-export function quickpassLevels(clipIds: string[], windowMs: number, wave = false): Promise<ClipLevels[]> {
-  return invoke("quickpass_levels", { clipIds, windowMs, wave });
-}
 
 export interface GenerateRequest {
   kind: "tone" | "white" | "pink" | "silence";
@@ -1329,24 +1313,6 @@ export function phaseAlign(reference: string, other: string, maxMs: number): Pro
 /** Plans Music Fit for the part of `path` from `start` to `end` seconds: up to three plans, best first, joining in different places. */
 export function musicFit(path: string, start: number, end: number, target: number, xfade: number): Promise<import("../panels/editor/musicfit").FitPlan[]> {
   return invoke("music_fit", { path, start, end, target, xfade });
-}
-
-/** Clicks or clipped spots found in one clip, as [first, last] timeline samples. */
-export interface ClipSpots {
-  clipId: string;
-  spans: [number, number][];
-}
-
-export type SpotsRequest = { kind: "clicks"; sensitivity: number; widthMs: number } | { kind: "clipping"; levelDb: number; longestMs: number };
-
-/** Finds clicks or clipping in clips as they play. */
-export function quickpassSpots(clipIds: string[], spots: SpotsRequest, wave = false): Promise<ClipSpots[]> {
-  return invoke<ClipSpots[]>("quickpass_spots", { clipIds, spots, wave });
-}
-
-/** Writes a copy of source frames `from..to` with `spans` (frames from `from`) repaired. Returns its path. */
-export function quickpassRepairCopy(source: string, from: number, to: number, folder: string, name: string, spots: SpotsRequest, spans: [number, number][]): Promise<string> {
-  return invoke<string>("quickpass_repair_copy", { source, from, to, folder, name, spots, spans });
 }
 
 export interface SesxExportReport {

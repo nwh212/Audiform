@@ -93,7 +93,7 @@ Default layout. This is the only Default layout. It puts the common podcast work
 
 Left column (~270px, full window height):
 - Top: Files panel with import/folder/search toolbar, Name/Status/Duration columns
-- Bottom: Tabbed panel group — Voice Chain (front tab), Batch Convert, QuickPass, with >> overflow
+- Bottom: Tabbed panel group — Voice Chain (front tab), Batch Convert, with >> overflow (QuickPass was removed by the project lead on 2026-10-30)
   - Voice Chain shows: Clip Effects / Track Effects tabs, Presets dropdown, Track label, 16 numbered slots with colored effect badges
   - Below slots: Input level meter, Output level meter, Mix (Dry/Wet slider)
 

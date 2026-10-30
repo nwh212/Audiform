@@ -26,7 +26,6 @@ pub mod peaks;
 pub mod plugins;
 pub mod preferences;
 pub mod prerender;
-pub mod quickpass;
 pub mod record;
 pub mod reverb;
 pub mod separation;
