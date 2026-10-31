@@ -307,3 +307,41 @@ fn bench_parallel() {
         seq / par
     );
 }
+
+/// What happens between Play and the first sound, timed stage by stage.
+#[test]
+#[ignore]
+fn bench_start() {
+    use crate::engine::graph::Mix;
+    crate::engine::host::init_threads();
+    let dir = tempfile::tempdir().unwrap();
+    let path = music_file(dir.path());
+    let tracks = env("BENCH_TRACKS", 48);
+    let s = dense_session(&path, tracks, 60, env("BENCH_FX", 1) == 1);
+    let rate = s.sample_rate;
+    for round in 0..2 {
+        let t0 = Instant::now();
+        let s2 = crate::engine::speaker_feed::expanded(&s);
+        let plan = plan::build(&s2, rate);
+        let t1 = Instant::now();
+        let renderer = Renderer::new(plan, 48_000 * 20);
+        let graph = Graph::new(&s2, rate, true);
+        let t2 = Instant::now();
+        let mut mix = Mix::new(renderer, graph);
+        let t3 = Instant::now();
+        let mut out = vec![Vec::new(); mix.outputs()];
+        let mut done = 0;
+        while done < 24_000 {
+            done += mix.render(2048, &mut out);
+        }
+        let t4 = Instant::now();
+        println!(
+            "round {round}: plan {:.1} ms, chains {:.1} ms, prime {:.1} ms, first half second {:.1} ms, total {:.1} ms",
+            (t1 - t0).as_secs_f64() * 1e3,
+            (t2 - t1).as_secs_f64() * 1e3,
+            (t3 - t2).as_secs_f64() * 1e3,
+            (t4 - t3).as_secs_f64() * 1e3,
+            (t4 - t0).as_secs_f64() * 1e3
+        );
+    }
+}

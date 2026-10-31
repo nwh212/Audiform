@@ -541,8 +541,14 @@ impl Playing {
     }
 }
 
+/// How far ahead of the block a clip is opened (its file, and its
+/// effects built), so the work is done before the clip is due rather
+/// than in the block it starts in: a second of output frames.
+const OPEN_AHEAD_SECONDS: u64 = 1;
+
 /// Mixes a track's clips for output frames `start..end` into `buf`
-/// (stereo, already sized and zeroed).
+/// (stereo, already sized and zeroed). Clips due within the next second
+/// are opened now, ready for their first block.
 fn render_track(
     track: &TrackPlan,
     active: &mut HashMap<Id, Active>,
@@ -571,6 +577,12 @@ fn render_track(
         let offset = (from - start) as usize;
         let n = (to - from) as usize;
         a.play_into(&mut buf[offset * 2..], n, clip, from - clip.start);
+    }
+    let soon = end + u64::from(rate) * OPEN_AHEAD_SECONDS;
+    for clip in &track.clips {
+        if clip.start >= end && clip.start < soon && !active.contains_key(&clip.id) {
+            active.insert(clip.id, Active::open(clip, 0, rate));
+        }
     }
 }
 
@@ -687,6 +699,38 @@ mod tests {
                 )],
             }],
         }
+    }
+
+    #[test]
+    fn clips_open_a_second_before_they_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = click_file(dir.path());
+        let id = new_id();
+        // One clip, two and a half seconds in.
+        let plan = Plan {
+            out_rate: 48_000,
+            session_rate: 48_000,
+            tracks: vec![TrackPlan {
+                midi: None,
+                id: new_id(),
+                clips: vec![ClipPlan::plain(id, path, 120_000, 10_000, 0.0)],
+            }],
+        };
+        let mut r = Renderer::new(plan, 0);
+        let mut out = vec![Vec::new()];
+        r.render(1_000, &mut out);
+        assert!(!r.active[0].contains_key(&id), "more than a second away");
+        while r.position() < 120_000 - 47_000 {
+            r.render(1_000, &mut out);
+        }
+        assert!(
+            r.active[0].contains_key(&id),
+            "within a second: opened early"
+        );
+        while r.position() < 125_000 {
+            r.render(1_000, &mut out);
+        }
+        assert!(r.active[0].contains_key(&id));
     }
 
     #[test]

@@ -819,6 +819,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
             thread::sleep(Duration::from_millis(50));
         }
     }
+    let t0 = std::time::Instant::now();
     let started = Host::start(
         &found,
         rate,
@@ -826,6 +827,13 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         slot_params(slot),
         wide_of(slot),
     );
+    crate::engine::host::log(&format!(
+        "plug-in start: \"{}\" {} in {:.0} ms{}",
+        found.info.name,
+        if started.is_ok() { "loaded" } else { "failed" },
+        t0.elapsed().as_secs_f64() * 1e3,
+        if fresh { " (for a mixdown)" } else { "" }
+    ));
     if !fresh {
         if let Ok(mut s) = starting().lock() {
             s.remove(&slot.id);

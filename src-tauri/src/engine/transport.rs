@@ -786,12 +786,19 @@ fn run(
     }
     let routed = crate::session::routing::is_routed(&session);
     let start_frame = plan::to_out(from, session.sample_rate, out_rate);
+    // Timed stage by stage into the audio log, so a slow start says why.
+    let t_start = std::time::Instant::now();
+    let plugin_slots = crate::commands::plugins::playing_plugin_slots(&session).len();
     let mut renderer = Renderer::new(plan::build(&session, out_rate), start_frame);
     if let Some((at, to)) = jump.and_then(|j| j.points(from)) {
         let r = session.sample_rate;
         renderer = renderer.with_jump(plan::to_out(at, r, out_rate), plan::to_out(to, r, out_rate));
     }
-    let mut mix = Mix::new(renderer, Graph::new(&session, out_rate, routed));
+    let graph = Graph::new(&session, out_rate, routed);
+    let t_chains = t_start.elapsed();
+    let lead = graph.lead();
+    let mut mix = Mix::new(renderer, graph);
+    let t_prime = t_start.elapsed() - t_chains;
     let rings = mix.outputs();
     // The metronome, on its own ring so faders and meters leave it alone.
     let mut click = Ticker {
@@ -837,6 +844,7 @@ fn run(
     };
 
     // Fill ahead before the device starts, so playback starts clean.
+    let t_fill0 = std::time::Instant::now();
     let mut blocks: Vec<Vec<f32>> = vec![Vec::with_capacity(BLOCK * 2); rings];
     while has_room(&producers, &click_out, bed_prod.as_ref(), nb) {
         render_block(
@@ -849,6 +857,8 @@ fn run(
         );
         shared.push_meters(&mut mix);
     }
+    let t_fill = t_fill0.elapsed();
+    let t_device0 = std::time::Instant::now();
 
     let render_shared = shared.clone();
     let render = thread::Builder::new()
@@ -921,6 +931,16 @@ fn run(
         }
     };
     let _ = ready.send(Ok(out_rate));
+    super::host::log(&format!(
+        "play start: {} tracks, {plugin_slots} plug-in slots; chains {:.0} ms, priming {:.0} ms ({lead} frames of look-ahead), first {:.1} s of audio {:.0} ms, device {:.0} ms; {:.0} ms in all",
+        session.tracks.len(),
+        t_chains.as_secs_f64() * 1e3,
+        t_prime.as_secs_f64() * 1e3,
+        AHEAD_SECONDS,
+        t_fill.as_secs_f64() * 1e3,
+        t_device0.elapsed().as_secs_f64() * 1e3,
+        t_start.elapsed().as_secs_f64() * 1e3
+    ));
 
     while !shared.stop.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(15));
@@ -1046,6 +1066,11 @@ fn render_loop(
     shared: Arc<Shared>,
 ) {
     let nb = mix.graph().bed_channels();
+    // How much of the time a block of audio lasts its rendering takes:
+    // noted in the audio log every ten seconds while playing, so a
+    // session that drops out says how close to the edge it ran.
+    let rate = super::scope::rate().max(1) as f64;
+    let mut load = Load::default();
     while !shared.stop.load(Ordering::SeqCst) {
         // A fault on the audio thread was caught: silence went out, and
         // playback stops here rather than carrying on over it.
@@ -1074,6 +1099,8 @@ fn render_loop(
             }
         }
         if has_room(&producers, &click_out, bed.as_ref(), nb) {
+            let t0 = std::time::Instant::now();
+            let before = mix.rendered();
             render_block(
                 &mut mix,
                 &mut blocks,
@@ -1083,9 +1110,48 @@ fn render_loop(
                 bed.as_mut(),
             );
             shared.push_meters(&mut mix);
+            let frames = mix.rendered().saturating_sub(before);
+            if frames > 0 {
+                load.note(t0.elapsed().as_secs_f64() / (frames as f64 / rate));
+            }
         } else {
             thread::sleep(Duration::from_millis(5));
         }
+    }
+    load.flush();
+}
+
+/// Rendering time as a share of the audio time it makes, averaged and
+/// at its worst over a stretch, written to the audio log now and then.
+#[derive(Default)]
+struct Load {
+    sum: f64,
+    max: f64,
+    n: u32,
+    since: Option<std::time::Instant>,
+}
+
+impl Load {
+    fn note(&mut self, share: f64) {
+        let since = *self.since.get_or_insert_with(std::time::Instant::now);
+        self.sum += share;
+        self.max = self.max.max(share);
+        self.n += 1;
+        if since.elapsed() >= Duration::from_secs(10) {
+            self.flush();
+        }
+    }
+
+    fn flush(&mut self) {
+        if self.n > 0 {
+            super::host::log(&format!(
+                "render load: {:.0}% of the time on average, {:.0}% at worst over {} blocks",
+                self.sum / f64::from(self.n) * 100.0,
+                self.max * 100.0,
+                self.n
+            ));
+        }
+        *self = Self::default();
     }
 }
 
