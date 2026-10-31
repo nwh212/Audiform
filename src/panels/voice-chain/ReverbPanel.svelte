@@ -118,6 +118,7 @@
   <div class="dial"><BigKnob param={p} value={val(k)} size={64} {label} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} /></div>
 {/snippet}
 
+<div class="wrap">
 {#if onKind}<KindTabs kinds={REVERB_KINDS} current={REVERB_KINDS.length - 1} tips={REVERB_TIPS} label="Kind of reverb" pick={(i) => i < REVERB_KINDS.length - 1 && onKind(i)} />{/if}
 <div class="verb">
   <div class="plate">
@@ -168,8 +169,14 @@
     </div>
   </div>
 </div>
+</div>
 
 <style>
+  /* Tabs above, the panel below: one column. */
+  .wrap {
+    display: grid;
+    min-width: 0;
+  }
   .verb {
     --ink: #ece4ff;
     --violet: #b48cff;
