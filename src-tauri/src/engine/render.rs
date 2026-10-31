@@ -294,12 +294,20 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// New clip levels while playing (see `plan::clip_gains`).
-    pub fn set_clip_gains(&mut self, gains: &[(Id, f32)]) {
-        for t in &mut self.plan.tracks {
+    /// New clip levels and channel mixes while playing (see
+    /// `plan::clip_gains`). A clip already playing takes the new mix at once.
+    pub fn set_clip_gains(&mut self, gains: &[super::plan::ClipLive]) {
+        for (t, active) in self.plan.tracks.iter_mut().zip(&mut self.active) {
             for c in &mut t.clips {
-                if let Some((_, g)) = gains.iter().find(|(id, _)| *id == c.id) {
-                    c.gain = *g;
+                let Some((_, g, mix)) = gains.iter().find(|(id, ..)| *id == c.id) else {
+                    continue;
+                };
+                c.gain = *g;
+                if c.mix != *mix {
+                    c.mix = mix.clone();
+                    if let Some(r) = active.get_mut(&c.id).and_then(|a| a.reader.as_mut()) {
+                        r.change_mix(mix.clone());
+                    }
                 }
             }
         }

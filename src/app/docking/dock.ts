@@ -29,7 +29,6 @@ import {
 } from "dockview";
 import { mount, unmount, type Component } from "svelte";
 import { writable, type Readable } from "svelte/store";
-import type { SessionRow } from "../../panels/files/session-row";
 
 import {
   DEFAULT_LAYOUT,
@@ -90,17 +89,6 @@ export interface DockOptions {
   onError: (message: string) => void;
   /** Delay before saving after the last change. */
   saveDelayMs?: number;
-  /** The open sessions, drawn as chips in the Editor tab. */
-  sessionTabs?: SessionTabsSource;
-}
-
-/** What the Editor tab needs to list the open sessions. */
-export interface SessionTabsSource {
-  rows: Readable<SessionRow[]>;
-  open: (id: string) => void;
-  close: (id: string) => void;
-  /** Puts a session's tab at a new place in the row. */
-  move: (id: string, to: number) => void;
 }
 
 export interface WorkspaceState {
@@ -171,7 +159,7 @@ function headerActions(
  * stacked dots) that opens the same menu as right-clicking the tab.
  * There is no close button, so a stray click never closes a panel.
  */
-function panelTab(sessions?: SessionTabsSource): ITabRenderer {
+function panelTab(): ITabRenderer {
   const element = document.createElement("div");
   element.className = "aa-tab";
   const title = document.createElement("span");
@@ -198,73 +186,11 @@ function panelTab(sessions?: SessionTabsSource): ITabRenderer {
       }),
     );
   });
-  const chips = document.createElement("span");
-  chips.className = "aa-session-chips";
-  element.append(chips, title, menu);
+  element.append(title, menu);
   const subs: { dispose(): void }[] = [];
-  /** One chip per open session, like documents in an image editor. */
-  // Dragging a chip along the row moves its session; a drag does not count as a click.
-  let dragging: { id: string; moved: boolean } | null = null;
-  let shown: SessionRow[] = [];
-  const onDrag = (e: PointerEvent) => {
-    if (!dragging || !sessions) return;
-    const rects = [...chips.children].map((c) => c.getBoundingClientRect());
-    let to = rects.findIndex((rc) => e.clientX < rc.left + rc.width / 2);
-    if (to < 0) to = rects.length - 1;
-    const from = shown.findIndex((r) => r.id === dragging?.id);
-    if (to !== from && from >= 0) {
-      dragging.moved = true;
-      sessions.move(dragging.id, to);
-    }
-  };
-  const endDrag = () => {
-    window.removeEventListener("pointermove", onDrag);
-    window.removeEventListener("pointerup", endDrag);
-    // Keep the flag until the click that follows the release has been ignored.
-    setTimeout(() => (dragging = null), 0);
-  };
-  const drawChips = (rows: SessionRow[]) => {
-    shown = rows;
-    chips.replaceChildren();
-    for (const r of rows) {
-      const chip = document.createElement("span");
-      chip.className = "aa-session-chip" + (r.front ? " front" : "");
-      const name = document.createElement("span");
-      name.className = "aa-session-name";
-      name.textContent = r.name + (r.dirty ? " *" : "");
-      name.title = r.name;
-      const x = document.createElement("button");
-      x.type = "button";
-      x.className = "aa-session-x";
-      x.textContent = "\u00d7";
-      x.title = `Close ${r.name}${r.dirty ? " (asks to save first)" : ""}`;
-      x.setAttribute("aria-label", `Close ${r.name}`);
-      x.addEventListener("pointerdown", (e) => e.stopPropagation());
-      x.addEventListener("click", (e) => {
-        e.stopPropagation();
-        sessions?.close(r.id);
-      });
-      chip.addEventListener("pointerdown", (e) => {
-        if (e.button !== 0 || !sessions) return;
-        e.stopPropagation();
-        dragging = { id: r.id, moved: false };
-        window.addEventListener("pointermove", onDrag);
-        window.addEventListener("pointerup", endDrag);
-      });
-      chip.addEventListener("click", () => {
-        if (dragging?.moved) return;
-        sessions?.open(r.id);
-      });
-      chip.append(name, x);
-      chips.append(chip);
-    }
-    // The plain title only shows when no session is in front (the Waveform editor).
-    element.classList.toggle("has-sessions", rows.some((r) => r.active));
-  };
   return {
     element,
     init(params: TabPartInitParameters) {
-      if (sessions && params.api.id === "editor") subs.push({ dispose: sessions.rows.subscribe(drawChips) });
       title.textContent = params.title ?? params.api.title ?? "";
       subs.push(
         params.api.onDidTitleChange((e) => (title.textContent = e.title)),
@@ -408,7 +334,7 @@ export class DockController {
         headerActions((group) => this.dockGroup(group)),
       // Every tab uses our own renderer (title plus menu button).
       defaultTabComponent: "panel-tab",
-      createTabComponent: () => panelTab(this.options.sessionTabs),
+      createTabComponent: () => panelTab(),
       getTabContextMenuItems: ({ panel, group, api }) =>
         tabMenu(panel, group, api, (g) => this.dockGroup(g)),
     });

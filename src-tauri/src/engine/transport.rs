@@ -91,8 +91,9 @@ struct Shared {
     /// Routed mixes: levels changed during playback, waiting for the
     /// render thread.
     levels: Mutex<Option<Levels>>,
-    /// Clip levels changed during playback, waiting for the render thread.
-    clip_gains: Mutex<Option<Vec<(Id, f32)>>>,
+    /// Clip levels and channel mixes changed during playback, waiting
+    /// for the render thread.
+    clip_gains: Mutex<Option<Vec<plan::ClipLive>>>,
     /// Render-thread meters, oldest first, released as the device plays them.
     chain_meters: Mutex<VecDeque<BlockPeaks>>,
     /// The last reading `played_meters` gave, given again when no new block
@@ -230,13 +231,13 @@ impl Shared {
         }
     }
 
-    fn send_clip_gains(&self, gains: Vec<(Id, f32)>) {
+    fn send_clip_gains(&self, gains: Vec<plan::ClipLive>) {
         if let Ok(mut g) = self.clip_gains.lock() {
             *g = Some(gains);
         }
     }
 
-    fn take_clip_gains(&self) -> Option<Vec<(Id, f32)>> {
+    fn take_clip_gains(&self) -> Option<Vec<plan::ClipLive>> {
         self.clip_gains.try_lock().ok().and_then(|mut g| g.take())
     }
 

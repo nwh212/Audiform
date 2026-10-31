@@ -902,6 +902,59 @@ mod tests {
     }
 
     #[test]
+    fn a_flac_saves_as_flac() {
+        let dir = tempfile::tempdir().unwrap();
+        let wav = dir.path().join("v.wav");
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 44_100,
+            bits_per_sample: 24,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut w = hound::WavWriter::create(&wav, spec).unwrap();
+        for i in 0..44_100 {
+            w.write_sample((i % 100) * 1000).unwrap();
+            w.write_sample(0i32).unwrap();
+        }
+        w.finalize().unwrap();
+        let flac_req = |depth: u16| MixdownRequest {
+            clip_only: true,
+            channels: Some(2),
+            format: Some(OutputFormat {
+                kind: FormatKind::Flac,
+                bit_depth: Some(depth.min(24)),
+                channels: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let s = session_for(&codecs::probe(&wav).unwrap()).unwrap();
+        let a = dir.path().join("a.flac");
+        mixdown::mixdown(
+            &s,
+            &flac_req(s.bit_depth),
+            &a,
+            &AtomicBool::new(false),
+            |_, _| {},
+        )
+        .unwrap();
+        // The FLAC opened again and saved as another FLAC.
+        let s = session_for(&codecs::probe(&a).unwrap()).unwrap();
+        let b = dir.path().join("b.flac");
+        mixdown::mixdown(
+            &s,
+            &flac_req(s.bit_depth),
+            &b,
+            &AtomicBool::new(false),
+            |_, _| {},
+        )
+        .unwrap();
+        let info = codecs::probe(&b).unwrap();
+        assert_eq!(info.channels, 2);
+        assert!(info.length > 44_000, "{} frames", info.length);
+    }
+
+    #[test]
     fn an_empty_file_has_a_track_and_no_clips() {
         let info = codecs::AudioInfo {
             path: "new.wav".into(),

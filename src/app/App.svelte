@@ -877,16 +877,6 @@
   }
   /** The open session as a row at the top of the Files panel. */
   const sessionRows = writable<SessionRow[]>([]);
-  /** Session ids in the order their tabs show them. */
-  let sessionOrder: string[] = [];
-  /** Moves a session's tab to a new place in the row. */
-  function moveSession(id: string, to: number) {
-    const from = sessionOrder.indexOf(id);
-    if (from < 0 || from === to) return;
-    sessionOrder.splice(from, 1);
-    sessionOrder.splice(to, 0, id);
-    updateSessionRow();
-  }
   function updateSessionRow() {
     const d = session.current;
     const rows: SessionRow[] = [];
@@ -895,10 +885,6 @@
       rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true });
     }
     for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false });
-    // The tabs keep the order the user left them in; the front one is only highlighted.
-    const ids = rows.map((r) => r.id);
-    sessionOrder = sessionOrder.filter((id) => ids.includes(id)).concat(ids.filter((id) => !sessionOrder.includes(id)));
-    rows.sort((a, b) => sessionOrder.indexOf(a.id) - sessionOrder.indexOf(b.id));
     const cur = get(sessionRows);
     if (JSON.stringify(cur) !== JSON.stringify(rows)) sessionRows.set(rows);
   }
@@ -1115,17 +1101,6 @@
     setCurrentId: (id) => prefs.set(KEY_WORKSPACE, id),
     ready: () => prefs.load(),
     onError: showError,
-    sessionTabs: {
-      rows: sessionRows,
-      open: (id) => {
-        const front = get(sessionRows).find((r) => r.id === id)?.front;
-        void (front ? Promise.resolve() : files.switchTo(id))
-          .then(() => actions.run("view.editor.multitrack"))
-          .catch(showError);
-      },
-      close: (id) => void files.closeSession(id).catch(showError),
-      move: moveSession,
-    },
   });
 
   let aboutOpen = $state(false);

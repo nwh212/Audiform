@@ -77,6 +77,12 @@ impl AudioReader {
         }
     }
 
+    /// Changes the channel mix while playing (None maps the channels the
+    /// plain way). The packet already decoded keeps the old mix.
+    pub fn change_mix(&mut self, gains: Option<Vec<[f32; 2]>>) {
+        self.mix = gains;
+    }
+
     /// Opens a file. `out_rate` of None keeps the file's own rate.
     pub fn open(
         path: &Path,

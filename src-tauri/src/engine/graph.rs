@@ -1221,8 +1221,8 @@ pub struct Mix {
 }
 
 impl Mix {
-    /// New clip levels while playing.
-    pub fn set_clip_gains(&mut self, gains: &[(Id, f32)]) {
+    /// New clip levels and channel mixes while playing.
+    pub fn set_clip_gains(&mut self, gains: &[super::plan::ClipLive]) {
         self.renderer.set_clip_gains(gains);
     }
 

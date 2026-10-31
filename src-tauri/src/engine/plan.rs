@@ -848,14 +848,26 @@ fn midi_hash(session: &Session) -> u64 {
 /// Each audio clip's gain as playback applies it: its level, flipped when
 /// inverted, nothing when muted. Sent to a running playback when only
 /// levels changed, so a level drag is heard without a restart.
-pub fn clip_gains(session: &Session) -> Vec<(Id, f32)> {
+pub fn clip_gains(session: &Session) -> Vec<ClipLive> {
     session
         .tracks
         .iter()
         .flat_map(|t| t.clips.iter())
-        .map(|c| (c.id, clip_gain(c)))
+        .map(|c| {
+            let n = session
+                .media_by_id(c.media_id)
+                .map_or(1, |m| usize::from(m.channels));
+            (
+                c.id,
+                clip_gain(c),
+                crate::dsp::channels::effective(c.channel_mix.as_ref(), n),
+            )
+        })
         .collect()
 }
+
+/// A clip's level and channel mix, which change while playing.
+pub type ClipLive = (Id, f32, Option<Vec<[f32; 2]>>);
 
 fn clip_gain(c: &Clip) -> f32 {
     if c.muted {
