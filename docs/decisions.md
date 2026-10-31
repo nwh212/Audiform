@@ -1998,3 +1998,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Track header column width
 - Drag the right edge of the track header column to make it 190 to 520 px wide (double-click the edge for the usual 214). The width is remembered (`editor.headerWidth`). The corner above the headers and the tempo row follow it, and the header rows stretch with it: names, the effects list and the sends get the room.
+
+## 2026-10-31: Center Channel Extractor and Stereo Width on a speaker bed
+- On a bed, the Center Channel Extractor and Stereo Width now run on every speaker pair (fronts, surrounds, rears, each height pair), each copy on its own pair's sound: the extractor finds what that pair shares, width narrows or widens that pair. A lone speaker (C, LFE) has no pair to compare and is left as it is (held back by the effect's look-ahead, so it stays in time). Only the Channel Mixer, whose controls name left and right, still works on L and R alone.
+- A test runs every built-in effect on a 7.1.4 bed and checks it covers all twelve channels and stays sane.

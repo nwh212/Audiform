@@ -23,18 +23,23 @@
 //!   together and the image holds still.
 //! - Delays, pitch and tone shapers leave the low-frequency channel alone
 //!   (it only carries the deep end); filters and repair work on it too.
-//! - Effects that only make sense on a stereo pair (width, center
-//!   extraction, the channel mixer) keep working on L and R.
+//! - Center extraction and stereo width work on what two speakers share:
+//!   they run on every pair (fronts, surrounds, rears, heights) and leave
+//!   a lone speaker (C, LFE) as it is. The Channel Mixer, whose controls
+//!   name left and right, keeps working on L and R only.
 
 use super::{build, routing, verb, EffectInfo, Params, Processor};
 use crate::session::model::EffectSlot;
 
-/// Effects that only work on a left and right pair.
-const STEREO_ONLY: [&str; 5] = [
+/// Effects that only work on the front left and right (their controls
+/// name left and right).
+const STEREO_ONLY: [&str; 2] = [super::mixer::ID, "altaudio.phase_rotate"];
+
+/// Effects that work on what two speakers share: every pair runs them,
+/// a lone speaker (C, LFE) is left alone (it has no side to compare with).
+const PAIRS_ONLY: [&str; 3] = [
     super::center::ID,
     super::width::WIDTH,
-    super::mixer::ID,
-    "altaudio.phase_rotate",
     "altaudio.center_remover",
 ];
 
@@ -91,7 +96,12 @@ pub fn build_wide(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<
     }
     let skip_lfe = SKIP_LFE.contains(&info.id);
     let mut units = Vec::new();
-    for (k, group) in groups(names, skip_lfe).into_iter().enumerate() {
+    let pairs_only = PAIRS_ONLY.contains(&info.id);
+    for (k, group) in groups(names, skip_lfe)
+        .into_iter()
+        .filter(|g| !pairs_only || g.len() == 2)
+        .enumerate()
+    {
         let mut proc = build(slot, rate)?;
         // Each pair its own: sweeps and drifts start at their own point.
         proc.vary(k);
@@ -398,8 +408,29 @@ mod tests {
     }
 
     #[test]
-    fn width_stays_on_the_front_pair() {
-        assert!(build_wide(&slot(super::super::width::WIDTH, &[]), 48_000, &bed51()).is_none());
+    fn the_mixer_stays_on_the_front_pair() {
+        assert!(build_wide(&slot(super::super::mixer::ID, &[]), 48_000, &bed51()).is_none());
+    }
+
+    #[test]
+    fn width_works_on_every_pair_and_leaves_the_center_alone() {
+        // Width 0: each pair folds to its middle; the center is untouched.
+        let mut w = build_wide(
+            &slot(super::super::width::WIDTH, &[("width", 0.0)]),
+            48_000,
+            &bed51(),
+        )
+        .unwrap();
+        let out = run(w.as_mut(), &vec![[1.0, 0.0, 0.7, 0.2, 0.5, -0.5]; 64]);
+        let f = out.last().unwrap();
+        assert!(
+            (f[0] - f[1]).abs() < 1e-3 && (f[4] - f[5]).abs() < 1e-3,
+            "{f:?}"
+        );
+        assert!(
+            (f[2] - 0.7).abs() < 1e-6 && (f[3] - 0.2).abs() < 1e-6,
+            "{f:?}"
+        );
     }
 
     #[test]
@@ -426,4 +457,37 @@ mod tests {
         assert!(corr(4, 5).abs() < 0.5, "{}", corr(4, 5));
         assert!(out.iter().flatten().all(|v| v.is_finite() && v.abs() < 4.0));
     }
+
+    #[test]
+    fn every_built_in_effect_runs_on_a_7_1_4_bed() {
+        let names = crate::dsp::channels::labels(12);
+        let mut seed = 1u32;
+        let frames = 4800;
+        let input: Vec<f32> = (0..frames * 12)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                (seed as f32 / u32::MAX as f32 - 0.5) * 0.5
+            })
+            .collect();
+        let mut wide = 0;
+        for info in crate::dsp::effects::catalog() {
+            let s = slot(info.id, &[]);
+            let Some(mut p) = build_wide(&s, 48_000, &names) else {
+                // Only the effects whose controls name left and right stay stereo.
+                assert!(STEREO_ONLY.contains(&info.id), "{} has no multichannel form", info.id);
+                continue;
+            };
+            wide += 1;
+            assert_eq!(p.channels().0.len(), 12, "{}", info.id);
+            let mut b = input.clone();
+            for c in b.chunks_mut(512 * 12) {
+                p.process(c);
+            }
+            assert!(b.iter().all(|v| v.is_finite()), "{} stays finite", info.id);
+        }
+        assert!(wide > 20, "{wide}");
+    }
+
 }
