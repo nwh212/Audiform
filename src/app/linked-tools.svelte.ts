@@ -118,13 +118,15 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
       const link = m.linked!;
       const r = await render(`Updating ${nameOf(link.path)}`, link.path, dirOf(m.path) || (await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.")) || "");
       if (!r) return;
-      const cur = session.current?.media.find((x) => x.id === m.id);
-      if (!cur) continue;
-      await session.edit(
-        `Update Linked Session ${r.name}`,
-        { op: "set_media", media: { ...cur, path: r.path, relative_path: null, sample_rate: r.sampleRate, channels: 2, length: r.frames, linked: { path: link.path, stamp: r.stamp } } },
-        sessionHistory,
-      );
+      const now = session.current;
+      const cur = now?.media.find((x) => x.id === m.id);
+      if (!now || !cur) continue;
+      // Clips keep their splits, stretch, pitch, fades and effects. Pieces that
+      // start past the end of a shorter mix have nothing left to play and go;
+      // the rest are trimmed to the new end by set_media.
+      const gone = now.tracks.flatMap((t) => t.clips).filter((c) => c.media_id === m.id && !c.looped && c.source_in >= r.frames).map((c) => c.id);
+      const setMedia: Op = { op: "set_media", media: { ...cur, path: r.path, relative_path: null, sample_rate: r.sampleRate, channels: 2, length: r.frames, linked: { path: link.path, stamp: r.stamp } } };
+      await session.edit(`Update Linked Session ${r.name}`, gone.length ? { op: "batch", ops: [{ op: "remove_clips", ids: gone }, setMedia] } : setMedia, sessionHistory);
       showNotice(`${r.name} was saved since its clip was rendered: the clip plays the new mix.`);
     }
   }

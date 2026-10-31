@@ -869,7 +869,9 @@
     const z = zoneAt(track, x, y);
     if (!z) return;
     editor.selectClips([z.clip.id], track.id);
-    run("clip.edit-source");
+    // A linked session's clip opens that session: its file is rendered again on the next save there.
+    const linked = doc?.media.find((m) => m.id === z.clip.media_id)?.linked;
+    run(linked ? "clip.linked.open" : "clip.edit-source");
   }
 
   function onLanePointer(e: PointerEvent, track: TrackDoc) {
