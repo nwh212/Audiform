@@ -3,9 +3,10 @@
   Copyright (c) The GeekCast Radio Network, LLC.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  A control's value in a number box. Click it to type a value (Enter
-  sets it, Escape leaves it), or drag up or down on it to change it (Ctrl for
-  fine steps, Shift for coarse) or turn the mouse wheel over it.
+  A control's value in a number box. Double-click it (or press Enter on
+  it) to type a value (Enter sets it, Escape leaves it), or drag up or
+  down on it to change it (Ctrl for fine steps, Shift for coarse) or turn
+  the mouse wheel over it.
 -->
 <script lang="ts">
   import type { EffectParamInfo } from "../../app/core";
@@ -49,10 +50,11 @@
     if (!drag) return;
     const d = drag;
     drag = null;
-    if (d.moved) {
-      oncommit(d.last);
-      return;
-    }
+    if (d.moved) oncommit(d.last);
+  }
+
+  function type() {
+    drag = null;
     text = formatParam(param, value);
     editing = true;
     queueMicrotask(() => input?.select());
@@ -110,18 +112,15 @@
     aria-valuemax={param.max}
     aria-valuenow={value}
     aria-valuetext={formatParam(param, value)}
-    title="Click to type a value. Drag up or down, or use the mouse wheel, to change it (Ctrl for fine steps, Shift for coarse)."
+    title="Double-click to type a value. Drag up or down, or use the mouse wheel, to change it (Ctrl for fine steps, Shift for coarse)."
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}
     onpointercancel={() => (drag = null)}
     onwheel={wheel}
+    ondblclick={type}
     onkeydown={(e) => {
-      if (e.key === "Enter") {
-        text = formatParam(param, value);
-        editing = true;
-        queueMicrotask(() => input?.select());
-      }
+      if (e.key === "Enter") type();
     }}>{formatParam(param, value)}</span
   >
 {/if}

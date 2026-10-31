@@ -11,8 +11,13 @@
 //!   notches that sweeps up and down (the jet sound).
 //! - Phaser: the sound through a chain of all-pass filters whose turning
 //!   point sweeps, mixed with the dry sound: moving notches without delay.
-//! - Double Track: one copy 10 to 60 ms late whose delay wanders at random,
-//!   as a second take of the same part would, for a thicker voice or guitar.
+//! - Double Track: a tape-style doubler. The source and its copy each have
+//!   their own pan, drive, level, mute and polarity; the copy plays up to
+//!   20 ms early or late (Offset), its time swaying by an LFO (range, rate,
+//!   shape: sine, triangle or random), as a second take or a second tape
+//!   machine would. The input can be the left, both or the right side, and
+//!   the result can be heard in mono. The source is held back 20 ms so the
+//!   copy can come early (the effect's latency).
 //!
 //! Rate, depth, feedback, stereo width and the dry and wet levels are
 //! shared; each kind has its own time setting.
@@ -23,13 +28,16 @@
 //! each copy a share of the neighbouring speakers' sound, so a part in
 //! front shimmers out into the sides and rear too.
 
-use super::{choice, num, EffectInfo, Params, Processor};
+use super::{choice, db_to_gain, num, toggle, EffectInfo, Params, Processor};
 
 pub const ID: &str = "altaudio.modulation";
 pub const KINDS: [&str; 4] = ["Chorus", "Flanger", "Phaser", "Double Track"];
 const STAGES: [&str; 6] = ["2", "4", "6", "8", "10", "12"];
 /// Longest delay any kind reads, with room for its swing.
 const MAX_MS: f64 = 80.0;
+/// Double Track: how early or late the copy can be, and its LFO shapes.
+pub const ADT_MS: f64 = 20.0;
+const LFO_SHAPES: [&str; 3] = ["Sine", "Triangle", "Random"];
 
 pub fn modulation_info() -> EffectInfo {
     EffectInfo {
@@ -49,8 +57,22 @@ pub fn modulation_info() -> EffectInfo {
             num("flange_delay", "Delay", "ms", 0.1, 10.0, 1.5, 0.01).log().group("Flanger"),
             choice("stages", "Stages", &STAGES, 2).group("Phaser"),
             num("center", "Center", "Hz", 100.0, 5000.0, 700.0, 1.0).log().group("Phaser"),
-            num("dt_delay", "Delay", "ms", 10.0, 60.0, 28.0, 0.1).group("Double Track"),
-            num("wander", "Wander", "%", 0.0, 100.0, 40.0, 1.0).group("Double Track"),
+            num("adt_offset", "Offset", "ms", -ADT_MS, ADT_MS, 12.0, 0.01).group("Double Track"),
+            num("lfo_range", "LFO range", "ms", 0.0, 5.0, 1.0, 0.01).group("Double Track"),
+            num("lfo_rate", "LFO rate", "Hz", 0.05, 10.0, 0.4, 0.01).log().group("Double Track"),
+            choice("lfo_shape", "LFO shape", &LFO_SHAPES, 2).group("Double Track"),
+            choice("adt_input", "Input", &["Left", "Left + Right", "Right"], 1).group("Double Track"),
+            toggle("adt_mono", "Mono", false).group("Double Track"),
+            num("src_pan", "Source pan", "", -100.0, 100.0, 0.0, 1.0).group("Source"),
+            num("src_drive", "Source drive", "%", 0.0, 100.0, 0.0, 1.0).group("Source"),
+            num("src_level", "Source level", "dB", -48.0, 12.0, 0.0, 0.1).group("Source"),
+            toggle("src_mute", "Source mute", false).group("Source"),
+            toggle("src_invert", "Source invert", false).group("Source"),
+            num("adt_pan", "Copy pan", "", -100.0, 100.0, 0.0, 1.0).group("Copy"),
+            num("adt_drive", "Copy drive", "%", 0.0, 100.0, 0.0, 1.0).group("Copy"),
+            num("adt_level", "Copy level", "dB", -48.0, 12.0, 0.0, 0.1).group("Copy"),
+            toggle("adt_mute", "Copy mute", false).group("Copy"),
+            toggle("adt_invert", "Copy invert", false).group("Copy"),
             num("dry", "Dry", "%", 0.0, 100.0, 100.0, 1.0).group("Output"),
             num("wet", "Wet", "%", 0.0, 100.0, 50.0, 1.0).group("Output"),
         ],
@@ -177,6 +199,74 @@ pub struct Modulation {
     spread: f32,
     /// On a speaker bed; None for stereo.
     bed: Option<Bed>,
+    /// Double Track's settings, when it is the kind.
+    adt: Option<AdtSet>,
+    /// Double Track's random LFO.
+    adt_walk: Wander,
+    adt_step: f64,
+    adt_phase: f64,
+}
+
+/// One side of Double Track (the source or its copy): pan gains, drive,
+/// and level with mute and polarity folded in.
+#[derive(Clone, Copy)]
+struct AdtSide {
+    pan: [f32; 2],
+    drive: f32,
+    gain: f32,
+}
+
+impl AdtSide {
+    fn from(p: &Params, k: &str) -> Self {
+        let pan = (p.get(&format!("{k}_pan")) / 100.0).clamp(-1.0, 1.0);
+        let a = (pan + 1.0) * std::f64::consts::FRAC_PI_4;
+        let mut gain = db_to_gain(p.get(&format!("{k}_level")));
+        if p.on(&format!("{k}_mute")) {
+            gain = 0.0;
+        }
+        if p.on(&format!("{k}_invert")) {
+            gain = -gain;
+        }
+        Self {
+            pan: [a.cos() as f32, a.sin() as f32],
+            drive: (p.get(&format!("{k}_drive")) / 100.0) as f32,
+            gain,
+        }
+    }
+
+    /// Soft tape saturation, the same level at low drive.
+    fn color(&self, x: f32) -> f32 {
+        if self.drive <= 0.0 {
+            return x;
+        }
+        let k = 1.0 + 5.0 * self.drive;
+        (x * k).tanh() / k.tanh()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AdtSet {
+    src: AdtSide,
+    copy: AdtSide,
+    offset_ms: f64,
+    range_ms: f64,
+    shape: usize,
+    input: usize,
+    mono: bool,
+}
+
+impl AdtSet {
+    fn from(p: &Params) -> Self {
+        Self {
+            src: AdtSide::from(p, "src"),
+            copy: AdtSide::from(p, "adt"),
+            offset_ms: p.get("adt_offset").clamp(-ADT_MS, ADT_MS),
+            range_ms: p.get("lfo_range").clamp(0.0, 5.0),
+            shape: p.index("lfo_shape").min(LFO_SHAPES.len() - 1),
+            input: p.index("adt_input").min(2),
+            mono: p.on("adt_mono"),
+        }
+    }
 }
 
 /// The speakers a bed's copies work on.
@@ -246,6 +336,10 @@ impl Modulation {
             wet: 0.5,
             spread: 0.5,
             bed: None,
+            adt: None,
+            adt_walk: Wander::new(0x51ed_270b, 0.4, sr),
+            adt_step: 0.0,
+            adt_phase: 0.0,
         };
         m.set(p);
         m
@@ -262,11 +356,17 @@ impl Modulation {
         self.flange_ms = p.get("flange_delay").clamp(0.1, 10.0);
         self.n_stages = (p.index("stages").min(STAGES.len() - 1) + 1) * 2;
         self.center = p.get("center").clamp(100.0, 5000.0);
-        self.dt_ms = p.get("dt_delay").clamp(10.0, 60.0);
-        self.wander = (p.get("wander") / 100.0).clamp(0.0, 1.0);
+        // On a bed Double Track keeps the plain doubler: a copy late by
+        // the offset (at least 10 ms), wandering by the LFO range.
+        self.dt_ms = (10.0 + p.get("adt_offset").abs()).clamp(10.0, 60.0);
+        self.wander = (p.get("lfo_range") / 5.0).clamp(0.0, 1.0);
+        self.adt = (self.kind == 3).then(|| AdtSet::from(p));
         for w in &mut self.walk {
             w.set_rate(rate, self.sr);
         }
+        let lfo = p.get("lfo_rate").clamp(0.05, 10.0);
+        self.adt_step = std::f64::consts::TAU * lfo / self.sr;
+        self.adt_walk.set_rate(lfo, self.sr);
         self.dry = (p.get("dry") / 100.0) as f32;
         self.wet = (p.get("wet") / 100.0) as f32;
         self.spread = (p.get("spread") / 100.0).clamp(0.0, 1.0) as f32;
@@ -367,10 +467,49 @@ impl Modulation {
     }
 }
 
+impl Modulation {
+    /// Double Track on stereo: the source held back ADT_MS, the copy read
+    /// earlier or later by the offset and the LFO, each colored, leveled
+    /// and panned, then summed (and folded to mono when asked).
+    fn process_adt(&mut self, buf: &mut [f32], a: AdtSet) {
+        let hold = self.ms(ADT_MS);
+        for f in buf.as_chunks_mut::<2>().0 {
+            let x = match a.input {
+                0 => f[0],
+                2 => f[1],
+                _ => 0.5 * (f[0] + f[1]),
+            };
+            self.lines[0].push(x);
+            let lfo = match a.shape {
+                0 => self.adt_phase.sin(),
+                1 => 1.0 - 2.0 * (self.adt_phase / std::f64::consts::PI - 1.0).abs(),
+                _ => self.adt_walk.next(),
+            };
+            self.adt_phase = (self.adt_phase + self.adt_step) % std::f64::consts::TAU;
+            let src = self.lines[0].read(hold + 1.0);
+            let copy = self.lines[0].read(hold + 1.0 + self.ms(a.offset_ms + a.range_ms * lfo));
+            let s = a.src.color(src) * a.src.gain;
+            let c = a.copy.color(copy) * a.copy.gain;
+            let mut l = s * a.src.pan[0] + c * a.copy.pan[0];
+            let mut r = s * a.src.pan[1] + c * a.copy.pan[1];
+            if a.mono {
+                let m = 0.5 * (l + r);
+                (l, r) = (m, m);
+            }
+            f[0] = l;
+            f[1] = r;
+        }
+    }
+}
+
 impl Processor for Modulation {
     fn process(&mut self, buf: &mut [f32]) {
         if self.bed.is_some() {
             self.process_bed(buf);
+            return;
+        }
+        if let Some(a) = self.adt {
+            self.process_adt(buf, a);
             return;
         }
         // The right side's sweep runs up to a quarter turn behind (half for chorus).
@@ -388,6 +527,14 @@ impl Processor for Modulation {
             let side = 0.5 * (wl - wr) * self.width;
             f[0] = l * self.dry + (mid + side) * self.wet;
             f[1] = r * self.dry + (mid - side) * self.wet;
+        }
+    }
+
+    fn latency(&self) -> usize {
+        if self.adt.is_some() && self.bed.is_none() {
+            self.ms(ADT_MS).round() as usize
+        } else {
+            0
         }
     }
 
@@ -468,7 +615,8 @@ mod tests {
 
     #[test]
     fn wet_off_leaves_the_sound_alone() {
-        for k in 0..KINDS.len() {
+        // Double Track has its own levels for the source and the copy.
+        for k in 0..KINDS.len() - 1 {
             let mut m = Modulation::new(&params(&[("kind", k as f64), ("wet", 0.0)]), R);
             let input = tone(300.0, 4800);
             let mut b = input.clone();
@@ -525,5 +673,47 @@ mod tests {
                 .sum();
             assert!(diff > 10.0, "{k}: copies move on their own: {diff}");
         }
+    }
+
+    #[test]
+    fn double_track_offsets_the_copy_and_pans_each_side() {
+        // Source hard left, copy hard right 5 ms late, no LFO.
+        let p = params(&[
+            ("kind", 3.0),
+            ("adt_offset", 5.0),
+            ("lfo_range", 0.0),
+            ("src_pan", -100.0),
+            ("adt_pan", 100.0),
+        ]);
+        let mut m = Modulation::new(&p, R);
+        let hold = 960; // 20 ms at 48 kHz
+        assert_eq!(super::super::Processor::latency(&m), hold);
+        let mut b = vec![0.0f32; 4000 * 2];
+        b[0] = 1.0;
+        b[1] = 1.0;
+        m.process(&mut b);
+        let peak = |side: usize| {
+            (0..4000)
+                .max_by(|&i, &j| b[i * 2 + side].abs().total_cmp(&b[j * 2 + side].abs()))
+                .unwrap()
+        };
+        assert_eq!(peak(0), hold, "source comes out after the hold-back");
+        assert!(
+            (peak(1) as i64 - (hold + 240) as i64).abs() <= 1,
+            "copy 5 ms later: {}",
+            peak(1)
+        );
+        // Copy muted: only the source, in both sides when centered.
+        let p = params(&[("kind", 3.0), ("adt_mute", 1.0)]);
+        let mut m = Modulation::new(&p, R);
+        let mut b = vec![0.0f32; 2000 * 2];
+        b[0] = 1.0;
+        b[1] = 1.0;
+        m.process(&mut b);
+        let sum: f32 = b.iter().map(|v| v.abs()).sum();
+        assert!(
+            (sum - 2.0 * std::f32::consts::FRAC_1_SQRT_2).abs() < 0.05,
+            "{sum}"
+        );
     }
 }

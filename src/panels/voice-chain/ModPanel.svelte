@@ -8,7 +8,10 @@
   faceplate color). In the middle, the two big dials (Rate and Depth)
   either side of a lit display that draws the movement: each chorus
   voice's swing, the flanger's and phaser's sweep, or the double track's
-  wander. Under them, small dials for the kind's own settings, the
+  wander. Double Track instead has a Source and a Copy strip (pan,
+  drive, level, mute, polarity) either side of a display of where the
+  copy sits against the source, the Offset dial and the LFO, with the
+  input side and a mono check across the top. Under them, small dials for the kind's own settings, the
   feedback, width and room spread, and the levels. Picking a kind starts
   it from settings that suit it, in one undoable step.
 -->
@@ -55,8 +58,8 @@
     flange_delay: "Delay",
     stages: "Stages",
     center: "Center",
-    dt_delay: "Delay",
-    wander: "Wander",
+    adt_offset: "Offset",
+    lfo_range: "Range",
   };
 
   // The display: two turns of the movement, one line per voice.
@@ -76,7 +79,7 @@
         const t = (i / steps) * 2;
         const y =
           kind === 3
-            ? Math.sin(t * 5.1) * 0.5 + Math.sin(t * 2.3 + 1) * 0.35 + Math.sin(t * 9.7 + 2) * 0.15 * val("wander") / 100
+            ? Math.sin(t * 5.1) * 0.5 + Math.sin(t * 2.3 + 1) * 0.35 + Math.sin(t * 9.7 + 2) * 0.15
             : Math.sin((t + off) * Math.PI * 2);
         const py = H / 2 - y * depth * (H / 2 - 6);
         d += `${i ? "L" : "M"}${((i / steps) * W).toFixed(1)} ${py.toFixed(1)}`;
@@ -85,6 +88,12 @@
     }
     return out;
   });
+  // Double Track's display: the copy's place against the source, -20 to +20 ms.
+  const adtX = (ms: number) => W / 2 + (ms / 20) * (W / 2 - 8);
+  const on = (k: string) => val(k) >= 0.5;
+  const toggle = (k: string) => set(k, on(k) ? 0 : 1, true);
+  const INPUTS = ["Left", "L + R", "Right"];
+
   const detail = $derived(
     kind === 0
       ? `${Math.round(val("voices"))} voices · ${formatParam(P("chorus_delay"), val("chorus_delay"))}`
@@ -92,7 +101,7 @@
         ? `${formatParam(P("flange_delay"), val("flange_delay"))} · feedback ${Math.round(val("feedback"))}%`
         : kind === 2
           ? `${formatParam(P("stages"), val("stages"))} stages · ${formatParam(P("center"), val("center"))}`
-          : `${formatParam(P("dt_delay"), val("dt_delay"))} late`,
+          : `${formatParam(P("adt_offset"), val("adt_offset"))}`,
   );
 </script>
 
@@ -106,6 +115,59 @@
       </div>
     </div>
 
+    {#if kind === 3}
+      <div class="fp-top adt-switches">
+        <div class="fp-switches" role="radiogroup" aria-label="Input">
+          {#each INPUTS as name, i (name)}
+            <button type="button" role="radio" class:lit={Math.round(val("adt_input")) === i} aria-checked={Math.round(val("adt_input")) === i} title="What the source is: the left side, both, or the right side" onclick={() => set("adt_input", i, true)}>{name}</button>
+          {/each}
+        </div>
+        <div class="fp-switches">
+          <button type="button" class:lit={on("adt_mono")} aria-pressed={on("adt_mono")} title="Hear the source and copy folded to mono, to check how they sit together" onclick={() => toggle("adt_mono")}>Mono</button>
+        </div>
+      </div>
+      <div class="adt">
+        {#each [["src", "Source"], ["adt", "Copy"]] as const as [k, name], side (k)}
+          <div class="fp-group strip" style:order={side === 0 ? 0 : 2}>
+            <span class="fp-gname">{name}</span>
+            <BigKnob param={P(`${k}_pan`)} value={val(`${k}_pan`)} size={56} label="Pan" oninput={(v) => set(`${k}_pan`, v, false)} oncommit={(v) => set(`${k}_pan`, v, true)} />
+            <BigKnob param={P(`${k}_drive`)} value={val(`${k}_drive`)} size={56} label="Drive" oninput={(v) => set(`${k}_drive`, v, false)} oncommit={(v) => set(`${k}_drive`, v, true)} />
+            <BigKnob param={P(`${k}_level`)} value={val(`${k}_level`)} size={56} label="Level" oninput={(v) => set(`${k}_level`, v, false)} oncommit={(v) => set(`${k}_level`, v, true)} />
+            <div class="pair">
+              <button type="button" class="fp-toggle" class:lit={on(`${k}_mute`)} aria-pressed={on(`${k}_mute`)} title="Mute the {name.toLowerCase()}" onclick={() => toggle(`${k}_mute`)}>Mute</button>
+              <button type="button" class="fp-toggle" class:lit={on(`${k}_invert`)} aria-pressed={on(`${k}_invert`)} title="Flip the {name.toLowerCase()}'s polarity" onclick={() => toggle(`${k}_invert`)}>Ø</button>
+            </div>
+          </div>
+        {/each}
+        <div class="centre">
+          <div class="fp-screen">
+            <div class="fp-readout">
+              <span class="fp-big">{val("adt_offset") > 0 ? "+" : ""}{val("adt_offset").toFixed(2)} ms</span>
+              <span class="fp-small">{val("adt_offset") < 0 ? "copy early" : val("adt_offset") > 0 ? "copy late" : "together"}</span>
+            </div>
+            <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" class="fp-echoes" role="img" aria-label="Where the copy sits against the source">
+              <line class="fp-axis" x1="0" x2={W} y1={H - 14} y2={H - 14} />
+              {#each [-20, -15, -10, -5, 0, 5, 10, 15, 20] as t (t)}
+                <line class="tick" x1={adtX(t)} x2={adtX(t)} y1={H - 18} y2={H - 10} />
+                <text class="tlabel" x={adtX(t)} y={H - 1}>{t}</text>
+              {/each}
+              <rect class="sway" x={adtX(val("adt_offset") - val("lfo_range"))} y="8" width={Math.max(1, adtX(val("adt_offset") + val("lfo_range")) - adtX(val("adt_offset") - val("lfo_range")))} height={H - 28} />
+              <rect class="srcmark" x={adtX(0) - 1.5} y="6" width="3" height={H - 24} />
+              <rect class="fp-rep" x={adtX(val("adt_offset")) - 1.5} y="6" width="3" height={H - 24} />
+            </svg>
+          </div>
+          <BigKnob param={P("adt_offset")} value={val("adt_offset")} size={96} label="Offset" marks={[-20, 0, 20]} oninput={(v) => set("adt_offset", v, false)} oncommit={(v) => set("adt_offset", v, true)} />
+          <div class="fp-group">
+            <span class="fp-gname">LFO</span>
+            <div class="fp-knobs">
+              <BigKnob param={P("lfo_range")} value={val("lfo_range")} size={50} label="Range" oninput={(v) => set("lfo_range", v, false)} oncommit={(v) => set("lfo_range", v, true)} />
+              <BigKnob param={P("lfo_rate")} value={val("lfo_rate")} size={50} label="Rate" oninput={(v) => set("lfo_rate", v, false)} oncommit={(v) => set("lfo_rate", v, true)} />
+              <BigKnob param={P("lfo_shape")} value={val("lfo_shape")} size={50} label="Shape" oninput={(v) => set("lfo_shape", Math.round(v), false)} oncommit={(v) => set("lfo_shape", Math.round(v), true)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    {:else}
     <div class="fp-mid">
       <BigKnob param={P("rate")} value={val("rate")} size={104} label="Rate" marks={[0.02, 0.1, 1, 10]} oninput={(v) => set("rate", v, false)} oncommit={(v) => set("rate", v, true)} />
       <div class="fp-screen" aria-live="polite">
@@ -150,10 +212,54 @@
         </div>
       </div>
     </div>
+    {/if}
   </div>
 </div>
 
 <style>
+  .adt-switches {
+    justify-content: space-between;
+  }
+  .adt {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .strip {
+    align-content: start;
+    gap: 6px;
+  }
+  .pair {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+  }
+  .centre {
+    display: grid;
+    flex: 1;
+    order: 1;
+    gap: 8px;
+    justify-items: center;
+    min-width: 0;
+  }
+  .centre .fp-screen {
+    justify-self: stretch;
+  }
+  .tick {
+    stroke: color-mix(in srgb, var(--glow) 45%, transparent);
+    vector-effect: non-scaling-stroke;
+  }
+  .tlabel {
+    fill: color-mix(in srgb, var(--glow) 60%, #888);
+    font-size: 7px;
+    text-anchor: middle;
+  }
+  .sway {
+    fill: color-mix(in srgb, var(--glow) 18%, transparent);
+  }
+  .srcmark {
+    fill: color-mix(in srgb, var(--panel-ink) 70%, transparent);
+  }
   .sweep {
     fill: none;
     stroke: var(--glow);

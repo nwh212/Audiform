@@ -14,6 +14,7 @@
   import type { EffectSlotDoc } from "../../stores/session";
   import { formatParam, paramValue } from "./chain";
   import BigKnob from "./BigKnob.svelte";
+  import ValueField from "./ValueField.svelte";
 
   interface Props {
     slot: EffectSlotDoc;
@@ -145,7 +146,7 @@
 
 {#snippet slider(k: string, air = false)}
   {@const p = P(k)}
-  <label class="vs" class:air title="{p.name}: {formatParam(p, val(k))}. Double-click for the default.">
+  <div class="vs" class:air title="{p.name}: {formatParam(p, val(k))}. Double-click the slider for the default, or the number to type one.">
     <input
       type="range"
       min={p.min}
@@ -158,8 +159,8 @@
       ondblclick={() => set(k, p.default, true)}
     />
     <span class="vname">{p.name}</span>
-    <span class="vval">{formatParam(p, val(k))}</span>
-  </label>
+    <span class="vval"><ValueField param={p} value={val(k)} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} /></span>
+  </div>
 {/snippet}
 
 <div class="vox">
@@ -537,6 +538,7 @@
     font-size: 9px;
   }
   .vval {
+    width: 52px;
     color: var(--ink-dim);
     font-variant-numeric: tabular-nums;
     font-size: 9px;
