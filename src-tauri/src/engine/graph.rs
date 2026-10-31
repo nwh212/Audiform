@@ -299,7 +299,9 @@ impl Graph {
                 let mut d = crate::dsp::diffuse::Diffuser::new(rate, k);
                 // Place Elements: made up front, so playing never allocates.
                 if let Some(sp) = s.space {
-                    d.steer = Some(Box::new(crate::dsp::diffuse::Steer::new(sp.layout)));
+                    d.steer = Some(Box::new(crate::dsp::diffuse::Steer::new(
+                        sp.layout, rate, k,
+                    )));
                 }
                 st.diffuse = Some(Box::new(d));
             }

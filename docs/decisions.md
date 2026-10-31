@@ -2079,3 +2079,17 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - Save Audio As in the Waveform editor opens Audiform's own window instead of the system's save dialog: the file name, its location (with Browse), the format and its settings (sample rate, channels, bit depth, MP3 and AAC rates), the sample type it will be written as, Include markers, and the estimated file size. The format is picked in the window, so the extension always matches what is written (the system dialog's type list could leave a .wav name on a FLAC choice, or the other way round). An existing file asks before it is replaced. New, never-saved files start in the folder last saved to.
 - Save As now writes the chosen format settings (an MP3's bit rate, a FLAC's bit depth, a new sample rate or mono); before, only the format came through.
 - A test opens a FLAC, saves it as another FLAC and reads it back.
+
+## 2026-10-31: Place Elements and headphone listening sound closer to the source
+Measured on the lead's test song (source, and 7.1 exports at 50 and 100 percent Spatialize with Place Elements):
+- At 50 percent about 2.4 dB went missing across the whole range: the placed sound and the Place Elements sound were crossfaded by plain gains, and they differ speaker by speaker. They are now mixed at equal power.
+- At 100 percent the mids were 1.2 to 1.8 dB short on the speakers, the lows were steered around the room (and came out 1.8 dB heavy folded to stereo), a voice's air was treated as ambience, and the ambience got a random phase on every frequency, which smears it through the whole analysis slice.
+Place Elements now:
+- leaves everything below 120 Hz on the front pair as it is;
+- keeps each side's power between its direct and ambient parts, so the speakers together are within a dB of the source at every band (they were up to 1.8 dB short);
+- builds the direct part from both sides lined up by their smoothed cross power, so it keeps the original's phase instead of jumping between the left and right side's;
+- smooths what it measures over neighbouring frequencies as well as over time, and pans between its direction steps instead of jumping, so parts do not flicker between speakers;
+- leans toward direct sound from 4 to 10 kHz, so a voice's air and s sounds stay with it;
+- keeps most of each side's ambience on its front speaker and gives the rest round the room a phase turn that wanders slowly across frequency (a few milliseconds at most), so the copies differ without blurring attacks;
+- uses a 2048-point analysis (was 1024) for finer frequency detail; its latency grows to match and stays lined up with every other placed sound.
+Headphones (binaural) listening: the sphere head model took about 2.4 dB off the top of a sound straight ahead at both ears. Each ear now gets the inverse of that shelf, so a centered voice is flat on headphones, as on speakers.

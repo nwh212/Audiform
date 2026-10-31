@@ -37,8 +37,11 @@ impl Shelf {
     /// sound, at `rate`, by the bilinear transform of
     /// (1 + s * alpha / (2 w0)) / (1 + s / (2 w0)).
     fn shadow(theta: f32, rate: u32) -> Shelf {
-        let alpha = (1.0 + ALPHA_MIN / 2.0)
-            + (1.0 - ALPHA_MIN / 2.0) * (theta / THETA_MIN * std::f32::consts::PI).cos();
+        Self::with_top(shadow_top(theta), rate)
+    }
+
+    /// The same shelf with its top at `alpha` times the level below.
+    fn with_top(alpha: f32, rate: u32) -> Shelf {
         let w0 = SOUND / HEAD;
         let k = 2.0 * rate as f32;
         let (n0, n1) = (1.0, alpha / (2.0 * w0));
@@ -59,6 +62,12 @@ impl Shelf {
         self.y1 = y;
         y
     }
+}
+
+/// How much of the top an ear facing `theta` degrees away keeps.
+fn shadow_top(theta: f32) -> f32 {
+    (1.0 + ALPHA_MIN / 2.0)
+        + (1.0 - ALPHA_MIN / 2.0) * (theta / THETA_MIN * std::f32::consts::PI).cos()
 }
 
 /// One speaker heard at one ear.
@@ -97,6 +106,10 @@ pub struct Binaural {
     hist: Vec<Vec<f32>>,
     at: usize,
     len: usize,
+    /// Per ear: undoes the shadow a sound straight ahead gets (both ears
+    /// face it side on), so a centered voice keeps its top on headphones
+    /// as it does on speakers.
+    level: [Shelf; 2],
 }
 
 impl Binaural {
@@ -156,6 +169,7 @@ impl Binaural {
             paths,
             at: 0,
             len,
+            level: [Shelf::with_top(1.0 / shadow_top(90.0), rate); 2],
         }
     }
 
@@ -166,6 +180,10 @@ impl Binaural {
     pub fn reset(&mut self) {
         for h in &mut self.hist {
             h.fill(0.0);
+        }
+        for l in &mut self.level {
+            l.x1 = 0.0;
+            l.y1 = 0.0;
         }
         for p in &mut self.paths {
             for e in p.iter_mut() {
@@ -198,8 +216,8 @@ impl Binaural {
                     lr[e] += y;
                 }
             }
-            o[0] = lr[0];
-            o[1] = lr[1];
+            o[0] = self.level[0].run(lr[0]);
+            o[1] = self.level[1].run(lr[1]);
             self.at = (self.at + 1) & mask;
         }
     }
@@ -242,5 +260,19 @@ mod tests {
         for (a, b) in l.iter().zip(&r) {
             assert!((a - b).abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn a_centered_voice_keeps_its_top_on_headphones() {
+        let (l, _) = impulse_at(SpaceLayout::Surround51, 2);
+        let mut planner = realfft::RealFftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(l.len());
+        let mut x = l.clone();
+        let mut spec = fft.make_output_vec();
+        fft.process(&mut x, &mut spec).unwrap();
+        // 256 points at 48 kHz: bin 1 is about 190 Hz, bin 85 about 16 kHz.
+        let (low, top) = (spec[1].norm(), spec[85].norm());
+        let db = 20.0 * (top / low).log10();
+        assert!(db.abs() < 0.5, "top {db:+.2} dB against the lows");
     }
 }
