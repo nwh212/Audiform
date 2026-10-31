@@ -1936,3 +1936,14 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - Opening a plug-in's window while the session plays could hold the plug-in's audio for a few seconds; after 4 s it was taken as hung, its process was stopped, and it had to be reloaded.
 - Now a block that does not come back in time is bypassed and the plug-in catches up: late answers are taken in as they arrive and the plug-in plays again once it is current. It is stopped only if it stays behind for 20 s.
 - During playback, a block that finds the plug-in held by a request (its window opening) waits up to 30 ms, then plays bypassed instead of holding the whole mix up. A mixdown still waits, so nothing is left out of the file.
+
+## 2026-10-31: Built-in effects on every multichannel layout
+- Built-in effects used to be stereo: on the master of a 3D Space session they worked on L and R only, the Waveform editor ran a surround file through the chain a pair of channels at a time in file order (C with LFE), and Batch Convert refused surround files.
+- Now a chain on more than two channels (a 3D Space master's speaker bed, or a 3.0 to 7.1.4 file in the Waveform editor or Batch Convert) runs each built-in effect on every speaker, unless the slot has a routing of its own (then the routing decides, as before). The chain knows which case it is in from its channel names; a 3D Space session's master gets the bed's speakers, plain sessions stay stereo.
+- Reverb is native on the bed: one room engine, the bed's left and right speakers feed its two inputs, and every speaker hears its own mix of the eight tail lines (its own row of the Hadamard matrix, then a short all-pass of its own), so the tail is different in each speaker. Early reflections are dealt out among the speakers. The whole bed's tail is as loud in total as the stereo tail. The low-frequency channel neither feeds it nor gets any.
+- Gain works on every channel.
+- Every other effect runs as stereo copies with the same settings, one per speaker pair by name (L/R, Ls/Rs, Lss/Rss, Lrs/Rrs, Ltf/Rtf, Ltr/Rtr...) and one per lone speaker (C), fed the same sound on both sides. Unnamed channels pair in order.
+- Dynamics, Limiter and Breath Gate copies listen to the loudest channel of the whole bed (or their sidechain), so they move their gain together and the image stays put. The Limiter can now take a key for this.
+- Echo, Pitch Shift, Phase Curve, the Convolution Reverb, the amp, tube and Vox Strip effects and the Speech Leveler leave the low-frequency channel alone (held back by their look-ahead, so it stays in time). EQs, filters and repair effects work on it too.
+- Stereo Width, the Center Channel Extractor, the Channel Mixer and the retired stereo effects keep working on L and R only.
+- Tracks and buses in a 3D Space session stay stereo: they are placed in the room as objects after their effects. A bed-wide reverb belongs on the master.

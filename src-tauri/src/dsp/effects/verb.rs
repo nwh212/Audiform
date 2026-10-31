@@ -22,6 +22,14 @@
 //!
 //! The Impulse Response kind is the Convolution Reverb, picked from the
 //! same window.
+//!
+//! On a speaker bed (a 3D Space master, a surround file) the same tail
+//! feeds every speaker: each hears its own mix of the eight lines (a
+//! different row of the Hadamard matrix, then a short all-pass of its
+//! own), so the room is different in every speaker, as a real one is.
+//! The early reflections are dealt out among the speakers. The bed's
+//! left and right speakers feed the reverb's left and right inputs; the
+//! low-frequency channel neither feeds it nor gets any of it.
 
 use super::{choice, num, EffectInfo, Params, Processor};
 use crate::dsp::biquad::{Biquad, Coeffs, Shape};
@@ -258,9 +266,98 @@ pub struct Reverb {
     width: f32,
     dry: f32,
     wet: f32,
+    /// Each early reflection's level this frame (filled by `core`).
+    er_vals: Vec<f32>,
+    /// On a speaker bed; None for stereo.
+    bed: Option<Bed>,
+}
+
+/// The reverb's speakers on a bed.
+struct Bed {
+    names: Vec<String>,
+    /// Per channel: how much it feeds the left and right inputs.
+    feed: Vec<[f32; 2]>,
+    /// Per channel: its place among the speakers that get the reverb
+    /// (None for the low-frequency channel).
+    out: Vec<Option<usize>>,
+    /// Per speaker that gets the reverb: its row of the line mix, its own
+    /// all-pass, its filters and reflection darkening, and this frame's sound.
+    rows: Vec<usize>,
+    decor: Vec<Allpass>,
+    low: Vec<Biquad>,
+    high: Vec<Biquad>,
+    er_lp: Vec<f32>,
+    wet: Vec<f32>,
+    /// Keeps the whole bed's tail as loud as the stereo tail.
+    gain: f32,
+}
+
+/// How much a speaker feeds the reverb's left and right inputs.
+fn feed(name: &str, index: usize) -> [f32; 2] {
+    const H: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    match name {
+        "LFE" => [0.0, 0.0],
+        "L" => [1.0, 0.0],
+        "R" => [0.0, 1.0],
+        "C" | "Cs" | "M" => [H, H],
+        n if n.starts_with('L') => [H, 0.0],
+        n if n.starts_with('R') => [0.0, H],
+        _ if index.is_multiple_of(2) => [H, 0.0],
+        _ => [0.0, H],
+    }
+}
+
+impl Bed {
+    fn new(names: &[String], rate: u32) -> Self {
+        let r = f64::from(rate.max(1));
+        let mut out = Vec::new();
+        let mut n = 0;
+        for name in names {
+            if name == "LFE" {
+                out.push(None);
+            } else {
+                out.push(Some(n));
+                n += 1;
+            }
+        }
+        // Row 0 is the plain sum, the least like a room: used last.
+        const ROWS: [usize; 8] = [1, 2, 4, 7, 3, 5, 6, 0];
+        let filter = |shape, f| Biquad::new(Coeffs::new(shape, rate, f, 0.707, 0.0));
+        Self {
+            names: names.to_vec(),
+            feed: names.iter().enumerate().map(|(i, x)| feed(x, i)).collect(),
+            out,
+            rows: (0..n).map(|a| ROWS[a % 8]).collect(),
+            decor: (0..n)
+                .map(|a| Allpass::new(((0.9 + 0.61 * a as f64) / 1000.0 * r) as usize, 0.5))
+                .collect(),
+            low: vec![filter(Shape::HighPass, 20.0); n],
+            high: vec![filter(Shape::LowPass, 20_000.0); n],
+            er_lp: vec![0.0; n],
+            wet: vec![0.0; n],
+            gain: (2.0 / n.max(2) as f32).sqrt(),
+        }
+    }
+}
+
+/// +1 or -1: entry (row, k) of the 8 by 8 Hadamard matrix.
+fn sign(row: usize, k: usize) -> f32 {
+    if (row & k).count_ones().is_multiple_of(2) {
+        1.0
+    } else {
+        -1.0
+    }
 }
 
 impl Reverb {
+    /// A reverb over a speaker bed with channels named `names`.
+    pub fn wide(p: &Params, rate: u32, names: &[String]) -> Self {
+        let mut v = Self::new(p, rate);
+        v.bed = Some(Bed::new(names, rate));
+        v.set(p, rate);
+        v
+    }
+
     pub fn new(p: &Params, rate: u32) -> Self {
         let r = f64::from(rate.max(1));
         let kind = p.index("kind").min(KINDS.len() - 1);
@@ -334,7 +431,10 @@ impl Reverb {
             width: 1.0,
             dry: 1.0,
             wet: 0.0,
+            er_vals: Vec::new(),
+            bed: None,
         };
+        v.er_vals = vec![0.0; v.taps.len()];
         v.set(p, rate);
         v
     }
@@ -376,9 +476,19 @@ impl Reverb {
         for b in &mut self.high {
             b.set(Coeffs::new(Shape::LowPass, rate, hi, 0.707, 0.0));
         }
+        if let Some(bed) = self.bed.as_mut() {
+            for b in &mut bed.low {
+                b.set(Coeffs::new(Shape::HighPass, rate, lo, 0.707, 0.0));
+            }
+            for b in &mut bed.high {
+                b.set(Coeffs::new(Shape::LowPass, rate, hi, 0.707, 0.0));
+            }
+        }
     }
 
-    fn frame(&mut self, l: f32, r: f32) -> (f32, f32) {
+    /// One frame of the engine: pre-delay, the early reflections (into
+    /// `er_vals`), diffusion and the tail. Returns the eight lines' sound.
+    fn core(&mut self, l: f32, r: f32) -> [f32; 8] {
         // Pre-delay.
         let n = self.pre[0].len();
         self.pre[0][self.pre_at] = l;
@@ -387,27 +497,14 @@ impl Reverb {
         let (pl, pr) = (self.pre[0][back], self.pre[1][back]);
         self.pre_at = (self.pre_at + 1) % n;
 
-        // Early reflections off a mono copy, alternating sides.
-        let (mut el, mut er) = (0.0f32, 0.0f32);
+        // Early reflections off a mono copy.
         if self.early > 0.0 {
             let m = self.er_ring.len();
             self.er_ring[self.er_at] = (pl + pr) * 0.5;
-            for &(d, g, side) in &self.taps {
-                let v = self.er_ring[(self.er_at + m - d) % m] * g;
-                if side == 0 {
-                    el += v;
-                } else {
-                    er += v;
-                }
+            for (v, &(d, g, _)) in self.er_vals.iter_mut().zip(&self.taps) {
+                *v = self.er_ring[(self.er_at + m - d) % m] * g;
             }
             self.er_at = (self.er_at + 1) % m;
-            if self.saturate {
-                // Tape heads: each echo a little darker.
-                self.er_lp[0] += 0.35 * (el - self.er_lp[0]);
-                self.er_lp[1] += 0.35 * (er - self.er_lp[1]);
-                el = self.er_lp[0];
-                er = self.er_lp[1];
-            }
         }
 
         // Diffusion (and a spring's dispersion).
@@ -431,19 +528,6 @@ impl Reverb {
         for (k, line) in self.lines.iter().enumerate() {
             o[k] = line.read(self.depth);
         }
-        let (mut tl, mut tr) = (0.0f32, 0.0f32);
-        for (k, v) in o.iter().enumerate() {
-            if k % 2 == 0 {
-                tl += v;
-            } else {
-                tr += v;
-            }
-            if k % 4 < 2 {
-                tl += 0.4 * v;
-            } else {
-                tr += 0.4 * v;
-            }
-        }
         let mut mixed = o;
         hadamard(&mut mixed);
         for (k, line) in self.lines.iter_mut().enumerate() {
@@ -465,6 +549,43 @@ impl Reverb {
                 line.phase -= std::f64::consts::TAU;
             }
         }
+        o
+    }
+
+    /// One stereo frame of wet sound.
+    fn frame(&mut self, l: f32, r: f32) -> (f32, f32) {
+        let o = self.core(l, r);
+        // Early reflections alternate sides.
+        let (mut el, mut er) = (0.0f32, 0.0f32);
+        if self.early > 0.0 {
+            for (v, t) in self.er_vals.iter().zip(&self.taps) {
+                if t.2 == 0 {
+                    el += v;
+                } else {
+                    er += v;
+                }
+            }
+            if self.saturate {
+                // Tape heads: each echo a little darker.
+                self.er_lp[0] += 0.35 * (el - self.er_lp[0]);
+                self.er_lp[1] += 0.35 * (er - self.er_lp[1]);
+                el = self.er_lp[0];
+                er = self.er_lp[1];
+            }
+        }
+        let (mut tl, mut tr) = (0.0f32, 0.0f32);
+        for (k, v) in o.iter().enumerate() {
+            if k % 2 == 0 {
+                tl += v;
+            } else {
+                tr += v;
+            }
+            if k % 4 < 2 {
+                tl += 0.4 * v;
+            } else {
+                tr += 0.4 * v;
+            }
+        }
         let late = 0.5f32;
         let mut wl = tl * late + el * self.early;
         let mut wr = tr * late + er * self.early;
@@ -475,10 +596,61 @@ impl Reverb {
         let side = (wl - wr) * 0.5 * self.width;
         (mid + side, mid - side)
     }
+
+    /// Processes interleaved frames over the bed's speakers.
+    fn process_bed(&mut self, buf: &mut [f32]) {
+        let Some(mut bed) = self.bed.take() else {
+            return;
+        };
+        let ch = bed.names.len().max(1);
+        let n = bed.wet.len();
+        let late = 0.5f32;
+        // The eight lines' sum is about √8 times one line, the stereo
+        // side's about 2.15 times: the same per speaker before the bed's gain.
+        let tail_scale = 0.76 * bed.gain;
+        for f in buf.chunks_exact_mut(ch) {
+            let (mut il, mut ir) = (0.0f32, 0.0f32);
+            for (x, w) in f.iter().zip(&bed.feed) {
+                il += x * w[0];
+                ir += x * w[1];
+            }
+            let o = self.core(il, ir);
+            for a in 0..n {
+                let row = bed.rows[a];
+                let tail: f32 = o.iter().enumerate().map(|(k, v)| sign(row, k) * v).sum();
+                let mut e = 0.0f32;
+                if self.early > 0.0 {
+                    for v in self.er_vals.iter().skip(a).step_by(n) {
+                        e += v;
+                    }
+                    if self.saturate {
+                        bed.er_lp[a] += 0.35 * (e - bed.er_lp[a]);
+                        e = bed.er_lp[a];
+                    }
+                }
+                let w = bed.decor[a].run(tail * tail_scale * late + e * self.early);
+                bed.wet[a] = bed.high[a].run(bed.low[a].run(w));
+            }
+            // Width: 0 is the same in every speaker.
+            let mid = bed.wet.iter().sum::<f32>() / n.max(1) as f32;
+            for v in &mut bed.wet {
+                *v = mid + (*v - mid) * self.width;
+            }
+            for (x, out) in f.iter_mut().zip(&bed.out) {
+                let wet = out.map_or(0.0, |a| bed.wet[a]);
+                *x = *x * self.dry + wet * self.wet;
+            }
+        }
+        self.bed = Some(bed);
+    }
 }
 
 impl Processor for Reverb {
     fn process(&mut self, buf: &mut [f32]) {
+        if self.bed.is_some() {
+            self.process_bed(buf);
+            return;
+        }
         for f in buf.as_chunks_mut::<2>().0 {
             let (l, r) = (f[0], f[1]);
             let (wl, wr) = self.frame(l, r);
@@ -510,6 +682,22 @@ impl Processor for Reverb {
         }
         for b in self.low.iter_mut().chain(self.high.iter_mut()) {
             b.reset();
+        }
+        if let Some(bed) = self.bed.as_mut() {
+            for a in &mut bed.decor {
+                a.buf.fill(0.0);
+            }
+            for b in bed.low.iter_mut().chain(bed.high.iter_mut()) {
+                b.reset();
+            }
+            bed.er_lp.fill(0.0);
+        }
+    }
+
+    fn channels(&self) -> (Vec<String>, Vec<String>) {
+        match &self.bed {
+            Some(b) => (b.names.clone(), b.names.clone()),
+            None => (super::routing::stereo(), super::routing::stereo()),
         }
     }
 

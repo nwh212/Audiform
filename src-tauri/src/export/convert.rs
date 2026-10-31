@@ -21,7 +21,8 @@ use crate::dsp::effects::ChainProcessor;
 use crate::session::model::EffectChain;
 
 /// A Voice Chain run over a whole file. Mono files are processed as
-/// stereo and folded back; the chain's look-ahead delay is trimmed from
+/// stereo and folded back; surround files run on all their speakers
+/// (see dsp/effects/wide.rs). The chain's look-ahead delay is trimmed from
 /// the start and flushed at the end, so the output lines up exactly.
 struct FileFx {
     chain: ChainProcessor,
@@ -34,12 +35,14 @@ struct FileFx {
 
 impl FileFx {
     fn new(chain: &EffectChain, rate: u32, ch: usize) -> Result<Option<Self>, String> {
-        let Some(c) = ChainProcessor::new(chain, rate) else {
+        let c = if ch > 2 {
+            ChainProcessor::with_channels(chain, rate, &crate::dsp::effects::wide::names_for(ch))
+        } else {
+            ChainProcessor::new(chain, rate)
+        };
+        let Some(c) = c else {
             return Ok(None);
         };
-        if ch > 2 {
-            return Err("Processing works on mono and stereo files only.".into());
-        }
         let latency = c.latency();
         Ok(Some(Self {
             chain: c,
@@ -53,6 +56,13 @@ impl FileFx {
     /// Processes `buf` (interleaved at the file's channel count) in place;
     /// it may come back shorter while the delay is trimmed.
     fn run(&mut self, buf: &mut Vec<f32>) {
+        if self.ch > 2 {
+            self.chain.process(buf);
+            let drop = self.skip.min(buf.len() / self.ch);
+            self.skip -= drop;
+            buf.drain(..drop * self.ch);
+            return;
+        }
         self.stereo.clear();
         if self.ch == 1 {
             self.stereo.extend(buf.iter().flat_map(|v| [*v, *v]));

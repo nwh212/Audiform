@@ -337,12 +337,41 @@ impl Limiter {
 
 impl Processor for Limiter {
     fn process(&mut self, buf: &mut [f32]) {
+        self.run(buf, None);
+    }
+    /// Listens to `key` for its peaks: on a speaker bed, the loudest
+    /// channel of the whole bed, so every pair of speakers is turned down
+    /// together and the image holds.
+    fn process_keyed(&mut self, buf: &mut [f32], key: &[f32]) {
+        self.run(buf, Some(key));
+    }
+    fn latency(&self) -> usize {
+        self.lookahead
+    }
+    fn reset(&mut self) {
+        for p in &mut self.paths {
+            p.reset();
+        }
+        self.delay.fill(0.0);
+        self.delay_at = 0;
+        self.hist = [[0.0; TP_TAPS]; 2];
+    }
+}
+
+impl Limiter {
+    fn run(&mut self, buf: &mut [f32], key: Option<&[f32]>) {
         let n = self.delay.len();
-        for f in buf.as_chunks_mut::<2>().0 {
+        for (i, f) in buf.as_chunks_mut::<2>().0.iter_mut().enumerate() {
             let l = f[0] * self.boost;
             let r = f[1] * self.boost;
+            let (kl, kr) = match key {
+                Some(k) if k.len() >= i * 2 + 2 => {
+                    (k[i * 2] * self.boost, k[i * 2 + 1] * self.boost)
+                }
+                _ => (l, r),
+            };
             let (pl, pr) = if self.true_peak {
-                for (h, v) in self.hist.iter_mut().zip([l, r]) {
+                for (h, v) in self.hist.iter_mut().zip([kl, kr]) {
                     h.rotate_left(1);
                     h[TP_TAPS - 1] = v;
                 }
@@ -351,7 +380,7 @@ impl Processor for Limiter {
                     interval_peak(&self.hist[1], &self.weights),
                 )
             } else {
-                (l.abs(), r.abs())
+                (kl.abs(), kr.abs())
             };
             let (gl, gr) = if self.linked {
                 let g = self.paths[0].step(self.need(pl.max(pr)), self.release);
@@ -379,17 +408,6 @@ impl Processor for Limiter {
             f[0] = (dl * gl).clamp(-c, c);
             f[1] = (dr * gr).clamp(-c, c);
         }
-    }
-    fn latency(&self) -> usize {
-        self.lookahead
-    }
-    fn reset(&mut self) {
-        for p in &mut self.paths {
-            p.reset();
-        }
-        self.delay.fill(0.0);
-        self.delay_at = 0;
-        self.hist = [[0.0; TP_TAPS]; 2];
     }
 }
 

@@ -8,7 +8,7 @@
 //! interface swaps that stretch in as one undoable edit, like any other
 //! destructive edit.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 
 use tauri::async_runtime::spawn_blocking;
 use tauri::{AppHandle, Emitter, State};
@@ -50,31 +50,34 @@ pub fn process_range_with(
     step: &mut dyn FnMut(f32) -> bool,
 ) -> Option<Vec<f32>> {
     let latency = chain.latency();
+    let ch = chain.channels().max(1);
     let mut wet = audio.to_vec();
     let total = wet.len().max(1) as f32;
     let mut done = 0usize;
-    for block in wet.chunks_mut(4096 * 2) {
+    for block in wet.chunks_mut(4096 * ch) {
         chain.process(block);
         done += block.len();
         if !step(done as f32 / total) {
             return None;
         }
     }
-    let dry = audio.as_chunks::<2>().0;
-    let wet = wet.as_chunks::<2>().0;
     let edge = edge.min(frames / 2);
-    let mut out = Vec::with_capacity(frames * 2);
+    let mut out = Vec::with_capacity(frames * ch);
     for i in 0..frames {
-        let d = dry.get(warm + i).copied().unwrap_or([0.0; 2]);
-        let w = wet.get(warm + latency + i).copied().unwrap_or([0.0; 2]);
         let k = if edge == 0 {
             1.0
         } else {
             let from_edge = i.min(frames - 1 - i);
             (from_edge as f32 / edge as f32).min(1.0)
         };
-        out.push(d[0] + (w[0] - d[0]) * k);
-        out.push(d[1] + (w[1] - d[1]) * k);
+        for c in 0..ch {
+            let d = audio.get((warm + i) * ch + c).copied().unwrap_or(0.0);
+            let w = wet
+                .get((warm + latency + i) * ch + c)
+                .copied()
+                .unwrap_or(0.0);
+            out.push(d + (w - d) * k);
+        }
     }
     Some(out)
 }
@@ -103,6 +106,7 @@ pub async fn wave_apply_chain(
             return Err("Select some audio first, or apply to the whole file.".into());
         }
         let empty = || "The Audio FX chain is empty or bypassed, so there is nothing to apply.";
+        // The same on every layout: the copies on a bed share their settings.
         let latency = ChainProcessor::new(&chain, rate).ok_or(empty())?.latency();
         let warm = (f64::from(rate) * WARM_SECONDS) as usize;
         let from = start as i64 - warm as i64;
@@ -110,30 +114,35 @@ pub async fn wave_apply_chain(
         let (audio, n) = render_n(&session, from, to);
         let frames = (end - start) as usize;
         let edge = (f64::from(rate) * EDGE_SECONDS) as usize;
-        // A multichannel file goes through the chain a pair of channels at a time.
-        // Progress runs 0 to 1 across all the channel pairs, as "export-progress".
-        let pairs = n.div_ceil(2).max(1);
-        let pair = AtomicUsize::new(0);
+        // A surround file goes through the chain on all its speakers at
+        // once (see dsp/effects/wide.rs); mono runs as stereo and folds back.
+        // Progress runs 0 to 1, as "export-progress".
         let mut last = -1.0f32;
-        let out = by_pairs(&audio, n, |st| {
-            let mut c = ChainProcessor::new(&chain, rate).ok_or(empty())?;
-            let p = pair.fetch_add(1, Ordering::Relaxed);
-            process_range_with(&mut c, st, warm, frames, edge, &mut |f| {
-                if flag.load(Ordering::Relaxed) {
-                    return false;
-                }
-                let whole = (p as f32 + f) / pairs as f32;
-                if whole - last >= 0.01 || whole >= 1.0 {
-                    last = whole;
-                    let _ = progress.emit(
-                        "export-progress",
-                        serde_json::json!({ "done": (whole * 1000.0) as u64, "total": 1000u64 }),
-                    );
-                }
-                true
-            })
-            .ok_or_else(|| "Cancelled.".to_string())
-        })?;
+        let mut step = |f: f32| {
+            if flag.load(Ordering::Relaxed) {
+                return false;
+            }
+            if f - last >= 0.01 || f >= 1.0 {
+                last = f;
+                let _ = progress.emit(
+                    "export-progress",
+                    serde_json::json!({ "done": (f * 1000.0) as u64, "total": 1000u64 }),
+                );
+            }
+            true
+        };
+        let cancelled = || "Cancelled.".to_string();
+        let out = if n > 2 {
+            let names = crate::dsp::effects::wide::names_for(n);
+            let mut c = ChainProcessor::with_channels(&chain, rate, &names).ok_or(empty())?;
+            process_range_with(&mut c, &audio, warm, frames, edge, &mut step)
+                .ok_or_else(cancelled)?
+        } else {
+            by_pairs(&audio, n, |st| {
+                let mut c = ChainProcessor::new(&chain, rate).ok_or(empty())?;
+                process_range_with(&mut c, st, warm, frames, edge, &mut step).ok_or_else(cancelled)
+            })?
+        };
         let media = write_n(&dir, "voice-chain", &out, n, 0, frames, rate)?;
         Ok(SpectralResult { media, start, end })
     })

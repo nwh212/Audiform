@@ -32,6 +32,7 @@ pub mod shaped;
 pub mod tube;
 pub mod verb;
 pub mod vocal;
+pub mod wide;
 pub mod width;
 
 use std::collections::BTreeMap;
@@ -503,6 +504,22 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
     })
 }
 
+/// The processor for a slot in a chain over channels named `names`: on
+/// more than two (a speaker bed, a surround file), a built-in effect
+/// without a routing of its own runs on all of them (see `wide.rs`).
+fn build_for(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<dyn Processor>> {
+    let own_routing = slot
+        .routing
+        .as_ref()
+        .is_some_and(|r| !r.inputs.is_empty() || !r.outputs.is_empty());
+    if !own_routing {
+        if let Some(p) = wide::build_wide(slot, rate, names) {
+            return Some(p);
+        }
+    }
+    build(slot, rate)
+}
+
 /// True when `chain` would change the sound: the same test
 /// [`ChainProcessor::new`] makes, without building anything.
 pub fn is_active(chain: &EffectChain) -> bool {
@@ -542,6 +559,8 @@ pub struct ChainProcessor {
     routes: Vec<Option<Route>>,
     /// Channels per frame: 2, or one per speaker on a 3D Space master.
     ch: usize,
+    /// The channels by speaker name.
+    names: Vec<String>,
     /// Per stage: the track or bus keying it, and a delay that holds the
     /// key back by the look-ahead of the stages before it, so key and
     /// signal still line up when they reach it.
@@ -582,7 +601,7 @@ impl ChainProcessor {
         let mut keys = Vec::new();
         let mut before = 0;
         for s in chain.slots.iter().take(MAX_SLOTS).filter(|s| s.enabled) {
-            if let (Some(p), Some(i)) = (build(s, rate), info(&s.effect)) {
+            if let (Some(p), Some(i)) = (build_for(s, rate, names), info(&s.effect)) {
                 keys.push(s.sidechain.map(|id| (id, Delay::new(before))));
                 let (ins, outs) = p.channels();
                 let map = routing::resolve(s.routing.as_ref(), &ins, &outs, names);
@@ -617,6 +636,7 @@ impl ChainProcessor {
             stages,
             routes,
             ch,
+            names: names.to_vec(),
             keys,
             key_buf: Vec::new(),
             slots,
@@ -633,6 +653,11 @@ impl ChainProcessor {
 
     pub fn latency(&self) -> usize {
         self.latency
+    }
+
+    /// Channels per frame the chain runs on.
+    pub fn channels(&self) -> usize {
+        self.ch
     }
 
     /// True when a stage is a running plug-in, which must not be warmed up
@@ -669,7 +694,13 @@ impl ChainProcessor {
             position: None,
             routing: None,
         };
-        if let Some(fresh) = build(&slot, self.rate) {
+        // A stage that runs on all the chain's channels is built that way again.
+        let fresh = if self.routes[i].is_none() {
+            build_for(&slot, self.rate, &self.names)
+        } else {
+            build(&slot, self.rate)
+        };
+        if let Some(fresh) = fresh {
             if fresh.latency() == self.stages[i].latency() {
                 self.stages[i] = fresh;
             }
@@ -741,9 +772,10 @@ impl ChainProcessor {
                 None => None,
             };
             let Some(r) = route.as_mut() else {
+                // A stage on a whole bed takes the stereo key as it is.
                 match key {
-                    Some(k) if ch == 2 => st.process_keyed(buf, k),
-                    _ => st.process(buf),
+                    Some(k) => st.process_keyed(buf, k),
+                    None => st.process(buf),
                 }
                 continue;
             };
