@@ -568,6 +568,8 @@
     border-right: 1px solid var(--border);
   }
   .pick {
+    /* Full height each; the list scrolls instead of squeezing them. */
+    flex: none;
     display: flex;
     gap: 5px;
     align-items: center;
