@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use super::export::ExportCancel;
-use super::session::OpenSession;
+use super::session::{OpenSession, ParkedSessions};
 use crate::export::mixdown::{self, MixdownRequest};
 use crate::session::model::{Id, Session};
 
@@ -69,25 +69,43 @@ struct Progress {
 
 /// Renders the whole mix of the session at `session` to a new 32-bit
 /// float stereo WAV in `folder` (created if needed). Refuses the session
-/// in front, which cannot hold its own mix. Emits `export-progress` and
-/// stops on `export_cancel`.
+/// in front, which cannot hold its own mix. With `live`, a session that is
+/// open (set aside) is rendered as it is now, unsaved edits included;
+/// otherwise, and when it is not open, its file is. Emits
+/// `export-progress` and stops on `export_cancel`.
 #[tauri::command]
 pub async fn linked_render(
     app: AppHandle,
     open: State<'_, OpenSession>,
+    parked: State<'_, ParkedSessions>,
     cancel: State<'_, ExportCancel>,
     session: PathBuf,
     folder: PathBuf,
+    live: Option<bool>,
 ) -> Result<LinkedRender, String> {
     let own = open.0.lock().map_err(|e| e.to_string())?.path.clone();
     if own.as_deref().is_some_and(|p| same_file(p, &session)) {
         return Err("A session cannot hold its own mix. Pick another session.".into());
     }
+    let open_copy = if live.unwrap_or(false) {
+        parked
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .iter()
+            .find(|o| o.path.as_deref().is_some_and(|p| same_file(p, &session)))
+            .map(|o| o.session.clone())
+    } else {
+        None
+    };
     let flag = cancel.0.clone();
     flag.store(false, Ordering::Relaxed);
     tauri::async_runtime::spawn_blocking(move || {
         let stamp = stamp(&session).ok_or("That session file could not be read.")?;
-        let inner = load(&session)?;
+        let inner = match open_copy {
+            Some(s) => s,
+            None => load(&session)?,
+        };
         let name = inner.name.clone();
         std::fs::create_dir_all(&folder)
             .map_err(|e| format!("Could not create {}: {e}", folder.display()))?;

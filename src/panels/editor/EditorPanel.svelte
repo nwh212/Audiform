@@ -736,7 +736,7 @@
   }
 
   /** What hit-testing measures against: the view, the files and the session rate. */
-  const geometry = (): LaneGeometry => ({ view, media: mediaMap, rate });
+  const geometry = (): LaneGeometry => ({ view, media: mediaMap, rate, width: lanesWidth });
   const clipAt = (track: TrackDoc, x: number) => hitClip(geometry(), track, x);
 
   // Clip gestures. A drag shows its result live through `preview` and
@@ -867,7 +867,7 @@
     const { x, y } = laneXY(e, e.currentTarget as HTMLElement);
     if (chipAt(track, x, y)) return;
     const z = zoneAt(track, x, y);
-    if (!z) return;
+    if (!z || z.kind === "rerender") return;
     editor.selectClips([z.clip.id], track.id);
     // A linked session's clip opens that session: its file is rendered again on the next save there.
     const linked = doc?.media.find((m) => m.id === z.clip.media_id)?.linked;
@@ -939,6 +939,11 @@
     if (!ed.selectedClips.has(clip.id) && doc) editor.selectClips(withGroups(doc, [clip.id]), track.id);
     if (e.button === 0 && doc) {
       e.preventDefault();
+      if (z.kind === "rerender") {
+        editor.selectClips([clip.id], track.id);
+        run("clip.linked.update");
+        return;
+      }
       if (z.kind === "env-line" || z.kind === "env-point") {
         startEnvelope(e, (e.currentTarget as HTMLElement).getBoundingClientRect(), track, clip, z.env ?? "volume", z.index ?? null);
         return;

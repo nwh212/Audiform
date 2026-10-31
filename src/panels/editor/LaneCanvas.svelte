@@ -10,6 +10,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { drawGainHandle, gainBox } from "./clip-gain";
+  import { drawRerender, rerenderBox } from "./linked-clip";
   import { hiddenEdges } from "./lane-hit";
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
   import { clipLength, stretchOf, type ClipDoc, type FadeDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
@@ -249,11 +250,53 @@
       // A stretched clip says so in its title, with the pitch mode.
       const semis = clip.looped || !clip.stretch?.keep_pitch ? 0 : (clip.stretch.pitch ?? 0);
       const pitchText = semis ? `  ${semis > 0 ? "+" : ""}${Math.round(semis * 100) / 100} st` : "";
-      const label = st === 1 && !semis ? clip.name : `${clip.name}  ${st === 1 ? "" : `${Math.round(st * 1000) / 10}%`}${clip.stretch?.keep_pitch === false ? " tape" : ""}${pitchText}`;
+      // A session placed in this one is marked as such in its title.
+      const linked = !!m?.linked;
+      const name = linked ? `\u25A4 SESSION  ${clip.name}` : clip.name;
+      const label = st === 1 && !semis ? name : `${name}  ${st === 1 ? "" : `${Math.round(st * 1000) / 10}%`}${clip.stretch?.keep_pitch === false ? " tape" : ""}${pitchText}`;
       // Clear of the stretch handle in the corner, when shown.
       const indent = stretchHandles && !clip.looped && !clip.locked && x1 - x0 > 26 ? 14 : 4;
       g.fillText(label, Math.max(x0, 0) + indent, 1 + titleH / 2);
       g.restore();
+      if (linked) {
+        // Session clips: a dashed frame in the clip's color and a striped
+        // title bar, so they never read as a plain audio file.
+        g.save();
+        g.globalAlpha = clip.muted ? 0.6 : 1;
+        g.beginPath();
+        g.rect(left, 1, right - left, titleH);
+        g.clip();
+        g.strokeStyle = "rgba(14, 14, 16, 0.28)";
+        g.lineWidth = 3;
+        for (let sx = Math.floor((left - x0) / 10) * 10 + x0 - titleH; sx < right; sx += 10) {
+          g.beginPath();
+          g.moveTo(sx, 1 + titleH);
+          g.lineTo(sx + titleH, 1);
+          g.stroke();
+        }
+        g.restore();
+        g.save();
+        g.globalAlpha = clip.muted ? 0.6 : 1;
+        g.fillStyle = color;
+        g.globalAlpha *= 0.55;
+        g.fillRect(left, 1, right - left, titleH);
+        g.globalAlpha = clip.muted ? 0.6 : 1;
+        g.fillStyle = "#0e0e10";
+        g.font = `bold 11px ${css("--font-ui")}`;
+        g.textBaseline = "middle";
+        g.beginPath();
+        g.rect(left, 1, right - left, titleH);
+        g.clip();
+        g.fillText(label, Math.max(x0, 0) + indent, 1 + titleH / 2);
+        g.restore();
+        g.save();
+        g.globalAlpha = 1;
+        g.strokeStyle = "rgba(255, 255, 255, 0.8)";
+        g.lineWidth = 1.5;
+        g.setLineDash([6, 3]);
+        g.strokeRect(x0 + 1, 2, x1 - x0 - 2, lh - 4);
+        g.restore();
+      }
 
       // Waveform.
       const body = { top: 1 + titleH, height: lh - 2 - titleH };
@@ -548,6 +591,10 @@
       // Level handle in the bottom-left corner (see clip-gain.ts), with the level when it is not 0.
       const gb = clip === liveClip ? null : gainBox(x0, x1, lh - 2, 1 + titleH);
       if (gb) drawGainHandle(g, gb, clip.gain_db, `10px ${css("--font-ui")}`);
+      if (m?.linked && clip !== liveClip) {
+        const rb = rerenderBox(x0, x1, lh - 2, 1 + titleH, width);
+        if (rb) drawRerender(g, rb);
+      }
     }
     g.filter = "none";
 

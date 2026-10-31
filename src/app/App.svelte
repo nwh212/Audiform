@@ -812,7 +812,10 @@
   const KEY_RECENT = "sessions.recent";
   const KEY_EDITOR = "editor.settings";
 
+  /** Set once the linked-session tools exist: opens the sessions an opened session's clips stand in for. */
+  let onSessionOpened: ((doc: SessionDoc) => void) | null = null;
   const files = new SessionFiles({
+    onOpened: (doc) => onSessionOpened?.(doc),
     backend: {
       create: (options) => sessionNew<SessionDoc>(options),
       save: (path, media, libs) => sessionSave<SessionDoc, MediaRefDoc>(path, media, libs, settings.current.backups ? settings.current.backupCount : 0),
@@ -1317,8 +1320,35 @@
     folderBesideSession,
     playheadNow,
     uuid,
-    openSession: (p) => files.open(p),
+    openSession: async (p) => {
+      const ok = await files.open(p);
+      if (ok) await actions.run("view.editor.multitrack");
+      return ok;
+    },
+    openBehind: async (paths, frontId) => {
+      const key = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+      const seen = new Set<string>();
+      const queue = [...paths];
+      let moved = false;
+      while (queue.length > 0) {
+        const p = queue.shift()!;
+        if (seen.has(key(p))) continue;
+        seen.add(key(p));
+        // Only Audiform sessions open set aside; a .sesx would come in as a new, unsaved session.
+        if (!/\.(audfrm|altaudio)$/i.test(p) || files.isOpen(p)) continue;
+        try {
+          if (!(await files.open(p))) continue;
+          moved = true;
+        } catch (e) {
+          showNotice(`Could not open ${p.split(/[\\/]/).pop()}: ${e instanceof Error ? e.message : String(e)}`);
+          continue;
+        }
+        for (const m of session.current?.media ?? []) if (m.linked) queue.push(m.linked.path);
+      }
+      if (moved) await files.switchTo(frontId);
+    },
   });
+  onSessionOpened = (doc) => void linkedTools.openInner(doc);
   onDestroy(() => linkedTools.destroy());
 
   // Clip commands (see clip-tools.svelte.ts).

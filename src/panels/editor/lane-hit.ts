@@ -12,6 +12,7 @@
 import type { EditorState } from "../../stores/editor";
 import { clipLength, type ClipDoc, type MediaRefDoc, type TrackDoc } from "../../stores/session";
 import { gainBox } from "./clip-gain";
+import { onBox, rerenderBox } from "./linked-clip";
 import { chipBox, chipLabel, fxLaneOf, levelAt, pointsOf, rangeOf, restValue, valueToY, type EnvKind } from "./envelope";
 import { sampleAt, trackHeight, xOf, TRACK_GAP, type Viewport } from "./timeline";
 
@@ -21,7 +22,7 @@ export const SNAP_PX = 8;
 /** Stretch handles: triangles this many pixels wide in a clip's top corners (see LaneCanvas). */
 export const STRETCH_PX = 11;
 
-export type Gesture = "move" | "trim-left" | "trim-right" | "stretch-left" | "stretch-right" | "fade-in" | "fade-out" | "env-line" | "env-point" | "gain";
+export type Gesture = "move" | "trim-left" | "trim-right" | "stretch-left" | "stretch-right" | "fade-in" | "fade-out" | "env-line" | "env-point" | "gain" | "rerender";
 
 /** A razor blade for the Razor tool; the hot spot is the blade's cutting point. */
 export const RAZOR_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
@@ -50,6 +51,7 @@ export const CURSORS: Record<Gesture, string> = {
   "env-line": "crosshair",
   "env-point": "move",
   gain: "ns-resize",
+  rerender: "pointer",
 };
 
 /** The y range the volume envelope uses inside a lane of `height` pixels. Matches LaneCanvas. */
@@ -60,6 +62,8 @@ export interface LaneGeometry {
   view: Viewport;
   media: ReadonlyMap<string, MediaRefDoc>;
   rate: number;
+  /** Visible lane width in pixels, so corner buttons stay on screen. */
+  width?: number;
 }
 
 /** The editor settings hit-testing depends on. */
@@ -128,6 +132,8 @@ export function zoneAt(g: LaneGeometry, ed: HitOptions, track: TrackDoc, x: numb
     if (x - x0 <= STRETCH_PX) return { kind: "stretch-left", clip };
     if (x1 - x <= STRETCH_PX) return { kind: "stretch-right", clip };
   }
+  // A session clip's render-again button in the bottom-right corner (see linked-clip.ts).
+  if (g.media.get(clip.media_id)?.linked && onBox(rerenderBox(x0, x1, trackHeight(track) - TRACK_GAP - 2, TITLE_H + 1, g.width), x, y)) return { kind: "rerender", clip };
   // The level handle in the bottom-left corner (see clip-gain.ts).
   const gb = gainBox(x0, x1, trackHeight(track) - TRACK_GAP - 2, TITLE_H + 1);
   if (gb && !clip.locked && x >= gb.x - 2 && x <= gb.x + gb.w + 2 && y >= gb.y - 2 && y <= gb.y + gb.h + 2) return { kind: "gain", clip };

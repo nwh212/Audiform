@@ -2169,3 +2169,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-10-31: Every session row in the Files panel drags like a file
 - All session rows drag now, the same way audio rows do, with the session's name on the drag. Before, only a saved session set aside could be dragged and the others did nothing, which read as session rows not dragging at all.
 - Dropping the session in front onto its own tracks says why it cannot go in (a session cannot hold its own mix) and how to do it: bring the other session to the front, then drag this one in. Dragging a never-saved session asks for it to be saved first.
+
+## 2026-10-31: Session clips look like sessions, open with their session, and render again on demand
+- A clip that stands in for another session is marked as one: "SESSION" and a session mark before its name in a bold title, a striped title bar, and a dashed frame around the clip.
+- A curved arrow button in its bottom-right corner (and Render Session Again on its right-click menu, which also now says Open Session) renders the inner session's mix again right away, without saving it. When that session is open, it is rendered as it is in the editor, unsaved edits included; otherwise from its file. Saving the inner session still updates the clip on its own.
+- Opening a session from its file also opens the sessions its clips stand in for (and the ones they hold), set aside behind it, so they are one double-click away; it comes back to the front after. Sessions that cannot be found are skipped with a notice, and their clips keep the last mix. Only Audiform sessions open this way; a .sesx stand-in would come in as a new, unsaved session, so it is left closed.
+- Double-clicking a session clip brings its session up in the Multitrack view.

@@ -246,8 +246,8 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
       // A clip that plays another session's mix.
       ...(can("clip.linked.open")
         ? ([
-            { kind: "item", label: "Open Linked Session", run: () => run("clip.linked.open") },
-            { kind: "item", label: "Update Linked Session Now", disabled: !can("clip.linked.update"), run: () => run("clip.linked.update") },
+            { kind: "item", label: "Open Session", run: () => run("clip.linked.open") },
+            { kind: "item", label: "Render Session Again", disabled: !can("clip.linked.update"), run: () => run("clip.linked.update") },
           ] as ContextItem[])
         : []),
       { kind: "sep" },

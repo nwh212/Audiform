@@ -87,6 +87,8 @@ export interface SessionFilesDeps {
   beforePark?(): Promise<void>;
   /** The list of open sessions changed. */
   onSessions?(): void;
+  /** A session was opened from its file (not brought back from being set aside). */
+  onOpened?(doc: SessionDoc): void;
 }
 
 export { isBlank } from "../stores/session";
@@ -210,6 +212,12 @@ export class SessionFiles {
     return true;
   }
 
+  /** True when the session file at `path` is open, in front or set aside. */
+  isOpen(path: string): boolean {
+    const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
+    return key(this.d.session.path) === key(path) || this.parked.some((p) => key(p.path) === key(path));
+  }
+
   /** Brings an open session to the front, setting the current one aside. */
   async switchTo(id: string): Promise<boolean> {
     if (this.d.session.current?.id === id) return true;
@@ -251,6 +259,7 @@ export class SessionFiles {
     }
     await this.replace(r, "Open", false);
     this.addRecent(r.path ?? target);
+    this.d.onOpened?.(r.session);
     return true;
   }
 

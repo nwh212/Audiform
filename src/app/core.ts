@@ -1043,9 +1043,13 @@ export function linkedPick(): Promise<string | null> {
   return invoke<string | null>("linked_pick");
 }
 
-/** Renders the session file's whole mix into `folder`. Emits `export-progress`. */
-export function linkedRender(sessionPath: string, folder: string): Promise<LinkedRender> {
-  return invoke<LinkedRender>("linked_render", { session: sessionPath, folder });
+/**
+ * Renders a session's whole mix into `folder`. Emits `export-progress`.
+ * `live`: when that session is open (set aside), render it as it is now,
+ * unsaved edits included, instead of its file.
+ */
+export function linkedRender(sessionPath: string, folder: string, live = false): Promise<LinkedRender> {
+  return invoke<LinkedRender>("linked_render", { session: sessionPath, folder, live });
 }
 
 /** Which linked media files' sessions were saved since they were rendered, or are gone. */

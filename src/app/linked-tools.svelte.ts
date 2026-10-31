@@ -37,6 +37,11 @@ export interface LinkedToolsDeps {
   uuid: () => string;
   /** Brings a session file to the front (opening it if needed). */
   openSession: (path: string) => Promise<boolean>;
+  /**
+   * Opens these session files set aside behind the session `frontId`, which
+   * comes back to the front after; the sessions they hold open the same way.
+   */
+  openBehind?: (paths: string[], frontId: string) => Promise<void>;
 }
 
 const FOLDER = "Linked Sessions";
@@ -52,14 +57,14 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
   let refreshing = false;
 
   /** Renders a session with the progress window up. */
-  async function render(title: string, sessionPath: string, folder: string): Promise<LinkedRender | null> {
+  async function render(title: string, sessionPath: string, folder: string, live = false): Promise<LinkedRender | null> {
     setExporting({ title, progress: 0, floating: true });
     let off: (() => void) | null = null;
     try {
       off = await listen<{ done: number; total: number }>("export-progress", (e) => {
         if (exporting()) setExporting({ ...exporting()!, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 });
       });
-      const r = await linkedRender(sessionPath, folder);
+      const r = await linkedRender(sessionPath, folder, live);
       return r.cancelled ? null : r;
     } finally {
       off?.();
@@ -117,11 +122,15 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
   /** Linked media in the session in front. */
   const linkedMedia = (): MediaRefDoc[] => (session.current?.media ?? []).filter((m) => !!m.linked);
 
-  /** Renders each of `list` again and swaps the new file in, one undo step each. */
-  async function rerender(list: MediaRefDoc[]) {
+  /**
+   * Renders each of `list` again and swaps the new file in, one undo step
+   * each. `live` (the clip's render-again button): an inner session that is
+   * open is rendered as it is now, unsaved edits included.
+   */
+  async function rerender(list: MediaRefDoc[], live = false) {
     for (const m of list) {
       const link = m.linked!;
-      const r = await render(`Updating ${nameOf(link.path)}`, link.path, dirOf(m.path) || (await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.")) || "");
+      const r = await render(`Rendering ${nameOf(link.path)}`, link.path, dirOf(m.path) || (await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.")) || "", live);
       if (!r) return;
       const now = session.current;
       const cur = now?.media.find((x) => x.id === m.id);
@@ -132,13 +141,13 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
       const gone = now.tracks.flatMap((t) => t.clips).filter((c) => c.media_id === m.id && !c.looped && c.source_in >= r.frames).map((c) => c.id);
       const setMedia: Op = { op: "set_media", media: { ...cur, path: r.path, relative_path: null, sample_rate: r.sampleRate, channels: 2, length: r.frames, linked: { path: link.path, stamp: r.stamp } } };
       await session.edit(`Update Linked Session ${r.name}`, gone.length ? { op: "batch", ops: [{ op: "remove_clips", ids: gone }, setMedia] } : setMedia, sessionHistory);
-      showNotice(`${r.name} was saved since its clip was rendered: the clip plays the new mix.`);
+      showNotice(live ? `${r.name} rendered again: the clip plays its mix as it is now.` : `${r.name} was saved since its clip was rendered: the clip plays the new mix.`);
     }
   }
 
   /** Brings linked clips whose sessions were saved since up to date. */
   async function refresh() {
-    if (refreshing || exporting()) return;
+    if (refreshing || openingInner || exporting()) return;
     const list = linkedMedia();
     if (list.length === 0) return;
     refreshing = true;
@@ -165,6 +174,31 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
     return doc.media.filter((m) => ids.has(m.id) && !!m.linked);
   }
 
+  /**
+   * After a session is opened from its file, opens the sessions its clips
+   * stand in for (and theirs), set aside behind it, then brings it back to
+   * the front. Ones that cannot be found are skipped with a notice.
+   */
+  let openingInner = false;
+  async function openInner(doc: { id: string; media: MediaRefDoc[] }) {
+    if (openingInner || !deps.openBehind) return;
+    const want = [...new Set(doc.media.filter((m) => m.linked).map((m) => m.linked!.path))];
+    if (want.length === 0) return;
+    openingInner = true;
+    try {
+      const states = await linkedCheck(want.map((p, i) => ({ id: String(i), session: p, stamp: "" })));
+      const found = want.filter((_, i) => !states.find((s) => s.id === String(i))?.missing);
+      const lost = want.filter((p) => !found.includes(p));
+      if (lost.length) showNotice(`Not found, so not opened: ${lost.map(nameOf).join(", ")}. Their clips keep the last mix.`);
+      if (found.length) await deps.openBehind(found, doc.id);
+    } catch (e) {
+      showError(e);
+    } finally {
+      openingInner = false;
+    }
+    void refresh();
+  }
+
   // Check when this session comes to the front and when the window comes back.
   let lastId: string | null = null;
   const offSession = session.subscribe((d) => {
@@ -183,7 +217,7 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
       id: "clip.linked.update",
       run: async () => {
         try {
-          await rerender(selectedLinked());
+          await rerender(selectedLinked(), true);
         } catch (e) {
           showError(e);
         }
@@ -203,6 +237,7 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
   return {
     insert,
     refresh,
+    openInner,
     destroy() {
       offSession();
       window.removeEventListener("focus", onFocus);
