@@ -144,8 +144,9 @@ jobs:
 
   macos:
     name: macOS Apple silicon (experimental, unsigned)
-    # macos-latest was not handed a runner (arm64 capacity) in two releases.
-    runs-on: macos-14
+    # macos-latest was not handed a runner (arm64 capacity) in two releases,
+    # and macos-14 is retired on 2026-11-02: pinned to macos-15 (Apple silicon).
+    runs-on: macos-15
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
