@@ -59,7 +59,11 @@ export function stretchDrag(
 
 /**
  * An edge trim of `clip` by `dx` samples. The grabbed clip snaps; the
- * other clips in `ids` follow by the same amount, each within its own limits.
+ * other clips in `ids` meet it: dragging an end back, a clip that ends
+ * later comes back to the grabbed edge and then moves with it, while one
+ * that ends earlier stays put until the edge reaches it (and dragging an
+ * end out, the shorter ones are pulled out to meet it). Start edges the
+ * same way round. Each stays within its own limits.
  */
 export function trimDrag(
   d0: SessionDoc,
@@ -77,11 +81,17 @@ export function trimDrag(
   const changes = c ? [c] : [];
   if (c && ids.length > 1) {
     const moved = { ...clip, ...c } as ClipDoc;
-    const by = side === "left" ? moved.start - clip.start : moved.start + clipLength(moved, m, rate) - end;
+    const edge = side === "left" ? moved.start : moved.start + clipLength(moved, m, rate);
+    const by = side === "left" ? moved.start - clip.start : edge - end;
+    const media = new Map(d0.media.map((x) => [x.id, x]));
     for (const t of d0.tracks)
       for (const other of t.clips) {
         if (other.id === clip.id || !ids.includes(other.id)) continue;
-        const o = trimClip(d0, other, side, by);
+        const own = side === "left" ? other.start : other.start + clipLength(other, media.get(other.media_id), rate);
+        // Shortening (an end back, a start forward) takes the nearer of its own edge and the grabbed one.
+        const shorten = side === "left" ? by > 0 : by < 0;
+        const want = shorten === (side === "right") ? Math.min(own, edge) : Math.max(own, edge);
+        const o = want !== own ? trimClip(d0, other, side, want - own) : null;
         if (o) changes.push(o);
       }
   }

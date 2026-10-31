@@ -4,8 +4,8 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import type { ClipDoc, MediaRefDoc } from "../../stores/session";
-import { gestureLabel, slipChange } from "./clip-drag";
+import type { ClipDoc, MediaRefDoc, SessionDoc } from "../../stores/session";
+import { gestureLabel, slipChange, trimDrag } from "./clip-drag";
 import { ghostItems } from "./drop-ghost";
 
 const fade = (length = 0) => ({ length, shape: "linear", curve: 0 });
@@ -43,5 +43,21 @@ describe("drop ghost", () => {
   });
   it("shows only the first when files go on tracks side by side", () => {
     expect(ghostItems([{ name: "a", len: 1_000 }, { name: "b", len: 1_000 }], 0, view, true)).toEqual([{ name: "a (+1 on the tracks below)", x: 0, w: 10 }]);
+  });
+});
+
+describe("trimming several clips", () => {
+  // A ends at 2 s, B at 1 s (48 kHz, both start at 0).
+  const a = clip({ id: "a", source_in: 0, source_out: 96_000 });
+  const b = clip({ id: "b", source_in: 0, source_out: 48_000 });
+  const doc = { sample_rate: 48_000, media: [m], tracks: [{ id: "t1", clips: [a] }, { id: "t2", clips: [b] }] } as unknown as SessionDoc;
+  const ends = (dx: number) =>
+    Object.fromEntries(trimDrag(doc, a, "right", dx, [], 0, ["a", "b"], m, 48_000, 96_000).map((c) => [c.id, c.source_out]));
+  it("brings the longer one back to the shorter first, then both", () => {
+    expect(ends(-24_000)).toEqual({ a: 72_000 });
+    expect(ends(-72_000)).toEqual({ a: 24_000, b: 24_000 });
+  });
+  it("pulls the shorter one out to meet the grabbed edge", () => {
+    expect(ends(24_000)).toEqual({ a: 120_000, b: 120_000 });
   });
 });

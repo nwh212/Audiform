@@ -1981,3 +1981,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-31: Greyed-out clips for what is not heard; picked 3D Space node on top
 - Clips that are not heard are drawn through the theme's muted look (`--clip-muted-filter`, greyscale and a little darker by default; Phosphor dims instead): a muted clip, every clip on a muted track, and while anything is soloed every clip on a track that is not soloed and does not feed a soloed bus. Mute Clip stays in the clip right-click menu. Clips muted in a `.sesx` session come in muted (they already did; they were only drawn faint, which was easy to miss).
 - 3D Space: the picked track or bus (from its button on the left, the editor or a click) is drawn on top of the others, so one of several placed in the same spot can be grabbed.
+
+## 2026-10-31: Trimming several clips at once lines their edges up
+- With several clips selected, dragging one's end back brings any clip that ends later back to the grabbed edge first, then they move together; a clip that ends earlier stays put until the edge reaches it. Dragging an end out pulls the shorter ones out to meet the grabbed edge. Start edges work the same way round. Each clip stays within its own limits (its file, its neighbors). Before, every clip moved by the same amount and never met.
