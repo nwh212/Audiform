@@ -4,7 +4,7 @@
 
 [package]
 name = "audiform"
-version = "0.5.1"
+version = "0.6.0"
 description = "Free, open-source multitrack audio editor for podcasters and voiceover."
 authors = ["The Audiform contributors", "The GeekCast Radio Network, LLC (Altered Audio Editor)"]
 license = "GPL-3.0-or-later"
