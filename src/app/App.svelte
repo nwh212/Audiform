@@ -1129,6 +1129,7 @@
   });
 
   let aboutOpen = $state(false);
+  let reportOpen = $state(false);
   let shortcutsOpen = $state(false);
 
   const shortcutFor = (id: string) => keymap.displayFor(id);
@@ -1578,6 +1579,7 @@
     set_shortcutsOpen: (v) => (shortcutsOpen = v),
     aboutOpen: () => aboutOpen,
     set_aboutOpen: (v) => (aboutOpen = v),
+    openReport: () => (reportOpen = true),
     wsState: () => wsState,
     set_wsState: (v) => (wsState = v),
     openPanels: () => openPanels,
@@ -2397,6 +2399,11 @@
   {/await}
 {/if}
 
+{#if reportOpen}
+  {#await import("./ReportDialog.svelte") then { default: ReportDialog }}
+  <ReportDialog version={info?.version ?? null} onNotice={showNotice} onClose={() => (reportOpen = false)} />
+  {/await}
+{/if}
 {#if aboutOpen}
   {#await import("./AboutDialog.svelte") then { default: AboutDialog }}
   <AboutDialog version={info?.version ?? null} onClose={() => (aboutOpen = false)} />

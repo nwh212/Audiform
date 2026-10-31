@@ -33,6 +33,8 @@ export interface ViewToolsDeps {
   set_shortcutsOpen: (v: boolean) => void;
   aboutOpen: () => boolean;
   set_aboutOpen: (v: boolean) => void;
+  /** Help > Report a Problem: opens its window. */
+  openReport: () => void;
   wsState: () => WorkspaceState;
   set_wsState: (v: WorkspaceState) => void;
   openPanels: () => ReadonlySet<PanelId>;
@@ -40,7 +42,7 @@ export interface ViewToolsDeps {
 }
 
 export function createViewTools(deps: ViewToolsDeps) {
-  const { actions, dock, inWave, showNotice, promptText, ask, timeSel, shortcutsOpen, aboutOpen, wsState, openPanels, set_shortcutsOpen, set_aboutOpen, set_wsState, set_openPanels } = deps;
+  const { actions, dock, inWave, showNotice, promptText, ask, timeSel, shortcutsOpen, aboutOpen, wsState, openPanels, set_shortcutsOpen, set_aboutOpen, set_wsState, set_openPanels, openReport } = deps;
 
 
   /** Registers the menu actions. */
@@ -54,7 +56,7 @@ export function createViewTools(deps: ViewToolsDeps) {
       actions.register({ id: "help.original", run: () => openLink(LINKS.original) }),
       actions.register({ id: "help.update", run: () => openLink(LINKS.releases) }),
       actions.register({ id: "help.github", run: () => openLink(LINKS.github) }),
-      actions.register({ id: "help.report", run: () => openLink(LINKS.report) }),
+      actions.register({ id: "help.report", run: () => openReport() }),
       actions.register({ id: "help.about", run: () => void (set_aboutOpen(true)) }),
       actions.register({ id: "view.zoom-in", run: () => zoomBy(0.5), enabled: () => session.current !== null }),
       actions.register({ id: "view.zoom-out", run: () => zoomBy(2), enabled: () => session.current !== null }),

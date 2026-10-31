@@ -2059,3 +2059,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Linked crossfades
 - Where two clips overlap in a crossfade, bending one clip's fade (dragging its handle up or down) bends the other clip's fade the opposite way, and picking a shape or resetting the skew on one sets the other's too, so the pair stays matched: as one rises faster the other falls slower. On by default; Settings > General > Link crossfades turns it off. A partner is the clip on the same track whose opposite fade covers the same stretch.
+
+## 2026-10-31: Report a Problem window
+- Help > Report a Problem opens a short form (what happened, steps to see it, what was expected) with the Audiform version, system and theme added, which can be left out. Nothing is sent from Audiform, keeping the no-network rule: Open Report puts the filled-in report on the project's issue page in the browser (github.com, already on the link allow list), to check and send from there, and Copy Report copies it to paste anywhere. A very long report is shortened to fit a web address, with a note to paste the rest.
