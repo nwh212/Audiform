@@ -81,6 +81,7 @@ export const SPATIALIZE_MODES: { id: SpatializeMode; label: string; tip: string 
   { id: "matrix", label: "Matrix", tip: "The difference goes to the same speakers on a short plain delay, as a passive surround decoder does. Tight and punchy; folds back to stereo cleanly." },
   { id: "ambience", label: "Ambience", tip: "Smeared copies of the left side go to the left surround and height speakers, of the right side to the right ones. Lush and enveloping, for music and room sound." },
   { id: "height_lift", label: "Height Lift", tip: "Like Side Spread, but only to the height speakers, keeping the surrounds clear. Layouts without heights use Side Spread." },
+  { id: "steer", label: "Place Elements", tip: "Frequency by frequency, each part of the sound goes where it sits in the stereo picture: centered parts to the middle front, parts panned hard out to the sides, parts in opposite phase behind, and room and reverb to the surrounds and heights. Spatialize sets how much is placed this way." },
 ];
 
 /** The room view: room units (-1 to 1) to pixels in a square `size` across, front at the top, with a margin. */

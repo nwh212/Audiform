@@ -93,6 +93,8 @@ struct Strip {
     room: bool,
     bed_in: Vec<f32>,
     bed_delay: Delay,
+    /// Place Elements' input this block (before the hold-back).
+    steer_in: Vec<f32>,
 }
 
 /// Peaks since the last read, 0 to 1 (and above on overs).
@@ -294,7 +296,12 @@ impl Graph {
         if s.space.is_some() {
             // Made here, so playing never allocates them.
             for (k, st) in tracks.iter_mut().chain(buses.iter_mut()).enumerate() {
-                st.diffuse = Some(Box::new(crate::dsp::diffuse::Diffuser::new(rate, k)));
+                let mut d = crate::dsp::diffuse::Diffuser::new(rate, k);
+                // Place Elements: made up front, so playing never allocates.
+                if let Some(sp) = s.space {
+                    d.steer = Some(Box::new(crate::dsp::diffuse::Steer::new(sp.layout)));
+                }
+                st.diffuse = Some(Box::new(d));
             }
         }
 
@@ -440,7 +447,14 @@ impl Graph {
                 }
             }
         }
-        let lead = master_in + lat(&master);
+        let space_on = routed && s.space.is_some();
+        let lead = master_in
+            + lat(&master)
+            + if space_on {
+                crate::dsp::diffuse::STEER_FRAME as u64
+            } else {
+                0
+            };
         let input_time = |d: &Dest| match d {
             Dest::Bus(b) => in_t.get(&Node::Bus(*b)).copied().unwrap_or(0),
             Dest::Master | Dest::Direct(_) => master_in,
@@ -450,8 +464,23 @@ impl Graph {
             let o = out_t[&n];
             let mut routes = Vec::new();
             let main = main_dest(n);
+            // 3D Space: every placed sound is held back by Place Elements'
+            // look-ahead, so a steered sound lines up with the rest. A 3D
+            // Bus's inputs were placed (and held back) already.
+            let held = |d: &Dest, main: bool| -> u64 {
+                let placed = match d {
+                    Dest::Master => main && !matches!(n, Node::Bus(i) if rooms.get(i).copied().unwrap_or(false)),
+                    Dest::Bus(b) => rooms.get(*b).copied().unwrap_or(false),
+                    Dest::Direct(_) => false,
+                };
+                if placed && space_on {
+                    crate::dsp::diffuse::STEER_FRAME as u64
+                } else {
+                    0
+                }
+            };
             routes.push(Route {
-                delay: Delay::new((input_time(&main) - o) as usize),
+                delay: Delay::new((input_time(&main) - o + held(&main, true)) as usize),
                 dest: main,
             });
             for d in send_dests(n) {
@@ -459,7 +488,7 @@ impl Graph {
                 // place, so levels line up, but plays nowhere.
                 let dest = d.map_or(Dest::Master, Dest::Bus);
                 let delay = match d {
-                    Some(_) => Delay::new((input_time(&dest) - o) as usize),
+                    Some(_) => Delay::new((input_time(&dest) - o + held(&dest, false)) as usize),
                     None => Delay::new(0),
                 };
                 routes.push(Route { dest, delay });
@@ -745,6 +774,17 @@ impl Graph {
                         }
                     }
                 }
+                // Place Elements hears the sound before the hold-back (it adds its own).
+                let steering = r == 0
+                    && moved
+                        .as_ref()
+                        .or(to.place.as_ref())
+                        .and_then(|p| p.field.as_ref())
+                        .is_some_and(|f| f.steer > 0.0);
+                if steering {
+                    st.steer_in.clear();
+                    st.steer_in.extend_from_slice(&scratch);
+                }
                 route.delay.run(&mut scratch);
                 // 3D Space: placed into the room, and folded to stereo to
                 // listen. A 3D Bus hears it placed too, on its own speakers.
@@ -816,6 +856,7 @@ impl Graph {
                                         M::Matrix => {
                                             ([0.0; 4], [0.0; 4], [0.0; 4], dc.delay.run(side))
                                         }
+                                        M::Steer => ([0.0; 4], [0.0; 4], [0.0; 4], 0.0),
                                         M::Ambience => {
                                             ([0.0; 4], dc.left.run(v[0]), dc.right.run(v[1]), 0.0)
                                         }
@@ -853,6 +894,37 @@ impl Graph {
                                     if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
                                         o[0] += ol;
                                         o[1] += or;
+                                    }
+                                }
+                            }
+                        }
+                        // Place Elements: each part of the sound to where it sits.
+                        if let (true, Some(fl), Some(dc)) = (steering, field, st.diffuse.as_deref_mut()) {
+                            if let Some(steer) = dc.steer.as_deref_mut() {
+                                let g = fl.steer;
+                                let bed_n = if make_bed { nb } else { 0 };
+                                for (k, v) in st.steer_in.as_chunks::<2>().0.iter().enumerate() {
+                                    let outs = steer.push(v[0], v[1]);
+                                    let (mut ol, mut or) = (0.0f32, 0.0f32);
+                                    for (c, e) in outs.iter().enumerate() {
+                                        let e = e * g;
+                                        if c < bed_n {
+                                            if let Some(b) = room_bus {
+                                                self.buses[b].bed_in[k * nb + c] += e;
+                                            } else {
+                                                self.bed[k * nb + c] += e;
+                                            }
+                                        }
+                                        if let Some(f) = fl.fold.get(c) {
+                                            ol += e * f[0];
+                                            or += e * f[1];
+                                        }
+                                    }
+                                    if room_bus.is_none() {
+                                        if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
+                                            o[0] += ol;
+                                            o[1] += or;
+                                        }
                                     }
                                 }
                             }

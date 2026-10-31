@@ -801,6 +801,12 @@ pub enum SpatializeMode {
     /// Like Side Spread, but only to the height speakers, leaving the
     /// surrounds clear (Side Spread in layouts without heights).
     HeightLift,
+    /// Place Elements: frequency by frequency, each part of the sound goes
+    /// where it sits in the stereo picture: centered parts to the middle,
+    /// panned parts out to the sides, parts in opposite phase behind, and
+    /// what differs between the sides (room, reverb) to the surrounds and
+    /// heights.
+    Steer,
 }
 
 impl SpatializeMode {

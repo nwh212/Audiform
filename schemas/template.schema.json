@@ -1562,6 +1562,11 @@
           "description": "Like Side Spread, but only to the height speakers, leaving the\nsurrounds clear (Side Spread in layouts without heights).",
           "type": "string",
           "const": "height_lift"
+        },
+        {
+          "description": "Place Elements: frequency by frequency, each part of the sound goes\nwhere it sits in the stereo picture: centered parts to the middle,\npanned parts out to the sides, parts in opposite phase behind, and\nwhat differs between the sides (room, reverb) to the surrounds and\nheights.",
+          "type": "string",
+          "const": "steer"
         }
       ]
     },
