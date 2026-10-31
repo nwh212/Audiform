@@ -2024,3 +2024,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Tracks and buses added from a right-click go where it was clicked
 - Adding a track, MIDI track, bus, 3D Bus or several tracks (Add Tracks) from the right-click menu of a track's lane or header puts them just above that track when the click was in its top half, just below when in its bottom half (buses by their shown position). Adds from the main menus keep going after the selected track (buses at the end). The click is remembered for 30 seconds, long enough for the Add Tracks window, and used once.
+
+## 2026-10-31: Drags scroll the tracks at the top and bottom edges
+- Box-selecting clips, dragging a track or bus header to reorder it, and dragging clips scroll the track list when the pointer is held near its top or bottom edge, faster the closer to the edge, and the drag follows (the box grows, the drop line moves, the clips go to the track now under the pointer).
