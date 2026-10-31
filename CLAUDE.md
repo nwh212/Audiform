@@ -250,7 +250,7 @@ Approved 2026-10-20 and assigned in 0.1.9 (disabled menu items hold the chord fo
 | Convert sample type | Shift+T |
 | Capture a noise print | Shift+P |
 | Activate left or right channel (Waveform editor) | Up, Down |
-| Nudge clip left, right, up, down | Alt+comma, Alt+period, Alt+Up, Alt+Down |
+| Nudge clip left, right; copy clip to the track above, below (a new track below the last) | Alt+comma, Alt+period, Alt+Up, Alt+Down |
 | Mute, Solo, Record or Monitor on all tracks | Ctrl+Shift+click |
 | Dial fine and coarse steps | Ctrl+drag, Shift+drag |
 

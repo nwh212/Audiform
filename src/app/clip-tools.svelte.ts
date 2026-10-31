@@ -11,7 +11,7 @@
 
 import { newTrackNames } from "./track-names";
 import { alignPair, ALIGN_MAX_MS, alignOps, describeAlign } from "../panels/editor/align";
-import { findClips, mediaOf, clipsAt, splitClips, fadeClip, trimToPlayhead, trimToRange, loopChanges } from "../panels/editor/clip-edit";
+import { findClips, mediaOf, clipsAt, splitClips, fadeClip, trimToPlayhead, trimToRange, loopChanges, copyMoved } from "../panels/editor/clip-edit";
 import { unstretch } from "../panels/editor/stretch";
 import { splitChannelsOp, splittable } from "../panels/properties/split-channels";
 import { editor } from "../stores/editor";
@@ -299,35 +299,29 @@ export function createClipTools(deps: ClipToolsDeps) {
     const by = dir < 0 ? -Math.min(step, Math.min(...picked.map((c) => c.start))) : step;
     return by === 0 ? null : picked.map((c) => ({ id: c.id, start: c.start + by }));
   }
+  /**
+   * Alt+Up and Alt+Down: copies of the selected clips on the track above
+   * or below, the originals left where they are. Below the bottom track a
+   * new, plain track opens for them, in the same undoable step. The copies
+   * are selected, so pressing again copies on down the tracks.
+   */
   async function moveClipsToTrack(dir: -1 | 1) {
     let changes = clipsTrackMove(dir);
     const d = session.current;
     if (!changes || !d) return;
+    const adds: Op[] = [];
     if (changes.some((c) => c.track_id === NEW_TRACK)) {
-      // Past the bottom track: one new track like it, and the move, as one step.
       const last = d.tracks.filter((t) => !t.hidden).at(-1)!;
       const id = uuid();
       changes = changes.map((c) => (c.track_id === NEW_TRACK ? { ...c, track_id: id } : c));
       const name = newTrackNames(d.tracks.map((t) => t.name), 1)[0]!;
-      await session.edit(
-        "Move to New Track Below",
-        {
-          op: "batch",
-          ops: [
-            { op: "add_track", id, name, stereo: last.channels !== "mono", index: d.tracks.length },
-            { op: "set_clips", changes },
-          ],
-        },
-        sessionHistory,
-      );
-      editor.selectClips(editor.current().selectedClips, id);
-      return;
+      adds.push({ op: "add_track", id, name, stereo: last.channels !== "mono", index: d.tracks.length } as Op);
     }
-    await session.edit(dir < 0 ? "Move to Track Above" : "Move to Track Below", { op: "set_clips", changes }, sessionHistory);
-    const listed = d.tracks.filter((t) => !t.hidden);
-    const first = listed.findIndex((t) => t.clips.some((c) => c.id === changes[0]!.id));
-    const target = listed[first + dir];
-    if (target) editor.selectClips(editor.current().selectedClips, target.id);
+    const copy = copyMoved(d, changes.map((c) => c.id), changes, uuid);
+    const label = adds.length ? "Copy to New Track Below" : dir < 0 ? "Copy to Track Above" : "Copy to Track Below";
+    await session.edit(label, adds.length ? { op: "batch", ops: [...adds, copy.op] } : copy.op, sessionHistory);
+    const target = changes[0]!.track_id;
+    editor.selectClips(copy.ids, target ?? null);
   }
   /** How far one nudge moves clips: five pixels at the current zoom. */
   const NUDGE_PX = 5;
@@ -386,7 +380,7 @@ export function createClipTools(deps: ClipToolsDeps) {
           id: dir < 0 ? "clip.to-track-above" : "clip.to-track-below",
           run: () => moveClipsToTrack(dir),
           enabled: () => clipsTrackMove(dir) !== null,
-          reason: () => (editor.current().selectedClips.size === 0 ? "Select clips first." : dir < 0 ? "The clips are already on the top track, or one is locked." : "The clips are already on the bottom track, or one is locked."),
+          reason: () => (editor.current().selectedClips.size === 0 ? "Select clips first." : dir < 0 ? "The clips are already on the top track, or one is locked." : "A selected clip is locked, or is on a MIDI track at the bottom."),
         }),
       ),
       ...([-1, 1] as const).map((dir) =>

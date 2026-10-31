@@ -2062,3 +2062,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Report a Problem window
 - Help > Report a Problem opens a short form (what happened, steps to see it, what was expected) with the Audiform version, system and theme added, which can be left out. Nothing is sent from Audiform, keeping the no-network rule: Open Report puts the filled-in report on the project's issue page in the browser (github.com, already on the link allow list), to check and send from there, and Copy Report copies it to paste anywhere. A very long report is shortened to fit a web address, with a note to paste the rest.
+
+## 2026-10-31: Alt+Up and Alt+Down copy clips
+- Alt+Up and Alt+Down (Clip > Copy to Track Above / Below) now put copies of the selected clips on the next track up or down and leave the originals where they are, as Alt+drag does. Below the last track a new, plain track opens for the copies (it is not a copy of the track), in the same undoable step. The copies are selected, so pressing again copies on down the tracks. Decided by the project lead after the 0.5.1 test pass.
