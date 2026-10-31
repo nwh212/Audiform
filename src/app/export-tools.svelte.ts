@@ -25,7 +25,7 @@ import type { ActionRegistry } from "./actions";
 import { exportBounce, exportEmbedChapters, exportMixdown, exportPickFolder, exportPickPath, exportText, exportVerify, loudnessCheck, pathsExist, publishWriteFiles } from "./core";
 import type { DockController } from "./docking/dock";
 import { DEFAULT_TARGET, type LoudnessReport, targetsFor } from "./loudness";
-import { DEFAULT_FORMAT, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
+import { DEFAULT_FORMAT, type FormatKind, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
 import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
 import type { PublishSettings } from "./PublishDialog.svelte";
@@ -157,6 +157,18 @@ export function createExportTools(deps: ExportToolsDeps) {
   }
 
   /** File > Export: opens the Export Mixdown dialog, remembering the last format and folder. */
+  /** The saved settings of each format, each checked like a format of its own. */
+  function savedByKind(saved: unknown): Partial<Record<FormatKind, OutputFormat>> {
+    const raw = (saved as { byKind?: unknown } | null)?.byKind;
+    const out: Partial<Record<FormatKind, OutputFormat>> = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const f = sanitizeFormat(v);
+      if (f.kind === k) out[f.kind] = f;
+    }
+    return out;
+  }
+
   function openExportDialog(source: MixSource) {
     const doc = session.current;
     if (!doc) return;
@@ -188,6 +200,7 @@ export function createExportTools(deps: ExportToolsDeps) {
           return typeof n === "string" && targetsFor().some((t) => t.id === n) ? n : "";
         })(),
         ...(doc.space ? { speakers: doc.space.layout } : {}),
+        byKind: savedByKind(saved),
       },
       scopes,
       source: { sampleRate: doc.sample_rate, channels: doc.master?.channels === "mono" ? 1 : 2, bitDepth: doc.bit_depth },
@@ -197,7 +210,7 @@ export function createExportTools(deps: ExportToolsDeps) {
   async function finishExportDialog(v: ExportSettings | null) {
     exportReq = null;
     if (!v) return;
-    prefs.set(KEY_EXPORT, { format: v.format, folder: v.folder, addToFiles: v.addToFiles, chapters: v.chapters, verify: v.verify, normalize: v.normalize });
+    prefs.set(KEY_EXPORT, { format: v.format, byKind: v.byKind ?? {}, folder: v.folder, addToFiles: v.addToFiles, chapters: v.chapters, verify: v.verify, normalize: v.normalize });
     const sep = v.folder.includes("\\") ? "\\" : "/";
     const path = `${v.folder.replace(/[\\/]+$/, "")}${sep}${fileSafe(v.name)}.${extensionOf(v.format.kind)}`;
     const [exists] = await pathsExist([path]);

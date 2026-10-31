@@ -26,6 +26,8 @@
     normalize: string;
     /** 3D Space sessions: a speaker layout ("5.1", "7.1.4"...) or "binaural". */
     speakers?: string;
+    /** The settings last used for each format, brought back when it is picked again. */
+    byKind?: Partial<Record<FormatKind, OutputFormat>>;
   }
 
   export interface ExportScopeInfo {
@@ -39,6 +41,7 @@
 </script>
 
 <script lang="ts">
+  import { untrack } from "svelte";
   import OutputFormatFields from "./OutputFormatFields.svelte";
   import { describeFormat, estimateBytes, extensionOf } from "./output-format";
   import { SPACE_LAYOUTS, type SpaceLayout } from "../stores/session";
@@ -66,6 +69,27 @@
   let s = $state<ExportSettings>({ ...initial, format: { ...initial.format } });
   let input = $state<HTMLInputElement | null>(null);
 
+  // Each format remembers its own settings: picking MP3 brings back the
+  // last MP3 bit rate, picking WAV the last bit depth, and so on.
+  // svelte-ignore state_referenced_locally
+  const byKind: Partial<Record<FormatKind, OutputFormat>> = { ...(initial.byKind ?? {}) };
+  // svelte-ignore state_referenced_locally
+  let lastKind: FormatKind = initial.format.kind;
+  $effect(() => {
+    const f = { ...s.format };
+    untrack(() => {
+      if (f.kind !== lastKind) {
+        lastKind = f.kind;
+        const saved = byKind[f.kind];
+        if (saved) {
+          s.format = { ...saved, kind: f.kind };
+          return;
+        }
+      }
+      byKind[f.kind] = f;
+    });
+  });
+
   $effect(() => {
     input?.focus();
     input?.select();
@@ -92,7 +116,7 @@
   const ok = $derived(s.name.trim() !== "" && s.folder !== "" && (current?.seconds ?? null) !== null);
 
   function done() {
-    if (ok) onDone({ ...s, name: s.name.trim().replace(/\.(wav|wave|flac|mp3)$/i, "") });
+    if (ok) onDone({ ...s, byKind: { ...byKind, [s.format.kind]: { ...s.format } }, name: s.name.trim().replace(/\.(wav|wave|flac|mp3)$/i, "") });
   }
 
   async function browse() {
