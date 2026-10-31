@@ -42,3 +42,23 @@ export function keyValue(value: number, key: string, home: number): number | nul
 export function pointerAngle(value: number): number {
   return -135 + clamp01(value) * 270;
 }
+
+/**
+ * Where a value (0 to 1) sits on the dial's turn (0 to 1) when its
+ * default `home` points straight up: the range below the default fills
+ * the left half of the turn, the range above it the right half.
+ */
+export function toTurn(value: number, home: number): number {
+  const v = clamp01(value);
+  const h = clamp01(home);
+  if (h <= 0 || h >= 1) return v;
+  return v <= h ? (v / h) * 0.5 : 0.5 + ((v - h) / (1 - h)) * 0.5;
+}
+
+/** The value (0 to 1) at a point on the turn: the inverse of {@link toTurn}. */
+export function fromTurn(turn: number, home: number): number {
+  const t = clamp01(turn);
+  const h = clamp01(home);
+  if (h <= 0 || h >= 1) return t;
+  return t <= 0.5 ? (t / 0.5) * h : h + ((t - 0.5) / 0.5) * (1 - h);
+}

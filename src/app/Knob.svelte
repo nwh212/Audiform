@@ -3,10 +3,11 @@
 <!-- This file is part of Audiform, based on Altered Audio Editor. -->
 
 <script lang="ts">
-  import { dragValue, keyValue, pointerAngle } from "./knob";
+  import { dragValue, fromTurn, keyValue, pointerAngle, toTurn } from "./knob";
 
   /**
-   * A small dial. `value` is 0 to 1. Drag up or down to turn it (Ctrl for
+   * A small dial. `value` is 0 to 1; `home` (the default) points straight
+   * up, so each half of the turn covers its own side of the range. Drag up or down to turn it (Ctrl for
    * fine steps, Shift for coarse), double-click for `home`, arrow keys and
    * Page Up/Down to step. `oninput` fires while turning, `oncommit` once on
    * release (or per key press).
@@ -36,12 +37,12 @@
   function down(e: PointerEvent) {
     if (disabled || e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag = { y: e.clientY, start: value, last: value };
+    drag = { y: e.clientY, start: toTurn(value, home), last: value };
     e.preventDefault();
   }
   function move(e: PointerEvent) {
     if (!drag) return;
-    const t = dragValue(drag.start, drag.y - e.clientY, { ctrl: e.ctrlKey, shift: e.shiftKey });
+    const t = fromTurn(dragValue(drag.start, drag.y - e.clientY, { ctrl: e.ctrlKey, shift: e.shiftKey }), home);
     if (t === drag.last) return;
     drag.last = t;
     oninput(t);
@@ -49,14 +50,15 @@
   function up() {
     if (!drag) return;
     const t = drag.last;
-    const moved = t !== drag.start;
+    const moved = t !== value || t !== fromTurn(drag.start, home);
     drag = null;
     if (moved) oncommit(t);
   }
   function key(e: KeyboardEvent) {
     if (disabled) return;
-    const t = keyValue(value, e.key, home);
-    if (t === null) return;
+    const k = keyValue(toTurn(value, home), e.key, 0.5);
+    if (k === null) return;
+    const t = fromTurn(k, home);
     e.preventDefault();
     if (t !== value) oncommit(t);
   }
@@ -82,7 +84,7 @@
 >
   <svg viewBox="0 0 28 28" aria-hidden="true">
     <circle class="body" cx="14" cy="14" r="11" />
-    <line class="tick" x1="14" y1="14" x2="14" y2="5" transform="rotate({pointerAngle(value)} 14 14)" />
+    <line class="tick" x1="14" y1="14" x2="14" y2="5" transform="rotate({pointerAngle(toTurn(value, home))} 14 14)" />
   </svg>
 </div>
 

@@ -10,6 +10,7 @@
 <script lang="ts">
   import { tick as nextTick } from "svelte";
   import { parseDialValue } from "../mixer/fader";
+  import { toTurn } from "../../app/knob";
 
   interface Props {
     value: number;
@@ -28,7 +29,10 @@
 
   const { value, min, max, step, origin, label, icon, format, onChange }: Props = $props();
 
-  const angle = (v: number) => -135 + ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * 270;
+  // The reset value (0 dB, center) points straight up; each half of the
+  // turn covers its own side of the range.
+  const angle = (v: number) =>
+    -135 + toTurn((Math.min(max, Math.max(min, v)) - min) / (max - min), (origin - min) / (max - min)) * 270;
   const a = $derived(angle(value));
   const a0 = $derived(angle(origin));
 

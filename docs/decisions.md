@@ -1947,3 +1947,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - Echo, Pitch Shift, Phase Curve, the Convolution Reverb, the amp, tube and Vox Strip effects and the Speech Leveler leave the low-frequency channel alone (held back by their look-ahead, so it stays in time). EQs, filters and repair effects work on it too.
 - Stereo Width, the Center Channel Extractor, the Channel Mixer and the retired stereo effects keep working on L and R only.
 - Tracks and buses in a 3D Space session stay stereo: they are placed in the room as objects after their effects. A bed-wide reverb belongs on the master.
+
+## 2026-10-31: Dials point straight up at their default
+- Every dial (effect dials, the large hardware-style dials, the In and Out gains, track volume and pan) now points straight up at its default value. The part of the range below the default fills the left half of the turn and the part above it the right half, so a dial whose default sits low in its range (a ratio of 4 on 1 to 20) still starts at twelve o'clock. Dragging, the wheel and the arrow keys move along the turn, so each half has its own resolution. Double-click still resets to the default.

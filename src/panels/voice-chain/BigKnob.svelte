@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import type { EffectParamInfo } from "../../app/core";
-  import { dragValue, keyValue } from "../../app/knob";
+  import { dragValue, fromTurn, keyValue, toTurn } from "../../app/knob";
   import { formatParam, fromSlider, toSlider } from "./chain";
   import ValueField from "./ValueField.svelte";
 
@@ -28,7 +28,11 @@
 
   const { param, value, size = 110, marks = [], label, oninput, oncommit }: Props = $props();
 
-  const t = $derived(Math.min(1, Math.max(0, toSlider(param, value))));
+  // The default points straight up; each half of the turn covers its side of the range.
+  const home = $derived(Math.min(1, Math.max(0, toSlider(param, param.default))));
+  const turn = (v: number) => toTurn(toSlider(param, v), home);
+  const fromT = (u: number) => fromSlider(param, fromTurn(u, home));
+  const t = $derived(turn(value));
   const ang = (u: number) => -135 + u * 270;
   const R = 50;
   const polar = (deg: number, r: number) => {
@@ -47,7 +51,7 @@
   }
   function move(e: PointerEvent) {
     if (!drag) return;
-    const v = fromSlider(param, dragValue(drag.start, (drag.y - e.clientY) * 0.8, { ctrl: e.ctrlKey, shift: e.shiftKey }));
+    const v = fromT(dragValue(drag.start, (drag.y - e.clientY) * 0.8, { ctrl: e.ctrlKey, shift: e.shiftKey }));
     if (v === drag.last) return;
     drag.last = v;
     oninput(v);
@@ -56,14 +60,14 @@
     if (!drag) return;
     const d = drag;
     drag = null;
-    if (d.last !== value || fromSlider(param, d.start) !== d.last) oncommit(d.last);
+    if (d.last !== value || fromT(d.start) !== d.last) oncommit(d.last);
   }
   let wheelTimer: ReturnType<typeof setTimeout> | undefined;
   let wheelValue: number | null = null;
   function wheel(e: WheelEvent) {
     e.preventDefault();
     const base = wheelValue ?? value;
-    const v = fromSlider(param, toSlider(param, base) + (e.ctrlKey ? 0.002 : e.shiftKey ? 0.05 : 0.01) * (e.deltaY < 0 ? 1 : -1));
+    const v = fromT(turn(base) + (e.ctrlKey ? 0.002 : e.shiftKey ? 0.05 : 0.01) * (e.deltaY < 0 ? 1 : -1));
     wheelValue = v;
     oninput(v);
     clearTimeout(wheelTimer);
@@ -95,10 +99,10 @@
     onwheel={wheel}
     ondblclick={() => oncommit(param.default)}
     onkeydown={(e) => {
-      const n = keyValue(t, e.key, toSlider(param, param.default));
+      const n = keyValue(t, e.key, 0.5);
       if (n === null) return;
       e.preventDefault();
-      oncommit(fromSlider(param, n));
+      oncommit(fromT(n));
     }}
   >
     {#each Array.from({ length: 21 }, (_, i) => i / 20) as u (u)}
@@ -107,7 +111,7 @@
       <line class="tick" x1={x1} y1={y1} x2={x2} y2={y2} />
     {/each}
     {#each marks as m (m)}
-      {@const [x, y] = polar(ang(toSlider(param, m)), R + 15)}
+      {@const [x, y] = polar(ang(turn(m)), R + 15)}
       <text class="mk" {x} y={y + 3} text-anchor="middle">{m}</text>
     {/each}
     <circle class="skirt" cx="60" cy="60" r={R - 4} />

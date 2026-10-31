@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { DRAG_PIXELS, dragValue, keyValue, pointerAngle } from "./knob";
+import { DRAG_PIXELS, dragValue, fromTurn, keyValue, pointerAngle, toTurn } from "./knob";
 
 describe("dial maths", () => {
   it("drags up to raise and down to lower, within the range", () => {
@@ -28,5 +28,22 @@ describe("dial maths", () => {
     expect(pointerAngle(0)).toBe(-135);
     expect(pointerAngle(0.5)).toBe(0);
     expect(pointerAngle(1)).toBe(135);
+  });
+});
+
+describe("default at twelve o'clock", () => {
+  it("puts the default straight up and keeps the ends", () => {
+    expect(toTurn(0.2, 0.2)).toBe(0.5);
+    expect(toTurn(0, 0.2)).toBe(0);
+    expect(toTurn(1, 0.2)).toBe(1);
+    expect(toTurn(0.1, 0.2)).toBeCloseTo(0.25);
+    expect(toTurn(0.6, 0.2)).toBeCloseTo(0.75);
+  });
+  it("turns back to the same value", () => {
+    for (const v of [0, 0.05, 0.2, 0.33, 0.9, 1]) expect(fromTurn(toTurn(v, 0.2), 0.2)).toBeCloseTo(v);
+  });
+  it("leaves a default at an end as a plain dial", () => {
+    expect(toTurn(0.3, 0)).toBe(0.3);
+    expect(fromTurn(0.3, 1)).toBe(0.3);
   });
 });
