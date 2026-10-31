@@ -23,7 +23,7 @@
   <div class="dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="about-title" onclick={(e) => e.stopPropagation()}>
     <img class="logo" src={logo} alt="" width="372" height="134" />
     <h1 id="about-title" class="visually-hidden">Audiform</h1>
-    <p class="version">Version {version ?? "unknown"}</p>
+    <p class="version">Version {version ?? "unknown"}{__BUILD_COMMIT__ ? ` (build ${__BUILD_COMMIT__})` : ""}</p>
     <p>A free, open-source multitrack audio editor for podcasts, voiceover, music and immersive mixes.</p>
     <div class="credit">
       <p class="credit-head">Built on Altered Audio Editor</p>

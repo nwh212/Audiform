@@ -66,12 +66,13 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP "test-build"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-          Copy-Item $setup.FullName (Join-Path $out "Audiform-test-setup.exe")
-          Copy-Item src-tauri/target/release/audiform.exe (Join-Path $out "Audiform.exe")
+          $build = "${{ github.sha }}".Substring(0, 7)
+          Copy-Item $setup.FullName (Join-Path $out "Audiform-test-$build-setup.exe")
+          Copy-Item src-tauri/target/release/audiform.exe (Join-Path $out "Audiform-$build.exe")
 
       - uses: actions/upload-artifact@v4
         with:
-          name: audiform-test-windows
+          name: audiform-test-windows-${{ github.sha }}
           path: ${{ runner.temp }}/test-build/*
           if-no-files-found: error
 

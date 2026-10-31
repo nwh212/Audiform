@@ -2162,3 +2162,6 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - A saved session set aside in the Files panel can be dragged from its row onto a track the same way. The session in front cannot, since a session cannot hold itself.
 - A linked clip is an ordinary audio clip: it can be split, trimmed, stretched, pitched, faded, reversed and given clip effects, and all of that stays when the inner session is saved and the mix comes back. Every piece of a split follows the new mix. If the new mix is shorter, pieces are trimmed to its end and pieces that start past it are removed, in the same undo step (before, such a piece made the update fail).
 - Double-clicking a linked clip opens its session instead of its rendered file in the Waveform editor, since edits to that file would be replaced on the next update.
+
+## 2026-10-31: Builds show their commit
+- Help > About shows the commit a build was made from ("Version 0.7.0 (build d82da4d)"), and the Windows test build's download and files carry it in their names. Every test build has been 0.7.0, so an older install or download could not be told apart from a new one (the lead tested a build from before the session tabs were removed and before sessions could be dropped on a track).
