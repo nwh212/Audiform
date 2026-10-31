@@ -26,6 +26,7 @@
   import type { MenuPlugin } from "../voice-chain/chain";
   import type { EnvelopeDoc, Op } from "../../stores/session";
   import { newTrackNames } from "../../app/track-names";
+  import { setAnchor } from "./insert-anchor";
   import { pluginsVersion } from "../../stores/plugins";
   import { dragGain, gainText } from "./clip-gain";
   import { clipsAt, copyMoved, LockedError, moveClips, NEW_TRACK, nearest, previewTracks, snapTargets, splitClips, withCrossfades,
@@ -1242,6 +1243,8 @@
     e.preventDefault();
     e.stopPropagation();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // Tracks and buses added from this menu go above or below this track, by the half clicked.
+    setAnchor(track.id, e.clientY, r.top, r.bottom);
     const z = zoneAt(track, e.clientX - r.left, e.clientY - r.top);
     if (!z) {
       // Empty space in a lane: the session-wide menu. Keep any chosen clips, but make this the chosen track.

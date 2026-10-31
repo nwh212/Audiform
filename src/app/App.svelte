@@ -79,6 +79,7 @@
   import { createExportTools } from "./export-tools.svelte";
   import { createSeparationTools } from "./separation-tools.svelte";
   import type { AddTracksValues } from "./AddTracksDialog.svelte";
+  import { takeAnchor } from "../panels/editor/insert-anchor";
   import { PluginSync } from "./plugin-sync";
   import { markStopped, pluginsVersion } from "../stores/plugins";
   import { newTrackNames } from "./track-names";
@@ -402,18 +403,23 @@
     addTracksOpen = false;
     const doc = session.current;
     if (!doc) return;
+    // Opened from a right-click on a track: the new ones go above or below it.
+    const anchor = takeAnchor();
+    const anchorAt = anchor ? doc.tracks.findIndex((t) => t.id === anchor.trackId) : -1;
+    const anchored = anchorAt >= 0 ? anchorAt + (anchor!.below ? 1 : 0) : null;
     if (v.bus) {
       const buses = doc.buses ?? [];
       const names = newTrackNames([...doc.tracks, ...buses].map((t) => t.name), v.count, v.base);
       const ids = names.map(() => uuid());
       const ops: Op[] = names.map((name, k) => ({ op: "add_bus", id: ids[k]!, name, stereo: true, index: buses.length + k }));
+      if (anchored !== null) for (const id of ids) ops.push({ op: "set_bus", id, changes: { position: anchored } });
       await session.edit(v.count === 1 ? "Add Bus Track" : `Add ${v.count} Bus Tracks`, { op: "batch", ops }, sessionHistory);
       editor.selectTrack(ids[0]!);
       return;
     }
     const sel = editor.current().selectedTrack;
     const i = doc.tracks.findIndex((t) => t.id === sel);
-    const start = i >= 0 ? i + 1 : doc.tracks.length;
+    const start = anchored ?? (i >= 0 ? i + 1 : doc.tracks.length);
     const names = newTrackNames(doc.tracks.map((t) => t.name), v.count, v.base);
     const ids = names.map(() => uuid());
     const ops: Op[] = names.map((name, k) => ({ op: "add_track", id: ids[k]!, name, stereo: v.stereo, index: start + k, ...(v.midi ? { midi: true } : {}) }));

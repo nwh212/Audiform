@@ -30,6 +30,7 @@
   import { rowTarget } from "../voice-chain/slot-drag";
   import { autoChoices, autoMode, dropLane, isOrphan, nextTarget, putLane, setMode, shownLanes, targetKey } from "./automation";
   import Dial from "./Dial.svelte";
+  import { setAnchor } from "./insert-anchor";
   import { busHeight, formatDb, formatPan, HEADER_W, ROW_AUTO, ROW_INPUT, ROW_OUTPUT, ROW_SENDS, trackColor } from "./editor-layout";
   import HeaderFx from "./HeaderFx.svelte";
   import type { Row } from "./rows";
@@ -278,6 +279,8 @@
       oncontextmenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setAnchor(track.id, e.clientY, r.top, r.bottom);
         onMenu(e.clientX, e.clientY, trackMenu(track));
       }}
     >

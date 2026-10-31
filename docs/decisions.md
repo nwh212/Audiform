@@ -2021,3 +2021,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 - Move to Track Below (Alt+Down) on clips already on the bottom track adds a new track below it (stereo unless the bottom track is mono) and moves them there, as one undoable step. Dragging clips (or Alt+dragging copies) below the last track opens as many new tracks as the drop needs, one per lane height below, also in one step.
 - Settings > Appearance's Themes folder button opens the folder itself rather than showing it selected in its parent.
 - The 3D Space panel's track list scrolls instead of squeezing buttons out of sight in large sessions.
+
+## 2026-10-31: Tracks and buses added from a right-click go where it was clicked
+- Adding a track, MIDI track, bus, 3D Bus or several tracks (Add Tracks) from the right-click menu of a track's lane or header puts them just above that track when the click was in its top half, just below when in its bottom half (buses by their shown position). Adds from the main menus keep going after the selected track (buses at the end). The click is remembered for 30 seconds, long enough for the Add Tracks window, and used once.

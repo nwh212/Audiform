@@ -9,6 +9,7 @@
  * commands, and inserting files as tracks.
  */
 
+import { takeAnchor } from "../panels/editor/insert-anchor";
 import { showOnly, hasClipIn } from "../panels/editor/visibility";
 import { spaceToggle as spaceOnOff, LAYOUT_NAMES } from "../panels/space/space";
 import { editor } from "../stores/editor";
@@ -75,7 +76,12 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
     while (taken.has(`Bus ${n}`)) n++;
     const id = uuid();
     const name = room ? `3D Bus ${n}` : `Bus ${n}`;
-    await session.edit(room ? "Add 3D Bus Track" : stereo ? "Add Bus Track" : "Add Mono Bus Track", { op: "add_bus", id, name, stereo, index: buses.length, ...(room ? { room: true } : {}) }, sessionHistory);
+    const add: Op = { op: "add_bus", id, name, stereo, index: buses.length, ...(room ? { room: true } : {}) };
+    // From a right-click on a track: shown just above or below it.
+    const a = takeAnchor();
+    const at = a ? doc.tracks.findIndex((t) => t.id === a.trackId) : -1;
+    const op: Op = at >= 0 ? { op: "batch", ops: [add, { op: "set_bus", id, changes: { position: at + (a!.below ? 1 : 0) } }] } : add;
+    await session.edit(room ? "Add 3D Bus Track" : stereo ? "Add Bus Track" : "Add Mono Bus Track", op, sessionHistory);
     editor.selectTrack(id);
     if (room) {
       showNotice(`Added ${name}. Route tracks to it: they are placed in the room as they would be on the master, its effects run on every speaker, and it plays straight into the master's speakers.`);
@@ -88,26 +94,33 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
   async function addMidiTrack() {
     const doc = session.current;
     if (!doc) return;
-    const sel = editor.current().selectedTrack;
-    const i = doc.tracks.findIndex((t) => t.id === sel);
     const id = uuid();
+    const index = insertIndex(doc.tracks);
     const [name] = newTrackNames(
       doc.tracks.map((t) => t.name),
       1,
       "MIDI",
     );
-    await session.edit("Add MIDI Track", { op: "add_track", id, name: name!, stereo: true, index: i >= 0 ? i + 1 : doc.tracks.length, midi: true }, sessionHistory);
+    await session.edit("Add MIDI Track", { op: "add_track", id, name: name!, stereo: true, index, midi: true }, sessionHistory);
     editor.selectTrack(id);
     showNotice("Added a MIDI track. Pick its instrument in the track header, then double-click the lane to make a clip.");
+  }
+
+  /** Where a new track goes: above or below a right-clicked track, else after the selected one, else at the end. */
+  function insertIndex(tracks: readonly { id: string }[]): number {
+    const a = takeAnchor();
+    const at = a ? tracks.findIndex((t) => t.id === a.trackId) : -1;
+    if (at >= 0) return at + (a!.below ? 1 : 0);
+    const sel = editor.current().selectedTrack;
+    const i = tracks.findIndex((t) => t.id === sel);
+    return i >= 0 ? i + 1 : tracks.length;
   }
 
   function addTrack(stereo: boolean) {
     const doc = session.current;
     if (!doc) return;
-    const sel = editor.current().selectedTrack;
-    const i = doc.tracks.findIndex((t) => t.id === sel);
     const id = uuid();
-    const index = i >= 0 ? i + 1 : doc.tracks.length;
+    const index = insertIndex(doc.tracks);
     return session
       .edit(stereo ? "Add Stereo Track" : "Add Mono Track", { op: "add_track", id, name: nextTrackName(doc.tracks), stereo, index }, sessionHistory)
       .then(() => editor.selectTrack(id));
