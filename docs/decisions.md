@@ -2065,3 +2065,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Alt+Up and Alt+Down copy clips
 - Alt+Up and Alt+Down (Clip > Copy to Track Above / Below) now put copies of the selected clips on the next track up or down and leave the originals where they are, as Alt+drag does. Below the last track a new, plain track opens for the copies (it is not a copy of the track), in the same undoable step. The copies are selected, so pressing again copies on down the tracks. Decided by the project lead after the 0.5.1 test pass.
+
+## 2026-10-31: Analog knob on Tape and Analog delay; icon-only power buttons; theme trim pointers
+- Delay and Echo's Tape and Analog kinds have an Analog knob (Off, 1 to 4) in a Machine group, for the character of an old machine. Each step darkens the repeats more (Analog more than Tape), drives them a little harder, and adds hiss that follows the repeats, quiet at step 1 and rising (Tape's brighter, Analog's darker). From step 3 a faint floor stays under the repeats, and step 4 adds a faint mains hum. The noise is only on the repeats (half of it fed back), never on the dry sound. It starts at 2, so existing Tape and Analog delays pick up a mild amount.
+- The effect windows' on/off buttons show only the power symbol, larger, green when on; the word is in the tooltip and for screen readers.
+- Themes with their own pointers now have trim pointers for clip edges too (new pointer kinds trim-left and trim-right, 16 by 16 with the hot spot in the middle), drawn in each theme's style. A theme without them keeps the standard trim pointer, not its plain left-right arrow.

@@ -894,7 +894,7 @@
         <header onpointerdown={dragWindow}>
           <span class="badge" style:background={winInfo ? (CATEGORY_COLORS[winInfo.category] ?? "#888") : "#666"}></span>
           <span class="wtitle">{winInfo?.name ?? winSlot.effect}{winSlot.preset ? ` · ${winSlot.preset}` : ""}</span>
-          <button type="button" class="mini" class:on={winSlot.enabled} title={winSlot.enabled ? "Bypass" : "Turn on"} aria-pressed={winSlot.enabled} onclick={() => commit(winSlot.enabled ? "Bypass Effect" : "Turn On Effect", setSlot(chain, winSlot.id, { enabled: !winSlot.enabled }))}>{winSlot.enabled ? "On" : "Off"}</button>
+          <button type="button" class="mini power-mini" class:on={winSlot.enabled} title={winSlot.enabled ? "On: click to bypass" : "Bypassed: click to turn on"} aria-label={winSlot.enabled ? "Bypass effect" : "Turn on effect"} aria-pressed={winSlot.enabled} onclick={() => commit(winSlot.enabled ? "Bypass Effect" : "Turn On Effect", setSlot(chain, winSlot.id, { enabled: !winSlot.enabled }))}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
           <button type="button" class="mini" class:on={routingOpen} aria-pressed={routingOpen} title="Channel routing: which of the chain's channels this effect hears and writes to" aria-label="Channel routing" onclick={() => (routingOpen = !routingOpen)}>
             <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M2 4h5l3 8h4M2 12h5l3-8h4" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
           </button>
@@ -1077,7 +1077,6 @@
             onclick={() => winSlot && commit(winSlot.enabled ? "Bypass Effect" : "Turn On Effect", setSlot(chain, winSlot.id, { enabled: !winSlot.enabled }))}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><path d="M4.6 4.4a5 5 0 1 0 6.8 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-            {winSlot?.enabled ? "On" : "Bypassed"}
           </button>
           {#if inWave && $trialSlot === winSlot?.id}
             <span class="grow">Heard on the file while this window is open.</span>
@@ -1313,6 +1312,20 @@
   .mini.on {
     color: var(--accent);
   }
+  /* The title bar's power switch: the symbol only, lit green when on. */
+  .mini.power-mini {
+    width: 24px;
+    height: 22px;
+    padding: 0 !important;
+  }
+  .mini.power-mini svg {
+    display: block;
+    width: 15px;
+    height: 15px;
+  }
+  .mini.power-mini.on {
+    color: var(--ok, #3fb950);
+  }
   .fxwin {
     position: fixed;
     z-index: 900;
@@ -1408,8 +1421,9 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    height: 22px;
-    padding: 0 9px 0 7px !important;
+    width: 30px;
+    height: 26px;
+    padding: 0 !important;
     line-height: 1;
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -1429,8 +1443,8 @@
   .fxwin footer .power svg {
     display: block;
     flex: none;
-    width: 14px;
-    height: 14px;
+    width: 17px;
+    height: 17px;
   }
   .fxwin footer .power.on {
     border-color: color-mix(in srgb, var(--ok, #3fb950) 60%, transparent);

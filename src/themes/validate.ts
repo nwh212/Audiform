@@ -13,7 +13,7 @@ export const THEME_VERSION = 1;
 /** The built-in default look (tokens.css). It has no file and no other theme may use this id. */
 export const DEFAULT_THEME_ID = "dark";
 
-export const POINTER_KINDS = ["text", "ew", "ns", "nwse", "nesw", "move", "grab", "grabbing", "busy"] as const;
+export const POINTER_KINDS = ["text", "ew", "ns", "nwse", "nesw", "move", "grab", "grabbing", "busy", "trim-left", "trim-right"] as const;
 export type PointerKind = (typeof POINTER_KINDS)[number];
 
 export interface ThemePointer {

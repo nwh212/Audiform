@@ -62,7 +62,7 @@ Every name the style sheet or a pointer uses must be in `assets`, or the file is
 
 ### Pointers
 
-`pointers` replaces the standard mouse pointers while the theme is on. The kinds are `text`, `ew`, `ns`, `nwse`, `nesw`, `move`, `grab`, `grabbing` and `busy`. Each one names an asset and the hot spot, the point in the picture (in pixels from its top left) that does the pointing:
+`pointers` replaces the standard mouse pointers while the theme is on. The kinds are `text`, `ew`, `ns`, `nwse`, `nesw`, `move`, `grab`, `grabbing`, `busy`, and `trim-left` and `trim-right` (the pointers over a clip's start and end edges: a short double arrow beside a bracket on the clip's side; without them the standard trim pointers show, not the theme's `ew` arrow). Each one names an asset and the hot spot, the point in the picture (in pixels from its top left) that does the pointing:
 
 ```json
 "pointers": {

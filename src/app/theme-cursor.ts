@@ -4,7 +4,8 @@
 
 /**
  * Theme pointers: a theme file can draw the text and time-selection
- * I-beam, the resize double arrows, the grab hands and the busy pointer
+ * I-beam, the resize double arrows, the clip-edge trim pointers, the grab
+ * hands and the busy pointer
  * (its `pointers` entry, set here by the theme loader when it applies the
  * theme). Many of these pointers are chosen by code as the mouse moves (lane
  * edges, track and panel resizing, dragging a window by its title), so a
@@ -62,9 +63,24 @@ export function keywordOf(cursor: string): string {
   return (parts[parts.length - 1] ?? "").trim();
 }
 
+/**
+ * The clip-edge trim pointers carry their kind in their picture (see
+ * lane-hit.ts), so a theme's own trim pointer can stand in for them. A
+ * theme without one keeps the standard trim pointer, not its plain
+ * double arrow.
+ */
+export function trimKind(cursor: string): PointerKind | null {
+  return cursor.includes("audiform-trim-left") ? "trim-left" : cursor.includes("audiform-trim-right") ? "trim-right" : null;
+}
+
 /** The cursor value to use instead with `pointers`, or null to leave it as it is. */
 export function themedFor(cursor: string, pointers: ResolvedPointers | null = active): string | null {
   const kw = keywordOf(cursor);
+  const trim = trimKind(cursor);
+  if (trim) {
+    const p = pointers?.[trim];
+    return p ? `url("${p.url}") ${p.hot[0]} ${p.hot[1]}, ${kw}` : null;
+  }
   const kind = KIND[kw];
   const p = kind ? pointers?.[kind] : undefined;
   if (!p) return null;

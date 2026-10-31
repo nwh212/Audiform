@@ -31,6 +31,9 @@ use super::{choice, num, toggle, EffectInfo, Params, Processor};
 const MAX_SECONDS: f64 = 4.0;
 
 pub const KINDS: [&str; 4] = ["Digital", "Tape", "Analog", "Simple"];
+/// Tape and Analog: how much of the machine's character comes with it.
+pub const ANALOG: [&str; 5] = ["Off", "1", "2", "3", "4"];
+
 /// The Simple kind: each side's own time, early or late, by this much at most.
 pub const SIMPLE_MS: f64 = 500.0;
 /// Note values for a time that follows the tempo, and their length in beats.
@@ -83,6 +86,7 @@ pub fn echo_info() -> EffectInfo {
             num("depth", "Modulation", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
             num("rate", "Rate", "Hz", 0.05, 10.0, 0.6, 0.01).log().group("Color"),
             num("drive", "Drive", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
+            choice("analog", "Analog", &ANALOG, 2).group("Color"),
             num("dry", "Dry", "%", 0.0, 100.0, 100.0, 1.0).group("Output"),
             num("wet", "Echo level", "%", 0.0, 100.0, 30.0, 1.0).group("Output"),
             num("l_time", "Left time", "ms", -SIMPLE_MS, SIMPLE_MS, 0.0, 0.01).group("Simple"),
@@ -127,6 +131,16 @@ pub struct Echo {
     bed: Option<Bed>,
     /// The Simple kind's settings, when it is picked.
     simple: Option<Simple>,
+    /// Tape and Analog character, 0 (off) to 4, and its noise: the
+    /// generator, its tone per side, how loud the repeats are (the noise
+    /// follows them, as a compander's does), and the hum's phase.
+    analog: f32,
+    seed: u32,
+    hiss: [f32; 2],
+    hiss_k: f32,
+    env: [f32; 2],
+    env_fall: f32,
+    hum: f64,
 }
 
 /// The Simple kind: per side, how far back to read (frames, the shared
@@ -221,6 +235,13 @@ impl Echo {
             spread: 0.5,
             bed: None,
             simple: None,
+            analog: 0.0,
+            seed: 0x2545_f491,
+            hiss: [0.0; 2],
+            hiss_k: 0.3,
+            env: [0.0; 2],
+            env_fall: 0.0,
+            hum: 0.0,
         };
         e.set(p);
         e.cur = e.want;
@@ -263,12 +284,23 @@ impl Echo {
         self.wet = (p.get("wet") / 100.0) as f32;
         self.dry = (p.get("dry") / 100.0) as f32;
         self.pingpong = p.on("pingpong");
-        // Analog repeats are darker still.
-        let tone = if self.kind == 2 {
-            p.get("tone").min(5500.0)
+        // Tape and Analog character: each step a little more saturation,
+        // a softer top and more of the machine's own noise.
+        self.analog = if matches!(self.kind, 1 | 2) {
+            p.index("analog").min(ANALOG.len() - 1) as f32
         } else {
-            p.get("tone")
+            0.0
         };
+        let lvl = f64::from(self.analog);
+        // Analog repeats are darker still.
+        let tone = match self.kind {
+            2 => p.get("tone").min(5500.0 - 450.0 * lvl),
+            1 => p.get("tone").min(16_000.0 - 1800.0 * lvl),
+            _ => p.get("tone"),
+        };
+        // Tape hiss is bright; a bucket-brigade's noise is duller.
+        self.hiss_k = if self.kind == 1 { 0.45 } else { 0.12 };
+        self.env_fall = (-1.0 / (0.12 * self.rate)).exp() as f32;
         self.lp = (-std::f64::consts::TAU * tone / self.rate).exp() as f32;
         self.hp = (-std::f64::consts::TAU * p.get("low_cut") / self.rate).exp() as f32;
         self.depth = sway;
@@ -280,6 +312,9 @@ impl Echo {
             2 => 0.1 + 0.9 * base,
             _ => base,
         };
+        if self.analog > 0.0 {
+            self.drive = (self.drive + 0.08 * self.analog).min(1.0);
+        }
         self.simple = (self.kind == 3).then(|| {
             let frames = |ms: f64| (ms / 1000.0 * self.rate).round() as i64;
             let (l, r) = (frames(p.get("l_time")), frames(p.get("r_time")));
@@ -415,6 +450,40 @@ impl Echo {
     }
 }
 
+impl Echo {
+    /// One frame of the Tape or Analog machine's noise for each side: hiss
+    /// that follows the level of the repeats (louder behind loud repeats,
+    /// as a compander lets through), a faint floor from step 3, and a
+    /// faint mains hum at step 4.
+    fn machine_noise(&mut self, dl: f32, dr: f32) -> (f32, f32) {
+        let lvl = self.analog;
+        let rel = 10f32.powf((-62.0 + 5.0 * lvl) / 20.0);
+        let floor = if lvl >= 3.0 {
+            10f32.powf((-88.0 + 5.0 * (lvl - 3.0)) / 20.0)
+        } else {
+            0.0
+        };
+        let hum = if lvl >= 4.0 {
+            self.hum =
+                (self.hum + std::f64::consts::TAU * 60.0 / self.rate) % std::f64::consts::TAU;
+            (0.00005 * (self.hum.sin() + 0.3 * (3.0 * self.hum).sin())) as f32
+        } else {
+            0.0
+        };
+        let mut out = [0f32; 2];
+        for (c, d) in [dl, dr].into_iter().enumerate() {
+            self.seed ^= self.seed << 13;
+            self.seed ^= self.seed >> 17;
+            self.seed ^= self.seed << 5;
+            let white = (self.seed as f32 / u32::MAX as f32) * 2.0 - 1.0;
+            self.hiss[c] += (white - self.hiss[c]) * self.hiss_k;
+            self.env[c] = d.abs().max(self.env[c] * self.env_fall);
+            out[c] = self.hiss[c] * (self.env[c] * rel * 3.0 + floor) + hum;
+        }
+        (out[0], out[1])
+    }
+}
+
 impl Processor for Echo {
     fn process(&mut self, buf: &mut [f32]) {
         if let Some(sm) = self.simple {
@@ -453,6 +522,15 @@ impl Processor for Echo {
                 fl = soft(fl, dr_);
                 fr = soft(fr, dr_);
             }
+            let (mut dl, mut dr) = (dl, dr);
+            if self.analog > 0.0 {
+                // The machine's noise rides on the repeats, heard and fed back.
+                let (nl, nr) = self.machine_noise(dl, dr);
+                dl += nl;
+                dr += nr;
+                fl += nl * 0.5;
+                fr += nr * 0.5;
+            }
             let (xl, xr) = (f[0], f[1]);
             let (wl, wr) = if self.pingpong {
                 // The input enters on the left; each repeat crosses sides.
@@ -474,6 +552,8 @@ impl Processor for Echo {
         }
         self.lp_state.fill(0.0);
         self.hp_state.fill(0.0);
+        self.hiss = [0.0; 2];
+        self.env = [0.0; 2];
         self.at = 0;
         self.cur = self.want;
     }
@@ -728,5 +808,53 @@ mod tests {
         let mut b = impulse(200, 1.0, 0.0);
         e.process(&mut b);
         assert!((b[0] - 0.5).abs() < 1e-6 && (b[48 * 2] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn analog_adds_the_machines_noise_to_the_repeats_only() {
+        // A tone, then silence: Analog 4 leaves noise riding the repeats,
+        // Off leaves none, and Digital ignores the setting.
+        let run_with = |kind: f64, analog: f64| {
+            let p = params(&[
+                ("kind", kind),
+                ("analog", analog),
+                ("feedback", 0.0),
+                ("wet", 100.0),
+                ("dry", 0.0),
+                ("time", 50.0),
+                ("depth", 0.0),
+            ]);
+            let mut e = Echo::new(&p, R);
+            let mut b: Vec<f32> = (0..4800)
+                .flat_map(|i| {
+                    let v = (i as f32 * 0.07).sin() * 0.5;
+                    [v, v]
+                })
+                .collect();
+            b.extend(vec![0.0; 2 * 48_000]);
+            for c in b.chunks_mut(2 * 512) {
+                e.process(c);
+            }
+            b
+        };
+        let noise_after = |b: &[f32]| -> f32 {
+            // Well after the repeat has gone: only what the machine adds.
+            b[2 * 40_000..].iter().map(|v| v.abs()).fold(0.0, f32::max)
+        };
+        let off = run_with(1.0, 0.0);
+        let four = run_with(1.0, 4.0);
+        assert_eq!(noise_after(&off), 0.0);
+        let n = noise_after(&four);
+        assert!(n > 0.0 && n < 0.001, "a faint floor and hum: {n}");
+        // While the repeat plays, step 4 differs from off by its noise.
+        let during: f32 = off[2 * 2400..2 * 7000]
+            .iter()
+            .zip(&four[2 * 2400..2 * 7000])
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        assert!(during > 0.01, "{during}");
+        let digital = run_with(0.0, 4.0);
+        assert_eq!(noise_after(&digital), 0.0);
+        assert!(four.iter().all(|v| v.is_finite()));
     }
 }

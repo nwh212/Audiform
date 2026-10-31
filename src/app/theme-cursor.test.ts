@@ -4,6 +4,7 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { keywordOf, themedFor, type ResolvedPointers } from "./theme-cursor";
+import { CURSORS } from "../panels/editor/lane-hit";
 import { findTheme, resolvePointers } from "../themes/loader";
 
 /** A shipped theme's pointers, read from its file like the app does. */
@@ -49,6 +50,21 @@ describe("theme pointers", () => {
   it("gives each pixel-art pointer its own hot spot", () => {
     expect(themedFor("text", phosphor ?? null)).toMatch(/\) 7 10, text$/);
     expect(themedFor("ew-resize", phosphor ?? null)).toMatch(/\) 11 5, ew-resize$/);
+  });
+
+  it("every themed set has its own clip-edge trim pointers; other themes keep the standard ones", async () => {
+    for (const id of ["prism", "aqua", "meadow", "moonlight", "phosphor", "mallpastel", "mallnight"]) {
+      const p = await pointersOf(id);
+      for (const side of ["trim-left", "trim-right"] as const) {
+        const t = themedFor(CURSORS[side], p);
+        expect(t, `${id} ${side}`).toMatch(/^url\(.+\) 8 8, ew-resize$/);
+        expect(t).not.toContain("audiform-trim");
+        // Not the theme's plain double arrow.
+        expect(t).not.toBe(themedFor("ew-resize", p));
+      }
+    }
+    expect(themedFor(CURSORS["trim-left"], analog ?? null)).toBeNull();
+    expect(themedFor(CURSORS["trim-right"], null)).toBeNull();
   });
 
   it("draws a busy pointer only for themes that have one", () => {

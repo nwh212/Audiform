@@ -28,11 +28,16 @@ export const RAZOR_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g transform="rotate(-35 12 12)"><rect x="9" y="1" width="6" height="15" rx="1" fill="%23e8e8ee" stroke="%23111" stroke-width="1"/><path d="M12 3v11" stroke="%23111" stroke-width="1" stroke-dasharray="2 1.5"/><rect x="10" y="16" width="4" height="6" rx="1" fill="%23e5534b" stroke="%23111" stroke-width="1"/></g></svg>',
 ).replace(/%2523/g, "%23")}") 4 22, crosshair`;
 
-/** Edge trim cursors: a double arrow (the edge moves either way) beside a bracket on the clip's side. */
+/**
+ * Edge trim cursors: a double arrow (the edge moves either way) beside a
+ * bracket on the clip's side, 16 by 16 with the hot spot in the middle
+ * (the theme pointer rule). The picture names its kind, so a theme's own
+ * trim pointer takes its place (see theme-cursor.ts).
+ */
 const trimCursor = (left: boolean) =>
   `url("data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><g transform="${left ? "" : "translate(22 0) scale(-1 1)"}" stroke-linecap="square" fill="none"><path d="M14 4h3v14h-3" stroke="#111" stroke-width="3.6"/><path d="M14 4h3v14h-3" stroke="#f2f2f5" stroke-width="1.6"/><path d="M2 11h10M5 8l-3 3 3 3M9 8l3 3-3 3" stroke="#111" stroke-width="3.4"/><path d="M2 11h10M5 8l-3 3 3 3M9 8l3 3-3 3" stroke="#f2f2f5" stroke-width="1.4"/></g></svg>`,
-  )}") ${left ? 7 : 15} 11, ew-resize`;
+    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><desc>audiform-trim-${left ? "left" : "right"}</desc><g transform="${left ? "" : "translate(24 0) scale(-1 1)"}" stroke-linecap="square" fill="none"><path d="M17 5h3v14h-3" stroke="#111" stroke-width="3.6"/><path d="M17 5h3v14h-3" stroke="#f2f2f5" stroke-width="1.6"/><path d="M2 12h12M5 9l-3 3 3 3M11 9l3 3-3 3" stroke="#111" stroke-width="3.4"/><path d="M2 12h12M5 9l-3 3 3 3M11 9l3 3-3 3" stroke="#f2f2f5" stroke-width="1.4"/></g></svg>`,
+  )}") 8 8, ew-resize`;
 
 export const CURSORS: Record<Gesture, string> = {
   move: "grab",

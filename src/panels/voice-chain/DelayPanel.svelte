@@ -10,7 +10,8 @@
   either side of a lit display with the time and a picture of the
   repeats fading away (alternating sides when they ping-pong). Under
   them, a row of small dials for the modulation, filters, drive and the
-  levels, and the room spread used on surround. The Simple kind shows a
+  levels, the room spread used on surround, and for Tape and Analog an
+  Analog dial (Off, 1 to 4) for how much of the machine comes with them. The Simple kind shows a
   time, a mix and an Invert switch for each side instead, with the
   times in milliseconds or samples.
 -->
@@ -168,6 +169,14 @@
         <BigKnob param={P("tone")} value={val("tone")} size={56} label="Hi cut" oninput={(v) => set("tone", v, false)} oncommit={(v) => set("tone", v, true)} />
       </div>
     </div>
+    {#if kind === 1 || kind === 2}
+      <div class="fp-group" title="How much of the machine comes with it: each step more saturation, a softer top and more of its own noise riding on the repeats ({kind === 1 ? 'tape hiss' : 'the bucket-brigade\'s noise'}); step 4 adds a faint hum. Off is the clean {kind === 1 ? 'tape' : 'analog'} sound.">
+        <span class="fp-gname">Machine</span>
+        <div class="fp-knobs">
+          <BigKnob param={P("analog")} value={val("analog")} size={56} label="Analog" oninput={(v) => set("analog", Math.round(v), false)} oncommit={(v) => set("analog", Math.round(v), true)} />
+        </div>
+      </div>
+    {/if}
     <div class="fp-group" title="On a surround bed or a 3D Space master: how far each repeat spreads to the speakers either side. Stereo ignores it.">
       <span class="fp-gname">Room</span>
       <div class="fp-knobs">
