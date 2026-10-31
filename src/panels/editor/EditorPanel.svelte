@@ -58,7 +58,7 @@
   import { chipMenuItems, clipZoneItems, emptyLaneItems, rulerMenuItems, type MenuCtx } from "./lane-menus";
   import { autoLaneItems, busItems as buildBusItems, midiClipItems as buildMidiClipItems, trackItems as buildTrackItems, type TrackMenuExtra } from "./track-menus";
   import { drawRuler } from "./ruler-draw";
-  import { fadeDrag, gestureLabel, slipChange, stretchDrag, trimDrag } from "./clip-drag";
+  import { fadeDrag, linkCrossfade, gestureLabel, slipChange, stretchDrag, trimDrag } from "./clip-drag";
   import EditorToolbar from "./EditorToolbar.svelte";
   import HeaderViews from "./HeaderViews.svelte";
   import StartScreen from "./StartScreen.svelte";
@@ -1209,7 +1209,7 @@
         // Across sets the fade's length; up and down bends its curve.
         const at = sampleAt(ev.clientX - lanesEl!.getBoundingClientRect().left, view);
         const r = fadeDrag(d0, clip, kind === "fade-in" ? "in" : "out", at, end, Math.abs(ev.clientX - startX) >= 3, ev.clientY - startY, rate);
-        changes = r.changes;
+        changes = settings.current.linkCrossfades ? linkCrossfade(d0, clip, kind === "fade-in" ? "in" : "out", r.changes, rate) : r.changes;
         envTip = { x: ev.clientX, y: ev.clientY, text: r.tip };
       }
       preview = changes;

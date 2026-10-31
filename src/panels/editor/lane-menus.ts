@@ -9,10 +9,12 @@
  * and the ruler. Each builder only makes the items; the editor shows them.
  */
 
+import { settings } from "../../stores/settings";
+import { linkCrossfade } from "./clip-drag";
 import type { ContextItem } from "../../app/ContextMenu.svelte";
 import { clipReversePrepare } from "../../app/core";
 import { editor, type EditorState } from "../../stores/editor";
-import type { ClipDoc, MarkerDoc, Op, SessionDoc, TempoDoc } from "../../stores/session";
+import type { ClipChange, ClipDoc, MarkerDoc, Op, SessionDoc, TempoDoc } from "../../stores/session";
 import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
 import { mixOf, toSpeakers } from "../properties/channel-mix";
 import { envChange, envName, fxChoices, fxLaneOf, pointsOf } from "./envelope";
@@ -187,12 +189,20 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
     const ids = ed.selectedClips.has(z.clip.id) ? [...ed.selectedClips] : [z.clip.id];
     const clips = (ctx.doc()?.tracks ?? []).flatMap((t) => t.clips).filter((c) => ids.includes(c.id));
     const current = z.clip[which].shape;
+    // Linked crossfades: the partner fade follows (same shape, opposite bend).
+    const linked = (changes: ClipChange[]) => {
+      const doc = ctx.doc();
+      if (!doc || !settings.current.linkCrossfades) return changes;
+      let out = changes;
+      for (const c of clips) out = linkCrossfade(doc, c, which === "fade_in" ? "in" : "out", out, doc.sample_rate);
+      return out;
+    };
     const setShape = (shape: string, label: string) =>
-      void ctx.edit(`${word} Shape: ${label}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], shape } })) }).catch(onError);
+      void ctx.edit(`${word} Shape: ${label}`, { op: "set_clips", changes: linked(clips.map((c) => ({ id: c.id, [which]: { ...c[which], shape } }))) }).catch(onError);
     for (const [shape, label] of FADE_SHAPES) items.push({ kind: "item", label, checked: current === shape || (shape === "linear" && current !== "cosine"), run: () => setShape(shape, label) });
     const bent = clips.some((c) => (c[which].curve ?? 0) !== 0);
     items.push({ kind: "item", label: `Skew: ${Math.round((z.clip[which].curve ?? 0) * 100)} (drag the handle up or down)`, disabled: true, run: () => {} });
-    items.push({ kind: "item", label: "Reset Skew", disabled: !bent, run: () => void ctx.edit(`${word} Skew`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], curve: 0 } })) }).catch(onError) });
+    items.push({ kind: "item", label: "Reset Skew", disabled: !bent, run: () => void ctx.edit(`${word} Skew`, { op: "set_clips", changes: linked(clips.map((c) => ({ id: c.id, [which]: { ...c[which], curve: 0 } }))) }).catch(onError) });
     items.push(
       { kind: "sep" },
       { kind: "item", label: `Remove ${word}`, disabled: clips.every((c) => c[which].length === 0), run: () => void ctx.edit(`Remove ${word}`, { op: "set_clips", changes: clips.map((c) => ({ id: c.id, [which]: { ...c[which], length: 0 } })) }).catch(onError) },

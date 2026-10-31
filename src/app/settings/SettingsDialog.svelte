@@ -187,7 +187,7 @@
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
-    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape });
+    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
@@ -236,6 +236,7 @@
             <label><input type="radio" bind:group={d.app.fadeShape} value="linear" /> Straight</label>
             <label><input type="radio" bind:group={d.app.fadeShape} value="cosine" /> Curve (smooth at both ends)</label>
             <p class="hint">Drag a fade's handle up or down to bend it (skew, -100 to 100).</p>
+            <label><input type="checkbox" bind:checked={d.app.linkCrossfades} /> Link crossfades: bending one clip's fade bends the other's the opposite way, with the same shape</label>
           </fieldset>
           <p class="note">The Space bar plays, and stops when playing or recording.</p>
           <label class="off" title="Warnings with a 'don't ask again' box arrive with the first such warning."><input type="checkbox" disabled /> Show warnings I turned off again <span class="why">No warnings can be turned off yet.</span></label>

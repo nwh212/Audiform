@@ -36,6 +36,8 @@ export interface AppSettings {
   wheelZooms: boolean;
   /** Shape a new fade starts with. */
   fadeShape: FadeShape;
+  /** In a crossfade, bending one clip's fade bends the other's the opposite way, and they share a shape. */
+  linkCrossfades: boolean;
   /** What the space bar does to a playing session. */
   colors: AppColors;
   /** System name of the output; null is the system default. */
@@ -160,6 +162,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wheelAnchor: "between",
   wheelZooms: true,
   fadeShape: "linear",
+  linkCrossfades: true,
   colors: { ...NO_COLORS },
   output: null,
   outputPair: [0, 1],
@@ -221,6 +224,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     wheelZooms: bool(o.wheelZooms, d.wheelZooms),
     fadeShape:
       o.fadeShape === "cosine" ? "cosine" : "linear",
+    linkCrossfades: bool(o.linkCrossfades, d.linkCrossfades),
     colors: {
       wave: color(c.wave),
       playhead: color(c.playhead),

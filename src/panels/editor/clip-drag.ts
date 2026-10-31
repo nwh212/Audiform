@@ -124,6 +124,36 @@ export function fadeDrag(
   return { changes, tip };
 }
 
+/**
+ * Linked crossfades: the clip on the same track whose opposite fade
+ * covers the same stretch as this change's fade (a crossfade) takes the
+ * same shape and the opposite bend, so as one rises faster the other
+ * falls slower. Returns the changes with the partner's added.
+ */
+export function linkCrossfade(d0: SessionDoc, clip: ClipDoc, which: "in" | "out", changes: ClipChange[], rate: number): ClipChange[] {
+  const ch = changes.find((c) => c.id === clip.id);
+  const fade = which === "in" ? ch?.fade_in : ch?.fade_out;
+  if (!fade || fade.length <= 0) return changes;
+  const track = d0.tracks.find((t) => t.clips.some((c) => c.id === clip.id));
+  if (!track) return changes;
+  const len = (c: ClipDoc) => clipLength(c, d0.media.find((m) => m.id === c.media_id), rate);
+  const tol = Math.max(2, Math.round(rate / 1000));
+  // The stretch this fade covers on the timeline.
+  const [a, b] = which === "in" ? [clip.start, clip.start + fade.length] : [clip.start + len(clip) - fade.length, clip.start + len(clip)];
+  const partner = track.clips.find((c) => {
+    if (c.id === clip.id || c.locked) return false;
+    if (which === "in") {
+      const end = c.start + len(c);
+      return Math.abs(end - b) <= tol && Math.abs(end - c.fade_out.length - a) <= tol && c.fade_out.length > 0;
+    }
+    return Math.abs(c.start - a) <= tol && Math.abs(c.start + c.fade_in.length - b) <= tol && c.fade_in.length > 0;
+  });
+  if (!partner) return changes;
+  const other = which === "in" ? partner.fade_out : partner.fade_in;
+  const linked = { ...other, shape: fade.shape, curve: fade.curve === 0 ? 0 : -fade.curve };
+  return [...changes, which === "in" ? { id: partner.id, fade_out: linked } : { id: partner.id, fade_in: linked }];
+}
+
 /** The undo label of a finished clip drag. `count` is how many clips the drag took. */
 export function gestureLabel(kind: Gesture, stretching: boolean, count: number, changes: readonly ClipChange[]): string {
   return kind === "gain"

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { ClipDoc, MediaRefDoc, SessionDoc } from "../../stores/session";
-import { gestureLabel, slipChange, trimDrag } from "./clip-drag";
+import { gestureLabel, linkCrossfade, slipChange, trimDrag } from "./clip-drag";
 import { ghostItems } from "./drop-ghost";
 
 const fade = (length = 0) => ({ length, shape: "linear", curve: 0 });
@@ -29,6 +29,30 @@ describe("clip drags", () => {
     expect(gestureLabel("trim-left", true, 1, [])).toBe("Stretch Clip");
     expect(gestureLabel("fade-in", false, 1, [{ id: "a", fade_in: fade(0) }])).toBe("Remove Fade In");
     expect(gestureLabel("trim-right", false, 2, [{ id: "a" }, { id: "b" }])).toBe("Trim 2 Clips");
+  });
+});
+
+describe("linked crossfades", () => {
+  // A plays 0 to 48 000 and fades out over its last 8 000; B starts at 40 000 and fades in over 8 000.
+  const a = clip({ id: "a", fade_out: fade(8_000) });
+  const b = clip({ id: "b", start: 40_000, fade_in: fade(8_000) });
+  const doc = { sample_rate: 48_000, media: [m], tracks: [{ id: "t", clips: [a, b] }] } as unknown as SessionDoc;
+  it("bends the partner fade the opposite way, with the same shape", () => {
+    const bent = { length: 8_000, shape: "cosine", curve: 0.4 };
+    const out = linkCrossfade(doc, b, "in", [{ id: "b", fade_in: bent }], 48_000);
+    expect(out).toEqual([
+      { id: "b", fade_in: bent },
+      { id: "a", fade_out: { length: 8_000, shape: "cosine", curve: -0.4 } },
+    ]);
+    // And from the other side.
+    const back = linkCrossfade(doc, a, "out", [{ id: "a", fade_out: { ...bent, curve: -0.2 } }], 48_000);
+    expect(back[1]).toEqual({ id: "b", fade_in: { length: 8_000, shape: "cosine", curve: 0.2 } });
+  });
+  it("leaves a fade with no partner alone", () => {
+    const lone = clip({ id: "c", start: 200_000, fade_in: fade(4_000) });
+    const d = { ...doc, tracks: [{ id: "t", clips: [a, lone] }] } as unknown as SessionDoc;
+    const ch = [{ id: "c", fade_in: { length: 4_000, shape: "linear", curve: 0.5 } }];
+    expect(linkCrossfade(d, lone, "in", ch, 48_000)).toEqual(ch);
   });
 });
 
