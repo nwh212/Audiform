@@ -386,16 +386,56 @@ impl Renderer {
         let start = self.pos;
         let end = start + frames as u64;
         let rate = self.plan.out_rate;
-        for (t, track) in self.plan.tracks.iter().enumerate() {
-            let buf = &mut out[t];
+        let tracks = &self.plan.tracks;
+        let out = &mut out[..tracks.len()];
+        // Each track's clips decode on their own: with several tracks the
+        // work is spread over the cores, a slice of tracks per thread.
+        let threads = crate::engine::host::worker_threads()
+            .clamp(1, 16)
+            .min(tracks.len().max(1));
+        let one = |t: usize,
+                   track: &TrackPlan,
+                   active: &mut HashMap<Id, Active>,
+                   playing: &mut Option<Playing>,
+                   buf: &mut Vec<f32>| {
+            let _ = t;
             buf.clear();
             buf.resize(frames * 2, 0.0);
-            render_track(track, &mut self.active[t], rate, start, end, buf);
+            render_track(track, active, rate, start, end, buf);
             if let Some(midi) = &track.midi {
-                self.playing[t]
+                playing
                     .get_or_insert_with(|| Playing::open(midi, start, rate))
                     .play(midi, buf);
             }
+        };
+        if threads <= 1 || tracks.len() < 2 {
+            for (t, track) in tracks.iter().enumerate() {
+                one(
+                    t,
+                    track,
+                    &mut self.active[t],
+                    &mut self.playing[t],
+                    &mut out[t],
+                );
+            }
+        } else {
+            let position = crate::plugins::instance::block_position();
+            let tempo = crate::plugins::instance::block_tempo();
+            // On the engine's worker threads, each taking the next track as
+            // it frees up, so a track with a heavy chain or instrument does
+            // not hold the others up.
+            use rayon::prelude::*;
+            let one = &one;
+            self.active
+                .par_iter_mut()
+                .zip(self.playing.par_iter_mut())
+                .zip(out.par_iter_mut())
+                .enumerate()
+                .for_each(|(t, ((a, p), o))| {
+                    crate::plugins::instance::set_block_position(position);
+                    crate::plugins::instance::set_block_tempo(tempo.clone());
+                    one(t, &tracks[t], a, p, o);
+                });
         }
         self.pos = end;
         self.rendered += frames as u64;

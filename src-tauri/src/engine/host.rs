@@ -278,6 +278,26 @@ pub fn guard_out<T: cpal::SizedSample>(out: &mut [T], f: impl FnOnce(&mut [T])) 
     }
 }
 
+/// Sets up the engine's worker threads once, at startup: one per core,
+/// or `AUDIFORM_THREADS` of them when set (for measuring). They spread
+/// a block's tracks and buses over the cores (see the mix graph).
+pub fn init_threads() {
+    let _ = rayon::ThreadPoolBuilder::new()
+        .num_threads(worker_threads())
+        .thread_name(|k| format!("engine-{k}"))
+        .build_global();
+}
+
+/// Threads the engine spreads a block's tracks over: the cores, or
+/// `AUDIFORM_THREADS` when set (for measuring).
+pub fn worker_threads() -> usize {
+    std::env::var("AUDIFORM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|&n| n >= 1)
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(4, std::num::NonZero::get))
+}
+
 /// The same for an input callback.
 pub fn guard_in(f: impl FnOnce()) {
     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err() {

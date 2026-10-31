@@ -65,6 +65,7 @@ pub fn run() {
             {
                 carry_over::carry_over(&dir);
             }
+            engine::host::init_threads();
             if let Ok(dir) = app.path().app_config_dir() {
                 plugins::load(&dir);
                 engine::host::set_log_path(dir.join("audio.log"));

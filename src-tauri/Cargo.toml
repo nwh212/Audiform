@@ -60,6 +60,7 @@ sha2 = "0.10"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 # Album art in Track Details: read any common picture, shrink it, save as JPEG.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp", "gif"] }
+rayon = "1.10"
 
 [dev-dependencies]
 pretty_assertions = "1"

@@ -716,10 +716,15 @@ impl Graph {
             o.clear();
             o.resize(n, 0.0);
         }
-        let done = self.run_plugin_tracks(raw, n);
+        let done = self.run_tracks_ahead(raw, n);
+        let mut buses_done: Option<Vec<bool>> = None;
+        let mut routed_buses = vec![false; self.buses.len()];
         let mut scratch = std::mem::take(&mut self.scratch);
         for k in 0..self.order.len() {
             let node = self.order[k];
+            if let (Node::Bus(_), None) = (node, &buses_done) {
+                buses_done = Some(self.run_buses_ahead(&routed_buses, n));
+            }
             let mut st = match node {
                 Node::Track(i) => std::mem::take(&mut self.tracks[i]),
                 Node::Bus(i) => std::mem::take(&mut self.buses[i]),
@@ -727,9 +732,15 @@ impl Graph {
             if let (Node::Bus(i), true) = (node, st.room) {
                 self.run_room_bus(i, &mut st, n);
                 self.buses[i] = st;
+                routed_buses[i] = true;
                 continue;
             }
-            let ran = matches!(node, Node::Track(i) if done.get(i).copied().unwrap_or(false));
+            let ran = match node {
+                Node::Track(i) => done.get(i).copied().unwrap_or(false),
+                Node::Bus(i) => buses_done
+                    .as_ref()
+                    .is_some_and(|d| d.get(i).copied().unwrap_or(false)),
+            };
             if !ran {
                 if let Node::Track(i) = node {
                     prepare_track(&mut st, &raw[i][..n]);
@@ -952,7 +963,10 @@ impl Graph {
             }
             match node {
                 Node::Track(i) => self.tracks[i] = st,
-                Node::Bus(i) => self.buses[i] = st,
+                Node::Bus(i) => {
+                    self.buses[i] = st;
+                    routed_buses[i] = true;
+                }
             }
         }
         // 3D Space: the master chain runs on the speakers, and the stereo
@@ -1077,44 +1091,81 @@ impl Graph {
     /// listen to no other track. Each plug-in waits on its own host
     /// process, so running them together keeps a session with many heavy
     /// plug-ins from adding up their times. Returns which tracks ran.
-    fn run_plugin_tracks(&mut self, raw: &[Vec<f32>], n: usize) -> Vec<bool> {
+    /// Tracks with effects and no sidechain key run their chains side by
+    /// side on every core, before the rest of the block is mixed in
+    /// order. A track listening to another's key waits for the order,
+    /// since its key is that track's output. Returns which tracks ran.
+    fn run_tracks_ahead(&mut self, raw: &[Vec<f32>], n: usize) -> Vec<bool> {
         let mut done = vec![false; self.tracks.len()];
         let heavy: Vec<usize> = (0..self.tracks.len().min(raw.len()))
             .filter(|&i| {
                 let t = &self.tracks[i];
-                t.keys.is_empty() && t.fx.as_ref().is_some_and(|f| f.chain.has_plugins())
+                t.keys.is_empty() && t.fx.is_some()
             })
             .collect();
         if heavy.len() < 2 {
             return done;
         }
-        let threads = std::thread::available_parallelism()
-            .map_or(4, std::num::NonZero::get)
+        let threads = crate::engine::host::worker_threads()
             .clamp(2, 16)
             .min(heavy.len());
-        let mut taken: Vec<(usize, Strip)> = heavy
+        let taken: Vec<(usize, Strip)> = heavy
             .iter()
             .map(|&i| (i, std::mem::take(&mut self.tracks[i])))
             .collect();
-        let per = taken.len().div_ceil(threads);
-        let position = crate::plugins::instance::block_position();
         let pos = self.pos;
-        let tempo = self.tempo.clone();
-        std::thread::scope(|scope| {
-            for chunk in taken.chunks_mut(per) {
-                let tempo = tempo.clone();
-                scope.spawn(move || {
-                    crate::plugins::instance::set_block_position(position);
-                    crate::plugins::instance::set_block_tempo(Some(tempo));
-                    for (i, st) in chunk.iter_mut() {
-                        prepare_track(st, &raw[*i][..n]);
-                        run_strip_at(st, pos);
-                    }
-                });
-            }
+        let taken = run_strips_parallel(taken, threads, |i, st| {
+            prepare_track(st, &raw[i][..n]);
+            run_strip_at(st, pos);
         });
         for (i, st) in taken {
             self.tracks[i] = st;
+            done[i] = true;
+        }
+        done
+    }
+
+    /// Buses whose feeders are all routed already (tracks, and buses
+    /// before them in the order): their chains side by side on every
+    /// core. Called at the first bus in the order, when every track is
+    /// routed. Returns which buses ran.
+    fn run_buses_ahead(&mut self, routed_buses: &[bool], n: usize) -> Vec<bool> {
+        let mut done = vec![false; self.buses.len()];
+        let fed_by_pending_bus = |b: usize| {
+            self.buses.iter().enumerate().any(|(j, s)| {
+                !routed_buses[j]
+                    && !s.room
+                    && s.routes
+                        .iter()
+                        .any(|r| matches!(r.dest, Dest::Bus(d) if d == b))
+            })
+        };
+        let ready: Vec<usize> = (0..self.buses.len())
+            .filter(|&b| {
+                let s = &self.buses[b];
+                !s.room && s.fx.is_some() && s.keys.is_empty() && !fed_by_pending_bus(b)
+            })
+            .collect();
+        if ready.len() < 2 {
+            return done;
+        }
+        let threads = crate::engine::host::worker_threads()
+            .clamp(2, 16)
+            .min(ready.len());
+        let taken: Vec<(usize, Strip)> = ready
+            .iter()
+            .map(|&i| (i, std::mem::take(&mut self.buses[i])))
+            .collect();
+        let pos = self.pos;
+        let taken = run_strips_parallel(taken, threads, |_, st| {
+            if st.mono {
+                fold_mono(&mut st.input);
+            }
+            let _ = n;
+            run_strip_at(st, pos);
+        });
+        for (i, st) in taken {
+            self.buses[i] = st;
             done[i] = true;
         }
         done
@@ -1132,6 +1183,28 @@ impl Graph {
             tap.delay.run(&mut tap.buf);
         }
     }
+}
+
+/// Runs `work` on every strip in `taken` over the engine's worker
+/// threads (see [`super::host::init_threads`]), each taking the next
+/// strip as it frees up, so a heavy chain on one strip does not leave
+/// the others waiting. Plug-ins are told the block's position and tempo
+/// on whichever thread runs them.
+fn run_strips_parallel(
+    mut taken: Vec<(usize, Strip)>,
+    threads: usize,
+    work: impl Fn(usize, &mut Strip) + Sync,
+) -> Vec<(usize, Strip)> {
+    use rayon::prelude::*;
+    let _ = threads;
+    let position = crate::plugins::instance::block_position();
+    let tempo = crate::plugins::instance::block_tempo();
+    taken.par_iter_mut().for_each(|(i, st)| {
+        crate::plugins::instance::set_block_position(position);
+        crate::plugins::instance::set_block_tempo(tempo.clone());
+        work(*i, st);
+    });
+    taken
 }
 
 /// Left and right averaged onto both sides.

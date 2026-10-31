@@ -174,7 +174,10 @@ impl Allpass {
         let d = self.buf[self.at];
         let v = x + self.g * d;
         self.buf[self.at] = flush(v);
-        self.at = (self.at + 1) % self.buf.len();
+        self.at += 1;
+        if self.at == self.buf.len() {
+            self.at = 0;
+        }
         d - self.g * v
     }
 }
@@ -205,6 +208,11 @@ struct Line {
     phase: f64,
     /// LFO step per frame.
     step: f64,
+    /// The read distance this frame and how it moves per frame: the LFO
+    /// is worked out once a block and run along in between (it moves far
+    /// slower than a block), so no sine is taken per sample.
+    d: f64,
+    d_step: f64,
     gain: f32,
     lp: f32,
     lp_state: f32,
@@ -212,14 +220,37 @@ struct Line {
 }
 
 impl Line {
-    fn read(&self, depth: f64) -> f32 {
+    /// Where the LFO puts the read distance at `phase`.
+    fn distance(&self, depth: f64, phase: f64) -> f64 {
+        (self.len + depth * (1.0 + phase.sin())).clamp(1.0, (self.buf.len() - 2) as f64)
+    }
+
+    /// Sets the read distance for the next `frames` frames and moves the
+    /// LFO past them.
+    fn begin_block(&mut self, depth: f64, frames: usize) {
+        let d0 = self.distance(depth, self.phase);
+        let end = self.phase + self.step * frames as f64;
+        let d1 = self.distance(depth, end);
+        self.d = d0;
+        self.d_step = if frames > 0 {
+            (d1 - d0) / frames as f64
+        } else {
+            0.0
+        };
+        self.phase = end % std::f64::consts::TAU;
+    }
+
+    fn read(&self) -> f32 {
         let n = self.buf.len();
-        let d = (self.len + depth * (1.0 + self.phase.sin())).clamp(1.0, (n - 2) as f64);
-        let pos = self.at as f64 + n as f64 - d;
+        // `d` is at least 1 and under n - 1, so `pos` is in `at + 1..at + n`.
+        let pos = self.at as f64 + n as f64 - self.d;
         let i0 = pos.floor();
         let frac = (pos - i0) as f32;
-        let i0 = i0 as usize % n;
-        let i1 = (i0 + 1) % n;
+        let mut i0 = i0 as usize;
+        if i0 >= n {
+            i0 -= n;
+        }
+        let i1 = if i0 + 1 == n { 0 } else { i0 + 1 };
         self.buf[i0] * (1.0 - frac) + self.buf[i1] * frac
     }
 }
@@ -375,6 +406,8 @@ impl Reverb {
                 len: l * scale / 1000.0 * r,
                 phase: i as f64 * 0.77,
                 step: std::f64::consts::TAU * (0.31 + 0.13 * i as f64) / r,
+                d: 1.0,
+                d_step: 0.0,
                 gain: 0.0,
                 lp: 0.0,
                 lp_state: 0.0,
@@ -493,18 +526,31 @@ impl Reverb {
         let n = self.pre[0].len();
         self.pre[0][self.pre_at] = l;
         self.pre[1][self.pre_at] = r;
-        let back = (self.pre_at + n - self.pre_len) % n;
+        let mut back = self.pre_at + n - self.pre_len.min(n);
+        if back >= n {
+            back -= n;
+        }
         let (pl, pr) = (self.pre[0][back], self.pre[1][back]);
-        self.pre_at = (self.pre_at + 1) % n;
+        self.pre_at += 1;
+        if self.pre_at == n {
+            self.pre_at = 0;
+        }
 
         // Early reflections off a mono copy.
         if self.early > 0.0 {
             let m = self.er_ring.len();
             self.er_ring[self.er_at] = (pl + pr) * 0.5;
             for (v, &(d, g, _)) in self.er_vals.iter_mut().zip(&self.taps) {
-                *v = self.er_ring[(self.er_at + m - d) % m] * g;
+                let mut i = self.er_at + m - d.min(m);
+                if i >= m {
+                    i -= m;
+                }
+                *v = self.er_ring[i] * g;
             }
-            self.er_at = (self.er_at + 1) % m;
+            self.er_at += 1;
+            if self.er_at == m {
+                self.er_at = 0;
+            }
         }
 
         // Diffusion (and a spring's dispersion).
@@ -526,7 +572,7 @@ impl Reverb {
         // The tail.
         let mut o = [0f32; 8];
         for (k, line) in self.lines.iter().enumerate() {
-            o[k] = line.read(self.depth);
+            o[k] = line.read();
         }
         let mut mixed = o;
         hadamard(&mut mixed);
@@ -543,13 +589,20 @@ impl Reverb {
             let input = if k < 4 { il } else { ir } * if k % 2 == 0 { 0.5 } else { -0.5 };
             let n = line.buf.len();
             line.buf[line.at] = flush(v + input);
-            line.at = (line.at + 1) % n;
-            line.phase += line.step;
-            if line.phase > std::f64::consts::TAU {
-                line.phase -= std::f64::consts::TAU;
+            line.at += 1;
+            if line.at == n {
+                line.at = 0;
             }
+            line.d += line.d_step;
         }
         o
+    }
+
+    /// Before a block of `frames` frames: each line's LFO for the block.
+    fn begin_block(&mut self, frames: usize) {
+        for line in &mut self.lines {
+            line.begin_block(self.depth, frames);
+        }
     }
 
     /// One stereo frame of wet sound.
@@ -604,6 +657,7 @@ impl Reverb {
         };
         let ch = bed.names.len().max(1);
         let n = bed.wet.len();
+        self.begin_block(buf.len() / ch);
         let late = 0.5f32;
         // The eight lines' sum is about √8 times one line, the stereo
         // side's about 2.15 times: the same per speaker before the bed's gain.
@@ -651,6 +705,7 @@ impl Processor for Reverb {
             self.process_bed(buf);
             return;
         }
+        self.begin_block(buf.len() / 2);
         for f in buf.as_chunks_mut::<2>().0 {
             let (l, r) = (f[0], f[1]);
             let (wl, wr) = self.frame(l, r);

@@ -9,6 +9,8 @@
 //! through lock-free ring buffers; settings arrive as atomics.
 
 pub mod automation;
+#[cfg(test)]
+pub mod bench;
 pub(crate) mod fx;
 pub mod graph;
 pub mod host;

@@ -1407,6 +1407,32 @@
     else run(k === "in" ? "view.zoom-in" : k === "out" ? "view.zoom-out" : k === "selection" ? "view.zoom-selection" : "view.zoom-session");
   }
 
+  // Lanes draw their clips only while they are on screen (or within a
+  // screen of it): a session with a hundred tracks mounts every lane, but
+  // only the dozen in view do the work. Pointer handling needs no canvas,
+  // so the lane boxes stay.
+  let onScreen = $state<Record<string, boolean>>({});
+  let laneWatcher: IntersectionObserver | null = null;
+  function watchLane(el: HTMLElement) {
+    laneWatcher ??= new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const id = (e.target as HTMLElement).dataset.lane;
+          if (!id) continue;
+          if (e.isIntersecting) onScreen[id] = true;
+          else if (onScreen[id]) delete onScreen[id];
+        }
+      },
+      { rootMargin: "100% 0px" },
+    );
+    laneWatcher.observe(el);
+    return {
+      destroy() {
+        laneWatcher?.unobserve(el);
+      },
+    };
+  }
+
   // Track scrollbar.
   let scrollerH = $state(0);
   let rowsH = $state(1);
@@ -1694,10 +1720,13 @@
             {@const track = row.track}
             {@const i = row.i}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
+            {@const laneTrack = resizing?.id === track.id || heightPreview !== 1 || uniformPreview !== null ? { ...(shownTracks?.[i] ?? track), height: shownHeight(track) } : (shownTracks?.[i] ?? track)}
             <div
               class="lane"
               data-track={track.id}
               style:cursor={preview.length > 0 && hoverCursor === "grab" ? "grabbing" : hoverCursor}
+              style:height="{trackHeight(laneTrack)}px"
+              use:watchLane
               onmousedown={(e) => {
                 if (e.button === 1) e.preventDefault();
               }}
@@ -1707,14 +1736,13 @@
               oncontextmenu={(e) => onLaneMenu(e, track)}
               ondblclick={(e) => onLaneDouble(e, track)}
             >
+              {#if onScreen[track.id]}
               <LaneCanvas
-                track={resizing?.id === track.id || heightPreview !== 1 || uniformPreview !== null ? { ...(shownTracks?.[i] ?? track), height: shownHeight(track) } : (shownTracks?.[i] ?? track)}
+                track={laneTrack}
                 media={mediaMap}
                 sessionRate={rate}
                 {view}
                 width={lanesWidth}
-                {playhead}
-                {startMark}
                 selectedClips={ed.selectedClips}
                 trackSelected={ed.selectedTrack === track.id}
                 index={i}
@@ -1729,6 +1757,7 @@
                 stretchHandles={ed.stretchHandles}
                 silent={silent.has(track.id)}
               />
+              {/if}
             </div>
             {@render autoLanes(track, i)}
             {:else}
@@ -1765,6 +1794,16 @@
             {@const sx1 = xOf(doc.view.selection.end, view)}
             {#if sx1 > 0 && sx0 < lanesWidth}
               <div class="range" style:left="{Math.max(0, sx0)}px" style:width="{Math.min(lanesWidth, sx1) - Math.max(0, sx0)}px"></div>
+            {/if}
+          {/if}
+          {@const hx = xOf(playhead, view)}
+          {#if hx >= 0 && hx <= lanesWidth}
+            <div class="head-line" style:transform="translateX({Math.round(hx)}px)"></div>
+          {/if}
+          {#if startMark !== null}
+            {@const sx = xOf(startMark, view)}
+            {#if sx >= 0 && sx <= lanesWidth}
+              <div class="start-line" style:transform="translateX({Math.round(sx)}px)"></div>
             {/if}
           {/if}
           {#if doc.tracks.length === 0}
@@ -2095,6 +2134,29 @@
     border-left: 1px dashed;
     opacity: 0.6;
     pointer-events: none;
+  }
+
+  /* The playhead and the start marker: one line each over every lane,
+     moved by a transform, so the lanes themselves never repaint for them. */
+  .head-line,
+  .start-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  .head-line {
+    width: 1px;
+    background: var(--playhead, var(--accent));
+  }
+
+  .start-line {
+    width: 0;
+    border-left: 1px dashed var(--playhead, var(--accent));
+    opacity: 0.75;
   }
 
   .range {

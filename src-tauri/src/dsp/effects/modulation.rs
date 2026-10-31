@@ -85,6 +85,29 @@ struct Line {
     at: usize,
 }
 
+/// A sine for the sweeps, a few thousandths off at most (far under what
+/// a sweep's shape shows) and several times quicker than the exact one,
+/// which was taken once per voice per sample.
+fn lfo_sin(x: f64) -> f64 {
+    use std::f64::consts::{PI, TAU};
+    // Into -PI..PI (phases here stay within a few turns, so a loop beats
+    // a remainder), then fold onto -PI/2..PI/2 where the polynomial holds.
+    let mut x = x;
+    while x > PI {
+        x -= TAU;
+    }
+    while x < -PI {
+        x += TAU;
+    }
+    if x > PI / 2.0 {
+        x = PI - x;
+    } else if x < -PI / 2.0 {
+        x = -PI - x;
+    }
+    let x2 = x * x;
+    x * (1.0 + x2 * (-1.0 / 6.0 + x2 * (1.0 / 120.0 + x2 * (-1.0 / 5040.0 + x2 / 362_880.0))))
+}
+
 impl Line {
     fn new(len: usize) -> Self {
         Self {
@@ -94,7 +117,10 @@ impl Line {
     }
     fn push(&mut self, x: f32) {
         self.buf[self.at] = x;
-        self.at = (self.at + 1) % self.buf.len();
+        self.at += 1;
+        if self.at == self.buf.len() {
+            self.at = 0;
+        }
     }
     /// The sound `d` frames ago (at least 1), between samples by a cubic.
     fn read(&self, d: f64) -> f32 {
@@ -103,8 +129,18 @@ impl Line {
         let pos = self.at as f64 + n as f64 - d;
         let i = pos.floor();
         let t = (pos - i) as f32;
-        let i = i as usize;
-        let s = |k: usize| self.buf[(i + n + k - 1) % n];
+        // `pos` is in `at + 3..at + n`, so `i - 1 + k` stays under 2n.
+        let i = i as usize + n - 1;
+        let s = |k: usize| {
+            let mut j = i + k;
+            if j >= n {
+                j -= n;
+            }
+            if j >= n {
+                j -= n;
+            }
+            self.buf[j]
+        };
         let (y0, y1, y2, y3) = (s(0), s(1), s(2), s(3));
         // Catmull-Rom between y1 and y2.
         y1 + 0.5
@@ -428,7 +464,7 @@ impl Modulation {
                 let mut sum = 0.0f32;
                 for v in 0..n {
                     let p = ph + std::f64::consts::TAU * v as f64 / n as f64;
-                    sum += self.lines[c].read(base + swing * p.sin());
+                    sum += self.lines[c].read(base + swing * lfo_sin(p));
                 }
                 let y = sum / (n as f32).sqrt();
                 self.lines[c].push(x + self.fb[c] * self.feedback);
@@ -438,14 +474,15 @@ impl Modulation {
             // Flanger: a short delay swept between almost nothing and twice the setting.
             1 => {
                 let base = self.ms(self.flange_ms);
-                let d = base * (1.0 + 0.95 * self.depth * ph.sin()) + 1.0;
+                let d = base * (1.0 + 0.95 * self.depth * lfo_sin(ph)) + 1.0;
                 let y = self.lines[c].read(d);
                 self.lines[c].push(x + y * self.feedback);
                 y
             }
             // Phaser: the all-passes' turning point sweeps up to 3 octaves each way.
             2 => {
-                let f = (self.center * 2f64.powf(self.depth * 3.0 * ph.sin())).min(self.sr * 0.45);
+                let f =
+                    (self.center * 2f64.powf(self.depth * 3.0 * lfo_sin(ph))).min(self.sr * 0.45);
                 let t = (std::f64::consts::PI * f / self.sr).tan();
                 let a = ((t - 1.0) / (t + 1.0)) as f32;
                 let mut y = x + self.fb[c] * self.feedback;
@@ -715,5 +752,16 @@ mod tests {
             (sum - 2.0 * std::f32::consts::FRAC_1_SQRT_2).abs() < 0.05,
             "{sum}"
         );
+    }
+}
+
+#[cfg(test)]
+mod lfo_tests {
+    #[test]
+    fn the_quick_sine_stays_close() {
+        for i in 0..2_000 {
+            let x = i as f64 * 0.01 - 10.0;
+            assert!((super::lfo_sin(x) - x.sin()).abs() < 2e-3, "{x}");
+        }
     }
 }
