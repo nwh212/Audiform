@@ -9,6 +9,7 @@
  * channels, phase align, and the Clip menu's actions.
  */
 
+import { newTrackNames } from "./track-names";
 import { alignPair, ALIGN_MAX_MS, alignOps, describeAlign } from "../panels/editor/align";
 import { findClips, mediaOf, clipsAt, splitClips, fadeClip, trimToPlayhead, trimToRange, loopChanges } from "../panels/editor/clip-edit";
 import { unstretch } from "../panels/editor/stretch";
@@ -265,6 +266,8 @@ export function createClipTools(deps: ClipToolsDeps) {
   }
 
   /** Selected clips moved one track up (-1) or down (1), or null when they can't all move. */
+  /** The id a new track below the last one gets while a move is worked out. */
+  const NEW_TRACK = "__new_track__";
   function clipsTrackMove(dir: -1 | 1): ClipChange[] | null {
     const d = session.current;
     const sel = editor.current().selectedClips;
@@ -276,8 +279,10 @@ export function createClipTools(deps: ClipToolsDeps) {
       for (const c of listed[i]!.clips) {
         if (!sel.has(c.id)) continue;
         const to = listed[i + dir];
-        if (!to || c.locked) return null;
-        changes.push({ id: c.id, track_id: to.id });
+        if (c.locked) return null;
+        // Below the bottom track: a new track opens there.
+        if (!to && !(dir > 0 && !listed[i]!.midi_clips?.length)) return null;
+        changes.push({ id: c.id, track_id: to ? to.id : NEW_TRACK });
       }
     }
     return changes.length ? changes : null;
@@ -295,9 +300,29 @@ export function createClipTools(deps: ClipToolsDeps) {
     return by === 0 ? null : picked.map((c) => ({ id: c.id, start: c.start + by }));
   }
   async function moveClipsToTrack(dir: -1 | 1) {
-    const changes = clipsTrackMove(dir);
+    let changes = clipsTrackMove(dir);
     const d = session.current;
     if (!changes || !d) return;
+    if (changes.some((c) => c.track_id === NEW_TRACK)) {
+      // Past the bottom track: one new track like it, and the move, as one step.
+      const last = d.tracks.filter((t) => !t.hidden).at(-1)!;
+      const id = uuid();
+      changes = changes.map((c) => (c.track_id === NEW_TRACK ? { ...c, track_id: id } : c));
+      const name = newTrackNames(d.tracks.map((t) => t.name), 1)[0]!;
+      await session.edit(
+        "Move to New Track Below",
+        {
+          op: "batch",
+          ops: [
+            { op: "add_track", id, name, stereo: last.channels !== "mono", index: d.tracks.length },
+            { op: "set_clips", changes },
+          ],
+        },
+        sessionHistory,
+      );
+      editor.selectClips(editor.current().selectedClips, id);
+      return;
+    }
     await session.edit(dir < 0 ? "Move to Track Above" : "Move to Track Below", { op: "set_clips", changes }, sessionHistory);
     const listed = d.tracks.filter((t) => !t.hidden);
     const first = listed.findIndex((t) => t.clips.some((c) => c.id === changes[0]!.id));

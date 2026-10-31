@@ -88,6 +88,7 @@ pub fn run() {
             commands::keymap::keymap_load,
             commands::keymap::keymap_save,
             commands::themes::themes_dir,
+            commands::themes::themes_open_dir,
             commands::themes::themes_list,
             commands::themes::themes_read,
             commands::library::library_default_root,

@@ -98,6 +98,14 @@ pub fn themes_dir(app: AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Opens the Themes folder itself in the system file manager (made first
+/// if it is not there yet).
+#[tauri::command]
+pub fn themes_open_dir(app: AppHandle) -> Result<(), String> {
+    let dir = themes_dir(app)?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
+}
+
 /// The `.audtheme` files in the Themes folder.
 #[tauri::command]
 pub fn themes_list(app: AppHandle) -> Result<Vec<ThemeFile>, String> {

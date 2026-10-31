@@ -2016,3 +2016,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-31: Reverb windows: Impulse Response tab fixed; each kind its own look
 - The Impulse Response tab drew its tabs and its panel side by side (the panel pushed off the window's edge); they are one column again.
 - Each made kind of Reverb has its own look, as the Impulse Response one does: a panel in the kind's color (Room warm wood, Hall deep blue, Plate silver, Spring green, Tape amber) with the kind's name and what it sounds like across the top.
+
+## 2026-10-31: Clips moved past the last track open new tracks; Themes folder opens itself
+- Move to Track Below (Alt+Down) on clips already on the bottom track adds a new track below it (stereo unless the bottom track is mono) and moves them there, as one undoable step. Dragging clips (or Alt+dragging copies) below the last track opens as many new tracks as the drop needs, one per lane height below, also in one step.
+- Settings > Appearance's Themes folder button opens the folder itself rather than showing it selected in its parent.
+- The 3D Space panel's track list scrolls instead of squeezing buttons out of sight in large sessions.

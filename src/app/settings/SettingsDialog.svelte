@@ -9,7 +9,7 @@
   reason, never faked.
 -->
 <script lang="ts">
-  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, themesDir, type CacheInfo } from "../core";
+  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, openThemesDir, type CacheInfo } from "../core";
   import { listThemes, type ThemeCatalog } from "../../themes/loader";
   import { themeId } from "../../stores/settings";
   import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, type AudioDriver, type AudioInput } from "../core";
@@ -76,7 +76,7 @@
   }
   async function openThemesFolder() {
     try {
-      await revealMedia(await themesDir());
+      await openThemesDir();
     } catch (e) {
       onNotice(`Could not open the Themes folder: ${String(e)}`);
     }

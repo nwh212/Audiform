@@ -25,9 +25,10 @@
   import { transportAuditionClip, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginsRegistry, type EffectInfo } from "../../app/core";
   import type { MenuPlugin } from "../voice-chain/chain";
   import type { EnvelopeDoc, Op } from "../../stores/session";
+  import { newTrackNames } from "../../app/track-names";
   import { pluginsVersion } from "../../stores/plugins";
   import { dragGain, gainText } from "./clip-gain";
-  import { clipsAt, copyMoved, LockedError, moveClips, nearest, previewTracks, snapTargets, splitClips, withCrossfades,
+  import { clipsAt, copyMoved, LockedError, moveClips, NEW_TRACK, nearest, previewTracks, snapTargets, splitClips, withCrossfades,
     withLayers, withGroups } from "./clip-edit";
   import { shownTracks as listedTracks } from "./visibility";
   import { addPoint, envChange, envName, formatValue, fxLaneOf, fxParam, movePoint, pointsOf, rangeOf, snapValue, yToValue, type EnvKind } from "./envelope";
@@ -1153,8 +1154,18 @@
       const tol = ev.shiftKey || !ed.snap.on ? 0 : SNAP_PX * v.spp;
       if (kind === "move") {
         const over = hitLanes(ev.clientX, ev.clientY).trackId;
+        // Below the last track: each lane's height further down is one more new track.
+        let extra = 0;
         if (over) row = d0.tracks.findIndex((t) => t.id === over);
-        changes = moveClips(d0, ids, dx, row - startRow, targets, tol).changes;
+        else {
+          const lanes = lanesEl?.querySelectorAll<HTMLElement>("[data-track]");
+          const last = lanes?.[lanes.length - 1]?.getBoundingClientRect();
+          if (last && ev.clientY > last.bottom) {
+            row = d0.tracks.length - 1;
+            extra = 1 + Math.floor((ev.clientY - last.bottom) / Math.max(40, last.height));
+          }
+        }
+        changes = moveClips(d0, ids, dx, row - startRow + extra, targets, tol, true).changes;
         if (ed.autoCrossfade) changes = withCrossfades(d0, changes);
         changes = withLayers(d0, changes);
         // Alt held: the drop makes copies and leaves the originals.
@@ -1197,18 +1208,29 @@
       stretchHint = null;
       if (kind === "gain" || kind === "fade-in" || kind === "fade-out") envTip = null;
       if (!moved || changes.length === 0) return;
+      // Dropped below the last track: the tracks they need open there, in the same step.
+      const adds: Op[] = [];
+      if (kind === "move" && changes.some((c) => c.track_id?.startsWith(NEW_TRACK))) {
+        const need = Math.max(...changes.map((c) => (c.track_id?.startsWith(NEW_TRACK) ? Number(c.track_id.slice(NEW_TRACK.length)) + 1 : 0)));
+        const names = newTrackNames(d0.tracks.map((t) => t.name), need);
+        const newIds = names.map(() => crypto.randomUUID());
+        const like = d0.tracks.at(-1);
+        names.forEach((name, k) => adds.push({ op: "add_track", id: newIds[k]!, name, stereo: like?.channels !== "mono", index: d0.tracks.length + k } as Op));
+        changes = changes.map((c) => (c.track_id?.startsWith(NEW_TRACK) ? { ...c, track_id: newIds[Number(c.track_id.slice(NEW_TRACK.length))]! } : c));
+      }
+      const withAdds = (op: Op): Op => (adds.length ? { op: "batch", ops: [...adds, op] } : op);
       if (kind === "move" && lastEv?.altKey) {
         // Alt+drag: copies where they were dropped; the originals stay.
         const copy = copyMoved(d0, ids, changes, () => crypto.randomUUID());
         void session
-          .edit(copy.ids.length > 1 ? `Copy ${copy.ids.length} Clips` : "Copy Clip", copy.op, runner)
+          .edit(copy.ids.length > 1 ? `Copy ${copy.ids.length} Clips` : "Copy Clip", withAdds(copy.op), runner)
           .then(() => editor.selectClips(copy.ids))
           .catch(onError);
         return;
       }
       const label = gestureLabel(kind, stretching, ids.length, changes);
       void session
-        .edit(label, { op: "set_clips", changes }, runner)
+        .edit(label, withAdds({ op: "set_clips", changes }), runner)
         .catch(onError)
         .finally(() => kind === "gain" && endAudition(track.id));
     };

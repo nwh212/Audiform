@@ -1536,3 +1536,8 @@ export function trackDetailsPickCover(): Promise<string | null> {
 export function trackDetailsWrite(path: string, tags: FileTags, cover: string | null): Promise<void> {
   return invoke<void>("track_details_write", { path, tags, cover });
 }
+
+/** Opens the Themes folder itself in the system file manager. */
+export function openThemesDir(): Promise<void> {
+  return invoke<void>("themes_open_dir");
+}

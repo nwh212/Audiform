@@ -172,6 +172,9 @@ export interface MovePreview {
  * last track. Either edge of the group snaps to `targets` within
  * `tolerance`. Locked clips stay where they are.
  */
+/** The track id a clip dragged below the last track gets: `NEW_TRACK` and which new track (0 first). */
+export const NEW_TRACK = "__new_track__:";
+
 export function moveClips(
   doc: SessionDoc,
   ids: Iterable<string>,
@@ -179,6 +182,8 @@ export function moveClips(
   rows: number,
   targets: readonly number[] = [],
   tolerance = 0,
+  /** Rows below the last track open new tracks there (ids from `NEW_TRACK`). */
+  grow = false,
 ): MovePreview {
   const media = mediaOf(doc);
   const items = findClips(doc, ids).filter((l) => !l.clip.locked);
@@ -197,12 +202,13 @@ export function moveClips(
   d = Math.max(d, -first);
   const top = Math.min(...items.map((l) => l.trackIndex));
   const bottom = Math.max(...items.map((l) => l.trackIndex));
-  const r = Math.max(-top, Math.min(doc.tracks.length - 1 - bottom, Math.round(rows)));
+  const r = Math.max(-top, grow ? Math.round(rows) : Math.min(doc.tracks.length - 1 - bottom, Math.round(rows)));
   const changes: ClipChange[] = [];
   for (const l of items) {
     const ch: ClipChange = { id: l.clip.id };
     if (d !== 0) ch.start = l.clip.start + d;
-    if (r !== 0) ch.track_id = doc.tracks[l.trackIndex + r]!.id;
+    const to = l.trackIndex + r;
+    if (r !== 0) ch.track_id = to < doc.tracks.length ? doc.tracks[to]!.id : `${NEW_TRACK}${to - doc.tracks.length}`;
     if (ch.start !== undefined || ch.track_id !== undefined) changes.push(ch);
   }
   return { delta: d, rows: r, changes };
