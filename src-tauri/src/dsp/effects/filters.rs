@@ -88,7 +88,7 @@ fn band_eq_info(n: usize) -> EffectInfo {
         .collect();
     params.push(num("output", "Output", "dB", -15.0, 15.0, 0.0, 0.1));
     let (id, name) = match n {
-        10 => ("altaudio.band_eq_10", "Band EQ (10 bands)"),
+        10 => ("altaudio.band_eq_10", "Band EQ"),
         20 => ("altaudio.band_eq_20", "Band EQ (20 bands)"),
         _ => ("altaudio.band_eq_30", "Band EQ (30 bands)"),
     };
@@ -97,7 +97,7 @@ fn band_eq_info(n: usize) -> EffectInfo {
         name,
         category: "Filter and EQ",
         description:
-            "Fixed bands across the range, each turned up or down: quick broad tone shaping.",
+            "Fixed bands across the range, each turned up or down: quick broad tone shaping. Tabs pick 10, 20 or 30 bands.",
         params,
     }
 }

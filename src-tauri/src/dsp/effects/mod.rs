@@ -440,11 +440,14 @@ pub(crate) fn db_to_gain(db: f64) -> f32 {
 /// Effects no longer offered (Phase Curve does what Phase Rotate did, and
 /// the Center Channel Extractor what the Center Remover did, and more).
 /// Sessions that use them still play them.
-/// The Convolution Reverb is the Reverb's Impulse Response tab now.
-pub const RETIRED: [&str; 3] = [
+/// The Convolution Reverb is the Reverb's Impulse Response tab now, and
+/// the 20 and 30 band EQs are tabs of the Band EQ's window.
+pub const RETIRED: [&str; 5] = [
     "altaudio.phase_rotate",
     "altaudio.center_remover",
     "altaudio.convolution_reverb",
+    "altaudio.band_eq_20",
+    "altaudio.band_eq_30",
 ];
 
 /// Builds the processor for one slot, or None for an unknown effect (or a

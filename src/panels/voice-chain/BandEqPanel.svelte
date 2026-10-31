@@ -3,7 +3,9 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The Band EQ window: one tall slider per band in a row, lowest band on
+  The Band EQ window: tabs across the top for 10, 20 or 30 bands (a new
+  count keeps the curve's shape, in one undoable step), then one tall
+  slider per band in a row, lowest band on
   the left, with the band's level above it and its frequency below. Drag
   a slider (Ctrl for fine steps, Shift for coarse) or turn the mouse
   wheel over it; double-click sets it back to 0 dB; click the level to
@@ -14,6 +16,7 @@
 <script lang="ts">
   import type { EffectInfo, EffectParamInfo } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
+  import { BAND_EQ_KINDS } from "./band-eq";
   import { paramValue } from "./chain";
   import VSlider from "./VSlider.svelte";
 
@@ -21,9 +24,11 @@
     slot: EffectSlotDoc;
     info: EffectInfo;
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
+    /** Another tab: the slot becomes the Band EQ with that many bands. */
+    onKind?: (id: string) => void;
   }
 
-  const { slot, info, onParams }: Props = $props();
+  const { slot, info, onParams, onKind }: Props = $props();
 
   const bands = $derived(info.params.filter((p) => p.group === "Bands"));
   const output = $derived(info.params.find((p) => p.key === "output") ?? null);
@@ -107,6 +112,13 @@
 </script>
 
 <div class="beq" style:--col="{colW}px">
+  {#if onKind}
+    <div class="kinds" role="tablist" aria-label="Number of bands">
+      {#each BAND_EQ_KINDS as k (k.id)}
+        <button type="button" role="tab" class:on={k.id === slot.effect} aria-selected={k.id === slot.effect} onclick={() => k.id !== slot.effect && onKind(k.id)}>{k.label}</button>
+      {/each}
+    </div>
+  {/if}
   <div class="body">
     <div class="scale" style:height="{H}px">
       {#each SCALE as d (d)}<span style:top="{(1 - (d + 15) / 30) * 100}%">{d > 0 ? `+${d}` : d}</span>{/each}
@@ -180,6 +192,25 @@
 </div>
 
 <style>
+  .kinds {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .kinds button {
+    padding: 3px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-1);
+    color: var(--text-dim);
+    font: inherit;
+    cursor: pointer;
+  }
+  .kinds button.on {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface-1));
+    color: var(--text);
+  }
   .beq {
     display: grid;
     gap: 8px;

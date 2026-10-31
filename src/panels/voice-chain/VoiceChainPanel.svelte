@@ -15,6 +15,7 @@
   (or the whole file) as one undoable edit.
 -->
 <script lang="ts">
+  import { BAND_EQ_KINDS, carryBands } from "./band-eq";
   import { fromImpulse, IMPULSE_ID, REVERB_ID, REVERB_KINDS, toImpulse } from "./reverb-kinds";
   import EffectPresetBar from "./EffectPresetBar.svelte";
   import ChannelRouting from "./ChannelRouting.svelte";
@@ -636,7 +637,7 @@
   // or the master has no audio of its own to learn from yet.
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
-  const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
+  const BAND_EQS: string[] = BAND_EQ_KINDS.map((k) => k.id);
   const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width", "altaudio.limiter", "altaudio.channel_mixer", "altaudio.reverb", "altaudio.echo", "altaudio.modulation"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
@@ -1007,7 +1008,15 @@
         {/if}
         {#if BAND_EQS.includes(winSlot.effect)}
           {#await import("./BandEqPanel.svelte") then { default: BandEqPanel }}
-          <BandEqPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          <BandEqPanel
+            slot={winSlot}
+            info={winInfo}
+            onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
+            onKind={(id) => {
+              const to = byId.get(id);
+              if (to) commit(`Band EQ: ${to.name}`, setSlot(chain, winSlot.id, { effect: id, params: carryBands(winInfo, winSlot.params, to) }));
+            }}
+          />
           {/await}
         {/if}
         {#if winInfo.sidechain && onTrackTab && doc && keyOwner}

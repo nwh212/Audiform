@@ -77,8 +77,6 @@ export function createEffectsTools(deps: EffectsToolsDeps) {
     "clip_repair",
     "dc_offset",
     "band_eq_10",
-    "band_eq_20",
-    "band_eq_30",
     "curve_eq",
     "precision_filter",
     "notch",
