@@ -26,3 +26,37 @@ export function trackOp(doc: SessionDoc | null, id: string, changes: Record<stri
     ],
   };
 }
+
+/**
+ * The tracks not heard right now: muted ones, and while anything is
+ * soloed, every track that is not soloed and does not feed a soloed bus
+ * (through its output or a send, directly or through other buses).
+ * Their clips are drawn greyed out.
+ */
+export function silentTracks(doc: SessionDoc | null): Set<string> {
+  const out = new Set<string>();
+  if (!doc) return out;
+  const buses = doc.buses ?? [];
+  const anySolo = doc.tracks.some((t) => t.solo) || buses.some((b) => b.solo);
+  const byId = new Map(buses.map((b) => [b.id, b]));
+  /** True when something sent to `busId` reaches a soloed bus. */
+  const reaches = (busId: string, seen: Set<string>): boolean => {
+    if (seen.has(busId)) return false;
+    seen.add(busId);
+    const b = byId.get(busId);
+    if (!b) return false;
+    if (b.solo) return true;
+    const next = [...(b.output?.type === "bus" ? [b.output.bus_id] : []), ...(b.sends ?? []).map((x) => x.bus_id)];
+    return next.some((id) => reaches(id, seen));
+  };
+  for (const t of doc.tracks) {
+    if (t.muted) {
+      out.add(t.id);
+      continue;
+    }
+    if (!anySolo || t.solo) continue;
+    const next = [...(t.output?.type === "bus" ? [t.output.bus_id] : []), ...(t.sends ?? []).map((x) => x.bus_id)];
+    if (!next.some((id) => reaches(id, new Set()))) out.add(t.id);
+  }
+  return out;
+}

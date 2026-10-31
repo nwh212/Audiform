@@ -9,7 +9,7 @@
 -->
 <script lang="ts">
   import { settings, wheelAnchorX, zoomRatios } from "../../stores/settings";
-  import { trackOp } from "../mixer/solo";
+  import { silentTracks, trackOp } from "../mixer/solo";
   import { busOp, MASTER_ID } from "../mixer/routing";
   import { onDestroy, tick as nextFrame, untrack } from "svelte";
   import type { ActionRegistry } from "../../app/actions";
@@ -160,6 +160,8 @@
   const headerRows = $derived(showStart ? [] : laneList);
   /** Bus tracks, listed after the audio tracks. They hold no clips. */
   const buses = $derived(showStart ? [] : (doc?.buses ?? []));
+  /** Tracks not heard (muted, or others soloed): their clips are greyed out. */
+  const silent = $derived(silentTracks(doc));
   /** What the track headers show: the mix controls, or the output and sends. */
   /** What the headers show: mix controls (with input, output and sends as room allows) or the effects. */
   let headerView = $state<"mix" | "io" | "fx">("mix");
@@ -1634,6 +1636,7 @@
                 showFx={ed.showFx}
                 fxLanes={ed.fxLanes}
                 stretchHandles={ed.stretchHandles}
+                silent={silent.has(track.id)}
               />
             </div>
             {@render autoLanes(track, i)}

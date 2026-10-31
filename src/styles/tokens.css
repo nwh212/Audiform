@@ -37,6 +37,10 @@
 
   /* Corner rounding: subtle, so boxes read as boxes. A theme sets these
      to 0 for a square look. */
+  /* How muted clips and tracks that are not heard (muted, or others
+     soloed) are drawn: a CSS filter. */
+  --clip-muted-filter: grayscale(1) brightness(0.8);
+
   --radius-field: 3px;
   --radius-menu: 5px;
   --radius-dialog: 7px;

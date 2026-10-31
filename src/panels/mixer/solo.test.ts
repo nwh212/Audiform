@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { SessionDoc } from "../../stores/session";
-import { trackOp } from "./solo";
+import { silentTracks, trackOp } from "./solo";
 
 const doc = { tracks: [{ id: "a", solo: true }, { id: "b", solo: false }, { id: "c", solo: true }] } as unknown as SessionDoc;
 
@@ -31,5 +31,26 @@ describe("track changes", () => {
         { op: "set_bus", id: "b", changes: { solo: false } },
       ],
     });
+  });
+});
+
+describe("silent tracks", () => {
+  const d = (tracks: object[], buses: object[] = []) => ({ tracks, buses }) as unknown as SessionDoc;
+  it("greys muted tracks, and with a solo every track not heard", () => {
+    expect([...silentTracks(d([{ id: "a", muted: true }, { id: "b" }]))]).toEqual(["a"]);
+    expect([...silentTracks(d([{ id: "a", solo: true }, { id: "b" }]))]).toEqual(["b"]);
+  });
+  it("keeps tracks that feed a soloed bus", () => {
+    const out = silentTracks(
+      d(
+        [
+          { id: "a", output: { type: "bus", bus_id: "x" } },
+          { id: "b", sends: [{ bus_id: "y" }] },
+          { id: "c" },
+        ],
+        [{ id: "y", output: { type: "bus", bus_id: "x" } }, { id: "x", solo: true }],
+      ),
+    );
+    expect([...out]).toEqual(["c"]);
   });
 });

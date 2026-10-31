@@ -49,9 +49,11 @@
     fxLanes?: Record<string, FxLane>;
     /** Draw stretch handles in each clip's top corners. */
     stretchHandles?: boolean;
+    /** Not heard (the track is muted, or others are soloed): every clip greyed out. */
+    silent?: boolean;
   }
 
-  const { track, media, sessionRate, view, width, playhead, startMark = null, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {}, stretchHandles = false }: Props = $props();
+  const { track, media, sessionRate, view, width, playhead, startMark = null, selectedClips, trackSelected, index = 0, ampZoom = 1, liveTake = null, peaks, peakTick, showVolume = false, showPan = false, showFx = false, fxLanes = {}, stretchHandles = false, silent = false }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
 
@@ -235,7 +237,10 @@
     const bodyAlpha = Number(css("--clip-body-alpha")) || 0.2;
     const waveTone = Number(css("--clip-wave-tone")) || 0.55;
     const gloss = css("--clip-gloss") === "1";
+    // Muted clips: drawn through the theme's muted look (greyscale unless the theme says otherwise).
+    const mutedFilter = css("--clip-muted-filter") || "grayscale(1) brightness(0.8)";
     for (const clip of liveClip ? [...track.clips, liveClip] : track.clips) {
+      g.filter = clip.muted ? mutedFilter : "none";
       const m = clip === liveClip ? liveMedia! : media.get(clip.media_id);
       const len = clipLength(clip, m, sessionRate);
       const x0 = xOf(clip.start, view);
@@ -253,7 +258,7 @@
       g.clearRect(left, 1, right - left, lh - 2);
       g.fillStyle = laneFill;
       g.fillRect(left, 1, right - left, lh - 2);
-      g.globalAlpha = clip.muted ? 0.35 : 1;
+      g.globalAlpha = clip.muted ? 0.6 : 1;
       g.fillStyle = color;
       g.globalAlpha *= bodyAlpha;
       g.fillRect(left, 1, right - left, lh - 2);
@@ -262,11 +267,11 @@
         const sh = g.createLinearGradient(0, 1, 0, lh / 2);
         sh.addColorStop(0, "rgba(255, 255, 255, 0.55)");
         sh.addColorStop(1, "rgba(255, 255, 255, 0)");
-        g.globalAlpha = clip.muted ? 0.35 : 1;
+        g.globalAlpha = clip.muted ? 0.6 : 1;
         g.fillStyle = sh;
         g.fillRect(left, 1, right - left, lh / 2);
       }
-      g.globalAlpha = clip.muted ? 0.35 : 1;
+      g.globalAlpha = clip.muted ? 0.6 : 1;
       g.fillStyle = color;
       g.fillRect(left, 1, right - left, titleH);
       g.fillStyle = "#0e0e10";
@@ -321,7 +326,7 @@
           g.strokeStyle = tone;
           g.fillStyle = tone;
           g.lineWidth = 1.25;
-          g.globalAlpha = clip.muted ? 0.35 : 1;
+          g.globalAlpha = clip.muted ? 0.6 : 1;
           const laneH = body.height / ch;
           const fA = Math.max(clip.source_in, exact.start, Math.floor(clip.source_in + ((view.scroll + left * view.spp - clip.start) * srcRate) / sessionRate) - 1);
           const fB = Math.min(clip.source_out, exact.start + exact.count, Math.ceil(clip.source_in + ((view.scroll + right * view.spp - clip.start) * srcRate) / sessionRate) + 1);
@@ -358,7 +363,7 @@
         } else if (level) {
           // Much lighter than the clip body so the waveform stands out.
           g.fillStyle = lighten(color, waveTone);
-          g.globalAlpha = clip.muted ? 0.35 : 1;
+          g.globalAlpha = clip.muted ? 0.6 : 1;
           const laneH = body.height / ch;
           // A looped clip wraps back to the start of its region.
           const region = clip.source_out - clip.source_in;
@@ -549,7 +554,7 @@
       }
 
       // Raised edge: a light top and left, a dark bottom and right, so clips stand off the lane.
-      g.globalAlpha = clip.muted ? 0.35 : 1;
+      g.globalAlpha = clip.muted ? 0.6 : 1;
       g.fillStyle = "rgba(255, 255, 255, 0.28)";
       g.fillRect(left, 1, right - left, 1);
       if (x0 >= 0) g.fillRect(x0 + 1, 1, 1, lh - 3);
@@ -578,6 +583,7 @@
       const gb = clip === liveClip ? null : gainBox(x0, x1, lh - 2, 1 + titleH);
       if (gb) drawGainHandle(g, gb, clip.gain_db, `10px ${css("--font-ui")}`);
     }
+    g.filter = "none";
 
     // Clip edges under a clip on top (overlaps and crossfades): a strip of
     // the hidden clip's color along the bottom of the overlap, and a line
@@ -613,9 +619,13 @@
   });
 </script>
 
-<canvas bind:this={canvas} aria-hidden="true"></canvas>
+<canvas bind:this={canvas} class:silent aria-hidden="true"></canvas>
 
 <style>
+  /* A track not heard: its clips take the theme's muted look. */
+  canvas.silent {
+    filter: var(--clip-muted-filter, grayscale(1) brightness(0.8));
+  }
   canvas {
     display: block;
   }

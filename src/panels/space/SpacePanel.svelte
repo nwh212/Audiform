@@ -117,6 +117,8 @@
     return out;
   });
   const picked = $derived(sources.find((s) => s.id === ed.selectedTrack) ?? null);
+  /** The picked one is drawn last, on top, so it can be grabbed out of a stack in one spot. */
+  const drawOrder = $derived(picked ? [...sources.filter((s) => s.id !== picked.id), picked] : sources);
   const spots = $derived(space ? speakerSpots(space.layout) : []);
   const heights = $derived(spots.some((s) => s.z > 0));
 
@@ -384,7 +386,7 @@
               <text x={lab.x} y={lab.y} text-anchor={lab.anchor} class="spk-name">{sp.name}</text>
             {/if}
           {/each}
-          {#each sources as s (s.id)}
+          {#each drawOrder as s (s.id)}
             {@const r = dotR(s.pos)}
             {@const on = ed.selectedTrack === s.id}
             {@const [nx, ny] = toView(s.pos.x, s.pos.y, size)}
