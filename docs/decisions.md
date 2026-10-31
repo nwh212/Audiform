@@ -1984,3 +1984,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Trimming several clips at once lines their edges up
 - With several clips selected, dragging one's end back brings any clip that ends later back to the grabbed edge first, then they move together; a clip that ends earlier stays put until the edge reaches it. Dragging an end out pulls the shorter ones out to meet the grabbed edge. Start edges work the same way round. Each clip stays within its own limits (its file, its neighbors). Before, every clip moved by the same amount and never met.
+
+## 2026-10-31: Fades shape the drawn waveform; both halves of a crossfade show
+- A clip's waveform is drawn through its fades (the same curve the playback uses, bend included), so a fade in or out visibly tapers the sound; the shading over the silent side of a fade is lighter now that the waveform shows it.
+- Where clips overlap, the clip underneath draws its own fade line as a dashed curve in its color across the overlap (its fade out under a later clip, its fade in under an earlier one), next to the top clip's solid fade line, so both halves of a crossfade can be seen.

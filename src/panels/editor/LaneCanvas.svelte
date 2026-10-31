@@ -72,6 +72,16 @@
     return u;
   }
 
+  /** The clip's fade gain `tl` session frames into a clip `len` long, so the drawn waveform follows its fades. */
+  function fadeAt(clip: ClipDoc, tl: number, len: number): number {
+    let g = 1;
+    const fi = clip.fade_in.length;
+    const fo = clip.fade_out.length;
+    if (fi > 0 && tl < fi) g *= fadeGain(clip.fade_in.shape, Math.max(0, tl) / fi, clip.fade_in.curve);
+    if (fo > 0 && tl > len - fo) g *= fadeGain(clip.fade_out.shape, Math.max(0, len - tl) / fo, clip.fade_out.curve);
+    return g;
+  }
+
   /** Shades the silent side of a fade and draws its curve. */
   function drawFade(g: CanvasRenderingContext2D, fade: FadeDoc, from: number, to: number, top: number, height: number, rising: boolean) {
     if (fade.length <= 0 || to - from < 1) return;
@@ -87,7 +97,7 @@
     }
     g.lineTo(to, top);
     g.closePath();
-    g.fillStyle = "rgba(0, 0, 0, 0.38)";
+    g.fillStyle = "rgba(0, 0, 0, 0.2)";
     g.fill();
     g.beginPath();
     for (let i = 0; i <= steps; i++) {
@@ -339,8 +349,9 @@
             const mid = body.top + laneH * (k + 0.5);
             const hc = Math.min(k, exact.channels - 1);
             const at = (f: number): [number, number] => {
-              const v = Math.max(-1, Math.min(1, (exact.data[(f - exact.start) * exact.channels + hc] ?? 0) * ampZoom * clipLevel));
-              return [xOf(clip.start + ((f - clip.source_in) * sessionRate) / srcRate, view), mid - v * (laneH / 2 - 1)];
+              const tl = ((f - clip.source_in) * sessionRate) / srcRate;
+              const v = Math.max(-1, Math.min(1, (exact.data[(f - exact.start) * exact.channels + hc] ?? 0) * ampZoom * clipLevel * fadeAt(clip, tl, len)));
+              return [xOf(clip.start + tl, view), mid - v * (laneH / 2 - 1)];
             };
             g.beginPath();
             for (let f = fA; f < fB; f++) {
@@ -375,6 +386,7 @@
             const s0 = clip.source_in + into;
             const s1 = s0 + framesPerPx;
             if (s1 < clip.source_in || s0 >= clip.source_out) continue;
+            const faded = fadeAt(clip, tl0 + view.spp / 2, len);
             for (let k = 0; k < ch; k++) {
               // Reversed: positions count from the file's end.
               const fileLen = m?.length ?? clip.source_out;
@@ -384,7 +396,7 @@
               const flipped = clip.inverted && (!clip.invert_channel || clip.invert_channel === "both" || (ch === 2 && (clip.invert_channel === "left" ? k === 0 : k === 1)));
               const [lo, hi] = flipped ? [-hi0, -lo0] : [lo0, hi0];
               const mid = body.top + laneH * (k + 0.5);
-              const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom * clipLevel));
+              const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom * clipLevel * faded));
               const y0 = mid - amp(hi) * (laneH / 2 - 1);
               const y1 = mid - amp(lo) * (laneH / 2 - 1);
               g.fillRect(px, y0, 1, Math.max(1, y1 - y0));
@@ -601,6 +613,36 @@
       g.fillRect(Math.round(e.x) - 1, titleH + 2, 3, lh - titleH - 4);
       g.fillStyle = color;
       g.fillRect(Math.round(e.x), titleH + 2, 1, lh - titleH - 4);
+      // The hidden clip's own fade under the overlap (a crossfade's other half), dashed.
+      {
+        const hc = e.clip;
+        const hm = media.get(hc.media_id);
+        const hlen = clipLength(hc, hm, sessionRate);
+        const fade = e.side === "end" ? hc.fade_out : hc.fade_in;
+        if (fade.length > 0) {
+          const hx0 = xOf(hc.start, view);
+          const hx1 = xOf(hc.start + hlen, view);
+          const from = e.side === "end" ? hx1 - fade.length / view.spp : hx0;
+          const to = e.side === "end" ? hx1 : hx0 + fade.length / view.spp;
+          const top = titleH + 2;
+          const height = lh - titleH - 4;
+          const steps = Math.max(2, Math.ceil(to - from));
+          g.save();
+          g.beginPath();
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const x = from + (to - from) * t;
+            const y = top + height - fadeGain(fade.shape, e.side === "end" ? 1 - t : t, fade.curve) * height;
+            if (i === 0) g.moveTo(x, y);
+            else g.lineTo(x, y);
+          }
+          g.setLineDash([4, 3]);
+          g.strokeStyle = color;
+          g.lineWidth = 1.5;
+          g.stroke();
+          g.restore();
+        }
+      }
       // A small tab on the hidden clip's side of the line.
       const dir = e.side === "start" ? 1 : -1;
       g.beginPath();
