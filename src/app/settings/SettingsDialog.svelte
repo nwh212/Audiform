@@ -12,7 +12,8 @@
   import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, themesDir, type CacheInfo } from "../core";
   import { listThemes, type ThemeCatalog } from "../../themes/loader";
   import { themeId } from "../../stores/settings";
-  import { audioDriver, audioInputs, audioOutputs, outputChannels, type AudioDriver, type AudioInput } from "../core";
+  import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, type AudioDriver, type AudioInput } from "../core";
+  import { prefs } from "../../stores/prefs";
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
@@ -29,6 +30,36 @@
   }
 
   const { initial, page: startPage = "General", onApply, onNotice = () => {}, onClose }: Props = $props();
+
+  // Settings backups (General page).
+  let backingUp = $state(false);
+  let confirmRestore = $state(false);
+  let restored = $state(false);
+  async function backUp() {
+    backingUp = true;
+    try {
+      await prefs.flush();
+      const r = await backupSettings();
+      if (r) onNotice(`Backed up ${r[1]} settings files to ${r[0].split(/[\\/]/).pop()}.`);
+    } catch (e) {
+      onNotice(`Could not back up the settings: ${String(e)}`);
+    } finally {
+      backingUp = false;
+    }
+  }
+  async function restore() {
+    confirmRestore = false;
+    try {
+      const n = await restoreSettings();
+      if (n === null) return;
+      // The restored files take effect on the next start; nothing in memory writes over them first.
+      prefs.hold();
+      restored = true;
+      onNotice(`Restored ${n} settings files. Restart Audiform to use them.`);
+    } catch (e) {
+      onNotice(`Could not restore the settings: ${String(e)}`);
+    }
+  }
 
   // svelte-ignore state_referenced_locally
   let d = $state<SettingsDraft>($state.snapshot(initial) as SettingsDraft);
@@ -208,6 +239,21 @@
           </fieldset>
           <p class="note">The Space bar plays, and stops when playing or recording.</p>
           <label class="off" title="Warnings with a 'don't ask again' box arrive with the first such warning."><input type="checkbox" disabled /> Show warnings I turned off again <span class="why">No warnings can be turned off yet.</span></label>
+          <fieldset>
+            <legend>Backup</legend>
+            <p class="hint">One .afbackup file holds everything in Audiform's settings folder: these pages, keyboard shortcuts, saved workspaces, presets, added themes and the rest. Downloaded separation models, autosaves and other large working files are left out.</p>
+            <div class="row">
+              <button type="button" disabled={backingUp} onclick={() => void backUp()}>Back Up Settings...</button>
+              {#if !confirmRestore}
+                <button type="button" disabled={restored} onclick={() => (confirmRestore = true)}>Restore Settings...</button>
+              {:else}
+                <span>Replace every setting with the backup's?</span>
+                <button type="button" onclick={() => void restore()}>Pick Backup...</button>
+                <button type="button" onclick={() => (confirmRestore = false)}>Cancel</button>
+              {/if}
+            </div>
+            {#if restored}<p class="note">Settings restored. Restart Audiform to use them; until then nothing here is saved, so they are not written over.</p>{/if}
+          </fieldset>
         {:else if page === "Appearance"}
           <p class="note">Leave a color on Theme to keep the built-in one. Changes show the next time each view redraws.</p>
           <div class="colors">

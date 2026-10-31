@@ -19,6 +19,7 @@ export class Preferences {
   private values: Record<string, unknown> = {};
   private timer: ReturnType<typeof setTimeout> | undefined;
   private loaded: Promise<void> | null = null;
+  private held = false;
 
   constructor(
     private readonly backend: PreferenceBackend,
@@ -57,6 +58,12 @@ export class Preferences {
     return typeof v === "number" && Number.isFinite(v) ? v : fallback;
   }
 
+  /** Stops writing to disk (settings were restored from a backup and take effect on the next start). */
+  hold(): void {
+    this.held = true;
+    clearTimeout(this.timer);
+  }
+
   set(key: string, value: unknown): void {
     if (this.values[key] === value) return;
     this.values[key] = value;
@@ -68,6 +75,7 @@ export class Preferences {
   async flush(): Promise<void> {
     clearTimeout(this.timer);
     this.timer = undefined;
+    if (this.held) return;
     await this.backend.save({ ...this.values }).catch(this.onError);
   }
 }

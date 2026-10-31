@@ -1968,3 +1968,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Export Mixdown remembers settings per format
 - Each format keeps its own last settings (bit depth, sample rate, channels, MP3 mode and rate, AAC rate, dither, the mono mix). Switching the format in Export Mixdown brings back that format's last settings instead of carrying the previous format's over; a format never used yet starts from the current values. Saved with the other export settings (`export.mixdown`, `byKind`), each checked like any saved format.
+
+## 2026-10-31: Settings backup and restore (.afbackup)
+- Edit > Settings > General has Back Up Settings and Restore Settings. A backup is a zip with the extension `.afbackup`: a `manifest.json` (format `audiform.settings-backup`, schema version 1, when it was made, the app version, the file count) and every file in the app's settings folder under `settings/`. Left out: the Audio Separation engine and models, autosaves, working folders and any file over 20 MB (`src-tauri/src/settings_backup.rs`).
+- Restore asks first, then writes the backup's files over the current ones, only inside the settings folder (paths are checked). It refuses other zips and backups from a newer version. The restored settings take effect on the next start; until then the interface stops saving its preferences so it does not write over them.

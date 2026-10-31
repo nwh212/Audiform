@@ -21,6 +21,7 @@ pub mod plugins;
 pub mod separation;
 pub mod session;
 pub mod sesx;
+pub mod settings_backup;
 
 /// Starts the desktop app.
 pub fn run() {
@@ -113,6 +114,8 @@ pub fn run() {
             commands::peaks::scope_spectrum,
             commands::preferences::preferences_load,
             commands::preferences::preferences_save,
+            commands::preferences::settings_backup,
+            commands::preferences::settings_restore,
             commands::transport::transport_play,
             commands::transport::transport_stop,
             commands::transport::transport_audition_level,

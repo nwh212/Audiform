@@ -186,6 +186,16 @@ export function savePreferences(values: Record<string, unknown>): Promise<void> 
   return invoke<void>("preferences_save", { values });
 }
 
+/** Asks where, then saves every setting in one .afbackup file. Null on cancel. */
+export function backupSettings(): Promise<[string, number] | null> {
+  return invoke<[string, number] | null>("settings_backup");
+}
+
+/** Asks for a .afbackup file and writes its settings over the current ones. Null on cancel. */
+export function restoreSettings(): Promise<number | null> {
+  return invoke<number | null>("settings_restore");
+}
+
 /** A library index (`library.json`). Field names match the file format. */
 export interface Library {
   format: "altaudio.library";
