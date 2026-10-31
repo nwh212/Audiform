@@ -54,7 +54,7 @@ pub fn map() -> OutputMap {
 /// its default when that has enough, otherwise its widest setting at the
 /// default rate (and format, when it offers one).
 pub fn config_for(device: &cpal::Device, channels: usize) -> Option<cpal::SupportedStreamConfig> {
-    let def = device.default_output_config().ok()?;
+    let def = super::host::sane_config(device.default_output_config().ok()?);
     if usize::from(def.channels()) >= channels {
         return Some(def);
     }
@@ -67,7 +67,7 @@ pub fn config_for(device: &cpal::Device, channels: usize) -> Option<cpal::Suppor
     if wide.channels() <= def.channels() {
         return Some(def);
     }
-    Some(wide.with_sample_rate(rate))
+    Some(super::host::sane_config(wide.with_sample_rate(rate)))
 }
 
 /// Outputs on the chosen device in its widest setting (0 with no device).
@@ -94,8 +94,20 @@ pub fn choice() -> Option<String> {
     CHOICE.lock().ok().and_then(|c| c.clone())
 }
 
-/// The output to open now.
+/// The output to open now. On ASIO it is the one driver in use, whatever
+/// output name is picked (names are the system driver's).
 pub fn output_device(host: &cpal::Host) -> Option<cpal::Device> {
+    if super::host::asio() {
+        return match host.id() {
+            #[cfg(all(target_os = "windows", feature = "asio"))]
+            cpal::HostId::Asio => super::host::asio_device(),
+            _ => default_or_named(host),
+        };
+    }
+    default_or_named(host)
+}
+
+fn default_or_named(host: &cpal::Host) -> Option<cpal::Device> {
     if let Some(name) = choice() {
         if let Ok(mut all) = host.output_devices() {
             if let Some(d) = all.find(|d| d.description().ok().is_some_and(|x| x.name() == name)) {
@@ -120,7 +132,7 @@ pub fn output_device_any() -> Option<cpal::Device> {
 pub fn device_rate() -> u32 {
     output_device_any()
         .and_then(|d| d.default_output_config().ok())
-        .map_or(48_000, |c| c.config().sample_rate)
+        .map_or(48_000, |c| super::host::sane_rate(c.config().sample_rate))
 }
 
 #[cfg(test)]

@@ -179,3 +179,6 @@ opus-decoder = { path = "vendor/opus-decoder" }
 # (5.1, 7.1); see vendor/symphonia-codec-aac/AUDIFORM.md.
 symphonia-codec-aac = { path = "vendor/symphonia-codec-aac" }
 symphonia-common = { path = "vendor/symphonia-common" }
+# cpal 0.18.2 with a by-name ASIO device, so only the chosen driver is ever
+# loaded; see vendor/cpal/AUDIFORM.md.
+cpal = { path = "vendor/cpal" }

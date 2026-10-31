@@ -108,7 +108,7 @@ Collected from the project's Discord group. Each entry says what we will build, 
 - **Not the `nih-plug` crate:** that is for writing plugins. Hosting needs the VST3 interfaces directly (for example the `vst3` crate) or our own bindings.
 - **Phase:** P5, with Realtime Export (some live plugins misbehave when a mixdown renders faster than playback).
 
-### 4. Low-latency audio on Windows (ASIO) and discrete channels: ASIO built for 0.1.5 (needs hardware testing); routing matrix, buffer size and latency controls still to do
+### 4. Low-latency audio on Windows (ASIO) and discrete channels: ASIO built for 0.1.5; driver picker, buffer size, single-driver loading and the audio log added 2026-10-31 (testing on the lead's interface); routing matrix and latency controls still to do
 
 - Add ASIO next to the current Windows audio paths, through the audio library we already use. Check the ASIO SDK licence terms before shipping a build that includes it; do not assume they fit a GPL release.
 - Per-channel input and output routing so each track can take its own channel from a multi-microphone interface, plus loopback channels for system audio.

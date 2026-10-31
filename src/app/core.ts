@@ -1005,15 +1005,23 @@ export interface AudioDriver {
   asio: boolean;
   /** Installed ASIO drivers. */
   drivers: string[];
+  /** The ASIO driver in use (picked, or the app's guess). */
+  driver: string | null;
+  /** Frames per ASIO buffer; 0 is the driver's own. */
+  buffer: number;
+  /** Buffer sizes offered. */
+  buffers: number[];
+  /** Where the audio log is. */
+  log: string | null;
 }
 
 export function audioDriver(): Promise<AudioDriver> {
   return invoke<AudioDriver>("audio_driver");
 }
 
-/** ASIO (true) or the system driver (false), from the next stream opened. */
-export function setAudioDriver(asio: boolean): Promise<void> {
-  return invoke<void>("set_audio_driver", { asio });
+/** ASIO (true) or the system driver (false), from the next stream opened; with ASIO, which driver (null lets the app pick) and the buffer size (0 keeps the driver's own). */
+export function setAudioDriver(asio: boolean, driver: string | null = null, buffer = 0): Promise<void> {
+  return invoke<void>("set_audio_driver", { asio, driver, buffer });
 }
 
 export function setAudioOutput(name: string | null): Promise<void> {

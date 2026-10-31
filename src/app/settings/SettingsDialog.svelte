@@ -12,7 +12,7 @@
   import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, openThemesDir, type CacheInfo } from "../core";
   import { listThemes, type ThemeCatalog } from "../../themes/loader";
   import { themeId } from "../../stores/settings";
-  import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, type AudioDriver, type AudioInput } from "../core";
+  import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, setAudioDriver, type AudioDriver, type AudioInput } from "../core";
   import { prefs } from "../../stores/prefs";
   import { keepLast } from "./device-cache";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
@@ -104,7 +104,7 @@
     devicesLoading = true;
     try {
       const asio = d.app.driver === "asio";
-      driver = await audioDriver().catch(() => ({ asioBuilt: false, asio: false, drivers: [] }));
+      driver = await audioDriver().catch(() => ({ asioBuilt: false, asio: false, drivers: [], driver: null, buffer: 0, buffers: [], log: null }));
       const o = keepLast(`out:${asio}`, await audioOutputs(asio).catch(() => []));
       const i = keepLast(`in:${asio}`, await audioInputs(asio).catch(() => []));
       outputs = o.list;
@@ -124,6 +124,13 @@
     autoTries = 0;
     outputs = null;
     inputs = null;
+  }
+  /** A new ASIO driver or buffer size: tell the core, then look the devices up again. */
+  async function applyAsio() {
+    await setAudioDriver(d.app.driver === "asio", d.app.asioDriver, d.app.asioBuffer).catch(() => undefined);
+    d.app.output = null;
+    d.app.waveInput = null;
+    refreshDevices();
   }
   $effect(() => {
     if (page === "Audio Devices" && (outputs === null || inputs === null || driver === null)) void loadDevices();
@@ -349,19 +356,52 @@
               <option value="asio">ASIO</option>
             </select>
           </label>
+          {#if driver?.asioBuilt && d.app.driver === "asio"}
+            <label class="row" title="Only this driver is ever loaded. The others installed are left alone, since a driver that misbehaves can take the app down. Use your interface's own driver, not a wrapper (ASIO4ALL, Generic Low Latency) or a virtual cable, unless that is what you want.">
+              ASIO driver
+              <select
+                class="grow"
+                value={d.app.asioDriver ?? ""}
+                disabled={driver.drivers.length === 0}
+                onchange={(e) => {
+                  d.app.asioDriver = e.currentTarget.value || null;
+                  void applyAsio();
+                }}
+              >
+                <option value="">Let Audiform pick{driver.driver ? ` (${driver.driver})` : ""}</option>
+                {#each driver.drivers as name (name)}<option value={name}>{name}</option>{/each}
+                {#if d.app.asioDriver && !driver.drivers.includes(d.app.asioDriver)}<option value={d.app.asioDriver}>{d.app.asioDriver} (not installed)</option>{/if}
+              </select>
+            </label>
+            <label class="row" title="Frames per buffer. Smaller is quicker to respond while recording and monitoring, but needs more of the computer; if the sound breaks up, pick a larger one. The driver's own is set in its control panel.">
+              Buffer size
+              <select
+                class="grow"
+                value={String(d.app.asioBuffer)}
+                onchange={(e) => {
+                  d.app.asioBuffer = Number(e.currentTarget.value) || 0;
+                  void applyAsio();
+                }}
+              >
+                <option value="0">Driver's own</option>
+                {#each driver.buffers as n (n)}<option value={String(n)}>{n} frames</option>{/each}
+              </select>
+            </label>
+          {/if}
           {#if devicesStale}<p class="note">The driver is busy (for example while it records), so the last known device lists are shown.</p>{/if}
           {#if !driver?.asioBuilt}
             <p class="note">ASIO is in the Windows release builds. This build uses the system driver.</p>
           {:else if d.app.driver === "asio"}
             <p class="note">
-              {driver.drivers.length ? `ASIO drivers found: ${driver.drivers.join(", ")}.` : "No ASIO drivers found. Install your interface's ASIO driver."}
-              Sample rate and buffer size are set in the driver's own control panel. Takes effect from the next playback or recording. If the ASIO driver can't open, the system driver plays instead.
+              {driver.drivers.length ? `${driver.drivers.length} ASIO ${driver.drivers.length === 1 ? "driver" : "drivers"} installed; only the one picked is opened.` : "No ASIO drivers found. Install your interface's ASIO driver."}
+              Takes effect from the next playback or recording. If the driver can't open, the system driver plays instead.
             </p>
           {/if}
           <p class="note">ASIO is a trademark of Steinberg Media Technologies GmbH.</p>
           {#if d.app.driver === "asio" && driver && driver.drivers.length > 0 && ((outputs?.length ?? 0) === 0 || (inputs?.length ?? 0) === 0)}
-            <p class="note">The ASIO driver is installed but did not open. Another program may be using it, or the last plug-in that failed may have left it busy. Choose Refresh Devices; if it stays empty, restart the app.</p>
+            <p class="note">The ASIO driver did not open. Another program may be using it (interface drivers open for one program at a time), or it is not the right one for your interface: pick another above. Choose Refresh Devices; if it stays empty, restart the app.</p>
           {/if}
+          {#if driver?.log}<p class="note">Problems opening devices are written to {driver.log}. Attach it when reporting one.</p>{/if}
           <div>
             <button type="button" onclick={() => void openSoundSettings()}>Open System Sound Settings</button>
             <button type="button" onclick={refreshDevices}>Refresh Devices</button>

@@ -57,6 +57,10 @@ export interface AppSettings {
   customPeak: number;
   /** Audio driver: the system's own, or ASIO (Windows release builds). */
   driver: "system" | "asio";
+  /** The ASIO driver to use; null lets the app pick one. */
+  asioDriver: string | null;
+  /** Frames per ASIO buffer; 0 keeps the driver's own setting. */
+  asioBuffer: number;
   /** Input the Waveform editor records from, as a track input ("Mono: ..." or "Stereo: ..."); null is the system default. */
   waveInput: string | null;
   /** Hear the input while recording in the Waveform editor. */
@@ -172,6 +176,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   waveInput: null,
   waveMonitor: false,
   driver: "system",
+  asioDriver: null,
+  asioBuffer: 0,
   meterSpeed: "fast",
   customLufs: -18,
   customPeak: -1,
@@ -246,6 +252,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       ),
     ),
     driver: o.driver === "asio" ? "asio" : "system",
+    asioDriver: typeof o.asioDriver === "string" && o.asioDriver.trim() ? o.asioDriver : null,
+    asioBuffer: [64, 128, 256, 512, 1024, 2048].includes(o.asioBuffer as number) ? (o.asioBuffer as number) : 0,
     // Sky Glass and Night Glass (tried out, then dropped) become Meadow and Moonlight Aero.
     theme: themeId(o.theme),
     unlockedThemes: themeIds(o.unlockedThemes),

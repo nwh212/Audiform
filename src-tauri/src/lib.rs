@@ -67,6 +67,9 @@ pub fn run() {
             }
             if let Ok(dir) = app.path().app_config_dir() {
                 plugins::load(&dir);
+                engine::host::set_log_path(dir.join("audio.log"));
+                engine::host::install_panic_log();
+                engine::host::log(&format!("start: Audiform {}", env!("CARGO_PKG_VERSION")));
             }
             // Reversed clips read reversed copies kept with the other working files.
             if let Ok(root) = commands::cache::cache_root(app.handle()) {

@@ -770,7 +770,9 @@ fn run(
         }
     };
     let format = supported.sample_format();
-    let config: StreamConfig = supported.config();
+    let mut config: StreamConfig = supported.config();
+    config.buffer_size = super::host::buffer_size();
+    super::host::log(&super::host::describe("play", &device, &config, format));
     let out_rate = config.sample_rate;
     super::scope::set_rate(out_rate);
     let channels = usize::from(config.channels);
@@ -1045,6 +1047,15 @@ fn render_loop(
 ) {
     let nb = mix.graph().bed_channels();
     while !shared.stop.load(Ordering::SeqCst) {
+        // A fault on the audio thread was caught: silence went out, and
+        // playback stops here rather than carrying on over it.
+        if super::host::take_fault() {
+            super::host::log(
+                "playback stopped after a fault on the audio thread (see the panic above)",
+            );
+            shared.stop.store(true, Ordering::SeqCst);
+            break;
+        }
         if let Some(update) = shared.take_chains() {
             // Checked by the caller: every chain here keeps its look-ahead.
             mix.set_chains(&update);
@@ -1098,18 +1109,20 @@ where
         .build_output_stream(
             config,
             move |out: &mut [T], _| {
-                mix(
-                    out,
-                    channels,
-                    &mut consumers,
-                    &mut click,
-                    &shared,
-                    &mut gains,
-                    &mut peaks,
-                    &mut routing,
-                );
+                super::host::guard_out(out, |out| {
+                    mix(
+                        out,
+                        channels,
+                        &mut consumers,
+                        &mut click,
+                        &shared,
+                        &mut gains,
+                        &mut peaks,
+                        &mut routing,
+                    );
+                });
             },
-            |e| eprintln!("transport stream error: {e}"),
+            |e| super::host::log(&format!("play stream error: {e}")),
             None,
         )
         .map_err(|e| e.to_string())

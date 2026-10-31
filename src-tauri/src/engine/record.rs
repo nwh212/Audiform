@@ -681,6 +681,23 @@ pub const SYSTEM_AUDIO_PREFIX: &str = "System audio: ";
 
 /// The device for `name`, and whether it captures system audio.
 fn find_device(name: Option<&str>) -> Result<(cpal::Device, bool), String> {
+    // ASIO: the one driver in use is the only input there is.
+    if crate::engine::host::asio() {
+        let wanted = name.filter(|n| !n.starts_with(SYSTEM_AUDIO_PREFIX));
+        let driver = crate::engine::host::asio_driver();
+        if wanted.is_none_or(|n| Some(n) == driver.as_deref()) {
+            return crate::engine::host::asio_device()
+                .map(|d| (d, false))
+                .ok_or_else(|| {
+                    "The ASIO driver did not open. Another program may be using it; check Settings > Audio Devices.".to_string()
+                });
+        }
+        return Err(format!(
+            "The input \"{}\" is not the ASIO driver in use ({}). Pick the driver's inputs on the track, or switch the driver in Settings > Audio Devices.",
+            wanted.unwrap_or(""),
+            driver.as_deref().unwrap_or("none")
+        ));
+    }
     let host = crate::engine::host::host();
     match name {
         None => host
@@ -750,11 +767,15 @@ fn run(
         dev.default_input_config()
     };
     let supported = match config {
-        Ok(c) => c,
+        Ok(c) => crate::engine::host::sane_config(c),
         Err(e) => return fail(format!("The audio input is not available: {e}")),
     };
     let format = supported.sample_format();
-    let config: StreamConfig = supported.config();
+    let mut config: StreamConfig = supported.config();
+    config.buffer_size = crate::engine::host::buffer_size();
+    crate::engine::host::log(&crate::engine::host::describe(
+        "record", &dev, &config, format,
+    ));
     let rate = config.sample_rate;
     let channels = usize::from(config.channels);
     // A device opened while recording starts where the recording is.
@@ -939,19 +960,9 @@ fn open_monitor(
     input_name: Option<&str>,
 ) -> Result<(Producer<f32>, cpal::Stream), String> {
     let host = crate::engine::host::host();
-    // With ASIO, the output of the driver the input is on; the output picked
-    // in Settings may belong to another driver, which cannot be opened too.
-    let same_driver = if crate::engine::host::asio() {
-        input_name.and_then(|n| {
-            host.output_devices()
-                .ok()?
-                .find(|d| d.description().ok().is_some_and(|x| x.name() == n))
-        })
-    } else {
-        None
-    };
-    let dev = same_driver
-        .or_else(|| super::output::output_device(&host))
+    // With ASIO, the one driver in use is the input and the output both.
+    let _ = input_name;
+    let dev = super::output::output_device(&host)
         .ok_or("Input monitoring needs an output: no speakers or headphones found.")?;
     let mut best: Option<cpal::SupportedStreamConfig> = None;
     for c in dev.supported_output_configs().map_err(|e| e.to_string())? {
@@ -973,7 +984,11 @@ fn open_monitor(
         format!("Input monitoring is off: the output does not play at {rate} Hz, the input's rate. Set both to the same rate in the system sound settings.")
     })?;
     let format = supported.sample_format();
-    let config: StreamConfig = supported.config();
+    let mut config: StreamConfig = supported.config();
+    config.buffer_size = crate::engine::host::buffer_size();
+    crate::engine::host::log(&crate::engine::host::describe(
+        "monitor", &dev, &config, format,
+    ));
     // A second of room; the writer keeps it far emptier than that.
     let (producer, consumer) = RingBuffer::<f32>::new((rate as usize * 2).max(8192));
     let stream = match format {
@@ -1000,25 +1015,27 @@ where
         .build_output_stream(
             config,
             move |data: &mut [T], _| {
-                // Audio thread: copy only. Silence when the ring runs dry.
-                for frame in data.chunks_mut(out_channels) {
-                    let (l, r) = if consumer.slots() >= 2 {
-                        (consumer.pop().unwrap_or(0.0), consumer.pop().unwrap_or(0.0))
-                    } else {
-                        (0.0, 0.0)
-                    };
-                    for (i, s) in frame.iter_mut().enumerate() {
-                        let v = match (out_channels, i) {
-                            (1, _) => (l + r) * 0.5,
-                            (_, 0) => l,
-                            (_, 1) => r,
-                            _ => 0.0,
+                crate::engine::host::guard_out(data, |data| {
+                    // Audio thread: copy only. Silence when the ring runs dry.
+                    for frame in data.chunks_mut(out_channels) {
+                        let (l, r) = if consumer.slots() >= 2 {
+                            (consumer.pop().unwrap_or(0.0), consumer.pop().unwrap_or(0.0))
+                        } else {
+                            (0.0, 0.0)
                         };
-                        *s = T::from_sample(v);
+                        for (i, s) in frame.iter_mut().enumerate() {
+                            let v = match (out_channels, i) {
+                                (1, _) => (l + r) * 0.5,
+                                (_, 0) => l,
+                                (_, 1) => r,
+                                _ => 0.0,
+                            };
+                            *s = T::from_sample(v);
+                        }
                     }
-                }
+                });
             },
-            |e| eprintln!("monitor stream error: {e}"),
+            |e| crate::engine::host::log(&format!("monitor stream error: {e}")),
             None,
         )
         .map_err(|e| e.to_string())
@@ -1038,19 +1055,21 @@ where
         .build_input_stream(
             config,
             move |data: &[T], _| {
-                // Audio thread: copy only. No allocation, no locks, no disk.
-                let mut peak = 0f32;
-                for &s in data {
-                    let v: f32 = s.to_sample();
-                    peak = peak.max(v.abs());
-                    if producer.push(v).is_err() {
-                        shared.overruns.fetch_add(1, Ordering::Relaxed);
-                        break;
+                crate::engine::host::guard_in(|| {
+                    // Audio thread: copy only. No allocation, no locks, no disk.
+                    let mut peak = 0f32;
+                    for &s in data {
+                        let v: f32 = s.to_sample();
+                        peak = peak.max(v.abs());
+                        if producer.push(v).is_err() {
+                            shared.overruns.fetch_add(1, Ordering::Relaxed);
+                            break;
+                        }
                     }
-                }
-                shared.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
+                    shared.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
+                });
             },
-            |e| eprintln!("record stream error: {e}"),
+            |e| crate::engine::host::log(&format!("record stream error: {e}")),
             None,
         )
         .map_err(|e| e.to_string())

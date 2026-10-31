@@ -1520,7 +1520,7 @@
     setMeterSpeed(s.meterSpeed);
     if (isTauri()) {
       // Driver first, so the output name is looked up on the right one.
-      void setAudioDriver(s.driver === "asio")
+      void setAudioDriver(s.driver === "asio", s.asioDriver, s.asioBuffer)
         .then(() => setAudioOutput(s.output))
         .then(() => setOutputMap(s.outputPair, s.speakerOutputs))
         .catch(showError);
@@ -2169,7 +2169,12 @@
 
 {#if settingsDraft}
   {#await import("./settings/SettingsDialog.svelte") then { default: SettingsDialog }}
-  <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onClose={() => (settingsDraft = null)} />
+  <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onClose={() => {
+      settingsDraft = null;
+      // The ASIO picker tells the core as it changes, so cancelling puts the saved choice back.
+      if (isTauri()) void setAudioDriver(settings.current.driver === "asio", settings.current.asioDriver, settings.current.asioBuffer).catch(() => undefined);
+    }}
+  />
   {/await}
 {/if}
 

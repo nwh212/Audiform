@@ -203,14 +203,16 @@ fn run(input: Input, shared: Arc<Shared>, ready: mpsc::Sender<Result<u32, String
         return;
     };
     let supported = match device.default_output_config() {
-        Ok(c) => c,
+        Ok(c) => super::host::sane_config(c),
         Err(e) => {
             let _ = ready.send(Err(format!("The audio device is not available: {e}")));
             return;
         }
     };
     let format = supported.sample_format();
-    let config: StreamConfig = supported.config();
+    let mut config: StreamConfig = supported.config();
+    config.buffer_size = super::host::buffer_size();
+    super::host::log(&super::host::describe("preview", &device, &config, format));
     let rate = config.sample_rate;
     let channels = usize::from(config.channels);
 
@@ -316,8 +318,10 @@ where
     device
         .build_output_stream(
             config,
-            move |out: &mut [T], _| fill(out, &mut consumer, &shared, channels),
-            |e| eprintln!("preview stream error: {e}"),
+            move |out: &mut [T], _| {
+                super::host::guard_out(out, |out| fill(out, &mut consumer, &shared, channels));
+            },
+            |e| super::host::log(&format!("preview stream error: {e}")),
             None,
         )
         .map_err(|e| e.to_string())

@@ -42,8 +42,55 @@ fn retry_if_empty<T>(asio: Option<bool>, mut look: impl FnMut() -> Vec<T>) -> Ve
     found
 }
 
+/// ASIO: the one driver in use is the only device, named after itself.
+fn asio_wanted(asio: Option<bool>) -> bool {
+    asio.unwrap_or_else(crate::engine::host::asio) && crate::engine::host::ASIO_BUILT
+}
+
+fn asio_inputs() -> Vec<AudioInput> {
+    let Some(d) = crate::engine::host::asio_device() else {
+        return Vec::new();
+    };
+    let Some(name) = crate::engine::host::asio_driver() else {
+        return Vec::new();
+    };
+    let channels = d.default_input_config().map(|c| c.channels()).unwrap_or(0);
+    if channels == 0 {
+        return Vec::new();
+    }
+    vec![AudioInput {
+        name,
+        channels,
+        is_default: true,
+    }]
+}
+
+fn asio_outputs() -> Vec<AudioOutput> {
+    let Some(d) = crate::engine::host::asio_device() else {
+        return Vec::new();
+    };
+    let Some(name) = crate::engine::host::asio_driver() else {
+        return Vec::new();
+    };
+    if d.default_output_config().is_err() {
+        return Vec::new();
+    }
+    vec![AudioOutput {
+        name,
+        is_default: true,
+    }]
+}
+
 fn list(asio: Option<bool>) -> Vec<AudioInput> {
-    let host = crate::engine::host::host_for(asio.unwrap_or_else(crate::engine::host::asio));
+    if asio_wanted(asio) {
+        // Only the driver in use is asked; the others installed stay unloaded.
+        let was = crate::engine::host::asio();
+        crate::engine::host::set_asio(true);
+        let out = asio_inputs();
+        crate::engine::host::set_asio(was);
+        return out;
+    }
+    let host = crate::engine::host::host_for(false);
     let default = host
         .default_input_device()
         .and_then(|d| d.description().ok())
@@ -93,7 +140,14 @@ pub struct AudioOutput {
 }
 
 fn outputs(asio: Option<bool>) -> Vec<AudioOutput> {
-    let host = crate::engine::host::host_for(asio.unwrap_or_else(crate::engine::host::asio));
+    if asio_wanted(asio) {
+        let was = crate::engine::host::asio();
+        crate::engine::host::set_asio(true);
+        let out = asio_outputs();
+        crate::engine::host::set_asio(was);
+        return out;
+    }
+    let host = crate::engine::host::host_for(false);
     let default = host
         .default_output_device()
         .and_then(|d| d.description().ok())
@@ -155,25 +209,58 @@ pub struct AudioDriver {
     pub asio: bool,
     /// Installed ASIO drivers.
     pub drivers: Vec<String>,
+    /// The ASIO driver in use (picked, or the app's guess).
+    pub driver: Option<String>,
+    /// Frames per ASIO buffer; 0 is the driver's own.
+    pub buffer: u32,
+    /// Buffer sizes offered.
+    pub buffers: Vec<u32>,
+    /// Where the audio log is, for reporting problems.
+    pub log: Option<String>,
 }
 
-/// Which driver is in use, and the ASIO drivers installed.
+/// Which driver is in use, and the ASIO drivers installed. Loads no
+/// driver: the names come from the registry.
 #[tauri::command]
 pub async fn audio_driver() -> Result<AudioDriver, String> {
     spawn_blocking(|| AudioDriver {
         asio_built: crate::engine::host::ASIO_BUILT,
         asio: crate::engine::host::asio(),
         drivers: crate::engine::host::asio_drivers(),
+        driver: crate::engine::host::asio_driver(),
+        buffer: crate::engine::host::asio_buffer(),
+        buffers: crate::engine::host::ASIO_BUFFERS.to_vec(),
+        log: crate::engine::host::log_path().map(|p| p.display().to_string()),
     })
     .await
     .map_err(|e| e.to_string())
 }
 
 /// Uses ASIO (true) or the system driver (false) from the next time
-/// playback, recording or a preview starts.
+/// playback, recording or a preview starts; with ASIO, which driver
+/// (None lets the app pick) and the buffer size in frames (0 keeps the
+/// driver's own).
 #[tauri::command]
-pub fn set_audio_driver(asio: bool) {
+pub fn set_audio_driver(asio: bool, driver: Option<String>, buffer: Option<u32>) {
+    crate::engine::host::set_asio_driver(driver.clone(), buffer.unwrap_or(0));
     crate::engine::host::set_asio(asio);
+    crate::engine::host::log(&format!(
+        "driver: {}{}",
+        if asio && crate::engine::host::ASIO_BUILT {
+            "ASIO"
+        } else {
+            "system"
+        },
+        if asio {
+            format!(
+                ", \"{}\", buffer {}",
+                crate::engine::host::asio_driver().unwrap_or_else(|| "none".into()),
+                buffer.unwrap_or(0)
+            )
+        } else {
+            String::new()
+        }
+    ));
 }
 
 /// The audio inputs available now. Empty when there are none.
