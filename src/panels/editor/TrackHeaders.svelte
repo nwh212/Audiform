@@ -45,6 +45,8 @@
   $effect(() => watchPrerenders());
 
   interface Props {
+    /** The column's width in pixels (dragged by the user). */
+    width?: number;
     /** Tracks and buses, top to bottom. */
     rows: Row[];
     /** The master header shows after the rows. */
@@ -116,6 +118,7 @@
     startRowDrag,
     startResize,
     resizeLane,
+    width = HEADER_W,
   }: Props = $props();
 
   /** Opens an effect from a header: a plug-in in its own window, anything else in the Audio FX chain. */
@@ -256,7 +259,7 @@
   }
 </script>
 
-<div class="headers" style:width="{HEADER_W}px">
+<div class="headers" style:width="{width}px">
   {#each rows as row (row.id)}
     {#if row.kind === "track"}
     {@const track = row.track}

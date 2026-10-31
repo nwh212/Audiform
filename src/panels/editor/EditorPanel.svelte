@@ -50,7 +50,8 @@
   import type { MeterLevel, TransportState, TransportStore } from "../../stores/transport";
   import { appearanceTick } from "../../stores/appearance";
   import { trackHeight, maxSppFor, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
-  import { busHeight, HEADER_W, trackColor } from "./editor-layout";
+  import { busHeight, HEADER_MAX, HEADER_MIN, HEADER_W, trackColor } from "./editor-layout";
+  import { prefs } from "../../stores/prefs";
   import { chipAt as hitChip, clipAt as hitClip, CURSORS, envBox, RAZOR_CURSOR, SNAP_PX, zoneAt as hitZone, type Gesture, type LaneGeometry } from "./lane-hit";
   import { chipMenuItems, clipZoneItems, emptyLaneItems, rulerMenuItems, type MenuCtx } from "./lane-menus";
   import { autoLaneItems, busItems as buildBusItems, midiClipItems as buildMidiClipItems, trackItems as buildTrackItems, type TrackMenuExtra } from "./track-menus";
@@ -189,6 +190,26 @@
   };
 
   let lanesWidth = $state(800);
+  // The track header column: drag its right edge to make it wider or
+  // narrower (double-click puts it back). Remembered between sessions.
+  const KEY_HEADER_W = "editor.headerWidth";
+  const clampHeader = (w: number) => Math.round(Math.max(HEADER_MIN, Math.min(HEADER_MAX, w)));
+  let headerW = $state(clampHeader(prefs.number(KEY_HEADER_W, HEADER_W)));
+  function startHeaderResize(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const x0 = e.clientX;
+    const w0 = headerW;
+    const move = (ev: PointerEvent) => (headerW = clampHeader(w0 + ev.clientX - x0));
+    const up = () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      prefs.set(KEY_HEADER_W, headerW);
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  }
   $effect(() => {
     const w = lanesWidth;
     laneWidths.update((l) => (l.multitrack === w ? l : { ...l, multitrack: w }));
@@ -1484,7 +1505,7 @@
   <EditorToolbar {rate} hasDoc={!!doc} {run} {tip} bind:height={toolbarH} />
 
   <div class="overview-row">
-    <div class="corner" style:width="{HEADER_W}px"></div>
+    <div class="corner" style:width="{headerW}px"></div>
     <OverviewStrip
       {doc}
       media={mediaMap}
@@ -1501,7 +1522,7 @@
   </div>
 
   <div class="ruler-row">
-    <div class="corner header-views" style:width="{HEADER_W}px">
+    <div class="corner header-views" style:width="{headerW}px">
       <HeaderViews {ed} bind:headerView {metOn} hasDoc={!!doc} {run} {tip} />
     </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1513,11 +1534,11 @@
     </div>
   </div>
   {#if doc && metOn}
-    <MetronomeRow {tempo} {view} width={lanesWidth} {rate} {playhead} headerW={HEADER_W} onTempo={setTempoMap} />
+    <MetronomeRow {tempo} {view} width={lanesWidth} {rate} {playhead} headerW={headerW} onTempo={setTempoMap} />
   {/if}
   {#if doc && ((tempo.changes?.length ?? 0) > 0 || ed.timeFormat === "bars")}
     <div class="ruler-row tempo-row">
-      <div class="corner tempo-corner" style:width="{HEADER_W}px" title="Tempo and time signature changes. The tempo and time signature where the playhead is are next to the metronome, under the tracks.">Tempo</div>
+      <div class="corner tempo-corner" style:width="{headerW}px" title="Tempo and time signature changes. The tempo and time signature where the playhead is are next to the metronome, under the tracks.">Tempo</div>
       <TempoStrip {tempo} {view} width={lanesWidth} {rate} onChange={setTempoMap} onMenu={(e, items) => (menu = { x: e.clientX, y: e.clientY, items })} />
     </div>
   {/if}
@@ -1539,7 +1560,19 @@
     }}
   >
     <div class="rows" bind:clientHeight={rowsH}>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="hresize"
+        style:left="{headerW - 3}px"
+        title="Drag to make the track headers wider or narrower; double-click for the usual width"
+        onpointerdown={startHeaderResize}
+        ondblclick={() => {
+          headerW = HEADER_W;
+          prefs.set(KEY_HEADER_W, headerW);
+        }}
+      ></div>
       <TrackHeaders
+        width={headerW}
         rows={headerRows}
         showMaster={!showStart}
         {doc}
@@ -1937,8 +1970,23 @@
   }
 
   .rows {
+    position: relative;
     display: flex;
     min-height: 100%;
+  }
+
+  /* The header column's right edge: drag to resize it. */
+  .hresize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 6px;
+    cursor: col-resize;
+  }
+  .hresize:hover {
+    background: var(--accent);
+    opacity: 0.5;
   }
 
   .lanes {

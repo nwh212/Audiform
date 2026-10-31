@@ -13,6 +13,9 @@ import { defaultTrackColor } from "./timeline";
 
 /** Width of the track header column, in pixels. */
 export const HEADER_W = 214;
+/** How narrow and wide the header column can be dragged. */
+export const HEADER_MIN = 190;
+export const HEADER_MAX = 520;
 /** Height of the time ruler, in pixels. */
 export const RULER_H = 22;
 

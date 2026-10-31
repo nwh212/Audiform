@@ -1995,3 +1995,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Record while playing starts at once
 - Pressing Record (Shift+Space) while the Multitrack plays no longer stops playback, waits and starts it again at the same spot: playback keeps going and recording starts as soon as the inputs open, placed where the playhead was at that moment (the middle of the moment they took to open). The count-in is skipped when already playing. A punch-in (Record Options, with a time selection) still starts from its pre-roll, as before.
+
+## 2026-10-31: Track header column width
+- Drag the right edge of the track header column to make it 190 to 520 px wide (double-click the edge for the usual 214). The width is remembered (`editor.headerWidth`). The corner above the headers and the tempo row follow it, and the header rows stretch with it: names, the effects list and the sends get the room.
