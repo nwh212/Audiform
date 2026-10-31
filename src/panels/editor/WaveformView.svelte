@@ -85,7 +85,7 @@
     }),
   );
   let peakTick = $state(0);
-  $effect(() => peaks.subscribe(() => peakTick++));
+  $effect(() => peaks.subscribe(() => untrack(() => peakTick++)));
   // The theme or colors changed: draw again.
   $effect(() => appearanceTick.subscribe(() => untrack(() => peakTick++)));
   /** The take being recorded into this file, drawn as it arrives. */

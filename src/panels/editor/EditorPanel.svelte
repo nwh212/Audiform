@@ -138,7 +138,7 @@
   );
 
   let peakTick = $state(0);
-  $effect(() => peaks.subscribe(() => peakTick++));
+  $effect(() => peaks.subscribe(() => untrack(() => peakTick++)));
   // The theme or colors changed: the ruler and overview draw again.
   $effect(() => appearanceTick.subscribe(() => untrack(() => peakTick++)));
 

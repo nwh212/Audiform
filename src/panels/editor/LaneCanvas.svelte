@@ -132,7 +132,7 @@
 
   // Redraw when exact samples (for close zoom) arrive.
   let exactTick = $state(0);
-  $effect(() => exactSamples.subscribe(() => exactTick++));
+  $effect(() => exactSamples.subscribe(() => untrack(() => exactTick++)));
   // Redraw when the theme or colors change.
   let looks = $state(0);
   $effect(() => appearanceTick.subscribe((v) => (looks = v)));

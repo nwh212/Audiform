@@ -11,6 +11,7 @@
   Remove deletes it. Separation runs on this computer.
 -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import { sizeText } from "../../app/settings/pages";
   import { byCategory, sdrText } from "../../app/separation";
   import type { SeparationTools } from "../../app/separation-tools.svelte";
@@ -47,10 +48,13 @@
   }
 
   // What Separate works on follows the selection and the editor in front.
+  // These stores call back at once when subscribed, inside the effect: the
+  // count is bumped untracked, or the effect would read and write it and run
+  // again without end (it froze the app with this panel in the layout).
   let tick = $state(0);
-  $effect(() => editor.subscribe(() => tick++));
-  $effect(() => waveFile.subscribe(() => tick++));
-  $effect(() => mediaPool.subscribe(() => tick++));
+  $effect(() => editor.subscribe(() => untrack(() => tick++)));
+  $effect(() => waveFile.subscribe(() => untrack(() => tick++)));
+  $effect(() => mediaPool.subscribe(() => untrack(() => tick++)));
   const source = $derived.by(() => {
     void tick;
     return tools.source();
