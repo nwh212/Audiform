@@ -92,7 +92,9 @@ export function createRecorder(deps: RecorderDeps) {
         await finishRecord();
         return;
       }
-      if (!(await countIn())) return;
+      // Already playing in the Multitrack: recording starts at once, no count.
+      const rolling = !inWave() && transport.current.playing;
+      if (!rolling && !(await countIn())) return;
       try {
         if (inWave()) {
           const d = wave.current;
@@ -117,10 +119,19 @@ export function createRecorder(deps: RecorderDeps) {
           // until a track is armed. Each armed track gets its own take.
           const armed = doc.tracks.filter((t) => t.record_armed);
           const targets: RecordTarget[] = armed.map(recordTarget);
-          const plan = recordPlan(playheadNow(), timeSel(), recordOptions(), doc.sample_rate);
+          let plan = recordPlan(playheadNow(), timeSel(), recordOptions(), doc.sample_rate);
+          // Playing and not punching in: keep playing and record from where
+          // the playhead is when the inputs start, with no stop and restart.
+          const live = rolling && !plan.punch;
+          if (live) {
+            const before = playheadNow();
+            await recordStart(targets);
+            plan = { ...plan, at: Math.round((before + playheadNow()) / 2) };
+          } else {
+            await transport.stop();
+            await recordStart(targets);
+          }
           const at = plan.at;
-          await transport.stop();
-          await recordStart(targets);
           recordingKeys = new Set(armed.map((t) => t.id));
           take = { mode: "multitrack", at, plan, stopAfter: punchStopAfter(plan, doc.sample_rate) };
           holdEnd(true);
@@ -128,7 +139,7 @@ export function createRecorder(deps: RecorderDeps) {
           else if (!armed.length) showNotice("Recording. Arm a track to record on it.");
           liveTakes.set({ at, rate: 0, waves: {}, tick: 0 });
           metronomeRecording(true);
-          void transport.play(at);
+          if (!live) void transport.play(at);
         }
         recPeakMax = 0;
         recording.set({ active: true, seconds: 0, peak: 0 });

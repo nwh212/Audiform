@@ -1992,3 +1992,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-31: Import effects rack presets
 - The Audio FX rack's preset row has Import…: pick one or more XML preset files, and every effects rack in them (any element holding slots, named by the nearest `name` or `presetName` above it) becomes one of your presets, under Yours. Racks are read by the same code as a `.sesx` import, so the other editor's Parametric Equalizer, per-frequency phase shifter and vocal strip come in as our Parametric EQ, Phase Curve and Vox Strip, and VST3 plug-ins keep their settings. A notice lists what was converted, plug-ins not found on this computer and what was left out. A name already taken gets a number.
 - Presets now keep a plug-in's own settings and a bypassed slot, so a saved or imported chain with plug-ins comes back as it was.
+
+## 2026-10-31: Record while playing starts at once
+- Pressing Record (Shift+Space) while the Multitrack plays no longer stops playback, waits and starts it again at the same spot: playback keeps going and recording starts as soon as the inputs open, placed where the playhead was at that moment (the middle of the moment they took to open). The count-in is skipped when already playing. A punch-in (Record Options, with a time selection) still starts from its pre-roll, as before.
