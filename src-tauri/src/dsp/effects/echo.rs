@@ -30,7 +30,9 @@ use super::{choice, num, toggle, EffectInfo, Params, Processor};
 /// The longest delay, in seconds.
 const MAX_SECONDS: f64 = 4.0;
 
-pub const KINDS: [&str; 3] = ["Digital", "Tape", "Analog"];
+pub const KINDS: [&str; 4] = ["Digital", "Tape", "Analog", "Simple"];
+/// The Simple kind: each side's own time, early or late, by this much at most.
+pub const SIMPLE_MS: f64 = 500.0;
 /// Note values for a time that follows the tempo, and their length in beats.
 pub const NOTES: [&str; 16] = [
     "1/64", "1/32T", "1/32", "1/16T", "1/16", "1/16D", "1/8T", "1/8", "1/8D", "1/4T", "1/4",
@@ -66,7 +68,7 @@ pub fn echo_info() -> EffectInfo {
         id: "altaudio.echo",
         name: "Delay and Echo",
         category: "Delay and Reverb",
-        description: "Repeats the sound after a set time, each repeat quieter than the last. Digital, Tape or Analog; the time can follow the tempo. Tone darkens the repeats, and Ping-pong bounces them between left and right.",
+        description: "Repeats the sound after a set time, each repeat quieter than the last. Digital, Tape or Analog; the time can follow the tempo. Tone darkens the repeats, and Ping-pong bounces them between left and right. Simple moves each side by its own time, early or late, with its own mix and polarity, for lining up or widening a sound.",
         params: vec![
             choice("kind", "Type", &KINDS, 0),
             num("time", "Delay time", "ms", 1.0, MAX_SECONDS * 1000.0, 350.0, 1.0).log().group("Time"),
@@ -83,6 +85,13 @@ pub fn echo_info() -> EffectInfo {
             num("drive", "Drive", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
             num("dry", "Dry", "%", 0.0, 100.0, 100.0, 1.0).group("Output"),
             num("wet", "Echo level", "%", 0.0, 100.0, 30.0, 1.0).group("Output"),
+            num("l_time", "Left time", "ms", -SIMPLE_MS, SIMPLE_MS, 0.0, 0.01).group("Simple"),
+            num("l_mix", "Left mix", "%", 0.0, 100.0, 100.0, 1.0).group("Simple"),
+            toggle("l_invert", "Left invert", false).group("Simple"),
+            num("r_time", "Right time", "ms", -SIMPLE_MS, SIMPLE_MS, 0.0, 0.01).group("Simple"),
+            num("r_mix", "Right mix", "%", 0.0, 100.0, 100.0, 1.0).group("Simple"),
+            toggle("r_invert", "Right invert", false).group("Simple"),
+            choice("units", "Time in", &["ms", "Samples"], 0).group("Simple"),
         ],
     }
 }
@@ -116,6 +125,19 @@ pub struct Echo {
     spread: f32,
     /// On a speaker bed; None for stereo.
     bed: Option<Bed>,
+    /// The Simple kind's settings, when it is picked.
+    simple: Option<Simple>,
+}
+
+/// The Simple kind: per side, how far back to read (frames, the shared
+/// hold-back included), how much of that to hear, and the polarity.
+#[derive(Clone, Copy, PartialEq)]
+struct Simple {
+    /// Frames everything is held back so a side can come early.
+    base: usize,
+    read: [usize; 2],
+    mix: [f32; 2],
+    sign: [f32; 2],
 }
 
 /// The speakers a bed's rings work on.
@@ -198,6 +220,7 @@ impl Echo {
             drive: 0.0,
             spread: 0.5,
             bed: None,
+            simple: None,
         };
         e.set(p);
         e.cur = e.want;
@@ -257,6 +280,26 @@ impl Echo {
             2 => 0.1 + 0.9 * base,
             _ => base,
         };
+        self.simple = (self.kind == 3).then(|| {
+            let frames = |ms: f64| (ms / 1000.0 * self.rate).round() as i64;
+            let (l, r) = (frames(p.get("l_time")), frames(p.get("r_time")));
+            // On a bed nothing is held back (the other speakers would fall
+            // out of time), so a side can only come late there.
+            let base = if self.bed.is_some() {
+                0
+            } else {
+                (-l.min(r)).max(0)
+            };
+            let read = |t: i64| (t + base).max(0) as usize;
+            let mix = |k: &str| (p.get(k) / 100.0).clamp(0.0, 1.0) as f32;
+            let sign = |k: &str| if p.on(k) { -1.0 } else { 1.0 };
+            Simple {
+                base: base as usize,
+                read: [read(l), read(r)],
+                mix: [mix("l_mix"), mix("r_mix")],
+                sign: [sign("l_invert"), sign("r_invert")],
+            }
+        });
     }
 }
 
@@ -333,8 +376,51 @@ impl Echo {
     }
 }
 
+impl Echo {
+    /// The Simple kind: each side read back by its own time, mixed with
+    /// the sound held back by the shared hold-back, its polarity flipped
+    /// when asked. On a bed, the speakers named L... take the left
+    /// settings and R... the right; the others pass as they are.
+    fn process_simple(&mut self, buf: &mut [f32], sm: Simple) {
+        let n = self.ring[0].len();
+        let (ch, sides): (usize, Vec<(usize, usize, Option<usize>)>) = match &self.bed {
+            Some(b) => (
+                b.names.len().max(1),
+                b.chans
+                    .iter()
+                    .enumerate()
+                    .map(|(a, &c)| {
+                        let side = match b.names[c].chars().next() {
+                            Some('L') => Some(0),
+                            Some('R') => Some(1),
+                            _ => None,
+                        };
+                        (a, c, side)
+                    })
+                    .collect(),
+            ),
+            None => (2, vec![(0, 0, Some(0)), (1, 1, Some(1))]),
+        };
+        for f in buf.chunks_exact_mut(ch) {
+            for &(a, c, side) in &sides {
+                let Some(k) = side else { continue };
+                self.ring[a][self.at] = f[c];
+                let back = |d: usize| (self.at + n - d.min(n - 1)) % n;
+                let dry = self.ring[a][back(sm.base)];
+                let wet = self.ring[a][back(sm.read[k])];
+                f[c] = (dry * (1.0 - sm.mix[k]) + wet * sm.mix[k]) * sm.sign[k];
+            }
+            self.at = (self.at + 1) % n;
+        }
+    }
+}
+
 impl Processor for Echo {
     fn process(&mut self, buf: &mut [f32]) {
+        if let Some(sm) = self.simple {
+            self.process_simple(buf, sm);
+            return;
+        }
         if self.bed.is_some() {
             self.process_bed(buf);
             return;
@@ -393,8 +479,14 @@ impl Processor for Echo {
     }
 
     fn update(&mut self, p: &Params) -> bool {
+        let was = self.latency();
         self.set(p);
-        true
+        // A new hold-back changes the latency: built again.
+        self.latency() == was
+    }
+
+    fn latency(&self) -> usize {
+        self.simple.map_or(0, |s| s.base)
     }
 
     fn channels(&self) -> (Vec<String>, Vec<String>) {
@@ -610,5 +702,31 @@ mod tests {
             "and on round the room"
         );
         assert!(b.iter().all(|v| v.is_finite() && v.abs() < 3.0));
+    }
+
+    #[test]
+    fn simple_moves_each_side_early_or_late_and_flips_polarity() {
+        // Left 2 ms late, right 1 ms early: everything is held back 1 ms
+        // (48 frames), so right comes out at 0 and left at 96 + 48 = 144.
+        let p = params(&[
+            ("kind", 3.0),
+            ("l_time", 2.0),
+            ("r_time", -1.0),
+            ("r_invert", 1.0),
+        ]);
+        let mut e = Echo::new(&p, R);
+        assert_eq!(super::super::Processor::latency(&e), 48);
+        let mut b = impulse(400, 1.0, 1.0);
+        e.process(&mut b);
+        assert!((b[144 * 2] - 1.0).abs() < 1e-6, "left late");
+        assert!((b[1] + 1.0).abs() < 1e-6, "right early and flipped");
+        let rest: f32 = b.iter().map(|v| v.abs()).sum();
+        assert!((rest - 2.0).abs() < 1e-5, "nothing else");
+        // Half mix: half held-back dry, half moved.
+        let p = params(&[("kind", 3.0), ("l_time", 1.0), ("l_mix", 50.0)]);
+        let mut e = Echo::new(&p, R);
+        let mut b = impulse(200, 1.0, 0.0);
+        e.process(&mut b);
+        assert!((b[0] - 0.5).abs() < 1e-6 && (b[48 * 2] - 0.5).abs() < 1e-6);
     }
 }

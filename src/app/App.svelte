@@ -443,6 +443,8 @@
       markStopped(slot.id, why);
       showNotice(`A plug-in stopped: ${why} Restart it from its effect window.`);
     },
+    // Space in a plug-in's window plays and stops, as in the editor.
+    onSpace: (record) => void actions.run(record ? "multitrack.record" : "multitrack.play-pause"),
     onLatency: () => {
       // The plug-in's delay changed: start again where it is, so every track lines up.
       if (transport.current.playing) void transport.play(transport.current.position).catch(showError);
@@ -977,6 +979,7 @@
   const loadVisualizerPanel = () => import("../panels/visualizer/VisualizerPanel.svelte");
   const loadBatchConvertPanel = () => import("../panels/batch/BatchConvertPanel.svelte");
   const loadPropertiesPanel = () => import("../panels/properties/PropertiesPanel.svelte");
+  const loadTrackDetailsPanel = () => import("../panels/track-details/TrackDetailsPanel.svelte");
   const loadPlaylistPanel = () => import("../panels/playlist/PlaylistPanel.svelte");
   const loadMarkersPanel = () => import("../panels/markers/MarkersPanel.svelte");
 
@@ -1057,6 +1060,8 @@
             onError: showError,
           },
         };
+      case "track-details":
+        return { component: asComponent(LazyPanel), props: { load: loadTrackDetailsPanel, pool: mediaPool, session, onNotice: showNotice } };
       case "properties":
         return { component: asComponent(LazyPanel), props: { load: loadPropertiesPanel, session, onEdit: editClips, onError: showError } };
       case "playlist":
@@ -1178,7 +1183,6 @@
 
   const actions = new ActionRegistry();
   /** The file Track Details is open on, if any. */
-  let trackDetailsPath = $state<string | null>(null);
 
   // Waveform editor. Edits act on the selection; Amplify and Normalize
   // act on the whole file when nothing is selected.
@@ -1796,7 +1800,7 @@
         id: "files.track-details",
         run: () => {
           const it = mediaPool.selectedItems()[0];
-          if (it) trackDetailsPath = it.path;
+          if (it) dock.show("track-details");
         },
         enabled: () => mediaPool.selectedItems().length === 1,
         reason: () => "Select one file in the Files panel.",
@@ -2315,12 +2319,6 @@
       r?.(v);
     }}
   />
-{/if}
-
-{#if trackDetailsPath}
-  {#await import("./TrackDetailsDialog.svelte") then { default: TrackDetailsDialog }}
-  <TrackDetailsDialog path={trackDetailsPath} onNotice={showNotice} onDone={() => (trackDetailsPath = null)} />
-  {/await}
 {/if}
 
 {#if propertiesOpen && session.current}

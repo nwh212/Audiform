@@ -323,7 +323,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span class="name" title="Double-click to rename" ondblclick={() => onRename(track.id)}>{track.name}</span>
         {/if}
-        <button type="button" class="ms" class:on={track.muted} title="Mute" aria-pressed={track.muted} onclick={() => setTrack(track, { muted: !track.muted }, track.muted ? "Unmute Track" : "Mute Track")}>M</button>
+        <button type="button" class="ms mute" class:on={track.muted} title="Mute" aria-pressed={track.muted} onclick={() => setTrack(track, { muted: !track.muted }, track.muted ? "Unmute Track" : "Mute Track")}>M</button>
         <button type="button" class="ms solo" class:on={track.solo} title="Solo. Ctrl+click to hear only this track." aria-pressed={track.solo} onclick={(e) => (e.ctrlKey || e.metaKey ? soloOnly(track.id) : setTrack(track, { solo: !track.solo }, track.solo ? "Unsolo Track" : "Solo Track"))}>S</button>
         {#if !isMidi(track)}
         <button type="button" class="ms rec" class:on={track.record_armed} title="Arm for recording: Record records this track's input" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
@@ -547,7 +547,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span class="name" title="Double-click to rename" ondblclick={() => onRename(b.id)}>{b.name}</span>
         {/if}
-        <button type="button" class="ms" class:on={b.muted} title="Mute" aria-pressed={b.muted} onclick={() => setBus(b, { muted: !b.muted }, b.muted ? "Unmute Bus" : "Mute Bus")}>M</button>
+        <button type="button" class="ms mute" class:on={b.muted} title="Mute" aria-pressed={b.muted} onclick={() => setBus(b, { muted: !b.muted }, b.muted ? "Unmute Bus" : "Mute Bus")}>M</button>
         <button type="button" class="ms solo" class:on={b.solo} title="Solo: plays this bus and everything feeding it" aria-pressed={b.solo} onclick={() => setBus(b, { solo: !b.solo }, b.solo ? "Unsolo Bus" : "Solo Bus")}>S</button>
       </div>
       {#if headerView === "mix"}

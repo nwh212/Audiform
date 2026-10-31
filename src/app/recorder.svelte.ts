@@ -17,6 +17,7 @@ import { placeTake, punchStopAfter, recordPlan, sanitizeRecordOptions, type Reco
 import { isolate, LockedError } from "../panels/editor/clip-edit";
 import { insertFile } from "../panels/editor/wave-edit";
 import { sessionHistory } from "../stores/history";
+import { editor } from "../stores/editor";
 import { metronomeRecording } from "../stores/metronome";
 import { mediaPool } from "../stores/media";
 import { peaks, session, transport } from "../stores/open-session";
@@ -127,6 +128,12 @@ export function createRecorder(deps: RecorderDeps) {
             const before = playheadNow();
             await recordStart(targets);
             plan = { ...plan, at: Math.round((before + playheadNow()) / 2) };
+            // Playing in Loop or Skip: carry on straight from here instead,
+            // so the take never jumps back to the start of the loop.
+            if (editor.current().playMode !== "normal") {
+              holdEnd(true);
+              void transport.play(playheadNow());
+            }
           } else {
             await transport.stop();
             await recordStart(targets);
@@ -309,9 +316,26 @@ export function createRecorder(deps: RecorderDeps) {
           "No sound arrived while recording. On Mac, check System Settings > Privacy & Security > Microphone. On Windows, check Settings > Privacy > Microphone. Also check the input choice and its cable or gain.",
         );
       }
+      // Every take shows in the Files panel, whatever happens to its clip.
+      // When the Files panel copies it into the session folder, the clip
+      // uses the copy too.
+      const listed = new Map<string, string>();
+      try {
+        const r = await mediaPool.importPaths(
+          usable.map((k) => k.path),
+          sessionHistory,
+        );
+        const items = mediaPool.current.items;
+        usable.forEach((k, i) => {
+          const at = items.find((it) => it.id === r.ids[i])?.path;
+          if (at) listed.set(k.path, at);
+        });
+      } catch (e) {
+        showError(e);
+      }
       const media = (k: (typeof usable)[number]) => ({
         id: uuid(),
-        path: k.path,
+        path: listed.get(k.path) ?? k.path,
         relative_path: null,
         sample_rate: k.sample_rate,
         channels: k.channels,
@@ -353,11 +377,6 @@ export function createRecorder(deps: RecorderDeps) {
       }
       try {
         await session.edit(usable.length === 1 ? "Record" : `Record ${usable.length} Tracks`, { op: "batch", ops }, sessionHistory);
-        // The takes show in the Files panel too.
-        await mediaPool.importPaths(
-          usable.map((k) => k.path),
-          sessionHistory,
-        );
       } catch (e) {
         showError(e);
       }

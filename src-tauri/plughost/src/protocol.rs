@@ -345,6 +345,12 @@ pub enum Message {
     /// Event: the plug-in changed settings that are not controls (save
     /// its state to keep them).
     Dirty,
+    /// Event: Space was pressed in the plug-in's window (with Shift:
+    /// `record`), outside a text box: play or stop, as in the editor.
+    SpacePressed {
+        #[serde(default)]
+        record: bool,
+    },
 }
 
 pub fn write_frame(w: &mut impl Write, kind: u8, payload: &[u8]) -> io::Result<()> {

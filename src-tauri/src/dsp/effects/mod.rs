@@ -251,6 +251,11 @@ pub fn ui_catalog() -> Vec<EffectInfo> {
         for p in e.params.iter_mut().filter(|p| !p.hidden) {
             let base = latency(p.key, p.default);
             p.retimes = latency(p.key, p.min) != base || latency(p.key, p.max) != base;
+            // The Simple delay's times hold everything back when a side
+            // comes early (only in that kind, so the test above misses it).
+            if id == "altaudio.echo" && matches!(p.key, "l_time" | "r_time") {
+                p.retimes = true;
+            }
         }
     }
     all

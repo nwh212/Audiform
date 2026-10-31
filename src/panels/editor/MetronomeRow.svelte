@@ -92,7 +92,7 @@
     <div class="line">
       <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.8 2.2h4.4l2.8 11.3H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><path d="M3.6 11h8.8" stroke="currentColor" stroke-width="1" /><path d="M8 11l3.2-6.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /><circle cx="10.3" cy="6.4" r="1" fill="currentColor" /></svg>
       <span class="name">Metronome</span>
-      <button type="button" class="ms" class:on={met.muted} title="Mute the click (the track stays)" aria-pressed={met.muted} onclick={() => setMetronomePrefs({ muted: !met.muted })}>M</button>
+      <button type="button" class="ms mute" class:on={met.muted} title="Mute the click (the track stays)" aria-pressed={met.muted} onclick={() => setMetronomePrefs({ muted: !met.muted })}>M</button>
       <button type="button" class="ms more" title="Metronome settings (or right-click the track)" aria-label="Metronome settings" onclick={openPop}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="8" r="1.3" fill="currentColor" /><circle cx="8" cy="8" r="1.3" fill="currentColor" /><circle cx="12" cy="8" r="1.3" fill="currentColor" /></svg>
       </button>

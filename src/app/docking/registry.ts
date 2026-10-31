@@ -27,7 +27,8 @@ export type PanelId =
   | "phase-wheel"
   | "visualizer"
   | "space"
-  | "separation";
+  | "separation"
+  | "track-details";
 
 export type Side = "left" | "right" | "above" | "below";
 
@@ -186,6 +187,14 @@ export const PANELS: readonly PanelDef[] = [
     inDefault: false,
     // Beside 3D Space when it is open.
     home: [{ reference: "space", direction: "within" }, { reference: "phase-wheel", direction: "within" }, { reference: "editor", direction: "right" }, { edge: "right" }],
+    pending: null,
+  },
+  {
+    id: "track-details",
+    title: "Track Details",
+    inDefault: false,
+    // With Properties or History, else with Audio FX.
+    home: [{ reference: "properties", direction: "within" }, { reference: "history", direction: "within" }, ...LEFT_TABS],
     pending: null,
   },
 ];

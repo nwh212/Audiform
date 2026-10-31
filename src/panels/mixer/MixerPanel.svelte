@@ -226,7 +226,7 @@
         </div>
         {/if}
         <div class="buttons">
-          <button type="button" class:on={t.muted} class="m" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
+          <button type="button" class:on={t.muted} class="m mute" title="Mute" aria-pressed={t.muted} onclick={() => setStrip(t, { muted: !t.muted }, t.muted ? "Unmute Track" : "Mute Track")}>M</button>
           <button type="button" class:on={t.solo} class="s" title={t.kind === "bus" ? "Solo: plays this bus and everything feeding it" : "Solo. Ctrl+click to hear only this track."} aria-pressed={t.solo} onclick={(e) => (t.kind === "track" && (e.ctrlKey || e.metaKey) ? soloOnly(t.id) : setStrip(t, { solo: !t.solo }, t.solo ? "Unsolo Track" : "Solo Track"))}>S</button>
           <button type="button" class:on={t.mono} class="mo" title="Mono: folds this strip's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={t.mono} onclick={() => setStrip(t, { mono: !t.mono }, t.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
           {#if t.kind === "track"}

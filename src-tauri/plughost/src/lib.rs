@@ -301,8 +301,13 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                 if !w.pump() {
                     l.window = None;
                     send(out, *id, &Message::EditorClosed);
-                } else if let Some(bypassed) = w.take_bypass() {
-                    send(out, *id, &Message::BypassPicked { bypassed });
+                } else {
+                    if let Some(bypassed) = w.take_bypass() {
+                        send(out, *id, &Message::BypassPicked { bypassed });
+                    }
+                    if let Some(record) = w.take_space() {
+                        send(out, *id, &Message::SpacePressed { record });
+                    }
                 }
             }
             let edits: Vec<Edit> = l

@@ -265,6 +265,9 @@ pub struct Limiter {
     true_peak: bool,
     hist: [[f32; TP_TAPS]; 2],
     weights: [[f32; TP_TAPS]; 3],
+    /// Tests: frames the gain did not bring under the ceiling by itself.
+    #[cfg(test)]
+    clipped: u64,
 }
 
 /// Taps either side of the point being drawn, for the level between samples.
@@ -307,10 +310,13 @@ fn interval_peak(h: &[f32; TP_TAPS], w: &[[f32; TP_TAPS]; 3]) -> f32 {
 impl Limiter {
     pub fn new(p: &Params, rate: u32) -> Self {
         let true_peak = p.index("detect") == 1;
-        // True peak: the level between two samples is known a few frames
-        // later, so the sound is held back that much more.
-        let lookahead = (p.get("lookahead") * f64::from(rate) / 1000.0).round() as usize
-            + if true_peak { TP_HALF + 1 } else { 0 };
+        // The gain ramps down over the look-ahead window. True peak: the
+        // level between two samples is known TP_HALF frames late, so the
+        // sound is held back that much more than the ramp, and the ramp
+        // is fully down when the peak comes out.
+        let ramp = (p.get("lookahead") * f64::from(rate) / 1000.0).round() as usize
+            + usize::from(true_peak);
+        let lookahead = ramp + if true_peak { TP_HALF } else { 0 };
         Self {
             true_peak,
             hist: [[0.0; TP_TAPS]; 2],
@@ -320,9 +326,11 @@ impl Limiter {
             release: coef(p.get("release"), rate),
             linked: p.on("linked"),
             lookahead,
-            paths: [LimitPath::new(lookahead), LimitPath::new(lookahead)],
+            paths: [LimitPath::new(ramp), LimitPath::new(ramp)],
             delay: vec![0.0; lookahead * 2],
             delay_at: 0,
+            #[cfg(test)]
+            clipped: 0,
         }
     }
 
@@ -405,8 +413,13 @@ impl Limiter {
             };
             // The clamp only catches float rounding; the gain already fits.
             let c = self.ceiling;
-            f[0] = (dl * gl).clamp(-c, c);
-            f[1] = (dr * gr).clamp(-c, c);
+            let (ol, or) = (dl * gl, dr * gr);
+            #[cfg(test)]
+            if ol.abs().max(or.abs()) > c * 1.0005 {
+                self.clipped += 1;
+            }
+            f[0] = ol.clamp(-c, c);
+            f[1] = or.clamp(-c, c);
         }
     }
 }
@@ -675,6 +688,36 @@ mod tests {
         // True peak holds the curve: the samples sit about 3 dB lower.
         assert!(tail(&truep) < 0.5 * 0.75, "{}", tail(&truep));
         assert!(tail(&truep) > 0.5 * 0.6, "{}", tail(&truep));
+    }
+
+    #[test]
+    fn the_gain_alone_holds_the_ceiling_even_driven_hard() {
+        // Driven 24 dB into the ceiling, in both modes: the gain comes down
+        // in time, so the safety clamp never has to cut a peak (which is
+        // what made true peak mode sound clipped).
+        let mut b = vec![0f32; 2 * 4800];
+        b.extend(sine(220.0, 0.9, 0.5));
+        b.extend(sine(3000.0, 0.9, 0.3));
+        for detect in [0.0, 1.0] {
+            for la in [1.0, 5.0] {
+                let info = super::limiter_info();
+                let saved = [
+                    ("ceiling", -1.0),
+                    ("input_boost", 24.0),
+                    ("detect", detect),
+                    ("lookahead", la),
+                ]
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), *v))
+                .collect();
+                let mut l = super::Limiter::new(&super::Params::resolve(&info, &saved), 48_000);
+                let mut x = b.clone();
+                for chunk in x.chunks_mut(2 * 777) {
+                    super::Processor::process(&mut l, chunk);
+                }
+                assert_eq!(l.clipped, 0, "detect {detect}, look-ahead {la}");
+            }
+        }
     }
 
     #[test]

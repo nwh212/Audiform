@@ -10,7 +10,9 @@
   either side of a lit display with the time and a picture of the
   repeats fading away (alternating sides when they ping-pong). Under
   them, a row of small dials for the modulation, filters, drive and the
-  levels, and the room spread used on surround.
+  levels, and the room spread used on surround. The Simple kind shows a
+  time, a mix and an Invert switch for each side instead, with the
+  times in milliseconds or samples.
 -->
 <script lang="ts">
   import type { EffectInfo, EffectParamInfo } from "../../app/core";
@@ -24,10 +26,12 @@
     info: EffectInfo;
     /** The session tempo, to follow. */
     tempo?: number | undefined;
+    /** The sample rate, for times shown in samples. */
+    rate?: number | undefined;
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
   }
 
-  const { slot, info, tempo, onParams }: Props = $props();
+  const { slot, info, tempo, rate = 48_000, onParams }: Props = $props();
   const P = (k: string) => info.params.find((p) => p.key === k)!;
   const val = (k: string) => paramValue(slot, P(k));
   const set = (k: string, v: number, done: boolean) => {
@@ -39,10 +43,15 @@
     { name: "Digital", tip: "Clean repeats, each a copy of the last" },
     { name: "Tape", tip: "A tape loop: wow, flutter and saturation, each pass a little darker" },
     { name: "Analog", tip: "A bucket-brigade delay: darker repeats that clip softly" },
+    { name: "Simple", tip: "Each side moved by its own time, early or late, with its own mix and polarity: for lining up or widening" },
   ];
   const BEATS = [1 / 16, 1 / 12, 1 / 8, 1 / 6, 0.25, 0.375, 1 / 3, 0.5, 0.75, 2 / 3, 1, 1.5, 2, 3, 4, 8];
 
   const kind = $derived(Math.round(val("kind")));
+  const simple = $derived(kind === 3);
+  const samples = $derived(val("units") >= 0.5);
+  /** A side's time as shown: ms, or samples at the session rate. */
+  const timeText = (ms: number) => (samples ? `${Math.round((ms / 1000) * rate)} smp` : `${ms > 0 ? "+" : ""}${ms.toFixed(2)} ms`);
   const sync = $derived(val("sync") >= 0.5);
   const pingpong = $derived(val("pingpong") >= 0.5);
   const bpm = $derived(val("tempo"));
@@ -79,12 +88,40 @@
         <button type="button" role="tab" class:lit={i === kind} aria-selected={i === kind} title={k.tip} onclick={() => i !== kind && set("kind", i, true)}>{k.name}</button>
       {/each}
     </div>
+    {#if simple}
+    <div class="fp-switches" role="radiogroup" aria-label="Show times in">
+      <button type="button" role="radio" class:lit={!samples} aria-checked={!samples} title="Show times in milliseconds" onclick={() => set("units", 0, true)}>ms</button>
+      <button type="button" role="radio" class:lit={samples} aria-checked={samples} title="Show times in samples" onclick={() => set("units", 1, true)}>Samples</button>
+    </div>
+    {:else}
     <div class="fp-switches">
       <button type="button" class:lit={sync} aria-pressed={sync} title="The time follows the tempo as a note value" onclick={() => follow(!sync)}>Tempo</button>
       <button type="button" class:lit={pingpong} aria-pressed={pingpong} title="Each repeat crosses to the other side. On surround, each repeat moves on to the next speaker round the room." onclick={() => set("pingpong", pingpong ? 0 : 1, true)}>Ping-pong</button>
     </div>
+    {/if}
   </div>
 
+  {#if simple}
+  <div class="fp-screen simple-screen" aria-live="polite">
+    <div class="fp-readout">
+      <span class="fp-big">L {timeText(val("l_time"))}</span>
+      <span class="fp-big">R {timeText(val("r_time"))}</span>
+    </div>
+  </div>
+  <div class="fp-row fp-pairs">
+    {#each [["l", "Left"], ["r", "Right"]] as const as [k, side] (k)}
+      {@const inv = val(`${k}_invert`) >= 0.5}
+      <div class="fp-group">
+        <span class="fp-gname">{side}</span>
+        <div class="fp-knobs">
+          <BigKnob param={P(`${k}_time`)} value={val(`${k}_time`)} size={72} label="Time" marks={[-500, 0, 500]} oninput={(v) => set(`${k}_time`, v, false)} oncommit={(v) => set(`${k}_time`, v, true)} />
+          <BigKnob param={P(`${k}_mix`)} value={val(`${k}_mix`)} size={72} label="Mix" marks={[0, 50, 100]} oninput={(v) => set(`${k}_mix`, v, false)} oncommit={(v) => set(`${k}_mix`, v, true)} />
+        </div>
+        <button type="button" class="fp-toggle" class:lit={inv} aria-pressed={inv} title="Flip this side's polarity" onclick={() => set(`${k}_invert`, inv ? 0 : 1, true)}>Invert</button>
+      </div>
+    {/each}
+  </div>
+  {:else}
   <div class="fp-mid">
     {#if sync}
       <BigKnob param={P("note")} value={val("note")} size={104} label="Time" oninput={(v) => set("note", Math.round(v), false)} oncommit={(v) => set("note", Math.round(v), true)} />
@@ -146,4 +183,5 @@
       </div>
     </div>
   </div>
+  {/if}
 </div></div>

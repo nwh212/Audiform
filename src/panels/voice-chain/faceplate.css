@@ -57,7 +57,8 @@
   gap: 4px;
 }
 /* A faceplate's own switches: the theme's button look stays out. */
-.fp-unit .fp-top button {
+.fp-unit .fp-top button,
+.fp-unit .fp-toggle {
   min-width: 0;
   height: auto;
   padding: 4px 10px !important;
@@ -75,7 +76,8 @@
   text-transform: uppercase;
   cursor: pointer;
 }
-.fp-unit .fp-top button.lit {
+.fp-unit .fp-top button.lit,
+.fp-unit .fp-toggle.lit {
   color: #111 !important;
   background: linear-gradient(180deg, color-mix(in srgb, var(--glow) 90%, #fff), var(--glow)) !important;
   box-shadow:
@@ -221,4 +223,8 @@
 }
 .fp-readout > * {
   min-width: 0;
+}
+.fp-toggle {
+  justify-self: center;
+  margin-top: 4px;
 }

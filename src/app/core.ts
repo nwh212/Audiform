@@ -1214,6 +1214,8 @@ export interface PluginEvents {
   stopped: string | null;
   /** The power button on its window was clicked: bypassed now, or not. */
   bypass?: boolean | null;
+  /** Space was pressed in its window: play or stop (true: Shift+Space, record). */
+  space?: boolean | null;
 }
 
 export function pluginsRegistry(): Promise<PluginRegistry> {

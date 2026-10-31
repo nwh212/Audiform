@@ -27,6 +27,10 @@ pub trait EditorWindow {
     fn set_bypassed(&mut self, bypassed: bool);
     /// The bypass the user picked on the strip since the last look.
     fn take_bypass(&mut self) -> Option<bool>;
+    /// Space pressed in the window since the last look (Some(true) with Shift).
+    fn take_space(&mut self) -> Option<bool> {
+        None
+    }
     /// Hides the window for a while (the editor's close prompt), or shows it again.
     fn hide(&mut self, hidden: bool);
 }
@@ -96,14 +100,18 @@ mod win {
         AdjustWindowRectExForDpi, GetDpiForWindow, SetThreadDpiAwarenessContext,
         DPI_AWARENESS_CONTEXT_UNAWARE,
     };
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT, VK_SPACE,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect,
-        GetWindowLongPtrW, LoadCursorW, MoveWindow, PeekMessageW, RegisterClassW,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClassNameW,
+        GetClientRect, GetWindowLongPtrW, LoadCursorW, MoveWindow, PeekMessageW, RegisterClassW,
         SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
         CW_USEDEFAULT, GWLP_USERDATA, IDC_ARROW, MSG, PM_REMOVE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE,
-        SW_SHOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_LBUTTONDOWN,
-        WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-        WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+        SW_SHOW, SW_SHOWNOACTIVATE, WM_CHAR, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN,
+        WM_KEYUP, WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WNDCLASSW, WS_CAPTION, WS_CHILD,
+        WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU, WS_THICKFRAME,
+        WS_VISIBLE,
     };
 
     use super::EditorWindow;
@@ -324,6 +332,31 @@ mod win {
         style: u32,
         resizable: bool,
         state: Box<State>,
+        /// Space pressed since the last look: Some(true) with Shift.
+        space: Option<bool>,
+    }
+
+    /// A Space key message (down, up or the character it types), with
+    /// no Ctrl or Alt held.
+    fn is_space(msg: &MSG) -> bool {
+        matches!(msg.message, WM_KEYDOWN | WM_KEYUP | WM_CHAR)
+            && msg.wParam
+                == if msg.message == WM_CHAR {
+                    0x20
+                } else {
+                    usize::from(VK_SPACE)
+                }
+            && unsafe {
+                GetKeyState(i32::from(VK_CONTROL)) >= 0 && GetKeyState(i32::from(VK_MENU)) >= 0
+            }
+    }
+
+    /// The focus is in a text box, where Space types a space.
+    fn typing(hwnd: HWND) -> bool {
+        let mut name = [0u16; 64];
+        let n = unsafe { GetClassNameW(hwnd, name.as_mut_ptr(), name.len() as i32) };
+        let name = String::from_utf16_lossy(&name[..n.max(0) as usize]).to_lowercase();
+        name.contains("edit") || name.contains("text")
     }
 
     impl Win {
@@ -475,6 +508,7 @@ mod win {
                 style,
                 resizable,
                 state,
+                space: None,
             }))
         }
     }
@@ -484,6 +518,14 @@ mod win {
             unsafe {
                 let mut msg: MSG = std::mem::zeroed();
                 while PeekMessageW(&mut msg, ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                    // Space plays and stops the session, as in the editor,
+                    // unless a text box in the plug-in has the focus.
+                    if is_space(&msg) && !typing(msg.hwnd) {
+                        if msg.message == WM_KEYDOWN && msg.lParam & (1 << 30) == 0 {
+                            self.space = Some(GetKeyState(i32::from(VK_SHIFT)) < 0);
+                        }
+                        continue;
+                    }
                     TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
@@ -568,6 +610,10 @@ mod win {
 
         fn take_bypass(&mut self) -> Option<bool> {
             self.state.picked.take()
+        }
+
+        fn take_space(&mut self) -> Option<bool> {
+            self.space.take()
         }
 
         fn hide(&mut self, hidden: bool) {

@@ -27,21 +27,17 @@
 //!   together and the image holds still.
 //! - Delays, pitch and tone shapers leave the low-frequency channel alone
 //!   (it only carries the deep end); filters and repair work on it too.
-//! - Center extraction and stereo width work on what two speakers share:
-//!   they run on every pair (fronts, surrounds, rears, heights) and leave
-//!   a lone speaker (C, LFE) as it is. The Channel Mixer, whose controls
-//!   name left and right, keeps working on L and R only.
+//! - The Channel Mixer, Center Channel Extractor and Stereo Width, whose
+//!   controls name left and right, keep working on L and R only.
 
 use super::{build, routing, verb, EffectInfo, Params, Processor};
 use crate::session::model::EffectSlot;
 
 /// Effects that only work on the front left and right (their controls
 /// name left and right).
-const STEREO_ONLY: [&str; 2] = [super::mixer::ID, "altaudio.phase_rotate"];
-
-/// Effects that work on what two speakers share: every pair runs them,
-/// a lone speaker (C, LFE) is left alone (it has no side to compare with).
-const PAIRS_ONLY: [&str; 3] = [
+const STEREO_ONLY: [&str; 5] = [
+    super::mixer::ID,
+    "altaudio.phase_rotate",
     super::center::ID,
     super::width::WIDTH,
     "altaudio.center_remover",
@@ -110,12 +106,7 @@ pub fn build_wide(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<
     }
     let skip_lfe = SKIP_LFE.contains(&info.id);
     let mut units = Vec::new();
-    let pairs_only = PAIRS_ONLY.contains(&info.id);
-    for (k, group) in groups(names, skip_lfe)
-        .into_iter()
-        .filter(|g| !pairs_only || g.len() == 2)
-        .enumerate()
-    {
+    for (k, group) in groups(names, skip_lfe).into_iter().enumerate() {
         let mut proc = build(slot, rate)?;
         // Each pair its own: sweeps and drifts start at their own point.
         proc.vary(k);
@@ -467,24 +458,10 @@ mod tests {
     }
 
     #[test]
-    fn width_works_on_every_pair_and_leaves_the_center_alone() {
-        // Width 0: each pair folds to its middle; the center is untouched.
-        let mut w = build_wide(
-            &slot(super::super::width::WIDTH, &[("width", 0.0)]),
-            48_000,
-            &bed51(),
-        )
-        .unwrap();
-        let out = run(w.as_mut(), &vec![[1.0, 0.0, 0.7, 0.2, 0.5, -0.5]; 64]);
-        let f = out.last().unwrap();
-        assert!(
-            (f[0] - f[1]).abs() < 1e-3 && (f[4] - f[5]).abs() < 1e-3,
-            "{f:?}"
-        );
-        assert!(
-            (f[2] - 0.7).abs() < 1e-6 && (f[3] - 0.2).abs() < 1e-6,
-            "{f:?}"
-        );
+    fn width_and_center_stay_on_the_front_pair() {
+        for id in [super::super::width::WIDTH, super::super::center::ID] {
+            assert!(build_wide(&slot(id, &[]), 48_000, &bed51()).is_none());
+        }
     }
 
     #[test]

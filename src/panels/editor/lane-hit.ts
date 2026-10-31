@@ -15,7 +15,7 @@ import { gainBox } from "./clip-gain";
 import { chipBox, chipLabel, fxLaneOf, levelAt, pointsOf, rangeOf, restValue, valueToY, type EnvKind } from "./envelope";
 import { sampleAt, trackHeight, xOf, TRACK_GAP, type Viewport } from "./timeline";
 
-export const EDGE_PX = 6;
+export const EDGE_PX = 8;
 export const TITLE_H = 15;
 export const SNAP_PX = 8;
 /** Stretch handles: triangles this many pixels wide in a clip's top corners (see LaneCanvas). */

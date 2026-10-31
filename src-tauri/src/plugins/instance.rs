@@ -63,6 +63,8 @@ pub struct Events {
     pub latency_changed: bool,
     /// It crashed or stopped answering, and is bypassed.
     pub stopped: Option<String>,
+    /// Space was pressed in its window: play or stop (Some(true): record).
+    pub space: Option<bool>,
 }
 
 impl Events {
@@ -89,7 +91,7 @@ struct Route {
     audio: mpsc::Sender<Vec<f32>>,
     replies: mpsc::Sender<Message>,
     events: Arc<Mutex<Events>>,
-    known: Arc<Mutex<HashMap<u32, f64>>>,
+    known: Arc<Mutex<HashMap<u32, Known>>>,
 }
 
 impl Conn {
@@ -139,7 +141,7 @@ impl Conn {
                             match m {
                                 Message::ParamEdited { id, value } => {
                                     if let Ok(mut k) = r.known.lock() {
-                                        k.insert(id, value);
+                                        k.insert(id, (value, Some(std::time::Instant::now())));
                                     }
                                     e.edits.push((super::param_key(id), value));
                                 }
@@ -150,6 +152,7 @@ impl Conn {
                                 }
                                 Message::LatencyChanged { .. } => e.latency_changed = true,
                                 Message::BypassPicked { bypassed } => e.bypass = Some(bypassed),
+                                Message::SpacePressed { record } => e.space = Some(record),
                                 reply => {
                                     drop(e);
                                     let _ = r.replies.send(reply);
@@ -325,7 +328,7 @@ pub struct Host {
     events: Arc<Mutex<Events>>,
     dead: Arc<AtomicBool>,
     /// The control values the plug-in has: sent from here or moved in its window.
-    known: Arc<Mutex<HashMap<u32, f64>>>,
+    known: Arc<Mutex<HashMap<u32, Known>>>,
     pub latency: usize,
     pub params: Vec<ParamInfo>,
     pub has_editor: bool,
@@ -361,6 +364,15 @@ fn state_hash(data: &str) -> u64 {
 /// How long a plug-in's own report counts as still travelling back.
 const REPORT_ECHO: Duration = Duration::from_secs(3);
 
+/// A control value the plug-in has, and when it was last moved in the
+/// plug-in's own window (None when it was set from here).
+type Known = (f64, Option<std::time::Instant>);
+
+/// How long after a control moves in the plug-in's window the session's
+/// copy of it is not sent back: while it is being turned, the session
+/// lags a moment behind, and sending its copy would make the knob jump.
+const TURNING: Duration = Duration::from_millis(1500);
+
 impl Host {
     /// Starts `found` in a host process (its own, or its maker's shared one).
     pub fn start(
@@ -376,7 +388,10 @@ impl Host {
         let (rtx, rrx) = mpsc::channel();
         let events = Arc::new(Mutex::new(Events::default()));
         let known = Arc::new(Mutex::new(
-            params.iter().copied().collect::<HashMap<u32, f64>>(),
+            params
+                .iter()
+                .map(|&(id, v)| (id, (v, None)))
+                .collect::<HashMap<u32, Known>>(),
         ));
         conn.routes.lock().map_err(|e| e.to_string())?.insert(
             id,
@@ -525,7 +540,7 @@ impl Host {
         self.late_since = None;
         if !changes.is_empty() {
             if let Ok(mut k) = self.known.lock() {
-                k.extend(changes.iter().copied());
+                k.extend(changes.iter().map(|&(id, v)| (id, (v, None))));
             }
         }
         let position = block_position();
@@ -575,8 +590,14 @@ impl Host {
         let Ok(k) = self.known.lock() else {
             return want.to_vec();
         };
+        let now = std::time::Instant::now();
         want.iter()
-            .filter(|(id, v)| k.get(id) != Some(v))
+            .filter(|(id, v)| match k.get(id) {
+                Some((have, _)) if have == v => false,
+                // Being turned in its own window: the session's copy is behind.
+                Some((_, Some(t))) => now.duration_since(*t) >= TURNING,
+                _ => true,
+            })
             .copied()
             .collect()
     }

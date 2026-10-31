@@ -962,7 +962,7 @@
           {/await}
         {:else if winSlot.effect === "altaudio.echo"}
           {#await import("./DelayPanel.svelte") then { default: DelayPanel }}
-          <DelayPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          <DelayPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} rate={(inWave ? waveDoc : doc)?.sample_rate ?? 48000} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
           {/await}
         {:else if winSlot.effect === "altaudio.modulation"}
           {#await import("./ModPanel.svelte") then { default: ModPanel }}
@@ -1289,11 +1289,17 @@
     border-color: var(--rack, var(--accent));
     border-style: solid;
   }
+  /* Centered both ways whatever the theme's own button padding. */
   .mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     min-width: 20px;
-    padding: 0 3px;
+    height: 18px;
+    padding: 0 4px !important;
     font-size: 10px;
-    line-height: 16px;
+    line-height: 1;
   }
   .mini.on {
     color: var(--accent);
@@ -1391,7 +1397,11 @@
     display: inline-flex;
     gap: 5px;
     align-items: center;
-    padding: 2px 8px 2px 5px;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 22px;
+    padding: 0 9px 0 7px !important;
+    line-height: 1;
     border: 1px solid var(--border);
     border-radius: 4px;
     background: transparent;
@@ -1408,6 +1418,8 @@
     color: var(--on-accent, #fff);
   }
   .fxwin footer .power svg {
+    display: block;
+    flex: none;
     width: 14px;
     height: 14px;
   }

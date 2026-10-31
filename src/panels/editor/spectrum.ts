@@ -131,7 +131,10 @@ export function zoomFreq(v: FreqView, hz: number, factor: number, nyquist: numbe
 export function freqTicks(v: FreqView, nyquist: number, height: number, minGap = 16): number[] {
   const [lo, hi] = viewRange(v, nyquist);
   const yOf = (f: number) => (1 - viewFrac(f, v, nyquist)) * height;
-  if (v.log < 0.5) {
+  // A straight scale: evenly stepped marks. Any bend toward logarithmic
+  // (the default is a quarter) packs the low end, so the marks are then
+  // filled in step by step instead, wherever they fit.
+  if (v.log < 0.02) {
     const span = hi - lo;
     const want = Math.max(2, Math.floor(height / (minGap * 2)));
     const raw = span / want;
@@ -141,8 +144,9 @@ export function freqTicks(v: FreqView, nyquist: number, height: number, minGap =
     for (let f = Math.ceil(lo / step) * step; f <= hi; f += step) out.push(Math.round(f * 1000) / 1000);
     return keepApart(out.filter((f) => f > lo && f < hi), yOf, minGap);
   }
-  // Log scale: round steps from coarse to fine, each adding the marks that
-  // still fit, so zooming in on a range keeps adding round-numbered marks.
+  // Bent or log scale: round steps from coarse to fine, each adding the
+  // marks that still fit, so zooming in on a range keeps adding
+  // round-numbered marks.
   const kept: { f: number; y: number }[] = [];
   const span = hi - lo;
   for (let e = Math.ceil(Math.log10(hi)); e >= -2; e--) {

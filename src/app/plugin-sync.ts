@@ -107,6 +107,8 @@ export interface PluginSyncDeps {
   onStopped: (slot: EffectSlotDoc, why: string) => void;
   /** A plug-in's look-ahead changed: playback must re-align. */
   onLatency: () => void;
+  /** Space in a plug-in's window: play or stop (`record`: Shift+Space). */
+  onSpace?: (record: boolean) => void;
 }
 
 export class PluginSync {
@@ -115,7 +117,7 @@ export class PluginSync {
 
   constructor(private readonly deps: PluginSyncDeps) {}
 
-  start(everyMs = 400): void {
+  start(everyMs = 200): void {
     if (this.timer) return;
     this.timer = setInterval(() => void this.tick(), everyMs);
   }
@@ -145,6 +147,8 @@ export class PluginSync {
         }
       }
       if (events.some((e) => e.latencyChanged)) this.deps.onLatency();
+      const space = events.find((e) => e.space != null);
+      if (space) this.deps.onSpace?.(!!space.space);
       // Bypass clicks on plug-in windows are their own undo steps.
       const flips = events.filter((e) => e.bypass != null).map((e) => ({ ...e, edits: [] }));
       const before = this.deps.doc();
