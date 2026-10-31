@@ -788,7 +788,11 @@ fn run(
     let start_frame = plan::to_out(from, session.sample_rate, out_rate);
     // Timed stage by stage into the audio log, so a slow start says why.
     let t_start = std::time::Instant::now();
-    let plugin_slots = crate::commands::plugins::playing_plugin_slots(&session).len();
+    let slots = crate::commands::plugins::playing_plugin_slots(&session);
+    let plugin_slots = slots.len();
+    // Plug-ins not running yet start side by side, so a cold start waits
+    // for the slowest one rather than for all of them in turn.
+    crate::plugins::instance::start_all(slots, out_rate);
     let mut renderer = Renderer::new(plan::build(&session, out_rate), start_frame);
     if let Some((at, to)) = jump.and_then(|j| j.points(from)) {
         let r = session.sample_rate;

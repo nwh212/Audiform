@@ -808,6 +808,14 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
                     if e.effect == slot.effect && e.rate == rate && e.wide == wide_of(slot) {
                         return Some(e.host.clone());
                     }
+                    crate::engine::host::log(&format!(
+                        "plug-in restart: \"{}\" ran at {} Hz{}, wanted at {} Hz{}",
+                        found.info.name,
+                        e.rate,
+                        if e.wide { " (own layout)" } else { "" },
+                        rate,
+                        if wide_of(slot) { " (own layout)" } else { "" },
+                    ));
                 }
             }
             let mut s = starting().lock().ok()?;
@@ -908,29 +916,48 @@ pub fn warm(slots: Vec<EffectSlot>) {
             let rate = crate::engine::output::device_rate();
             // A few at a time: a session with dozens of heavy plug-ins
             // loading all at once slows the whole computer, the editor too.
-            let workers = thread::available_parallelism()
-                .map_or(2, |n| (n.get() / 2).clamp(2, 6))
-                .min(todo.len());
-            let mut todo = todo;
-            todo.reverse();
-            let queue = Arc::new(Mutex::new(todo));
-            let handles: Vec<_> = (0..workers)
-                .filter_map(|_| {
-                    let queue = queue.clone();
-                    thread::Builder::new()
-                        .name("plugin-warm".into())
-                        .spawn(move || loop {
-                            let next = queue.lock().ok().and_then(|mut q| q.pop());
-                            let Some(s) = next else { break };
-                            let _ = host_for(&s, rate);
-                        })
-                        .ok()
-                })
-                .collect();
-            for h in handles {
-                let _ = h.join();
-            }
+            start_all(todo, rate);
         });
+}
+
+/// Starts the playback hosts of `slots` side by side and waits for them
+/// all. Loading is mostly a plug-in's own work (licence checks, samples),
+/// so several load at once; slots already running come back at once.
+pub fn start_all(slots: Vec<EffectSlot>, rate: u32) {
+    let todo: Vec<EffectSlot> = slots
+        .into_iter()
+        .filter(|s| {
+            pool().lock().ok().and_then(|p| {
+                p.get(&s.id)
+                    .map(|e| e.effect == s.effect && e.rate == rate && e.wide == wide_of(s))
+            }) != Some(true)
+        })
+        .collect();
+    if todo.is_empty() {
+        return;
+    }
+    let workers = thread::available_parallelism()
+        .map_or(4, |n| n.get().clamp(2, 8))
+        .min(todo.len());
+    let mut todo = todo;
+    todo.reverse();
+    let queue = Arc::new(Mutex::new(todo));
+    let handles: Vec<_> = (0..workers)
+        .filter_map(|_| {
+            let queue = queue.clone();
+            thread::Builder::new()
+                .name("plugin-warm".into())
+                .spawn(move || loop {
+                    let next = queue.lock().ok().and_then(|mut q| q.pop());
+                    let Some(s) = next else { break };
+                    let _ = host_for(&s, rate);
+                })
+                .ok()
+        })
+        .collect();
+    for h in handles {
+        let _ = h.join();
+    }
 }
 
 fn failures() -> &'static Mutex<HashMap<Id, String>> {
@@ -962,7 +989,16 @@ pub fn latency(slot: &EffectSlot) -> usize {
 /// Stops the hosts of slots no longer in the session.
 pub fn retain(slots: &HashSet<Id>) {
     if let Ok(mut p) = pool().lock() {
-        p.retain(|id, _| slots.contains(id));
+        p.retain(|id, e| {
+            let keep = slots.contains(id);
+            if !keep {
+                crate::engine::host::log(&format!(
+                    "plug-in stop: \"{}\" is no longer in an open session",
+                    find(&e.effect).map_or(e.effect.clone(), |f| f.info.name.clone())
+                ));
+            }
+            keep
+        });
     }
 }
 
@@ -1012,7 +1048,12 @@ pub fn push_states(before: &HashMap<Id, Option<String>>, after: &HashMap<Id, Opt
 /// Stops a slot's host, so the next playback starts it again (after a crash).
 pub fn restart(slot: Id) {
     if let Ok(mut p) = pool().lock() {
-        p.remove(&slot);
+        if let Some(e) = p.remove(&slot) {
+            crate::engine::host::log(&format!(
+                "plug-in stop: \"{}\" asked to restart",
+                find(&e.effect).map_or(e.effect.clone(), |f| f.info.name.clone())
+            ));
+        }
     }
     if let Ok(mut f) = failures().lock() {
         f.remove(&slot);

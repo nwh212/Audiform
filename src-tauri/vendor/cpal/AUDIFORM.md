@@ -17,5 +17,10 @@ The addition:
 - `src/platform/mod.rs`: `Host::asio_device_named` on the platform host
   (Windows, `asio` feature), None on other hosts.
 
+- `src/host/asio/stream.rs`: an input or output stream asked for with more
+  channels than the one already open on the driver is refused with an
+  error, where upstream reads past the open stream's buffers (a crash
+  when playback asks for four outputs after monitoring opened two).
+
 Nothing else is changed. The examples are left out. Upstream:
 https://github.com/RustAudio/cpal (Apache-2.0).

@@ -873,6 +873,19 @@ impl Device {
         // Either create a stream if thers none or had back the
         // size of the current one.
         match streams.input {
+            // Audiform: a stream opened earlier with fewer channels than
+            // asked for now cannot serve this one; say so instead of
+            // reading past its buffers.
+            Some(ref input) if input.buffer_infos.len() < num_channels => {
+                Err(Error::with_message(
+                    ErrorKind::DeviceBusy,
+                    format!(
+                        "The ASIO input is already open with {} channels; {} were asked for.",
+                        input.buffer_infos.len(),
+                        num_channels
+                    ),
+                ))
+            }
             Some(ref input) => Ok(input.buffer_size as usize),
             None => {
                 let output = streams.output.take();
@@ -916,6 +929,17 @@ impl Device {
         // Either create a stream if thers none or had back the
         // size of the current one.
         match streams.output {
+            // Audiform: see the input side.
+            Some(ref output) if output.buffer_infos.len() < num_channels => {
+                Err(Error::with_message(
+                    ErrorKind::DeviceBusy,
+                    format!(
+                        "The ASIO output is already open with {} channels; {} were asked for.",
+                        output.buffer_infos.len(),
+                        num_channels
+                    ),
+                ))
+            }
             Some(ref output) => Ok(output.buffer_size as usize),
             None => {
                 let input = streams.input.take();

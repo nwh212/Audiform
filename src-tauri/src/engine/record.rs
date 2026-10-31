@@ -997,8 +997,17 @@ fn open_monitor(
     let _ = input_name;
     let dev = super::output::output_device(&host)
         .ok_or("Input monitoring needs an output: no speakers or headphones found.")?;
-    let mut best: Option<cpal::SupportedStreamConfig> = None;
+    // The same outputs playback uses, opened the way playback opens them:
+    // on ASIO the one driver holds one output stream, so monitoring and
+    // playback must ask for the same channels.
+    let stereo_out = super::output::map().stereo.map(usize::from);
+    let wanted = stereo_out[0].max(stereo_out[1]) + 1;
+    let mut best: Option<cpal::SupportedStreamConfig> =
+        super::output::config_for(&dev, wanted).filter(|c| c.sample_rate() == rate);
     for c in dev.supported_output_configs().map_err(|e| e.to_string())? {
+        if best.is_some() {
+            break;
+        }
         if c.min_sample_rate() > rate || c.max_sample_rate() < rate {
             continue;
         }
@@ -1025,25 +1034,33 @@ fn open_monitor(
     // A second of room; the writer keeps it far emptier than that.
     let (producer, consumer) = RingBuffer::<f32>::new((rate as usize * 2).max(8192));
     let stream = match format {
-        SampleFormat::F32 => build_out::<f32>(&dev, config, consumer),
-        SampleFormat::I16 => build_out::<i16>(&dev, config, consumer),
-        SampleFormat::I32 => build_out::<i32>(&dev, config, consumer),
-        SampleFormat::U16 => build_out::<u16>(&dev, config, consumer),
+        SampleFormat::F32 => build_out::<f32>(&dev, config, consumer, stereo_out),
+        SampleFormat::I16 => build_out::<i16>(&dev, config, consumer, stereo_out),
+        SampleFormat::I32 => build_out::<i32>(&dev, config, consumer, stereo_out),
+        SampleFormat::U16 => build_out::<u16>(&dev, config, consumer, stereo_out),
         other => Err(format!("Unsupported output sample format: {other}")),
     }?;
     stream.play().map_err(|e| e.to_string())?;
     Ok((producer, stream))
 }
 
+/// The monitor's output stream: the stereo mix goes to the outputs
+/// playback uses (`stereo_out`, when the stream has them), the rest silent.
 fn build_out<T>(
     device: &cpal::Device,
     config: StreamConfig,
     mut consumer: Consumer<f32>,
+    stereo_out: [usize; 2],
 ) -> Result<cpal::Stream, String>
 where
     T: SizedSample + FromSample<f32>,
 {
     let out_channels = usize::from(config.channels).max(1);
+    let [left, right] = if stereo_out[0] < out_channels && stereo_out[1] < out_channels {
+        stereo_out
+    } else {
+        [0, 1]
+    };
     device
         .build_output_stream(
             config,
@@ -1057,11 +1074,14 @@ where
                             (0.0, 0.0)
                         };
                         for (i, s) in frame.iter_mut().enumerate() {
-                            let v = match (out_channels, i) {
-                                (1, _) => (l + r) * 0.5,
-                                (_, 0) => l,
-                                (_, 1) => r,
-                                _ => 0.0,
+                            let v = if out_channels == 1 {
+                                (l + r) * 0.5
+                            } else if i == left {
+                                l
+                            } else if i == right {
+                                r
+                            } else {
+                                0.0
                             };
                             *s = T::from_sample(v);
                         }

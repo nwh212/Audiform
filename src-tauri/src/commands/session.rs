@@ -70,11 +70,30 @@ pub fn session_resume(
     let back = p.remove(i);
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
     *s = back;
+    // Its plug-ins are usually still running; any that stopped start now.
+    crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
+        &super::live::heard(&s.session),
+    ));
     Ok(SessionWithPath {
         session: s.session.clone(),
         path: s.path.clone(),
         missing: Vec::new(),
     })
+}
+
+/// The plug-in slots of every open session: the one in front and the
+/// ones set aside, whose plug-ins keep running for a quick switch back.
+fn open_plugin_slots(
+    front: &crate::session::model::Session,
+    parked: &ParkedSessions,
+) -> std::collections::HashSet<crate::session::model::Id> {
+    let mut all = crate::commands::plugins::plugin_slots(front);
+    if let Ok(p) = parked.0.lock() {
+        for x in p.iter() {
+            all.extend(crate::commands::plugins::plugin_slots(&x.session));
+        }
+    }
+    all
 }
 
 /// Drops a set-aside session and its unsaved edits.
@@ -189,6 +208,7 @@ pub fn session_get(open: State<'_, OpenSession>) -> Result<SessionWithPath, Stri
 pub fn session_apply(
     app: AppHandle,
     open: State<'_, OpenSession>,
+    parked: State<'_, ParkedSessions>,
     transport: State<'_, crate::engine::Transport>,
     playing: State<'_, super::wave::Playing>,
     op: Op,
@@ -201,8 +221,9 @@ pub fn session_apply(
         &states,
         &crate::commands::plugins::plugin_states(&s.session),
     );
-    // Plug-ins taken out of the session stop running.
-    crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
+    // Plug-ins taken out of the session stop running. Those of a session
+    // set aside keep running, so switching back plays at once.
+    crate::plugins::instance::retain(&open_plugin_slots(&s.session, &parked));
     // New plug-ins and instruments start loading now, not when Play is pressed.
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
         &super::live::heard(&s.session),
@@ -441,7 +462,10 @@ pub async fn session_open(app: AppHandle, path: PathBuf) -> Result<SessionWithPa
     }
     s.session = opened.session.clone();
     s.path = Some(path.clone());
-    crate::plugins::instance::retain(&crate::commands::plugins::plugin_slots(&s.session));
+    crate::plugins::instance::retain(&open_plugin_slots(
+        &s.session,
+        &app.state::<ParkedSessions>(),
+    ));
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
         &super::live::heard(&s.session),
     ));
