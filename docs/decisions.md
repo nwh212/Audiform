@@ -2145,3 +2145,6 @@ The lead saw the error right at startup, with no steps before it. Starting the i
 
 ## 2026-10-31: macOS builds move to the macos-15 runner
 The macOS job failed in a scheduled brownout of the macOS 14 runner image, which GitHub retires on 2026-11-02. The release and on-request test builds now run on `macos-15` (Apple silicon), pinned rather than `macos-latest`, which twice got no runner.
+
+## 2026-10-31: Version 0.7.0
+The lead names the next release 0.7.0 (the Windows release job refuses a tag that does not match the version in `package.json`). `npm run bump -- minor` set it in all five files; notes in `docs/release-notes-0.7.0.md`. Not done for this bump: the per-release check for a better public separation model (docs/RELEASING.md step 2).
