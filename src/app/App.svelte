@@ -1005,6 +1005,7 @@
                 .then(() => actions.run("view.editor.multitrack"))
                 .catch(showError),
             onCloseSession: (id: string) => files.closeSession(id).catch(showError),
+            onNotice: showNotice,
           },
         };
       case "drive-manager":

@@ -76,6 +76,11 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
     if (!doc || exporting()) return;
     const path = picked ?? (await linkedPick().catch((e) => (showError(e), null)));
     if (!path) return;
+    const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
+    if (key(path) === key(session.path)) {
+      showNotice(`${nameOf(path)} is the session in front, and a session cannot hold its own mix. Bring the session you want it in to the front (double-click its row in the Files panel), then drag this one onto a track.`);
+      return;
+    }
     const folder = await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.");
     if (!folder) return;
     try {

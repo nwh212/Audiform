@@ -49,9 +49,11 @@
     /** Close a session (asks to save first). */
     /** Closes a session (asking to save first); resolves once it is closed or kept. */
     onCloseSession?: (id: string) => void | Promise<unknown>;
+    /** A short message in the status line (why a session row cannot be dragged yet). */
+    onNotice?: (text: string) => void;
   }
 
-  const { pool, actions, drop, onDropPaths, onOpen = () => {}, shortcutFor = () => undefined, sessions, onOpenSession = () => {}, onCloseSession = () => {} }: Props = $props();
+  const { pool, actions, drop, onDropPaths, onOpen = () => {}, shortcutFor = () => undefined, sessions, onOpenSession = () => {}, onCloseSession = () => {}, onNotice = () => {} }: Props = $props();
 
   let sessionRows = $state<SessionRow[]>([]);
   $effect(() =>
@@ -566,11 +568,21 @@
         }}
         ondblclick={() => onOpenSession(sr.id)}
         onpointerdown={(e) => {
-          // A saved session set aside drags onto a track as one clip of its mix.
-          if (!sr.front && sr.path && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-            const path = sr.path;
-            beginPathDrag(e, drop, () => [path], () => "1 session", root ?? undefined);
-          }
+          // Session rows drag onto a track like audio files: the session's mix goes in as one clip.
+          if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+          const path = sr.path;
+          const name = sr.name;
+          beginPathDrag(
+            e,
+            drop,
+            () => {
+              if (path) return [path];
+              onNotice(`Save ${name} first, then drag it onto a track.`);
+              return [];
+            },
+            () => name,
+            root ?? undefined,
+          );
         }}
         oncontextmenu={(e) => {
           e.preventDefault();

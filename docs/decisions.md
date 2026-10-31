@@ -2165,3 +2165,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 ## 2026-10-31: Builds show their commit
 - Help > About shows the commit a build was made from ("Version 0.7.0 (build d82da4d)"), and the Windows test build's download and files carry it in their names. Every test build has been 0.7.0, so an older install or download could not be told apart from a new one (the lead tested a build from before the session tabs were removed and before sessions could be dropped on a track).
+
+## 2026-10-31: Every session row in the Files panel drags like a file
+- All session rows drag now, the same way audio rows do, with the session's name on the drag. Before, only a saved session set aside could be dragged and the others did nothing, which read as session rows not dragging at all.
+- Dropping the session in front onto its own tracks says why it cannot go in (a session cannot hold its own mix) and how to do it: bring the other session to the front, then drag this one in. Dragging a never-saved session asks for it to be saved first.
