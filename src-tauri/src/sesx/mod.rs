@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::codecs::probe;
+use crate::codecs::{probe, AudioInfo};
 use crate::session::model::{
     new_id, Bus, ChannelLayout, ChannelMix, ChannelSend, Clip, ClipStretch, EffectChain,
     EffectSlot, Envelope, EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id,
@@ -855,6 +855,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
     }
 
     let base = path.parent().unwrap_or(Path::new(""));
+    let probed = probe_files(&files, base);
     // File id in the .sesx to our media id, created on first use.
     let mut media_ids: HashMap<String, Id> = HashMap::new();
     let mut missing = Vec::new();
@@ -968,7 +969,7 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
                 None => {
                     let entry = files.get(file_key);
                     let (media, found) =
-                        resolve_media(entry, base, sample_rate, stereo, source_out);
+                        resolve_media(probed.get(file_key), entry, sample_rate, stereo, source_out);
                     if !found {
                         missing.push(media.id);
                         report.missing_files.push(media.path.clone());
@@ -1053,45 +1054,62 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
     })
 }
 
-/// Finds a media file and measures it. Missing files get a placeholder
-/// built from the session so their clips still show where they were.
-fn resolve_media(
-    entry: Option<&FileEntry>,
+/// Finds and measures every file the session lists, all at the same
+/// time, so a session with dozens of files opens in about the time of
+/// its slowest file instead of the sum of them.
+fn probe_files(
+    files: &HashMap<String, FileEntry>,
     base: &Path,
+) -> HashMap<String, (PathBuf, AudioInfo)> {
+    use rayon::prelude::*;
+    files
+        .par_iter()
+        .filter_map(|(k, e)| find_file(e, base).map(|f| (k.clone(), f)))
+        .collect()
+}
+
+/// The file an entry names, where it is found: by its path relative to
+/// the session, its absolute path, or its name next to the session.
+fn find_file(e: &FileEntry, base: &Path) -> Option<(PathBuf, AudioInfo)> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(r) = &e.relative {
+        candidates.push(base.join(r.replace('\\', "/")));
+    }
+    if let Some(a) = &e.absolute {
+        candidates.push(PathBuf::from(a));
+        // A Windows path read on another system: try its file name
+        // next to the session as a last resort.
+        if let Some(name) = a.rsplit(['\\', '/']).next() {
+            candidates.push(base.join(name));
+        }
+    }
+    candidates
+        .into_iter()
+        .filter(|p| p.is_file())
+        .find_map(|p| probe(&p).ok().map(|info| (p, info)))
+}
+
+/// A media file as found and measured, or a placeholder built from the
+/// session for a missing one, so its clips still show where they were.
+fn resolve_media(
+    found: Option<&(PathBuf, AudioInfo)>,
+    entry: Option<&FileEntry>,
     session_rate: u32,
     stereo: bool,
     min_length: u64,
 ) -> (MediaRef, bool) {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(e) = entry {
-        if let Some(r) = &e.relative {
-            candidates.push(base.join(r.replace('\\', "/")));
-        }
-        if let Some(a) = &e.absolute {
-            candidates.push(PathBuf::from(a));
-            // A Windows path read on another system: try its file name
-            // next to the session as a last resort.
-            if let Some(name) = a.rsplit(['\\', '/']).next() {
-                candidates.push(base.join(name));
-            }
-        }
-    }
-    for p in &candidates {
-        if p.is_file() {
-            if let Ok(info) = probe(p) {
-                return (
-                    MediaRef {
-                        id: new_id(),
-                        path: p.clone(),
-                        relative_path: None,
-                        sample_rate: info.sample_rate,
-                        channels: info.channels,
-                        length: info.length,
-                    },
-                    true,
-                );
-            }
-        }
+    if let Some((p, info)) = found {
+        return (
+            MediaRef {
+                id: new_id(),
+                path: p.clone(),
+                relative_path: None,
+                sample_rate: info.sample_rate,
+                channels: info.channels,
+                length: info.length,
+            },
+            true,
+        );
     }
     let stored = entry
         .and_then(|e| e.absolute.clone().or_else(|| e.relative.clone()))

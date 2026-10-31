@@ -185,10 +185,15 @@ export function createRecorder(deps: RecorderDeps) {
           return;
         }
         inputLevels.update((old) => {
-          const next: Record<string, number> = {};
+          const next: Record<string, number[]> = {};
           for (const k of new Set([...Object.keys(old), ...Object.keys(st.live)])) {
-            const fall = (old[k] ?? 0) * 0.8;
-            next[k] = Math.max(st.live[k]?.peak ?? 0, fall < 0.002 ? 0 : fall);
+            const l = st.live[k];
+            const was = old[k] ?? [];
+            const n = Math.max(l ? Math.min(2, Math.max(1, l.channels)) : 0, was.length);
+            next[k] = Array.from({ length: n }, (_, c) => {
+              const fall = (was[c] ?? 0) * 0.8;
+              return Math.max(l?.peaks?.[c] ?? 0, fall < 0.002 ? 0 : fall);
+            });
           }
           return next;
         });
@@ -213,7 +218,7 @@ export function createRecorder(deps: RecorderDeps) {
     }
 
     function recordTarget(t: TrackDoc): RecordTarget {
-      return { key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: `${t.name} ${stamp()}`, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null };
+      return { key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: `${t.name} ${stamp()}`, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan };
     }
 
     /** Tracks recording in the current multitrack take, and seconds recorded at the last poll. */
@@ -251,8 +256,16 @@ export function createRecorder(deps: RecorderDeps) {
       }
     }
 
-    /** Opens or closes the armed tracks' inputs for their meters. */
+    /**
+     * Opens or closes the armed tracks' inputs for their meters. A
+     * monitored track is heard through its built-in effects at its fader
+     * and pan; a change to those while monitoring opens the input again
+     * after a moment's rest, so a dragged fader does not reopen it on
+     * every step.
+     */
     let monitorKey = "";
+    let monitorTune = "";
+    let monitorRetune: ReturnType<typeof setTimeout> | undefined;
     function syncMonitor(force = false) {
       if (take) {
         syncRecordingTracks();
@@ -260,13 +273,27 @@ export function createRecorder(deps: RecorderDeps) {
       }
       const armed = (session.current?.tracks ?? []).filter((t) => t.record_armed);
       const key = armed.map((t) => `${t.id}:${t.input ?? ""}:${t.channels}:${t.monitor_input ? 1 : 0}`).join("|");
-      if (!force && key === monitorKey) return;
-      monitorKey = key;
-      // A monitored track is heard through its built-in effects, as they are when monitoring starts.
-      const targets: RecordTarget[] = armed.map((t) => ({ key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: t.name, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null }));
-      void recordMonitor(targets).catch(() => {});
-      if (targets.length) startInputPoll();
-      else stopInputPoll();
+      const tune = armed
+        .filter((t) => t.monitor_input)
+        .map((t) => `${t.id}:${t.volume_db}:${t.pan}:${JSON.stringify(t.effects ?? null)}`)
+        .join("|");
+      const open = () => {
+        clearTimeout(monitorRetune);
+        monitorRetune = undefined;
+        monitorKey = key;
+        monitorTune = tune;
+        const targets: RecordTarget[] = armed.map((t) => ({ key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: t.name, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan }));
+        void recordMonitor(targets).catch(() => {});
+        if (targets.length) startInputPoll();
+        else stopInputPoll();
+      };
+      if (force || key !== monitorKey) {
+        open();
+        return;
+      }
+      if (tune === monitorTune) return;
+      clearTimeout(monitorRetune);
+      monitorRetune = setTimeout(open, 350);
     }
 
     /** Stops recording and places the take. The live waveform stays until the finished clip is in, so nothing is redrawn in between. */

@@ -933,6 +933,9 @@ export interface RecordTarget {
   monitor?: boolean;
   /** With monitor: the track's effects, whose built-in ones the player hears. */
   chain?: import("../stores/session").EffectChainDoc | null;
+  /** With monitor: the track's fader in dB and pan (-100 to 100), so the input is heard as the track plays. */
+  gainDb?: number;
+  pan?: number;
 }
 
 export interface Take {
@@ -947,6 +950,8 @@ export interface Take {
 
 export interface LiveLevel {
   peak: number;
+  /** The same per channel (left, right). */
+  peaks: [number, number];
   /** Channels per block (1 or 2). */
   channels: number;
   /** Per block of LIVE_BLOCK frames, per channel: min then max, 16-bit, as the peak cache stores them. */

@@ -203,6 +203,10 @@ impl Biquad {
     pub fn set(&mut self, c: Coeffs) {
         self.c = c;
     }
+
+    pub fn coeffs(&self) -> Coeffs {
+        self.c
+    }
 }
 
 /// The same filter on both channels of a stereo signal.
@@ -218,6 +222,25 @@ impl StereoBiquad {
             l: Biquad::new(c),
             r: Biquad::new(c),
         }
+    }
+
+    /// New coefficients on both channels, keeping their memory.
+    pub fn set(&mut self, c: Coeffs) {
+        self.l.set(c);
+        self.r.set(c);
+    }
+
+    /// Gives `filters` the coefficients of `fresh`, keeping their memory,
+    /// when there are as many of each. False when the counts differ, and
+    /// nothing changes: the caller rebuilds instead.
+    pub fn retune(filters: &mut [StereoBiquad], fresh: &[StereoBiquad]) -> bool {
+        if filters.len() != fresh.len() {
+            return false;
+        }
+        for (f, n) in filters.iter_mut().zip(fresh) {
+            f.set(n.l.coeffs());
+        }
+        true
     }
 
     /// Filters stereo interleaved samples in place.

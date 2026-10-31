@@ -113,6 +113,7 @@ pub fn hum_info() -> EffectInfo {
 pub struct ParametricEq {
     filters: Vec<StereoBiquad>,
     gain: f32,
+    rate: u32,
 }
 
 impl ParametricEq {
@@ -165,11 +166,20 @@ impl ParametricEq {
         Self {
             filters: c.into_iter().map(StereoBiquad::new).collect(),
             gain: 10f64.powf(p.get("gain").clamp(-80.0, 40.0) / 20.0) as f32,
+            rate,
         }
     }
 }
 
 impl Processor for ParametricEq {
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        if !StereoBiquad::retune(&mut self.filters, &fresh.filters) {
+            return false;
+        }
+        self.gain = fresh.gain;
+        true
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in &mut self.filters {
             f.process(buf);
@@ -190,6 +200,7 @@ impl Processor for ParametricEq {
 /// Notches at the mains frequency and its overtones.
 pub struct HumCut {
     filters: Vec<StereoBiquad>,
+    rate: u32,
 }
 
 impl HumCut {
@@ -204,11 +215,16 @@ impl HumCut {
                 .filter(|f| *f < nyquist)
                 .map(|f| StereoBiquad::new(Coeffs::new(Shape::Notch, rate, f, q, 0.0)))
                 .collect(),
+            rate,
         }
     }
 }
 
 impl Processor for HumCut {
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        StereoBiquad::retune(&mut self.filters, &fresh.filters)
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in &mut self.filters {
             f.process(buf);

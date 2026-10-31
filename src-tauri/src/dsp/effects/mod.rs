@@ -452,6 +452,23 @@ pub const RETIRED: [&str; 5] = [
 
 /// Builds the processor for one slot, or None for an unknown effect (or a
 /// plug-in that is not installed or would not start).
+/// The running slots of `chain` with their settings left out: what has
+/// to match for a chain to be retuned instead of rebuilt.
+fn layout_of(chain: &EffectChain) -> Vec<EffectSlot> {
+    chain
+        .slots
+        .iter()
+        .take(MAX_SLOTS)
+        .filter(|s| s.enabled)
+        .map(|s| EffectSlot {
+            params: BTreeMap::new(),
+            preset: None,
+            position: None,
+            ..s.clone()
+        })
+        .collect()
+}
+
 pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
     if crate::plugins::is_plugin(&slot.effect) {
         return crate::plugins::instance::processor(slot, rate)
@@ -583,6 +600,9 @@ pub struct ChainProcessor {
     /// Per stage: its slot id, what it is and its current settings, so
     /// automation can change one setting while it plays.
     slots: Vec<SlotState>,
+    /// The chain's shape (slots without their settings), to tell a change
+    /// of settings from a change of shape.
+    layout: Vec<EffectSlot>,
     rate: u32,
     input: f32,
     output: f32,
@@ -654,6 +674,7 @@ impl ChainProcessor {
             keys,
             key_buf: Vec::new(),
             slots,
+            layout: layout_of(chain),
             rate,
             input,
             output,
@@ -678,6 +699,61 @@ impl ChainProcessor {
     /// on audio it has already heard.
     pub fn has_plugins(&self) -> bool {
         self.stages.iter().any(|s| s.is_plugin())
+    }
+
+    /// Takes `chain` as the new settings of the same effects, in place,
+    /// so a turned dial is heard without the chain starting over. False,
+    /// with nothing changed, when the chain's shape differs (an effect
+    /// added, removed, moved, switched off, rerouted or given another
+    /// sidechain or plug-in state): it then has to be rebuilt.
+    pub fn retune(&mut self, chain: &EffectChain) -> bool {
+        if !chain.enabled || layout_of(chain) != self.layout {
+            return false;
+        }
+        let live: Vec<(Id, Vec<(String, f64)>)> = chain
+            .slots
+            .iter()
+            .take(MAX_SLOTS)
+            .filter(|s| s.enabled)
+            .map(|s| {
+                (
+                    s.id,
+                    s.params.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+                )
+            })
+            .collect();
+        for (id, params) in live {
+            // A setting no longer in the list goes back to its default.
+            let gone: Vec<String> = self
+                .slots
+                .iter()
+                .find(|s| s.0 == id)
+                .map(|s| {
+                    s.2.keys()
+                        .filter(|k| !params.iter().any(|(pk, _)| pk == *k))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            for k in gone {
+                if let Some(d) = self
+                    .slots
+                    .iter()
+                    .find(|s| s.0 == id)
+                    .and_then(|s| s.1.params.iter().find(|p| p.key == k))
+                    .map(|p| p.default)
+                {
+                    self.set_param(id, &k, d);
+                }
+            }
+            for (k, v) in params {
+                self.set_param(id, &k, v);
+            }
+        }
+        self.input = db_to_gain(chain.input_gain_db.clamp(-48.0, 24.0));
+        self.output = db_to_gain(chain.output_gain_db.clamp(-48.0, 24.0));
+        self.mix = chain.mix.clamp(0.0, 1.0) as f32;
+        true
     }
 
     /// Changes one setting of one effect while it plays (automation). An
@@ -1016,5 +1092,52 @@ mod tests {
         // Fully dry, but the impulse arrives after the chain's latency.
         assert_eq!(b[lat * 2], 0.5);
         assert_eq!(b[0], 0.0);
+    }
+
+    #[test]
+    fn retune_keeps_the_effects_running() {
+        let rate = 48_000;
+        let mut chain = EffectChain {
+            slots: vec![
+                slot("altaudio.dynamics", &[("threshold", -30.0), ("ratio", 8.0)]),
+                slot("altaudio.parametric_eq", &[("b3_gain", 6.0)]),
+            ],
+            ..EffectChain::default()
+        };
+        let mut p = ChainProcessor::new(&chain, rate).unwrap();
+        let tone = |n: usize| -> Vec<f32> {
+            (0..n)
+                .flat_map(|i| {
+                    let v = (i as f32 * 1000.0 / rate as f32 * std::f32::consts::TAU).sin() * 0.5;
+                    [v, v]
+                })
+                .collect()
+        };
+        let mut b = tone(rate as usize);
+        p.process(&mut b);
+        let peak_of = |v: &[f32]| v.iter().fold(0f32, |m, x| m.max(x.abs()));
+        let before = peak_of(&b[b.len() - 512..]);
+        // The same effects, other settings: retuned in place. The
+        // compressor keeps its gain reduction, so the level only moves by
+        // the small change asked for and does not jump back to unity.
+        chain.slots[0].params.insert("threshold".into(), -31.0);
+        chain.slots[1].params.insert("b3_gain".into(), 5.0);
+        assert!(p.retune(&chain));
+        let mut c = tone(256);
+        p.process(&mut c);
+        let peak = peak_of(&c);
+        assert!(peak < before * 1.2, "level jumped from {before} to {peak}");
+        // A fresh chain would start at unity gain: a far louder block.
+        let mut fresh = ChainProcessor::new(&chain, rate).unwrap();
+        let mut d = tone(256);
+        fresh.process(&mut d);
+        assert!(peak_of(&d) > before * 1.5);
+        // Another effect, or one switched off: a change of shape.
+        let mut off = chain.clone();
+        off.slots[1].enabled = false;
+        assert!(!p.retune(&off));
+        let mut more = chain.clone();
+        more.slots.push(slot("altaudio.hum_cut", &[]));
+        assert!(!p.retune(&more));
     }
 }

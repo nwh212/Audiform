@@ -100,6 +100,14 @@ pub(crate) fn swap_fx_ch(
     rate: u32,
     names: &[String],
 ) -> bool {
+    // The same effects with other settings: turn the running chain's dials
+    // instead of building a new chain and warming it up, which was heard as
+    // a short pause on every change.
+    if let Some(old) = slot.as_mut() {
+        if old.chain.retune(chain) {
+            return true;
+        }
+    }
     let new = ChainProcessor::with_channels(chain, rate, names);
     let old_lat = slot.as_ref().map_or(0, |f| f.latency);
     if new.as_ref().map_or(0, |c| c.latency() as u64) != old_lat {

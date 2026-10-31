@@ -116,6 +116,7 @@ pub struct Compressor {
     linked: bool,
     /// Gain reduction in dB per channel (only [0] when linked).
     gr: [f32; 2],
+    rate: u32,
 }
 
 impl Compressor {
@@ -129,6 +130,7 @@ impl Compressor {
             release: coef(p.get("release"), rate),
             linked: p.on("linked"),
             gr: [0.0; 2],
+            rate,
         }
     }
 
@@ -175,6 +177,12 @@ impl Compressor {
 impl Processor for Compressor {
     fn process(&mut self, buf: &mut [f32]) {
         self.run(buf, None);
+    }
+    fn update(&mut self, p: &Params) -> bool {
+        let gr = self.gr;
+        *self = Self::new(p, self.rate);
+        self.gr = gr;
+        true
     }
     fn process_keyed(&mut self, buf: &mut [f32], key: &[f32]) {
         self.run(buf, Some(key));
@@ -265,6 +273,7 @@ pub struct Limiter {
     true_peak: bool,
     hist: [[f32; TP_TAPS]; 2],
     weights: [[f32; TP_TAPS]; 3],
+    rate: u32,
     /// Tests: frames the gain did not bring under the ceiling by itself.
     #[cfg(test)]
     clipped: u64,
@@ -329,6 +338,7 @@ impl Limiter {
             paths: [LimitPath::new(ramp), LimitPath::new(ramp)],
             delay: vec![0.0; lookahead * 2],
             delay_at: 0,
+            rate,
             #[cfg(test)]
             clipped: 0,
         }
@@ -346,6 +356,18 @@ impl Limiter {
 impl Processor for Limiter {
     fn process(&mut self, buf: &mut [f32]) {
         self.run(buf, None);
+    }
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        // Another look-ahead changes the delay line: a rebuild then.
+        if fresh.lookahead != self.lookahead || fresh.true_peak != self.true_peak {
+            return false;
+        }
+        self.ceiling = fresh.ceiling;
+        self.boost = fresh.boost;
+        self.release = fresh.release;
+        self.linked = fresh.linked;
+        true
     }
     /// Listens to `key` for its peaks: on a speaker bed, the loudest
     /// channel of the whole bed, so every pair of speakers is turned down
@@ -436,6 +458,7 @@ pub struct Gate {
     env: f32,
     held: u32,
     gain: f32,
+    rate: u32,
 }
 
 impl Gate {
@@ -458,6 +481,7 @@ impl Gate {
             env: 0.0,
             held: 0,
             gain: floor,
+            rate,
         }
     }
 }
@@ -465,6 +489,14 @@ impl Gate {
 impl Processor for Gate {
     fn process(&mut self, buf: &mut [f32]) {
         self.run(buf, None);
+    }
+    fn update(&mut self, p: &Params) -> bool {
+        let (env, held, gain) = (self.env, self.held, self.gain);
+        *self = Self::new(p, self.rate);
+        self.env = env;
+        self.held = held.min(self.hold);
+        self.gain = gain.max(self.floor);
+        true
     }
     fn process_keyed(&mut self, buf: &mut [f32], key: &[f32]) {
         self.run(buf, Some(key));
@@ -549,6 +581,14 @@ impl DeEsser {
 }
 
 impl Processor for DeEsser {
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        self.side.set(fresh.side.l.coeffs());
+        self.freq = fresh.freq;
+        self.threshold = fresh.threshold;
+        self.most = fresh.most;
+        true
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in buf.as_chunks_mut::<2>().0 {
             let sl = self.side.l.run(f[0]);
@@ -600,6 +640,7 @@ pub struct SpeechLeveler {
     /// Gain follower (slow, the Response setting).
     gain_coef: f32,
     gain_db: f32,
+    rate: u32,
 }
 
 impl SpeechLeveler {
@@ -613,11 +654,19 @@ impl SpeechLeveler {
             ms: 0.0,
             gain_coef: coef(p.get("speed"), rate),
             gain_db: 0.0,
+            rate,
         }
     }
 }
 
 impl Processor for SpeechLeveler {
+    fn update(&mut self, p: &Params) -> bool {
+        let (ms, gain_db) = (self.ms, self.gain_db);
+        *self = Self::new(p, self.rate);
+        self.ms = ms;
+        self.gain_db = gain_db;
+        true
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in buf.as_chunks_mut::<2>().0 {
             let x = (f[0] * f[0] + f[1] * f[1]) * 0.5;

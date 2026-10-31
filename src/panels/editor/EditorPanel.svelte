@@ -739,14 +739,16 @@
   /** Value readout beside the pointer while dragging an envelope point. */
   let envTip = $state<{ x: number; y: number; text: string } | null>(null);
   let hoverCursor = $state("default");
-  let levels = $state<Record<string, number>>({});
+  let levels = $state<Record<string, number[]>>({});
   /** Playback level of a track's channel, 0 when stopped. */
   /** A track's meter: the input while armed, otherwise playback (over lights stay after stopping). */
   function meterOf(track: TrackDoc): readonly [MeterLevel, MeterLevel] | null {
     if (track.record_armed) {
-      const v = levels[track.id] ?? 0;
-      const m = { level: v, peak: v, over: v >= 1 };
-      return [m, m];
+      // A stereo input meters as two; a mono one shows on both bars.
+      const v = levels[track.id] ?? [];
+      const bar = (x: number) => ({ level: x, peak: x, over: x >= 1 });
+      const l = v[0] ?? 0;
+      return [bar(l), bar(v.length > 1 ? v[1]! : l)];
     }
     return tp?.tracks[track.id] ?? null;
   }

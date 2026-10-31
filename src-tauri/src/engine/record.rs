@@ -49,6 +49,25 @@ pub struct RecordTarget {
     /// built-in effects in it, as they were when monitoring started.
     #[serde(default)]
     pub chain: Option<EffectChain>,
+    /// With `monitor`: the track's fader, in dB, so the input is heard at
+    /// the level the track plays at.
+    #[serde(default, alias = "gainDb")]
+    pub gain_db: f64,
+    /// With `monitor`: the track's pan, -100 (left) to 100 (right).
+    #[serde(default)]
+    pub pan: f64,
+}
+
+impl RecordTarget {
+    /// Left and right gains for monitoring: the fader and the same pan
+    /// law as playback (one side turned down, the other left as it is).
+    fn monitor_gains(&self) -> [f32; 2] {
+        let g = 10f64.powf(self.gain_db.clamp(-96.0, 24.0) / 20.0);
+        let pan = (self.pan / 100.0).clamp(-1.0, 1.0);
+        let left = if pan > 0.0 { 1.0 - pan } else { 1.0 };
+        let right = if pan < 0.0 { 1.0 + pan } else { 1.0 };
+        [(g * left) as f32, (g * right) as f32]
+    }
 }
 
 /// A finished take.
@@ -225,8 +244,10 @@ pub const LIVE_BLOCK: usize = 32;
 /// Live level and waveform for one target, filled by the disk thread.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Live {
-    /// Peak since the last status call, 0 to 1.
+    /// Peak since the last status call, 0 to 1, over every channel.
     pub peak: f32,
+    /// The same per channel (left, right), so a stereo input meters as two.
+    pub peaks: [f32; 2],
     /// Channels per block (1 or 2).
     pub channels: usize,
     /// Per block of [`LIVE_BLOCK`] frames since the last call, per channel:
@@ -292,6 +313,9 @@ impl LiveTap {
                     tap.lo[k] = tap.lo[k].min(v);
                     tap.hi[k] = tap.hi[k].max(v);
                     entry.peak = entry.peak.max(v.abs());
+                    if k < 2 {
+                        entry.peaks[k] = entry.peaks[k].max(v.abs());
+                    }
                 }
                 tap.count += 1;
                 if tap.count == LIVE_BLOCK {
@@ -321,10 +345,12 @@ fn monitor_chain(chain: Option<&EffectChain>, rate: u32) -> Option<ChainProcesso
 
 /// Mixes the monitored targets' channels to stereo for the speakers. A
 /// mono target goes to both sides; a stereo one keeps its sides. A target
-/// with a Voice Chain is heard through its built-in effects.
+/// with a Voice Chain is heard through its built-in effects, then at its
+/// track's fader and pan.
 pub struct MonitorMix {
     picks: Vec<Vec<usize>>,
     chains: Vec<Option<ChainProcessor>>,
+    gains: Vec<[f32; 2]>,
     device_channels: usize,
     side: Vec<f32>,
     sum: Vec<f32>,
@@ -346,9 +372,11 @@ impl MonitorMix {
             .iter()
             .map(|(t, _)| monitor_chain(t.chain.as_ref(), rate))
             .collect();
+        let gains = monitored.iter().map(|(t, _)| t.monitor_gains()).collect();
         (!picks.is_empty()).then_some(Self {
             picks,
             chains,
+            gains,
             device_channels: device_channels.max(1),
             side: Vec::new(),
             sum: Vec::new(),
@@ -360,7 +388,12 @@ impl MonitorMix {
         let frames = interleaved.len() / self.device_channels;
         self.sum.clear();
         self.sum.resize(frames * 2, 0.0);
-        for (chans, chain) in self.picks.iter().zip(self.chains.iter_mut()) {
+        for ((chans, chain), gain) in self
+            .picks
+            .iter()
+            .zip(self.chains.iter_mut())
+            .zip(&self.gains)
+        {
             self.side.clear();
             for frame in interleaved.chunks_exact(self.device_channels) {
                 let at = |i: usize| {
@@ -381,8 +414,8 @@ impl MonitorMix {
             if let Some(c) = chain {
                 c.process(&mut self.side);
             }
-            for (s, v) in self.sum.iter_mut().zip(&self.side) {
-                *s += *v;
+            for (i, (s, v)) in self.sum.iter_mut().zip(&self.side).enumerate() {
+                *s += *v * gain[i & 1];
             }
         }
         out.extend(self.sum.iter().map(|v| v.clamp(-1.0, 1.0)));

@@ -21,8 +21,8 @@ export interface RecordingState {
 
 export const recording = writable<RecordingState>({ active: false, seconds: 0, peak: 0 });
 
-/** Input level per track id (0 to 1, falling smoothly), while inputs are open. */
-export const inputLevels = writable<Record<string, number>>({});
+/** Input level per track id, per channel (0 to 1, falling smoothly), while inputs are open. One entry for a mono input. */
+export const inputLevels = writable<Record<string, number[]>>({});
 
 /**
  * The waveform of one take while it records, kept in the same form as a

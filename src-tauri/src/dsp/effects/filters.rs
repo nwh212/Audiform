@@ -109,6 +109,8 @@ pub fn band_infos() -> [EffectInfo; 3] {
 pub struct BandEq {
     filters: Vec<StereoBiquad>,
     gain: f32,
+    bands: usize,
+    rate: u32,
 }
 
 impl BandEq {
@@ -131,11 +133,21 @@ impl BandEq {
         Self {
             filters,
             gain: db_to_gain(p.get("output")),
+            bands: n,
+            rate,
         }
     }
 }
 
 impl Processor for BandEq {
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(self.bands, p, self.rate);
+        if !StereoBiquad::retune(&mut self.filters, &fresh.filters) {
+            return false;
+        }
+        self.gain = fresh.gain;
+        true
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in &mut self.filters {
             f.process(buf);
@@ -192,33 +204,41 @@ pub fn notch_info() -> EffectInfo {
     }
 }
 
-pub struct Notches(Vec<StereoBiquad>);
+pub struct Notches {
+    filters: Vec<StereoBiquad>,
+    rate: u32,
+}
 
 impl Notches {
     pub fn new(p: &Params, rate: u32) -> Self {
         let q = p.get("width");
-        Self(
-            NOTCH_KEYS
+        Self {
+            filters: NOTCH_KEYS
                 .iter()
                 .filter(|k| p.on(k[0]))
                 .map(|k| {
                     StereoBiquad::new(Coeffs::new(Shape::Peak, rate, p.get(k[1]), q, p.get(k[2])))
                 })
                 .collect(),
-        )
+            rate,
+        }
     }
 }
 
 impl Processor for Notches {
     fn process(&mut self, buf: &mut [f32]) {
-        for f in &mut self.0 {
+        for f in &mut self.filters {
             f.process(buf);
         }
     }
     fn reset(&mut self) {
-        for f in &mut self.0 {
+        for f in &mut self.filters {
             f.reset();
         }
+    }
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        StereoBiquad::retune(&mut self.filters, &fresh.filters)
     }
 }
 
@@ -360,6 +380,7 @@ pub struct Precision {
     /// Band-stop: a low-pass and a high-pass in parallel, summed.
     split: Option<(Vec<StereoBiquad>, Vec<StereoBiquad>)>,
     scratch: Vec<f32>,
+    rate: u32,
 }
 
 impl Precision {
@@ -399,11 +420,30 @@ impl Precision {
             chain,
             split,
             scratch: Vec::new(),
+            rate,
         }
     }
 }
 
 impl Processor for Precision {
+    fn update(&mut self, p: &Params) -> bool {
+        let fresh = Self::new(p, self.rate);
+        let same = fresh.chain.len() == self.chain.len()
+            && match (&fresh.split, &self.split) {
+                (None, None) => true,
+                (Some((fl, fh)), Some((l, h))) => fl.len() == l.len() && fh.len() == h.len(),
+                _ => false,
+            };
+        if !same {
+            return false;
+        }
+        StereoBiquad::retune(&mut self.chain, &fresh.chain);
+        if let (Some((fl, fh)), Some((l, h))) = (&fresh.split, self.split.as_mut()) {
+            StereoBiquad::retune(l, fl);
+            StereoBiquad::retune(h, fh);
+        }
+        true
+    }
     fn process(&mut self, buf: &mut [f32]) {
         for f in &mut self.chain {
             f.process(buf);
