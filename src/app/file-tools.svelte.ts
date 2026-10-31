@@ -40,6 +40,9 @@ export interface FileToolsDeps {
   collectMedia: (sessionFile: string, everything: boolean) => Promise<number>;
   plural: (n: number, one: string, many?: string) => string;
   usedMedia: () => Set<string>;
+  /** Which of these files have unsaved edits in the Waveform editor. */
+  unsavedFiles: (ids: readonly string[]) => string[];
+  ask: (title: string, message: string, buttons: { label: string; value: string; primary?: boolean }[]) => Promise<string>;
   closeWaveIfRemoved: (ids: readonly string[], remove: () => Promise<void>) => Promise<void>;
   askNewSession: () => Promise<void>;
   pluginSync: PluginSync;
@@ -54,7 +57,7 @@ export interface FileToolsDeps {
 }
 
 export function createFileTools(deps: FileToolsDeps) {
-  const { actions, showNotice, showError, promptText, openPaths, importPaths, exitSafely, measureLoudness, KEY_LOUD_TARGET, KEY_LOUD_REGION, exp, collectMedia, plural, usedMedia, closeWaveIfRemoved, askNewSession, pluginSync, files, KEY_CHAPTER_FORMAT, markerDoc, exportStems, loud, exporting, set_loud, set_exporting } = deps;
+  const { actions, showNotice, showError, promptText, openPaths, importPaths, exitSafely, measureLoudness, KEY_LOUD_TARGET, KEY_LOUD_REGION, exp, collectMedia, plural, usedMedia, unsavedFiles, ask, closeWaveIfRemoved, askNewSession, pluginSync, files, KEY_CHAPTER_FORMAT, markerDoc, exportStems, loud, exporting, set_loud, set_exporting } = deps;
 
 
   /**
@@ -169,7 +172,19 @@ export function createFileTools(deps: FileToolsDeps) {
         id: "file.close-unused",
         run: async () => {
           const used = usedMedia();
-          const unused = mediaPool.current.items.filter((it) => !used.has(it.id)).map((it) => it.id);
+          let unused = mediaPool.current.items.filter((it) => !used.has(it.id)).map((it) => it.id);
+          // Files with unsaved edits are not closed without asking.
+          const unsaved = unsavedFiles(unused);
+          if (unsaved.length) {
+            const names = unsaved.map((id) => mediaPool.get(id)?.path.split(/[\\/]/).pop() ?? "").join(", ");
+            const v = await ask("Unsaved changes", `${plural(unsaved.length, "unused file")} ${unsaved.length === 1 ? "has" : "have"} edits not saved yet: ${names}. Close ${unsaved.length === 1 ? "it" : "them"} too and lose the edits?`, [
+              { label: "Keep Them Open", value: "keep", primary: true },
+              { label: "Close and Discard Edits", value: "close" },
+              { label: "Cancel", value: "cancel" },
+            ]);
+            if (v === "cancel") return;
+            if (v === "keep") unused = unused.filter((id) => !unsaved.includes(id));
+          }
           await closeWaveIfRemoved(unused, () => mediaPool.remove(unused, sessionHistory));
           showNotice(unused.length ? `Removed ${unused.length} unused ${unused.length === 1 ? "file" : "files"}.` : "Every file is used by a clip.");
         },

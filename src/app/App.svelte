@@ -162,7 +162,7 @@
   import type { NewAudioSettings } from "./NewAudioFileDialog.svelte";
   import type { NewSessionSettings } from "./NewSessionDialog.svelte";
   import { liveCopies, samePath } from "../stores/wave";
-  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, newWaveFromClips, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
+  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, parkedUnsavedPaths, newWaveFromClips, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
   import { get, writable } from "svelte/store";
   import type { SessionRow } from "../panels/files/session-row";
   import { recordControl } from "../stores/record";
@@ -468,9 +468,20 @@
 
   const selectedTrack = () => session.current?.tracks.find((t) => t.id === editor.current().selectedTrack) ?? null;
 
+  /** The pool's files among `ids` with unsaved edits in the Waveform editor (open or set aside). */
+  function unsavedFiles(ids: readonly string[]): string[] {
+    const f = waveFile.current();
+    const dirty = new Set(parkedUnsavedPaths().map((p) => p.toLowerCase()));
+    if (f && !f.untitled && waveHistory.current.dirty) dirty.add(f.path.toLowerCase());
+    return ids.filter((id) => dirty.has(mediaPool.get(id)?.path.toLowerCase() ?? ""));
+  }
+
+  /** The files a clip plays, in the session in front or any set aside. */
   function usedMedia(): Set<string> {
     const used = new Set<string>();
     for (const t of session.current?.tracks ?? []) for (const c of t.clips) used.add(c.media_id);
+    const elsewhere = new Set(files.others.flatMap((p) => p.media ?? []).map((x) => x.toLowerCase()));
+    if (elsewhere.size) for (const it of mediaPool.current.items) if (elsewhere.has(it.path.toLowerCase())) used.add(it.id);
     return used;
   }
 
@@ -1635,6 +1646,8 @@
     collectMedia,
     plural,
     usedMedia,
+    unsavedFiles,
+    ask,
     closeWaveIfRemoved,
     askNewSession,
     pluginSync,

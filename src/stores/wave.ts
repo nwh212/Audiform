@@ -69,6 +69,11 @@ function adopt(doc: WaveDocRaw<SessionDoc>): void {
 const parked = new Map<string, { history: StashedHistory; dirty: boolean; format: string; bitDepth: number | null; untitled: boolean }>();
 
 /** Names of set-aside files with unsaved edits. */
+/** The paths of the files set aside with unsaved edits. */
+export function parkedUnsavedPaths(): string[] {
+  return [...parked.entries()].filter(([, v]) => v.dirty).map(([p]) => p);
+}
+
 export function parkedUnsaved(): string[] {
   return [...parked.entries()].filter(([, v]) => v.dirty).map(([p]) => p.split(/[\\/]/).pop() ?? p);
 }

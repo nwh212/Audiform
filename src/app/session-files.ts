@@ -45,6 +45,12 @@ export interface SessionFileBackend {
   forget?(id: string): Promise<void>;
 }
 
+/** The paths of the files a session's clips play. */
+function usedPaths(doc: SessionDoc): string[] {
+  const ids = new Set(doc.tracks.flatMap((t) => t.clips.map((c) => c.media_id)));
+  return doc.media.filter((m) => ids.has(m.id)).map((m) => m.path);
+}
+
 /** An open session waiting behind the one in front, with its undo history. */
 export interface ParkedSession {
   id: string;
@@ -54,6 +60,8 @@ export interface ParkedSession {
   seconds: number;
   sampleRate: number;
   history: StashedHistory;
+  /** The paths of the files its clips play, so they count as used. */
+  media?: string[];
 }
 
 export type Choice = "save" | "discard" | "cancel";
@@ -196,7 +204,7 @@ export class SessionFiles {
     const history = await this.d.stack.stash();
     this.parked = [
       ...this.parked.filter((p) => p.id !== doc.id),
-      { id: doc.id, name: this.name, path: this.d.session.path, dirty, seconds: sessionEnd(doc) / Math.max(1, doc.sample_rate), sampleRate: doc.sample_rate, history },
+      { id: doc.id, name: this.name, path: this.d.session.path, dirty, seconds: sessionEnd(doc) / Math.max(1, doc.sample_rate), sampleRate: doc.sample_rate, history, media: usedPaths(doc) },
     ];
     this.d.onSessions?.();
     return true;

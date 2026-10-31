@@ -1961,3 +1961,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Effect windows keep their how-to text behind an (i)
 - An effect window's title bar has an (i) button. Off (the default), the window shows only its controls and anything that says what state it is in (what was learned, a stopped plug-in, warnings). On, it shows what the effect does at the top and the how-to notes next to the controls they explain. The notes are marked with a `how` class in each effect's panel, so new panels only need to add that class.
+
+## 2026-10-31: Files panel menu on empty space; Remove Unused Files counts every open session
+- Right-clicking empty space in the Files panel opens the panel's own menu: New (Multitrack Session, Audio File), Open, Import Files, Import Folder, Close Selected Files, Close All Files, Remove Unused Files, Try Reading Failed Files Again and Select All. Only existing shortcuts are shown. Right-clicking a file keeps the file menu.
+- Remove Unused Files (File menu, was Close Unused Media) now keeps every file a clip plays in any open session, the ones set aside too, not only the session in front. Unused files with unsaved edits in the Waveform editor are not closed without asking: Keep Them Open, Close and Discard Edits, or Cancel.

@@ -105,7 +105,7 @@ export const MENUS: readonly Menu[] = [
       sep,
       item("file.close", "Close"),
       item("file.close-all", "Close All"),
-      item("file.close-unused", "Close Unused Media"),
+      item("file.close-unused", "Remove Unused Files"),
       item("file.collect-media", "Collect Session Media"),
       sep,
       sub("Export", [

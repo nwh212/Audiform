@@ -120,7 +120,7 @@
   let sortKey = $state<SortKey | null>(null);
   let descending = $state(false);
   let anchor = $state<string | null>(null);
-  let menu = $state<{ x: number; y: number } | null>(null);
+  let menu = $state<{ x: number; y: number; empty?: boolean } | null>(null);
   /** The channel menu of one file: All, or one channel to work with or copy. */
   let chanMenu = $state<{ x: number; y: number; path: string; channels: number } | null>(null);
   const NAMES: Record<string, string> = { L: "Left", R: "Right", C: "Center", LFE: "Low frequency", M: "Mono" };
@@ -301,8 +301,57 @@
 
   function openMenu(e: MouseEvent) {
     e.preventDefault();
-    menu = { x: e.clientX, y: e.clientY };
+    // Empty space gets the panel's own menu: new, open, import, close.
+    const onRow = !!(e.target as Element | null)?.closest(".row");
+    menu = { x: e.clientX, y: e.clientY, empty: !onRow };
   }
+
+  /** The menu for empty space in the panel. */
+  const emptyItems = $derived.by((): ContextItem[] => {
+    void tick;
+    const selected = snap ? pool.selectedItems() : [];
+    const failed = snap ? pool.current.items.filter((it) => it.status === "error") : [];
+    const item = (id: string, label: string): ContextItem => ({
+      kind: "item",
+      label,
+      run: () => run(id),
+      disabled: !actions.isEnabled(id),
+      shortcut: shortcutFor(id),
+    });
+    const out: ContextItem[] = [
+      { kind: "sub", label: "New", items: [item("file.new-session", "Multitrack Session..."), item("file.new-audio", "Audio File...")] },
+      item("file.open", "Open..."),
+      item("file.import-files", "Import Files..."),
+      item("file.import-folder", "Import Folder..."),
+      { kind: "sep" },
+      {
+        kind: "item",
+        label: selected.length > 1 ? `Close ${selected.length} Selected Files` : "Close Selected Files",
+        run: () => run("edit.delete"),
+        disabled: selected.length === 0,
+      },
+      {
+        kind: "item",
+        label: "Close All Files",
+        run: () => {
+          pool.selectAll();
+          run("edit.delete");
+        },
+        disabled: !snap || pool.current.items.length === 0,
+      },
+      item("file.close-unused", "Remove Unused Files"),
+      { kind: "sep" },
+      {
+        kind: "item",
+        label: failed.length > 1 ? `Try Reading ${failed.length} Failed Files Again` : "Try Reading Failed Files Again",
+        run: () => failed.forEach((it) => pool.retry(it.id)),
+        disabled: failed.length === 0,
+      },
+      { kind: "sep" },
+      item("edit.select-all", "Select All"),
+    ];
+    return out;
+  });
 
   const menuItems = $derived.by((): ContextItem[] => {
     void tick;
@@ -638,7 +687,7 @@
 </section>
 
 {#if menu}
-  <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => (menu = null)} />
+  <ContextMenu x={menu.x} y={menu.y} items={menu.empty ? emptyItems : menuItems} onClose={() => (menu = null)} />
 {/if}
 {#if chanMenu}
   <ContextMenu x={chanMenu.x} y={chanMenu.y} items={chanItems(chanMenu.path, chanMenu.channels)} onClose={() => (chanMenu = null)} />
