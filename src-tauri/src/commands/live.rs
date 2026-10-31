@@ -219,6 +219,7 @@ mod tests {
             sample_rate: 48_000,
             channels: 2,
             length: 1_000,
+            linked: None,
         });
         assert!(matches!(heard(&s), Cow::Borrowed(_)));
         LIVE.lock().unwrap().insert(

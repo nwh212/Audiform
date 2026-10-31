@@ -343,6 +343,7 @@ mod tests {
             sample_rate: 48_000,
             channels: 2,
             length: 480_000,
+            linked: None,
         }
     }
 

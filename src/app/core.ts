@@ -1027,6 +1027,32 @@ export function audioDriver(): Promise<AudioDriver> {
 }
 
 /** ASIO (true) or the system driver (false), from the next stream opened; with ASIO, which driver (null lets the app pick) and the buffer size (0 keeps the driver's own). */
+/** A session's whole mix, rendered for a linked clip. */
+export interface LinkedRender {
+  path: string;
+  stamp: string;
+  name: string;
+  sampleRate: number;
+  frames: number;
+  peak: number;
+  cancelled: boolean;
+}
+
+/** Picks a session to place as a clip. Null on cancel. */
+export function linkedPick(): Promise<string | null> {
+  return invoke<string | null>("linked_pick");
+}
+
+/** Renders the session file's whole mix into `folder`. Emits `export-progress`. */
+export function linkedRender(sessionPath: string, folder: string): Promise<LinkedRender> {
+  return invoke<LinkedRender>("linked_render", { session: sessionPath, folder });
+}
+
+/** Which linked media files' sessions were saved since they were rendered, or are gone. */
+export function linkedCheck(items: { id: string; session: string; stamp: string }[]): Promise<{ id: string; stale: boolean; missing: boolean }[]> {
+  return invoke("linked_check", { items });
+}
+
 /** Writes one line to the audio log (for errors with no detail of their own). */
 export function logLine(line: string): Promise<void> {
   return invoke<void>("log_line", { line });

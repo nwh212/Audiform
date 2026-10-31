@@ -928,6 +928,7 @@ mod tests {
             sample_rate: file_rate,
             channels: 2,
             length: 441_000,
+            linked: None,
         };
         let mid = m.id;
         s.media.push(m);

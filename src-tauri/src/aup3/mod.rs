@@ -564,6 +564,7 @@ pub fn import(path: &Path, audio_dir: &Path) -> Result<Imported, Aup3Error> {
             sample_rate: s.rate,
             channels: s.channels.len() as u16,
             length: frames,
+            linked: None,
         });
     }
     session.media = sources.iter().filter_map(|s| s.media.clone()).collect();

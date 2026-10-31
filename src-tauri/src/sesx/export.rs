@@ -500,6 +500,7 @@ mod tests {
             sample_rate: 48_000,
             channels: 2,
             length: 480_000,
+            linked: None,
         };
         let mut t = Track::new("Host <1>", ChannelLayout::Mono);
         t.volume_db = -6.0;

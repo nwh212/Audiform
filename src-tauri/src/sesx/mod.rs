@@ -1100,6 +1100,7 @@ fn resolve_media(
                 sample_rate: info.sample_rate,
                 channels: info.channels,
                 length: info.length,
+                linked: None,
             },
             true,
         );
@@ -1117,6 +1118,7 @@ fn resolve_media(
                 .and_then(|e| e.channels)
                 .unwrap_or(if stereo { 2 } else { 1 }),
             length: min_length,
+            linked: None,
         },
         false,
     )

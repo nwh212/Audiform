@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { startMetronome } from "../stores/metronome";
-  import { onMount, type Component } from "svelte";
+  import { onDestroy, onMount, type Component } from "svelte";
   import {
     workspaceDelete,
     exitApp,
@@ -79,6 +79,7 @@
   import { createWaveTools } from "./wave-tools.svelte";
   import { createExportTools } from "./export-tools.svelte";
   import { createSeparationTools } from "./separation-tools.svelte";
+  import { createLinkedTools } from "./linked-tools.svelte";
   import type { AddTracksValues } from "./AddTracksDialog.svelte";
   import { takeAnchor } from "../panels/editor/insert-anchor";
   import { PluginSync } from "./plugin-sync";
@@ -1301,6 +1302,20 @@
 
   // Audio Separation (see separation-tools.svelte.ts).
   const separationTools = createSeparationTools({ showError, showNotice, ask, inWave });
+
+  // Linked sessions: another session's mix as one clip (see linked-tools.svelte.ts).
+  const linkedTools = createLinkedTools({
+    actions,
+    showError,
+    showNotice,
+    exporting: () => exporting,
+    setExporting: (v) => (exporting = v),
+    folderBesideSession,
+    playheadNow,
+    uuid,
+    openSession: (p) => files.open(p),
+  });
+  onDestroy(() => linkedTools.destroy());
 
   // Clip commands (see clip-tools.svelte.ts).
   const clipTools = createClipTools({

@@ -224,6 +224,7 @@ pub fn session() -> Session {
             sample_rate: 44_100,
             channels: 1,
             length: 44_100 * 3_600,
+            linked: None,
         }],
         tracks: vec![track(), {
             let mut guest = track();

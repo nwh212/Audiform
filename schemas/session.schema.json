@@ -925,6 +925,24 @@
         "right"
       ]
     },
+    "LinkedSession": {
+      "description": "The session a linked clip's file was rendered from.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The session file.",
+          "type": "string"
+        },
+        "stamp": {
+          "description": "Its size and modified time when the file was rendered, to tell\nwhen it has been saved since.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "stamp"
+      ]
+    },
     "Marker": {
       "description": "A point or range marker on the session timeline.",
       "type": "object",
@@ -1080,6 +1098,17 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "linked": {
+          "description": "The file is the rendered mix of another session: which one, so the\nclip can be brought up to date when that session is saved again.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkedSession"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "path": {
           "description": "Absolute path when the session was last saved.",

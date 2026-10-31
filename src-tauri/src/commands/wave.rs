@@ -173,6 +173,7 @@ pub fn session_for(info: &codecs::AudioInfo) -> Result<Session, String> {
                         sample_rate: info.sample_rate,
                         channels: info.channels,
                         length: info.length,
+                        linked: None,
                     },
                 },
                 Op::AddTrack {

@@ -2148,3 +2148,11 @@ The macOS job failed in a scheduled brownout of the macOS 14 runner image, which
 
 ## 2026-10-31: Version 0.7.0
 The lead names the next release 0.7.0 (the Windows release job refuses a tag that does not match the version in `package.json`). `npm run bump -- minor` set it in all five files; notes in `docs/release-notes-0.7.0.md`. Not done for this bump: the per-release check for a better public separation model (docs/RELEASING.md step 2).
+
+## 2026-10-31: Linked sessions: another session's mix as one clip
+The lead's workflow: record an instrumental in one session, then bounce it so the heavy session does not weigh on the next one, by hand, again after every change. Multitrack > Insert Session as Clip does that and keeps it current.
+- Pick a session file (Audiform's own, or one from the other editor). Its whole mix is rendered (32-bit float stereo, every plug-in included, as a mixdown) into a Linked Sessions folder beside this session, and placed on the selected audio track (or a new track named after it) at the playhead. One undo step takes it out.
+- The clip plays that file like any other, so the session inside costs one audio clip of playback, however many tracks and plug-ins it has.
+- Its media remembers the session file and a stamp of it (size and modified time) when rendered. When this session comes to the front, and when the app window comes back into focus, linked clips are checked; one whose session was saved since is rendered again and the new file swapped in (one undo step, "Update Linked Session"). A longer or shorter mix moves the clip's end as an edited file does. Decided: updates follow saves, not every edit, and the clip is one stereo mix, not stems; both can grow later without changing the clip.
+- Right-click a linked clip: Open Linked Session brings it to the front for editing; Update Linked Session Now renders it again at once. A session cannot hold its own mix; a session file that moved keeps its last mix, with a notice once.
+- Stored as `linked` on the media reference, left out of the file for ordinary media, so older files read as before.

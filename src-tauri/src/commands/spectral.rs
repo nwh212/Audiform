@@ -213,6 +213,7 @@ pub(crate) fn write_n(
         sample_rate: rate,
         channels: n as u16,
         length: (end - skip.min(end)) as u64,
+        linked: None,
     })
 }
 

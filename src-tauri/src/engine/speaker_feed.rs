@@ -181,6 +181,7 @@ mod tests {
             sample_rate: 48_000,
             channels,
             length: 48_000,
+            linked: None,
         });
         let mut t = Track::new("Film", ChannelLayout::Stereo);
         let mut c = crate::session::ops::ClipSpec {

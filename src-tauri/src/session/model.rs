@@ -431,6 +431,20 @@ pub struct MediaRef {
     pub channels: u16,
     /// Length in samples at the file's own rate.
     pub length: u64,
+    /// The file is the rendered mix of another session: which one, so the
+    /// clip can be brought up to date when that session is saved again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linked: Option<LinkedSession>,
+}
+
+/// The session a linked clip's file was rendered from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct LinkedSession {
+    /// The session file.
+    pub path: PathBuf,
+    /// Its size and modified time when the file was rendered, to tell
+    /// when it has been saved since.
+    pub stamp: String,
 }
 
 /// Mono or stereo. More layouts can be added without a version bump.

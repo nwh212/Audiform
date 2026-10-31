@@ -70,6 +70,7 @@ fn track(s: &mut Session, path: &Path, start: u64, source_in: u64, len: u64) -> 
         sample_rate: RATE,
         channels: 1,
         length: u64::from(RATE),
+        linked: None,
     };
     let mid = m.id;
     s.media.push(m);

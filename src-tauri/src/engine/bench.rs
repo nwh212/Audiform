@@ -82,6 +82,7 @@ pub fn dense_session(path: &std::path::Path, tracks: usize, secs: u64, fx: bool)
         sample_rate: 48_000,
         channels: 2,
         length: 48_000 * 60,
+        linked: None,
     };
     let mid = m.id;
     s.media.push(m);

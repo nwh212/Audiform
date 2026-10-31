@@ -110,6 +110,7 @@ fn session(dir: &Path, fx: EffectSlot) -> Session {
         sample_rate: 48_000,
         channels: 1,
         length: 48_000,
+        linked: None,
     };
     let mid = m.id;
     s.media.push(m);

@@ -138,6 +138,7 @@ pub fn heard(s: &Session) -> Cow<'_, Session> {
             sample_rate: s.sample_rate,
             channels: 2,
             length: len,
+            linked: None,
         };
         let Some(t) = out.tracks.iter_mut().find(|t| t.id == id) else {
             continue;

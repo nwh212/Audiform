@@ -19,6 +19,7 @@ pub mod firewall;
 pub mod generate;
 pub mod keymap;
 pub mod library;
+pub mod linked;
 pub mod links;
 pub mod live;
 pub mod media;

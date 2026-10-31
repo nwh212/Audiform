@@ -224,6 +224,7 @@ export const MENUS: readonly Menu[] = [
         item("multitrack.add.bus-mono", "Mono Bus Track"),
         item("multitrack.add.bus-3d", "3D Bus Track"),
       ]),
+      item("multitrack.insert-session", "Insert Session as Clip..."),
       item("multitrack.duplicate-track", "Duplicate Track"),
       item("multitrack.delete-track", "Delete Track"),
       item("multitrack.delete-empty", "Delete Empty Tracks"),

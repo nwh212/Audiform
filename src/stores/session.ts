@@ -22,6 +22,8 @@ export interface MediaRefDoc {
   sample_rate: number;
   channels: number;
   length: number;
+  /** The file is another session's rendered mix: that session, and how its file looked when rendered. */
+  linked?: { path: string; stamp: string } | null;
 }
 
 export interface FadeDoc {

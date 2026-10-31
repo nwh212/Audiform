@@ -150,6 +150,7 @@ fn a_surround_file_plays_each_channel_from_its_speaker() {
         sample_rate: 48_000,
         channels: 6,
         length: 48_000,
+        linked: None,
     });
     let mut t = Track::new("Film", ChannelLayout::Stereo);
     t.clips.push(
@@ -194,6 +195,7 @@ fn session_with(dir: &Path) -> (Session, Id, Id) {
         sample_rate: 48_000,
         channels: 1,
         length: 48_000,
+        linked: None,
     };
     let mid = m.id;
     s.media.push(m);
@@ -273,6 +275,7 @@ fn sine_session(dir: &Path, peak: f32) -> Session {
         sample_rate: 48_000,
         channels: 1,
         length: 240_000,
+        linked: None,
     };
     let mid = m.id;
     s.media.push(m);

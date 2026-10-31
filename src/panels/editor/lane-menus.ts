@@ -243,6 +243,13 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
       { kind: "sep" },
       { kind: "item", label: ed.selectedClips.size > 1 ? `Delete ${ed.selectedClips.size} Clips` : "Delete Clip", shortcut: shortcutFor("edit.delete"), run: () => run("edit.delete") },
       { kind: "item", label: "Show in Files Panel", disabled: !can("clip.reveal"), run: () => run("clip.reveal") },
+      // A clip that plays another session's mix.
+      ...(can("clip.linked.open")
+        ? ([
+            { kind: "item", label: "Open Linked Session", run: () => run("clip.linked.open") },
+            { kind: "item", label: "Update Linked Session Now", disabled: !can("clip.linked.update"), run: () => run("clip.linked.update") },
+          ] as ContextItem[])
+        : []),
       { kind: "sep" },
     );
   }

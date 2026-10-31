@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 - **ASIO that works with your interface.** Settings > Audio Devices picks one ASIO driver by name and loads only that one, so wrappers and virtual cables installed alongside can no longer get in the way. A buffer size picker (64 to 2048 frames, or the driver's own) sits beside it. Changing either while tracks are armed reopens their inputs at once.
 - **Monitor Input with or without plug-ins.** The monitor button steps through off, on with plug-ins, and on without plug-ins (less delay). Monitoring goes through the track's effects, fader and pan, and follows changes to them. Plug-ins for monitoring start in the background, so recording never waits on them.
+- **Insert Session as Clip** (Multitrack menu). Another session's whole mix lands on a track as one clip, so a heavy instrumental session costs the session you are working in no more than one audio clip. Save the inner session again and the clip updates itself. Right-click the clip to open its session or update it at once.
 - **Stereo input meters.** An armed track on a stereo input shows left and right on their own bars.
 - **Audio log.** `audio.log` in the app's config folder records the driver, every stream opened, how long Play took to start and why, how hard rendering works while playing, and every plug-in start and stop. Settings shows where it is. Attach it to problem reports.
 
