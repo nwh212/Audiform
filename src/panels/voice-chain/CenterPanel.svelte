@@ -223,7 +223,7 @@
         {@render knob("amp_band", "Amp. bandwidth")}
         {@render knob("decay", "Spectral decay")}
       </div>
-      <p class="hint">Lower Phase and Amplitude find only sound right at the spot; higher catch more around it. Crossover bleed softens the edge. Spectral decay smooths a fluttery, watery sound.</p>
+      <p class="hint how">Lower Phase and Amplitude find only sound right at the spot; higher catch more around it. Crossover bleed softens the edge. Spectral decay smooths a fluttery, watery sound.</p>
     {/if}
   </div>
   <details class="adv">
@@ -234,7 +234,7 @@
         {#each P("fft").choices ?? [] as c, i (c)}<option value={String(i)}>{c}</option>{/each}
       </select>
     </label>
-    <p class="hint">Larger sizes separate low frequencies better but smear quick sounds and add delay.</p>
+    <p class="hint how">Larger sizes separate low frequencies better but smear quick sounds and add delay.</p>
   </details>
 </div>
 

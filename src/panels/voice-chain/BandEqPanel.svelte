@@ -174,7 +174,7 @@
     {/if}
   </div>
   <div class="bar">
-    <span class="hint">Alt+drag across the sliders to draw a shape. Double-click a slider for 0 dB.</span>
+    <span class="hint how">Alt+drag across the sliders to draw a shape. Double-click a slider for 0 dB.</span>
     <button type="button" disabled={flat} title="Every band back to 0 dB" onclick={() => onParams(bands.map((p) => [p, 0]), `${info.name} Flat`, true)}>Flat</button>
   </div>
 </div>

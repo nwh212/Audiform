@@ -72,7 +72,7 @@
       {@render small("tube")}
       {@render small("mix")}
     </div>
-    <p class="hint">Turn up Peak Reduction until the needle shows a few dB of leveling, then set Gain for the level you want. Emphasis makes it listen harder to "s" sounds.</p>
+    <p class="hint how">Turn up Peak Reduction until the needle shows a few dB of leveling, then set Gain for the level you want. Emphasis makes it listen harder to "s" sounds.</p>
   {:else}
     <div class="main">
       {@render big("input", [-12, 0, 12, 24])}
@@ -90,7 +90,7 @@
       {@render small("high")}
       {@render small("mix")}
     </div>
-    <p class="hint">Drive adds warmth; past halfway it starts to sound overdriven. The needle shows the output against a 0 mark at -18 dBFS.</p>
+    <p class="hint how">Drive adds warmth; past halfway it starts to sound overdriven. The needle shows the output against a 0 mark at -18 dBFS.</p>
   {/if}
 </div>
 

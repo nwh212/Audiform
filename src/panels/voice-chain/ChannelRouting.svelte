@@ -113,7 +113,7 @@
       </div>
     {/each}
   </div>
-  <p class="hint">Channels no output goes to pass through untouched.{custom ? "" : " Channels are matched by speaker name."}</p>
+  <p class="hint how">Channels no output goes to pass through untouched.{custom ? "" : " Channels are matched by speaker name."}</p>
   <div class="bar">
     <button type="button" disabled={!custom} title="Match the effect's channels to the chain's by speaker name" onclick={byNames}>Match by Name</button>
     <span class="spacer"></span>

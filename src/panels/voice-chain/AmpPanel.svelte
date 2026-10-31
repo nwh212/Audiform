@@ -127,7 +127,7 @@
     {@render sw("level", "Level Match")}
     {@render sw("cab", "Cabinet")}
   </div>
-  <p class="hint">Input sets how hard the capture is driven. Level Match brings every capture to about the same loudness, so switching between them is fair. The capture plays in mono; both channels get the result.</p>
+  <p class="hint how">Input sets how hard the capture is driven. Level Match brings every capture to about the same loudness, so switching between them is fair. The capture plays in mono; both channels get the result.</p>
 </div>
 
 <style>

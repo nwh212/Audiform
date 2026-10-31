@@ -229,6 +229,8 @@
     return info.plugin && chainNames.length > 2 ? { ...s, routing: { wide: true } } : s;
   };
   let routingOpen = $state(false);
+  /** The (i) in an effect window's title bar: shows what the effect does and how to use it. */
+  let howto = $state(false);
   // Tell the Editor whose chain this is, so it can mark that row.
   $effect(() => {
     chainTarget.set(onTrackTab ? (onMaster ? MASTER_ID : (bus?.id ?? track?.id ?? null)) : null);
@@ -853,7 +855,7 @@
       </div>
 
     {#if winSlot}
-      <div class="fxwin" use:portal bind:this={winEl} style:left="{winBox.x}px" style:top="{winBox.y}px" role="dialog" aria-label="{winInfo?.name ?? winSlot.effect} settings" tabindex="-1" onkeydown={(e) => e.key === "Escape" && (winOpen = false)}>
+      <div class="fxwin" class:howto use:portal bind:this={winEl} style:left="{winBox.x}px" style:top="{winBox.y}px" role="dialog" aria-label="{winInfo?.name ?? winSlot.effect} settings" tabindex="-1" onkeydown={(e) => e.key === "Escape" && (winOpen = false)}>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <header onpointerdown={dragWindow}>
           <span class="badge" style:background={winInfo ? (CATEGORY_COLORS[winInfo.category] ?? "#888") : "#666"}></span>
@@ -862,9 +864,11 @@
           <button type="button" class="mini" class:on={routingOpen} aria-pressed={routingOpen} title="Channel routing: which of the chain's channels this effect hears and writes to" aria-label="Channel routing" onclick={() => (routingOpen = !routingOpen)}>
             <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M2 4h5l3 8h4M2 12h5l3-8h4" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
           </button>
+          <button type="button" class="mini info" class:on={howto} aria-pressed={howto} title="How to use this effect" aria-label="How to use this effect" onclick={() => (howto = !howto)}>i</button>
           <button type="button" class="mini" title="Close (Esc)" aria-label="Close" onclick={() => (winOpen = false)}>✕</button>
         </header>
         <div class="editor">
+        {#if howto && winInfo?.description}<p class="about">{winInfo.description}</p>{/if}
       {#if winSlot && winInfo}
         {#if routingOpen}
           <ChannelRouting slot={winSlot} info={winInfo} chain={chainNames} {prefs} {ask} {onNotice} onChange={(routing, label) => commit(label, setSlot(chain, winSlot.id, { routing }))} />
@@ -988,7 +992,7 @@
               <button type="button" onclick={() => restartPlugin(winSlot)}>Restart Plug-in</button>
             {:else}
               <button type="button" disabled={!winInfo.hasWindow} title={winInfo.hasWindow ? "Open the plug-in's own window. What you set there is saved with the session." : "This plug-in has no window of its own; use the controls below."} onclick={() => openPluginWindow(winSlot)}>Open Plug-in Window</button>
-              <span class="hint">{winInfo.hasWindow ? "Its own window has every setting. Controls below move it too." : "Controls only."}</span>
+              <span class="hint how">{winInfo.hasWindow ? "Its own window has every setting. Controls below move it too." : "Controls only."}</span>
             {/if}
           </div>
         {/if}
@@ -1509,5 +1513,26 @@
   .name.stopped,
   .hint.stopped {
     color: var(--danger);
+  }
+  /* How-to text stays hidden until the (i) in the title bar is on. */
+  .fxwin:not(.howto) :global(.how) {
+    display: none;
+  }
+  .mini.info {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 700;
+    min-width: 18px;
+    width: 18px;
+    border-radius: 50% !important;
+  }
+  .about {
+    margin: 0 0 6px;
+    padding: 6px 8px;
+    border-left: 2px solid var(--accent);
+    background: var(--surface-1);
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    line-height: 1.4;
   }
 </style>

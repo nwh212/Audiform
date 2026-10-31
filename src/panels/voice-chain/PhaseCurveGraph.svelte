@@ -183,7 +183,7 @@
   </svg>
   {#if tip}<div class="tip" style:left="{tip.x}px" style:top="{tip.y}px">{tip.text}</div>{/if}
   <div class="row">
-    <p class="hint">Click to add a point (up to 8), drag to move it, right-click to remove it.</p>
+    <p class="hint how">Click to add a point (up to 8), drag to move it, right-click to remove it.</p>
     <label class="check"><input type="checkbox" checked={spline} onchange={(e) => setCtl("spline", e.currentTarget.checked ? 1 : 0, "Spline Curves")} /> Spline Curves</label>
     <button type="button" class="reset" title="Reset: a flat curve at 0°" aria-label="Reset" onclick={reset}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
