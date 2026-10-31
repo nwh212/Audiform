@@ -348,3 +348,69 @@ pub async fn effect_channels(slot: EffectSlot) -> EffectChannels {
         outputs: stereo(),
     })
 }
+
+/// One preset brought in by [`rack_presets_import`].
+#[derive(Debug, Serialize)]
+pub struct ImportedRack {
+    pub name: String,
+    pub chain: crate::session::model::EffectChain,
+}
+
+/// What [`rack_presets_import`] brought in.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RackImport {
+    pub presets: Vec<ImportedRack>,
+    /// Effects of the other editor brought in as ours.
+    pub converted: usize,
+    /// Plug-ins not installed (or not scanned) here.
+    pub missing_plugins: Vec<String>,
+    /// Effects that could not come along.
+    pub skipped: Vec<String>,
+}
+
+/// Audio FX > Presets > Import: asks for effects rack preset files (XML)
+/// and reads their racks, converting the other editor's built-in effects
+/// to ours as a session import does. None on cancel.
+#[tauri::command]
+pub async fn rack_presets_import(app: tauri::AppHandle) -> Result<Option<RackImport>, String> {
+    use tauri::Manager;
+    use tauri_plugin_dialog::DialogExt;
+    let parent = app.get_webview_window("main");
+    spawn_blocking(move || {
+        let mut d = app
+            .dialog()
+            .file()
+            .set_title("Import Effects Rack Presets")
+            .add_filter("Effects rack presets", &["xml"]);
+        if let Some(w) = parent.as_ref() {
+            d = d.set_parent(w);
+        }
+        let Some(files) = d.blocking_pick_files() else {
+            return Ok(None);
+        };
+        let mut report = crate::sesx::ImportReport::default();
+        let mut presets = Vec::new();
+        for f in files {
+            let Some(path) = f.as_path().map(std::path::Path::to_path_buf) else {
+                continue;
+            };
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+            for p in crate::sesx::read_rack_presets(&text, &mut report)? {
+                presets.push(ImportedRack {
+                    name: p.name,
+                    chain: p.chain,
+                });
+            }
+        }
+        Ok(Some(RackImport {
+            presets,
+            converted: report.converted,
+            missing_plugins: report.missing_plugins,
+            skipped: report.skipped_names,
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

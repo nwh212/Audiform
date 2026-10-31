@@ -1497,3 +1497,16 @@ export function separationCancel(): Promise<void> {
 export function onSeparationProgress(fn: (p: SeparationProgress) => void): Promise<() => void> {
   return listen<SeparationProgress>("separation-progress", (e) => fn(e.payload));
 }
+
+/** Effects rack presets read from preset files, ready to keep as the user's own. */
+export interface RackImport {
+  presets: { name: string; chain: import("../stores/session").EffectChainDoc }[];
+  converted: number;
+  missingPlugins: string[];
+  skipped: string[];
+}
+
+/** Asks for effects rack preset files (XML) and reads their racks. Null on cancel. */
+export function importRackPresets(): Promise<RackImport | null> {
+  return invoke<RackImport | null>("rack_presets_import");
+}

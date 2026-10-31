@@ -273,7 +273,8 @@ export interface ChainPreset {
   /** A full per-voice chain for a host's track: offered in the Audio FX chain only, not in Batch Convert. */
   trackOnly?: boolean;
   chain: Omit<EffectChainDoc, "slots"> & {
-    slots: { effect: string; params: Record<string, number> }[];
+    /** A plug-in's own settings ride along in `plugin_state`; `enabled` false keeps it bypassed. */
+    slots: { effect: string; params: Record<string, number>; plugin_state?: string | null; enabled?: boolean }[];
   };
 }
 
@@ -660,9 +661,10 @@ export function presetChain(
       .map((s) => ({
         id: newId(),
         effect: s.effect,
-        enabled: true,
+        enabled: s.enabled !== false,
         params: { ...s.params },
         preset: p.name,
+        ...(s.plugin_state ? { plugin_state: s.plugin_state } : {}),
       })),
   };
 }
@@ -690,6 +692,8 @@ export function presetFrom(name: string, chain: EffectChainDoc): ChainPreset {
       slots: chain.slots.map((s) => ({
         effect: s.effect,
         params: { ...s.params },
+        ...(s.plugin_state ? { plugin_state: s.plugin_state } : {}),
+        ...(s.enabled === false ? { enabled: false } : {}),
       })),
     },
   };
@@ -726,11 +730,16 @@ export function sanitizePresets(raw: unknown): ChainPreset[] {
               !!s && typeof (s as { effect?: unknown }).effect === "string",
           )
           .slice(0, MAX_SLOTS)
-          .map((s) => ({
-            effect: s.effect,
-            params:
-              typeof s.params === "object" && s.params ? { ...s.params } : {},
-          })),
+          .map((s) => {
+            const x = s as { plugin_state?: unknown; enabled?: unknown };
+            return {
+              effect: s.effect,
+              params:
+                typeof s.params === "object" && s.params ? { ...s.params } : {},
+              ...(typeof x.plugin_state === "string" && x.plugin_state ? { plugin_state: x.plugin_state } : {}),
+              ...(x.enabled === false ? { enabled: false } : {}),
+            };
+          }),
       },
     });
   }

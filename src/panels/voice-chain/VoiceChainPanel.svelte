@@ -22,7 +22,7 @@
   import { channelNames } from "../space/space";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
-  import { effectsCatalog, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource } from "../../app/core";
+  import { effectsCatalog, importRackPresets, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource, type RackImport } from "../../app/core";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
@@ -514,6 +514,38 @@
     onNotice(`Saved preset ${name}.`);
   }
 
+  async function importPresets() {
+    let r: RackImport | null;
+    try {
+      r = await importRackPresets();
+    } catch (e) {
+      onNotice(`Could not import presets: ${String(e)}`);
+      return;
+    }
+    if (!r) return;
+    if (r.presets.length === 0) {
+      onNotice("No effects rack presets were found in that file.");
+      return;
+    }
+    const taken = new Set([...userPresets, ...BUILTIN_PRESETS].map((p) => p.name));
+    const added: ChainPreset[] = [];
+    for (const p of r.presets) {
+      let name = p.name;
+      for (let n = 2; taken.has(name); n++) name = `${p.name} (${n})`;
+      taken.add(name);
+      added.push(presetFrom(name, p.chain));
+    }
+    userPresets = [...userPresets, ...added].sort((a, b) => a.name.localeCompare(b.name));
+    prefs.set(KEY_PRESETS, $state.snapshot(userPresets));
+    const notes = [
+      `Imported ${added.length} preset${added.length === 1 ? "" : "s"} (under Yours).`,
+      r.converted ? `${r.converted} built-in effect${r.converted === 1 ? "" : "s"} of the other editor came in as ours.` : "",
+      r.missingPlugins.length ? `Not found on this computer (install or scan them in the Plug-in Manager): ${r.missingPlugins.join(", ")}.` : "",
+      r.skipped.length ? `Left out: ${r.skipped.join(", ")}.` : "",
+    ];
+    onNotice(notes.filter(Boolean).join(" "));
+  }
+
   function deletePreset(name: string) {
     userPresets = userPresets.filter((p) => p.name !== name);
     prefs.set(KEY_PRESETS, $state.snapshot(userPresets));
@@ -712,6 +744,7 @@
           {/each}
         </select>
         <button type="button" title="Save this chain as a preset" disabled={chain.slots.length === 0} onclick={() => void savePreset()}>Save…</button>
+        <button type="button" title="Import effects rack presets from preset files (XML). Built-in effects of the other editor come in as ours, as in a session import; plug-ins keep their settings." onclick={() => void importPresets()}>Import…</button>
         {#if userPresets.length}
           <select
             class="del"

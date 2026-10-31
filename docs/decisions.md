@@ -1988,3 +1988,7 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-31: Fades shape the drawn waveform; both halves of a crossfade show
 - A clip's waveform is drawn through its fades (the same curve the playback uses, bend included), so a fade in or out visibly tapers the sound; the shading over the silent side of a fade is lighter now that the waveform shows it.
 - Where clips overlap, the clip underneath draws its own fade line as a dashed curve in its color across the overlap (its fade out under a later clip, its fade in under an earlier one), next to the top clip's solid fade line, so both halves of a crossfade can be seen.
+
+## 2026-10-31: Import effects rack presets
+- The Audio FX rack's preset row has Import…: pick one or more XML preset files, and every effects rack in them (any element holding slots, named by the nearest `name` or `presetName` above it) becomes one of your presets, under Yours. Racks are read by the same code as a `.sesx` import, so the other editor's Parametric Equalizer, per-frequency phase shifter and vocal strip come in as our Parametric EQ, Phase Curve and Vox Strip, and VST3 plug-ins keep their settings. A notice lists what was converted, plug-ins not found on this computer and what was left out. A name already taken gets a number.
+- Presets now keep a plug-in's own settings and a bypassed slot, so a saved or imported chain with plug-ins comes back as it was.

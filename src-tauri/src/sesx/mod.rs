@@ -114,6 +114,43 @@ fn component_param(
 /// Most slots a Voice Chain holds.
 const MAX_SLOTS: usize = 16;
 
+/// An effects rack preset read from a preset file.
+#[derive(Debug)]
+pub struct RackPreset {
+    pub name: String,
+    pub chain: EffectChain,
+}
+
+/// Reads the effects rack presets in an XML preset file: every element
+/// holding `<slot>`s is a rack, named by the nearest `name` (or
+/// `presetName`) attribute above it. The other editor's built-in
+/// effects come across as ours and VST3 plug-ins keep their settings,
+/// as in a session import. `report` counts what was brought in or left out.
+pub fn read_rack_presets(text: &str, report: &mut ImportReport) -> Result<Vec<RackPreset>, String> {
+    let doc = roxmltree::Document::parse(text)
+        .map_err(|e| format!("This file is not readable XML: {e}"))?;
+    let mut out = Vec::new();
+    for node in doc.descendants().filter(|n| n.is_element()) {
+        if !node.children().any(|c| c.has_tag_name("slot")) {
+            continue;
+        }
+        let name = node
+            .ancestors()
+            .find_map(|a| a.attribute("name").or_else(|| a.attribute("presetName")))
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map_or_else(
+                || format!("Imported Rack {}", out.len() + 1),
+                str::to_string,
+            );
+        let chain = read_rack(node, report);
+        if !chain.slots.is_empty() {
+            out.push(RackPreset { name, chain });
+        }
+    }
+    Ok(out)
+}
+
 /// Reads an effect rack into a Voice Chain: VST3 plug-ins with their
 /// settings, in slot order. Anything else is counted as skipped.
 fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> EffectChain {
@@ -1475,5 +1512,27 @@ mod tests {
         assert_eq!(gain_to_db(1.0), 0.0);
         assert_eq!(gain_to_db(0.5), -6.0);
         assert_eq!(gain_to_db(0.0), -96.0);
+    }
+
+    #[test]
+    fn reads_rack_presets_and_converts_built_in_effects() {
+        let xml = r#"<presets>
+          <preset name="Warm Vocal">
+            <rack>
+              <slot slotIndex="0"><component componentID="8edcd326-33de-4a4d-985b-f1bf48ed1427" name="Parametric Equalizer"/></slot>
+              <slot slotIndex="1"><component componentID="3:11111111 22222222 33333333 44444444" name="Some Plug-in"/></slot>
+            </rack>
+          </preset>
+          <preset name="Empty"><rack><slot slotIndex="0"><component componentID="nothing" name="Gone"/></slot></rack></preset>
+        </presets>"#;
+        let mut report = ImportReport::default();
+        let got = read_rack_presets(xml, &mut report).unwrap();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].name, "Warm Vocal");
+        assert_eq!(got[0].chain.slots[0].effect, "altaudio.parametric_eq");
+        assert!(got[0].chain.slots[1].effect.starts_with("vst3:"));
+        assert_eq!(report.converted, 1);
+        assert_eq!(report.skipped_names, vec!["Gone".to_string()]);
+        assert!(read_rack_presets("not xml <", &mut report).is_err());
     }
 }
