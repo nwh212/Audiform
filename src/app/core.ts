@@ -415,8 +415,8 @@ export function wavePlay(from?: number, mode: PlayMode = "normal"): Promise<void
 }
 
 /** Saves the edited file: in place when `path` is null, else as a new file. Reopens the saved file. */
-export function waveSave<S>(path: string | null, bitDepth: number | null): Promise<WaveDocRaw<S>> {
-  return invoke<WaveDocRaw<S>>("wave_save", { path, bitDepth });
+export function waveSave<S>(path: string | null, bitDepth: number | null, format: unknown = null, markers = true): Promise<WaveDocRaw<S>> {
+  return invoke<WaveDocRaw<S>>("wave_save", { path, bitDepth, format, markers });
 }
 
 /** Highest absolute sample of the edited file in `range` (whole file when null). */

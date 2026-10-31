@@ -24,9 +24,11 @@ import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
 import { closeWaveFile, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportEmbedChapters, exportPickPath, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
+import { exportEmbedChapters, pathsExist, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
-import { kindOfPath } from "./output-format";
+import { DEFAULT_FORMAT, kindOfPath, type OutputFormat } from "./output-format";
+import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
+import { prefs } from "../stores/prefs";
 import { listen } from "@tauri-apps/api/event";
 import { get } from "svelte/store";
 
@@ -56,7 +58,12 @@ export interface WaveToolsDeps {
   syncSessionMedia: (path: string) => Promise<void>;
   askNewAudio: () => void;
   pasteToNewFile: () => Promise<void>;
+  /** The Save Audio As window; null when cancelled. */
+  pickSaveAudio: (init: SaveAudioInit) => Promise<SaveAudioChoice | null>;
 }
+
+/** Where Save Audio As last saved, for new files. */
+const KEY_SAVE_FOLDER = "save-audio.folder";
 
 /** The progress dialog for long work. */
 export interface Exporting {
@@ -74,7 +81,7 @@ export function parseSeconds(text: string): number | null {
 
 
 export function createWaveTools(deps: WaveToolsDeps) {
-  const { actions, dock, showError, showNotice, ask, promptText, uuid, inWave, currentArea, selectedClipDocs, clipBoard, exporting, setExporting, recording, finishRecord, spaceToggle, syncSessionMedia, askNewAudio, pasteToNewFile } = deps;
+  const { actions, dock, showError, showNotice, ask, promptText, uuid, inWave, currentArea, selectedClipDocs, clipBoard, exporting, setExporting, recording, finishRecord, spaceToggle, syncSessionMedia, askNewAudio, pasteToNewFile, pickSaveAudio } = deps;
 
   const waveIsOpen = () => inWave() && waveFile.current() !== null;
   const waveFocus = () => waveIsOpen() && currentArea() !== "files" && currentArea() !== "libraries";
@@ -173,14 +180,37 @@ export function createWaveTools(deps: WaveToolsDeps) {
     const folder = cut > 0 ? f.path.slice(0, cut) : null;
     const stemName = waveName().replace(/\.[^.]+$/, "");
     let path: string | null = null;
+    let format: OutputFormat | null = null;
+    let markers = true;
     if (as || !savesInPlace(f)) {
-      const why = !as && !savesInPlace(f) ? `Save ${f.format || "this file"} as WAV, FLAC, MP3 or AAC` : "Save Audio As";
-      path = await exportPickPath(stemName, folder, why, kindOfPath(f.path) ?? "wav", true);
-      if (!path) return false;
-      if (kindOfPath(path) === null) path = `${path}.wav`;
-      const lossyKind = kindOfPath(path);
-      if (lossyKind === "mp3" || lossyKind === "m4a") {
-        const name = lossyKind === "mp3" ? "MP3" : "AAC";
+      const d = wave.current;
+      const own = kindOfPath(f.path);
+      const lastFolder = prefs.string(KEY_SAVE_FOLDER, "");
+      const picked = await pickSaveAudio({
+        name: stemName,
+        folder: (f.untitled ? lastFolder : folder) ?? lastFolder,
+        format: { ...DEFAULT_FORMAT, kind: own && !f.untitled ? own : "wav" },
+        markers: true,
+        seconds: d ? sessionEnd(d) / Math.max(1, d.sample_rate) : 0,
+        source: { sampleRate: d?.sample_rate ?? 48_000, channels: d?.media[0]?.channels ?? 2, bitDepth: f.bitDepth ?? 24 },
+        markerCount: d?.markers.length ?? 0,
+      });
+      if (!picked) return false;
+      path = picked.path;
+      format = picked.format;
+      markers = picked.markers;
+      const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+      if (cut > 0) prefs.set(KEY_SAVE_FOLDER, path.slice(0, cut));
+      const [exists] = await pathsExist([path]);
+      if (exists) {
+        const ok = await ask("Replace the file?", `${path.slice(cut + 1)} already exists in that folder. Replace it?`, [
+          { label: "Replace", value: "yes", primary: true },
+          { label: "Cancel", value: "no" },
+        ]);
+        if (ok !== "yes") return false;
+      }
+      if (format.kind === "mp3" || format.kind === "m4a") {
+        const name = format.kind === "mp3" ? "MP3" : "AAC";
         const ok = await ask(`Save as ${name}?`, `${name} is lossy: fine for publishing, but keep a WAV or FLAC copy if you'll edit it again.`, [
           { label: `Save ${name}`, value: "yes", primary: true },
           { label: "Cancel", value: "no" },
@@ -228,12 +258,12 @@ export function createWaveTools(deps: WaveToolsDeps) {
         if (cur) setExporting({ ...cur, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 });
       });
       const markerCount = wave.current?.markers.length ?? 0;
-      await saveWaveFile(path);
+      await saveWaveFile(path, null, format, markers);
       const saved = waveFile.current()?.path ?? f.path;
       // MP3, FLAC and M4A carry chapters inside the file (WAV keeps its markers as cue points).
       // Written before the peaks and the session read the file again, so they see the finished file.
       const saveDoc = wave.current;
-      const chapters = saveDoc && /\.(mp3|flac|m4a)$/i.test(saved) ? embedList(saveDoc.markers, saveDoc.sample_rate, null) : [];
+      const chapters = saveDoc && markers && /\.(mp3|flac|m4a)$/i.test(saved) ? embedList(saveDoc.markers, saveDoc.sample_rate, null) : [];
       let added = chapters.length;
       if (saveDoc && added > 0) {
         const totalMs = Math.round((sessionEnd(saveDoc) / saveDoc.sample_rate) * 1000);
@@ -246,7 +276,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       exactSamples.forget(saved);
       await syncSessionMedia(saved);
       const keepsMarkers = /\.wave?$/i.test(saved);
-      const left = keepsMarkers ? 0 : markerCount - added;
+      const left = keepsMarkers || !markers ? 0 : markerCount - added;
       const chapterNote = added > 0 ? ` ${added} ${added === 1 ? "chapter" : "chapters"} added.` : "";
       const leftNote = left > 0 ? ` ${left} other ${left === 1 ? "marker stays" : "markers stay"} only while it is open: only WAV files store them.` : "";
       showNotice(`Saved ${saved.split(/[\\/]/).pop()}.${chapterNote}${leftNote}`);

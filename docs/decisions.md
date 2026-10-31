@@ -2074,3 +2074,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 ## 2026-10-31: Channel switches heard while playing; session tabs removed
 - Switching a channel of a file off or on in the Waveform editor is heard while it plays, without stopping and starting: a clip's channel mix now reaches playing audio the way its level does (after the half second already rendered ahead plays). The Channel Mixer on clips in a session follows live the same way.
 - The open sessions no longer show as chips in the Editor tab: the lead found them more trouble than help. Open sessions are listed and switched in the Files panel, and the Editor tab shows the session's name again.
+
+## 2026-10-31: Save Audio As window
+- Save Audio As in the Waveform editor opens Audiform's own window instead of the system's save dialog: the file name, its location (with Browse), the format and its settings (sample rate, channels, bit depth, MP3 and AAC rates), the sample type it will be written as, Include markers, and the estimated file size. The format is picked in the window, so the extension always matches what is written (the system dialog's type list could leave a .wav name on a FLAC choice, or the other way round). An existing file asks before it is replaced. New, never-saved files start in the folder last saved to.
+- Save As now writes the chosen format settings (an MP3's bit rate, a FLAC's bit depth, a new sample rate or mono); before, only the format came through.
+- A test opens a FLAC, saves it as another FLAC and reads it back.

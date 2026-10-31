@@ -43,6 +43,7 @@
   import { sessionEnd, setErrorSink, type ClipDoc, type Op } from "../stores/session";
   import ChoiceDialog, { type ChoiceButton } from "./ChoiceDialog.svelte";
   import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
+  import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
   import PromptDialog from "./PromptDialog.svelte";
   import ExportProgress from "./ExportProgress.svelte";
   import { describeJoins, describePlan, FIT_XFADE, fitOps, type FitPlan } from "../panels/editor/musicfit";
@@ -742,6 +743,8 @@
   }
 
   let choice = $state<{ title: string; message: string; buttons: ChoiceButton[]; resolve: (v: string) => void } | null>(null);
+  /** The Save Audio As window while open. */
+  let saveAudio = $state<{ init: SaveAudioInit; resolve: (v: SaveAudioChoice | null) => void } | null>(null);
 
   function ask(title: string, message: string, buttons: ChoiceButton[]): Promise<string> {
     return new Promise((resolve) => {
@@ -1264,6 +1267,7 @@
     syncSessionMedia,
     askNewAudio,
     pasteToNewFile,
+    pickSaveAudio: (init) => new Promise((resolve) => (saveAudio = { init, resolve })),
   });
   const { waveEdit, waveSetSelection, wavePlayhead, confirmWaveDiscard, openInWaveform, saveWave, waveAmplify, applyWaveChain } = waveTools;
 
@@ -2330,6 +2334,20 @@
     onScan={() => exp.scanForExport("all")}
     onDone={(v) => void exp.finishPublishDialog(v)}
   />
+  {/await}
+{/if}
+
+{#if saveAudio}
+  {@const open = saveAudio}
+  {#await import("./SaveAudioDialog.svelte") then { default: SaveAudioDialog }}
+    <SaveAudioDialog
+      init={open.init}
+      onBrowse={(from) => exportPickFolder(from || null, "Save Audio In")}
+      onDone={(v) => {
+        saveAudio = null;
+        open.resolve(v);
+      }}
+    />
   {/await}
 {/if}
 

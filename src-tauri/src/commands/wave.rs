@@ -629,6 +629,7 @@ struct Progress {
 /// damages the original. Afterwards the editor reopens the saved file
 /// with a fresh edit list.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn wave_save(
     app: AppHandle,
     wave: State<'_, OpenWave>,
@@ -636,7 +637,10 @@ pub async fn wave_save(
     playing: State<'_, Playing>,
     path: Option<PathBuf>,
     bit_depth: Option<u16>,
+    format: Option<OutputFormat>,
+    markers: Option<bool>,
 ) -> Result<WaveDoc, String> {
+    let keep_markers = markers.unwrap_or(true);
     let (session, source) = {
         let w = wave.0.lock().map_err(|e| e.to_string())?;
         let state = w
@@ -672,16 +676,36 @@ pub async fn wave_save(
             "Audiform can open .{ext} files but can't write them. Use Save As and pick WAV, FLAC or MP3."
         ));
     };
-    let depth = bit_depth.unwrap_or(session.bit_depth);
+    if let Some(f) = &format {
+        if f.kind != kind {
+            return Err(format!(
+                "The file name ends in .{ext} but the format is {}.",
+                f.kind.extension().to_uppercase()
+            ));
+        }
+    }
+    let depth = format
+        .as_ref()
+        .and_then(|f| f.bit_depth)
+        .or(bit_depth)
+        .unwrap_or(session.bit_depth);
     if all_channels > 2 && kind != FormatKind::Wav {
         return Err(format!(
             "Files with {all_channels} channels save as WAV for now. Use Save As and pick WAV."
         ));
     }
-    let request = MixdownRequest {
-        clip_only: true,
-        channels: Some(channels),
-        format: Some(OutputFormat {
+    // The chosen format as it is; otherwise the file's own depth and channels.
+    let out = match format {
+        Some(f) => OutputFormat {
+            channels: f.channels.or(Some(channels)),
+            bit_depth: match kind {
+                FormatKind::Wav => Some(depth),
+                FormatKind::Flac => Some(depth.min(24)),
+                FormatKind::Mp3 | FormatKind::M4a => None,
+            },
+            ..f
+        },
+        None => OutputFormat {
             kind,
             bit_depth: match kind {
                 FormatKind::Wav => Some(depth),
@@ -690,7 +714,12 @@ pub async fn wave_save(
             },
             channels: Some(channels),
             ..Default::default()
-        }),
+        },
+    };
+    let request = MixdownRequest {
+        clip_only: true,
+        channels: out.channels,
+        format: Some(out),
         ..Default::default()
     };
     let view = session.view.clone();
@@ -722,7 +751,7 @@ pub async fn wave_save(
             return Err(e);
         }
         // WAV keeps the markers inside the file as cue points.
-        if kind == FormatKind::Wav && !session.markers.is_empty() {
+        if keep_markers && kind == FormatKind::Wav && !session.markers.is_empty() {
             let rate = codecs::probe(&tmp)
                 .map(|i| i.sample_rate)
                 .unwrap_or(session.sample_rate);

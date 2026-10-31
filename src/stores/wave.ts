@@ -17,6 +17,7 @@ import { transportStatus, transportStop, waveApply, waveClose, waveForget, waveN
 import { SessionStore, type ClipDoc, type MediaRefDoc, type Op, type SessionDoc, type ViewDoc } from "./session";
 import { TransportStore } from "./transport";
 import type { SpectralShape } from "../panels/editor/spectrum";
+import type { OutputFormat } from "../app/output-format";
 
 export interface WaveFile {
   /** The file being edited. */
@@ -162,9 +163,9 @@ export function savesInPlace(f: WaveFile | null): boolean {
  * new file and the editor moves to it. Either way the edit list starts
  * fresh on the saved audio, so the history is cleared.
  */
-export async function saveWaveFile(path: string | null, bitDepth: number | null = null): Promise<void> {
+export async function saveWaveFile(path: string | null, bitDepth: number | null = null, format: OutputFormat | null = null, markers = true): Promise<void> {
   await waveTransport.stop();
-  const doc = await waveSave<SessionDoc>(path, bitDepth);
+  const doc = await waveSave<SessionDoc>(path, bitDepth, format, markers);
   adopt(doc);
   await waveHistory.clear(path ? "Saved As" : "Saved");
 }
