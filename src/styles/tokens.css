@@ -35,6 +35,12 @@
   --gutter: #0e0e10;
   --danger: #e5534b;
 
+  /* Corner rounding: subtle, so boxes read as boxes. A theme sets these
+     to 0 for a square look. */
+  --radius-field: 3px;
+  --radius-menu: 5px;
+  --radius-dialog: 7px;
+
   /* Multitrack lanes: alternating rows, a clearly lighter selected
      track, and a dark gap between tracks. */
   --lane-a: #1b1b1e;
@@ -100,4 +106,19 @@ option,
 optgroup {
   background-color: var(--menu-bg);
   color: var(--text);
+}
+
+/* Rounded corners on every dialog, menu and field, whatever their own
+   styles say (themes change the --radius values, not these rules). */
+[role="dialog"],
+[role="alertdialog"] {
+  border-radius: var(--radius-dialog) !important;
+}
+[role="menu"] {
+  border-radius: var(--radius-menu) !important;
+}
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
+select,
+textarea {
+  border-radius: var(--radius-field) !important;
 }

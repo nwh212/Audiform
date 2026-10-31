@@ -1950,3 +1950,6 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Dials point straight up at their default
 - Every dial (effect dials, the large hardware-style dials, the In and Out gains, track volume and pan) now points straight up at its default value. The part of the range below the default fills the left half of the turn and the part above it the right half, so a dial whose default sits low in its range (a ratio of 4 on 1 to 20) still starts at twelve o'clock. Dragging, the wheel and the arrow keys move along the turn, so each half has its own resolution. Double-click still resets to the default.
+
+## 2026-10-31: Subtle rounded corners
+- Dialogs (and effect windows) round their corners by 7 px, menus by 5 px and text fields and drop-down boxes by 3 px. They come from `--radius-dialog`, `--radius-menu` and `--radius-field` in `tokens.css`, applied to every element with the dialog or menu role and to every field, so no component needs its own rule. Panel lists stay square. The 95 and Phosphor themes set the three to 0 to keep their square look.
