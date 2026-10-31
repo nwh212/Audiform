@@ -3,22 +3,22 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The Convolution Reverb's window. At the top, the impulse response: any
-  audio file of a space's echo, drawn as its level over time (on a dB
-  scale, so the tail shows), with the part Length keeps lit and the
-  Pre-delay drawn as a gap before it. Load picks a file, Clear removes
-  it. Below, dials for Pre-delay, Length, Width, Low cut and High cut,
-  and the Dry and Wet faders. Loading or clearing a file is one undoable
-  step, like every control.
+  The Convolution Reverb's window, on the same faceplate as the Reverb's
+  other kinds. Across the top, the kinds (Impulse Response lit) and the
+  Load and Clear switches. In the middle, a lit display of the impulse
+  response: any audio file of a space's echo, drawn as its level over
+  time (on a dB scale, so the tail shows), with the part Length keeps
+  lit and the Pre-delay drawn as a gap before it. Below, small dials for
+  the response, the filters and the levels. Loading or clearing a file
+  is one undoable step, like every control.
 -->
 <script lang="ts">
   import { reverbLoad, reverbPick, type EffectInfo, type EffectParamInfo, type ReverbIr } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
   import BigKnob from "./BigKnob.svelte";
-  import KindTabs from "./KindTabs.svelte";
   import { REVERB_KINDS, REVERB_TIPS } from "./reverb-kinds";
   import { paramValue } from "./chain";
-  import VSlider from "./VSlider.svelte";
+  import "./faceplate.css";
 
   interface Props {
     slot: EffectSlotDoc;
@@ -114,136 +114,105 @@
 </script>
 
 {#snippet dial(k: string, label: string)}
-  {@const p = P(k)}
-  <div class="dial"><BigKnob param={p} value={val(k)} size={64} {label} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} /></div>
+  <BigKnob param={P(k)} value={val(k)} size={56} {label} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} />
 {/snippet}
 
-<div class="wrap">
-{#if onKind}<KindTabs kinds={REVERB_KINDS} current={REVERB_KINDS.length - 1} tips={REVERB_TIPS} label="Kind of reverb" pick={(i) => i < REVERB_KINDS.length - 1 && onKind(i)} />{/if}
-<div class="verb">
-  <div class="plate">
-    <span class="title">Convolution Reverb</span>
-    <span class="sub">{ir ? `${ir.name} · ${ir.seconds.toFixed(2)} s · ${chans(ir.channels)} · ${(ir.rate / 1000).toFixed(1)} kHz` : saved?.name ? saved.name : "no impulse response loaded"}</span>
-  </div>
-  <div class="ir">
-    <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="The impulse response over time">
-      <defs>
-        <linearGradient id="verb-fill-{slot.id}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#b48cff" stop-opacity="0.85" />
-          <stop offset="100%" stop-color="#5b3fd1" stop-opacity="0.15" />
-        </linearGradient>
-        <clipPath id="verb-keep-{slot.id}"><rect x="0" y="0" width={keepX} height={H} /></clipPath>
-      </defs>
-      {#each [0.25, 0.5, 0.75] as g (g)}<line class="grid" x1="0" x2={W} y1={H * g} y2={H * g} />{/each}
-      {#if path}
-        <path class="cut" d={path} />
-        <path d={path} fill="url(#verb-fill-{slot.id})" clip-path="url(#verb-keep-{slot.id})" />
-        {#if keep < 0.999}<line class="edge" x1={keepX} x2={keepX} y1="0" y2={H} />{/if}
-        {#if pre > 0}<line class="edge pre" x1={(pre / total) * W} x2={(pre / total) * W} y1="0" y2={H} />{/if}
-      {/if}
-    </svg>
-    {#if !ir}
-      <div class="empty">{missing ?? "Load any audio file of a space's echo: a room, hall, plate, spring, or something stranger."}</div>
-    {/if}
-  </div>
-  {#if ir && missing === null}<p class="where" title={ir.path}>{ir.path}</p>{/if}
-  <div class="bar">
-    <button type="button" class="load" disabled={busy} onclick={() => void load()}>{busy ? "Loading…" : ir || saved ? "Load Another…" : "Load Impulse Response…"}</button>
-    <button type="button" disabled={!slot.data} onclick={() => onData(null, "Clear Impulse Response")}>Clear</button>
-  </div>
-  <div class="controls">
-    <div class="dials">
-      {@render dial("predelay", "Pre-delay")}
-      {@render dial("length", "Length")}
-      {@render dial("width", "Width")}
-      {@render dial("low_cut", "Low cut")}
-      {@render dial("high_cut", "High cut")}
+<div class="fp-shell">
+  <div class="fp-unit ir-unit">
+    <div class="fp-top">
+      <div class="fp-kinds" role="tablist" aria-label="Kind of reverb">
+        {#each REVERB_KINDS as k, i (k)}
+          {@const lit = i === REVERB_KINDS.length - 1}
+          <button type="button" role="tab" class:lit aria-selected={lit} title={REVERB_TIPS[i]} disabled={!onKind && !lit} onclick={() => !lit && onKind?.(i)}>{k}</button>
+        {/each}
+      </div>
+      <div class="fp-switches">
+        <button type="button" class:lit={!ir && !saved} disabled={busy} title="Pick an audio file of a space's echo" onclick={() => void load()}>{busy ? "Loading…" : ir || saved ? "Load another" : "Load"}</button>
+        <button type="button" disabled={!slot.data} title="Remove the impulse response" onclick={() => onData(null, "Clear Impulse Response")}>Clear</button>
+      </div>
     </div>
-    <div class="faders">
-      {#each [["dry", "Dry"], ["wet", "Wet"]] as const as [k, label] (k)}
-        <div class="fader">
-          <VSlider param={P(k)} value={val(k)} height={110} oninput={(v) => set(k, v, false)} oncommit={(v) => set(k, v, true)} />
-          <span class="lvl">{label}{val(k) <= P(k).min + 1e-9 ? ": off" : ""}</span>
+
+    <div class="fp-screen">
+      <div class="fp-readout">
+        <span class="fp-big">{ir ? `${(ir.seconds * keep).toFixed(2)} s` : "--"}</span>
+        <span class="fp-small" title={ir?.path ?? ""}>{ir ? `${ir.name} · ${chans(ir.channels)} · ${(ir.rate / 1000).toFixed(1)} kHz` : saved?.name ? saved.name : "no impulse response loaded"}</span>
+      </div>
+      <div class="ir">
+        <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="The impulse response over time">
+          <defs>
+            <linearGradient id="verb-fill-{slot.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--glow)" stop-opacity="0.85" />
+              <stop offset="100%" stop-color="var(--glow)" stop-opacity="0.12" />
+            </linearGradient>
+            <clipPath id="verb-keep-{slot.id}"><rect x="0" y="0" width={keepX} height={H} /></clipPath>
+          </defs>
+          {#each [0.25, 0.5, 0.75] as g (g)}<line class="fp-axis" x1="0" x2={W} y1={H * g} y2={H * g} />{/each}
+          {#if path}
+            <path class="cut" d={path} />
+            <path d={path} fill="url(#verb-fill-{slot.id})" clip-path="url(#verb-keep-{slot.id})" />
+            {#if keep < 0.999}<line class="edge" x1={keepX} x2={keepX} y1="0" y2={H} />{/if}
+            {#if pre > 0}<line class="edge pre" x1={(pre / total) * W} x2={(pre / total) * W} y1="0" y2={H} />{/if}
+          {/if}
+        </svg>
+        {#if !ir}
+          <div class="empty">{missing ?? "Load any audio file of a space's echo: a room, hall, plate, spring, or something stranger."}</div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="fp-row">
+      <div class="fp-group">
+        <span class="fp-gname">Response</span>
+        <div class="fp-knobs">
+          {@render dial("predelay", "Pre-delay")}
+          {@render dial("length", "Length")}
+          {@render dial("width", "Width")}
         </div>
-      {/each}
+      </div>
+      <div class="fp-group">
+        <span class="fp-gname">Filters</span>
+        <div class="fp-knobs">
+          {@render dial("low_cut", "Lo cut")}
+          {@render dial("high_cut", "Hi cut")}
+        </div>
+      </div>
+      <div class="fp-group">
+        <span class="fp-gname">Output</span>
+        <div class="fp-knobs">
+          {@render dial("dry", "Dry")}
+          {@render dial("wet", "Wet")}
+        </div>
+      </div>
     </div>
   </div>
-</div>
 </div>
 
 <style>
-  /* Tabs above, the panel below: one column. */
-  .wrap {
-    display: grid;
-    min-width: 0;
-  }
-  .verb {
-    --ink: #ece4ff;
-    --violet: #b48cff;
-    display: grid;
-    gap: 10px;
-    margin-bottom: 6px;
-    padding: 10px 12px 12px;
-    border: 1px solid #000;
-    border-radius: 6px;
-    background:
-      radial-gradient(120% 90% at 80% 0%, rgba(180, 140, 255, 0.14), transparent 60%),
-      linear-gradient(180deg, #1c1828, #100e17);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.07),
-      0 2px 8px rgba(0, 0, 0, 0.5);
-    color: var(--ink);
-  }
-  .plate {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 10px;
-    align-items: baseline;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(180, 140, 255, 0.3);
-  }
-  .title {
-    color: var(--violet);
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .sub {
-    min-width: 0;
-    overflow: hidden;
-    color: rgba(236, 228, 255, 0.6);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .ir-unit {
+    --face: #241d33;
+    --face2: #120f1b;
+    --panel-ink: #ece4ff;
+    --glow: #b48cff;
   }
   .ir {
     position: relative;
     height: 96px;
-    border: 1px solid rgba(180, 140, 255, 0.2);
-    border-radius: 4px;
-    background: radial-gradient(100% 140% at 0% 100%, #1d1533, #09080e);
-    overflow: hidden;
   }
   .ir svg {
     display: block;
     width: 100%;
     height: 100%;
   }
-  .grid {
-    stroke: rgba(180, 140, 255, 0.08);
-    vector-effect: non-scaling-stroke;
-  }
   .cut {
-    fill: rgba(180, 140, 255, 0.12);
+    fill: color-mix(in srgb, var(--glow) 12%, transparent);
   }
   .edge {
-    stroke: rgba(236, 228, 255, 0.7);
+    stroke: color-mix(in srgb, var(--panel-ink) 70%, transparent);
     stroke-dasharray: 3 3;
     vector-effect: non-scaling-stroke;
   }
   .edge.pre {
-    stroke: rgba(180, 140, 255, 0.6);
+    stroke: color-mix(in srgb, var(--glow) 60%, transparent);
   }
   .empty {
     position: absolute;
@@ -251,67 +220,13 @@
     display: grid;
     place-items: center;
     padding: 0 20px;
-    color: rgba(236, 228, 255, 0.6);
+    color: color-mix(in srgb, var(--panel-ink) 60%, transparent);
     font-size: 11px;
     text-align: center;
   }
-  .where {
-    margin: -4px 0 0;
+  .fp-small {
     overflow: hidden;
-    color: rgba(236, 228, 255, 0.4);
-    font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .bar {
-    display: flex;
-    gap: 6px;
-  }
-  .bar button {
-    padding: 3px 10px;
-    border: 1px solid rgba(180, 140, 255, 0.4);
-    border-radius: 3px;
-    background: rgba(0, 0, 0, 0.3);
-    color: var(--ink);
-    font: inherit;
-  }
-  .bar .load {
-    background: linear-gradient(180deg, #c3a2ff, #7c55e0);
-    color: #140c24;
-    font-weight: 600;
-  }
-  .bar button:disabled {
-    opacity: 0.45;
-  }
-  .controls {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-  .dials {
-    display: flex;
-    flex: 1;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 4px;
-  }
-  .dial {
-    display: grid;
-    justify-items: center;
-  }
-  .faders {
-    display: flex;
-    gap: 4px;
-    padding-left: 8px;
-    border-left: 1px solid rgba(180, 140, 255, 0.2);
-  }
-  .fader {
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-  }
-  .lvl {
-    color: var(--violet);
-    font-size: 10px;
   }
 </style>

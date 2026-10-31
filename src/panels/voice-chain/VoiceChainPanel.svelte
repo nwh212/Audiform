@@ -1316,8 +1316,9 @@
       min-width: 380px;
       max-width: 96vw;
     }
-    &:has(:global(.verb)) {
-      width: min(600px, 96vw);
+    /* Hardware faceplates (Delay and Echo, Modulation, Reverb). */
+    &:has(:global(.fp-unit)) {
+      width: min(660px, 96vw);
     }
     &:has(:global(.cce)) {
       width: min(560px, 96vw);
@@ -1365,7 +1366,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* One column: the presets, then the effect's own panel at full width. */
   .fxwin .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    padding: 8px 10px;
     overflow: auto;
   }
   .fxwin footer {
@@ -1408,7 +1415,6 @@
     border-color: color-mix(in srgb, var(--ok, #3fb950) 60%, transparent);
     color: var(--ok, #3fb950);
   }
-  .editor,
   .param {
     display: grid;
     grid-template-columns: 88px minmax(0, 1fr) 72px;

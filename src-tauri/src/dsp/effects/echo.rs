@@ -18,6 +18,12 @@
 //! so each repeat is `feedback` as loud as the one before. Changing the
 //! time while playing glides the read point, so it bends the repeats
 //! like tape instead of clicking.
+//!
+//! On a speaker bed every speaker has its own ring. Room spread passes a
+//! share of each repeat on to the speakers either side in the room's
+//! ring, and pulls their times a little apart, so the repeats spread out
+//! around the listener. Ping-pong sends each repeat on to the next
+//! speaker, so the echoes circle the room.
 
 use super::{choice, num, toggle, EffectInfo, Params, Processor};
 
@@ -49,6 +55,9 @@ const BEATS: [f64; 16] = [
     8.0,
 ];
 
+/// The most a bed's rings' times are pulled apart by the spread (a share).
+const MAX_APART: f64 = 0.06;
+
 /// How fast the read point glides to a new time, per frame (about 40 ms).
 const GLIDE: f64 = 0.0005;
 
@@ -66,6 +75,7 @@ pub fn echo_info() -> EffectInfo {
             num("tempo", "Tempo", "BPM", 30.0, 300.0, 120.0, 0.1).group("Time"),
             num("feedback", "Feedback", "%", 0.0, 120.0, 35.0, 1.0).group("Repeats"),
             toggle("pingpong", "Ping-pong", false).group("Repeats"),
+            num("spread", "Room spread", "%", 0.0, 100.0, 50.0, 1.0).group("Repeats"),
             num("low_cut", "Low cut", "Hz", 20.0, 2000.0, 20.0, 1.0).log().group("Repeats"),
             num("tone", "Tone", "Hz", 500.0, 16_000.0, 6000.0, 10.0).log().group("Repeats"),
             num("depth", "Modulation", "%", 0.0, 100.0, 0.0, 1.0).group("Color"),
@@ -79,7 +89,7 @@ pub fn echo_info() -> EffectInfo {
 
 pub struct Echo {
     rate: f64,
-    ring: [Vec<f32>; 2],
+    ring: Vec<Vec<f32>>,
     at: usize,
     /// The delay in frames the read point is at now, and the one it
     /// glides toward.
@@ -90,10 +100,10 @@ pub struct Echo {
     pingpong: bool,
     /// The low-pass on the repeats: its coefficient and each side's memory.
     lp: f32,
-    lp_state: [f32; 2],
+    lp_state: Vec<f32>,
     /// The low cut on the repeats (a one-pole high-pass): coefficient and memory.
     hp: f32,
-    hp_state: [f32; 2],
+    hp_state: Vec<f32>,
     kind: usize,
     dry: f32,
     /// Modulation: depth in frames, phase and step of the slow sway (wow),
@@ -103,6 +113,21 @@ pub struct Echo {
     step: f64,
     flutter: f64,
     drive: f32,
+    spread: f32,
+    /// On a speaker bed; None for stereo.
+    bed: Option<Bed>,
+}
+
+/// The speakers a bed's rings work on.
+struct Bed {
+    names: Vec<String>,
+    /// The channels in ring order (no LFE); ring `a` works on `chans[a]`.
+    chans: Vec<usize>,
+    /// Each ring's time, as a share of the set time: pulled apart by the spread.
+    stretch: Vec<f64>,
+    /// This frame's repeat per ring, before and after the filters.
+    heard: Vec<f32>,
+    back: Vec<f32>,
 }
 
 /// Soft saturation that leaves quiet sound almost as it is.
@@ -130,10 +155,30 @@ fn flush(x: f32) -> f32 {
 
 impl Echo {
     pub fn new(p: &Params, rate: u32) -> Self {
+        Self::with_rings(p, rate, 2)
+    }
+
+    /// A Delay and Echo over a speaker bed with channels named `names`.
+    pub fn wide(p: &Params, rate: u32, names: &[String]) -> Self {
+        let chans = super::wide::ring(names);
+        let n = chans.len().max(1);
+        let mut e = Self::with_rings(p, rate, n);
+        e.bed = Some(Bed {
+            names: names.to_vec(),
+            chans,
+            stretch: vec![1.0; n],
+            heard: vec![0.0; n],
+            back: vec![0.0; n],
+        });
+        e.set(p);
+        e
+    }
+
+    fn with_rings(p: &Params, rate: u32, rings: usize) -> Self {
         let n = (MAX_SECONDS * f64::from(rate)) as usize + 4;
         let mut e = Self {
             rate: f64::from(rate),
-            ring: [vec![0.0; n], vec![0.0; n]],
+            ring: vec![vec![0.0; n]; rings],
             at: 0,
             cur: 0.0,
             want: 0.0,
@@ -141,9 +186,9 @@ impl Echo {
             wet: 0.0,
             pingpong: false,
             lp: 0.0,
-            lp_state: [0.0; 2],
+            lp_state: vec![0.0; rings],
             hp: 0.0,
-            hp_state: [0.0; 2],
+            hp_state: vec![0.0; rings],
             kind: 0,
             dry: 1.0,
             depth: 0.0,
@@ -151,6 +196,8 @@ impl Echo {
             step: 0.0,
             flutter: 0.0,
             drive: 0.0,
+            spread: 0.5,
+            bed: None,
         };
         e.set(p);
         e.cur = e.want;
@@ -166,10 +213,29 @@ impl Echo {
         } else {
             p.get("time")
         };
-        // Room for the sway on both sides.
+        // Room for the sway on both sides, and on a bed for the spread.
         let sway =
             p.get("depth") / 100.0 * if self.kind == 1 { 8.0 } else { 4.0 } / 1000.0 * self.rate;
-        self.want = (ms / 1000.0 * self.rate).clamp(1.0 + sway, longest - sway - 2.0);
+        self.spread = (p.get("spread") / 100.0).clamp(0.0, 1.0) as f32;
+        let apart = if self.bed.is_some() {
+            1.0 + MAX_APART * f64::from(self.spread)
+        } else {
+            1.0
+        };
+        self.want = (ms / 1000.0 * self.rate).clamp(1.0 + sway, (longest - sway - 2.0) / apart);
+        if let Some(bed) = self.bed.as_mut() {
+            let n = bed.stretch.len();
+            for (a, t) in bed.stretch.iter_mut().enumerate() {
+                // Spread evenly from one end of the range to the other,
+                // in an order that keeps neighbours apart.
+                let at = if n > 1 {
+                    ((a * 5) % n) as f64 / (n - 1) as f64
+                } else {
+                    0.0
+                };
+                *t = 1.0 + MAX_APART * f64::from(self.spread) * at;
+            }
+        }
         self.feedback = (p.get("feedback") / 100.0) as f32;
         self.wet = (p.get("wet") / 100.0) as f32;
         self.dry = (p.get("dry") / 100.0) as f32;
@@ -194,25 +260,88 @@ impl Echo {
     }
 }
 
+impl Echo {
+    /// This frame's delay in frames, gliding to a new time, with the
+    /// modulation: a slow sway, and for tape a fast flutter too.
+    fn sway(&mut self) -> f64 {
+        self.cur += (self.want - self.cur) * GLIDE;
+        if (self.want - self.cur).abs() < 0.01 {
+            self.cur = self.want;
+        }
+        let mut d = self.cur;
+        if self.depth > 0.0 {
+            self.phase = (self.phase + self.step) % std::f64::consts::TAU;
+            let mut m = self.phase.sin();
+            if self.kind == 1 {
+                self.flutter = (self.flutter + self.step * 11.0) % std::f64::consts::TAU;
+                m = 0.8 * m + 0.2 * self.flutter.sin();
+            }
+            d += self.depth * m;
+        }
+        d
+    }
+
+    /// Processes interleaved frames over the bed's speakers.
+    fn process_bed(&mut self, buf: &mut [f32]) {
+        let Some(mut bed) = self.bed.take() else {
+            return;
+        };
+        let ch = bed.names.len().max(1);
+        let rings = bed.chans.len();
+        let n = self.ring[0].len();
+        let drive = if self.drive > 0.0 || self.feedback > 0.95 {
+            self.drive.max(0.05)
+        } else {
+            0.0
+        };
+        let side = 0.5 * self.spread;
+        for f in buf.chunks_exact_mut(ch) {
+            let d = self.sway();
+            for a in 0..rings {
+                let pos = self.at as f64 + n as f64 - d * bed.stretch[a];
+                let whole = pos.floor();
+                let frac = (pos - whole) as f32;
+                let i0 = whole as usize % n;
+                let y = tap(&self.ring[a], i0, (i0 + 1) % n, frac);
+                bed.heard[a] = y;
+                self.lp_state[a] = y + self.lp * (self.lp_state[a] - y);
+                let mut v = self.lp_state[a];
+                if self.hp > 0.0 && self.hp < 0.9999 {
+                    self.hp_state[a] = v + self.hp * (self.hp_state[a] - v);
+                    v -= self.hp_state[a];
+                }
+                bed.back[a] = if drive > 0.0 { soft(v, drive) } else { v };
+            }
+            for a in 0..rings {
+                let prev = bed.back[(a + rings - 1) % rings];
+                let next = bed.back[(a + 1) % rings];
+                // Ping-pong: each repeat moves on one speaker round the room.
+                let back = if self.pingpong {
+                    prev
+                } else if rings > 1 {
+                    bed.back[a] * (1.0 - self.spread) + (prev + next) * side
+                } else {
+                    bed.back[a]
+                };
+                let x = f[bed.chans[a]];
+                self.ring[a][self.at] = flush(x + self.feedback * back);
+                f[bed.chans[a]] = self.dry * x + self.wet * bed.heard[a];
+            }
+            self.at = (self.at + 1) % n;
+        }
+        self.bed = Some(bed);
+    }
+}
+
 impl Processor for Echo {
     fn process(&mut self, buf: &mut [f32]) {
+        if self.bed.is_some() {
+            self.process_bed(buf);
+            return;
+        }
         let n = self.ring[0].len();
         for f in buf.as_chunks_mut::<2>().0 {
-            self.cur += (self.want - self.cur) * GLIDE;
-            if (self.want - self.cur).abs() < 0.01 {
-                self.cur = self.want;
-            }
-            // Modulation: a slow sway, and for tape a fast flutter too.
-            let mut d = self.cur;
-            if self.depth > 0.0 {
-                self.phase = (self.phase + self.step) % std::f64::consts::TAU;
-                let mut m = self.phase.sin();
-                if self.kind == 1 {
-                    self.flutter = (self.flutter + self.step * 11.0) % std::f64::consts::TAU;
-                    m = 0.8 * m + 0.2 * self.flutter.sin();
-                }
-                d += self.depth * m;
-            }
+            let d = self.sway();
             let pos = self.at as f64 + n as f64 - d;
             let whole = pos.floor();
             let frac = (pos - whole) as f32;
@@ -257,8 +386,8 @@ impl Processor for Echo {
         for r in &mut self.ring {
             r.fill(0.0);
         }
-        self.lp_state = [0.0; 2];
-        self.hp_state = [0.0; 2];
+        self.lp_state.fill(0.0);
+        self.hp_state.fill(0.0);
         self.at = 0;
         self.cur = self.want;
     }
@@ -266,6 +395,13 @@ impl Processor for Echo {
     fn update(&mut self, p: &Params) -> bool {
         self.set(p);
         true
+    }
+
+    fn channels(&self) -> (Vec<String>, Vec<String>) {
+        match &self.bed {
+            Some(b) => (b.names.clone(), b.names.clone()),
+            None => (super::routing::stereo(), super::routing::stereo()),
+        }
     }
 }
 
@@ -404,5 +540,75 @@ mod tests {
         let mut quiet = vec![0.0; 2000];
         e.process(&mut quiet);
         assert!(quiet.iter().all(|v| *v == 0.0), "reset empties the tail");
+    }
+
+    #[test]
+    fn on_a_bed_ping_pong_circles_the_room_and_spread_reaches_neighbours() {
+        let names: Vec<String> = ["L", "R", "C", "LFE", "Ls", "Rs"]
+            .iter()
+            .map(|x| (*x).to_string())
+            .collect();
+        let at = |b: &[f32], frame: usize, c: usize| {
+            (frame - 400..frame + 400)
+                .map(|f| b[f * 6 + c].abs())
+                .fold(0.0, f32::max)
+        };
+        // Ring order from the front, clockwise: C, R, Rs, Ls, L.
+        let p = params(&[
+            ("time", 100.0),
+            ("feedback", 90.0),
+            ("tone", 16_000.0),
+            ("wet", 100.0),
+            ("dry", 0.0),
+            ("pingpong", 1.0),
+            ("spread", 0.0),
+        ]);
+        let mut e = Echo::wide(&p, R, &names);
+        let mut b = vec![0.0f32; 30_000 * 6];
+        b[2] = 1.0;
+        for c in b.chunks_mut(6 * 300) {
+            e.process(c);
+        }
+        assert!(at(&b, 4800, 2) > 0.5, "first repeat in the center");
+        assert!(
+            at(&b, 9600, 1) > 0.3 && at(&b, 9600, 2) < 1e-4,
+            "then right"
+        );
+        assert!(at(&b, 14_400, 5) > 0.2, "then right surround");
+        assert!(at(&b, 19_200, 4) > 0.1, "then left surround");
+        assert!(
+            b.as_chunks::<6>().0.iter().all(|f| f[3] == 0.0),
+            "LFE left alone"
+        );
+
+        let p = params(&[
+            ("time", 100.0),
+            ("feedback", 80.0),
+            ("wet", 100.0),
+            ("dry", 0.0),
+            ("spread", 100.0),
+        ]);
+        let mut e = Echo::wide(&p, R, &names);
+        let mut b = vec![0.0f32; 40_000 * 6];
+        b[2] = 1.0;
+        for c in b.chunks_mut(6 * 300) {
+            e.process(c);
+        }
+        let energy = |c: usize| {
+            b.as_chunks::<6>()
+                .0
+                .iter()
+                .map(|f| f[c] * f[c])
+                .sum::<f32>()
+        };
+        assert!(
+            energy(0) > 0.01 && energy(1) > 0.01,
+            "repeats spread to L and R"
+        );
+        assert!(
+            energy(4) > 0.001 && energy(5) > 0.001,
+            "and on round the room"
+        );
+        assert!(b.iter().all(|v| v.is_finite() && v.abs() < 3.0));
     }
 }

@@ -11,8 +11,12 @@
 //!   space is stereo: it fills the room by an upmix (see `reverb.rs`).
 //! - Every copy works on its own speakers' sound, so the surrounds and
 //!   heights are processed, not copied from the fronts. Effects that
-//!   sweep or drift (Modulation) start each copy at its own point, so
-//!   the speakers do not move in lockstep.
+//!   sweep or drift start each copy at its own point, so the speakers
+//!   do not move in lockstep.
+//! - Modulation and Delay and Echo also run natively on the bed: each
+//!   speaker has its own line, and Room spread passes the moving copies
+//!   and the repeats on to the speakers either side, around the room
+//!   (see `ring`). Ping-pong sends each repeat on to the next speaker.
 //! - Gain works on every channel as it is.
 //! - Every other effect runs as a set of stereo copies with the same
 //!   settings, one per speaker pair (L and R, Ls and Rs, the height
@@ -86,6 +90,16 @@ pub fn build_wide(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<
             slot.data.as_deref(),
             names,
         )));
+    }
+    if info.id == super::modulation::ID {
+        let p = Params::resolve(&info, &slot.params);
+        return Some(Box::new(super::modulation::Modulation::wide(
+            &p, rate, names,
+        )));
+    }
+    if info.id == "altaudio.echo" {
+        let p = Params::resolve(&info, &slot.params);
+        return Some(Box::new(super::echo::Echo::wide(&p, rate, names)));
     }
     if info.id == "altaudio.gain" {
         let p = Params::resolve(&info, &slot.params);
@@ -292,6 +306,46 @@ impl Processor for Pairs {
     fn channels(&self) -> (Vec<String>, Vec<String>) {
         (self.names.clone(), self.names.clone())
     }
+}
+
+/// The speakers an effect that spreads across the room works on, in ring
+/// order: the floor clockwise from the front, then the heights clockwise.
+/// The low-frequency channel is left out. Channels with no known place
+/// (numbered ones) follow in their own order.
+pub fn ring(names: &[String]) -> Vec<usize> {
+    use crate::session::model::SpaceLayout;
+    let spot = |name: &str| {
+        [
+            SpaceLayout::Surround714,
+            SpaceLayout::Surround51,
+            SpaceLayout::Surround512,
+        ]
+        .iter()
+        .flat_map(|l| crate::dsp::space::speakers(*l))
+        .find(|s| s.name == name)
+        .and_then(|s| s.at)
+    };
+    let mut placed: Vec<(bool, f32, usize)> = Vec::new();
+    let mut rest = Vec::new();
+    for (i, n) in names.iter().enumerate() {
+        if n == "LFE" {
+            continue;
+        }
+        match spot(n) {
+            Some([x, y, z]) => {
+                // Clockwise from straight ahead, 0 to a full turn.
+                let a = x.atan2(y).rem_euclid(std::f32::consts::TAU);
+                placed.push((z > 0.0, a, i));
+            }
+            None => rest.push(i),
+        }
+    }
+    placed.sort_by(|a, b| {
+        (a.0, a.1)
+            .partial_cmp(&(b.0, b.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    placed.into_iter().map(|p| p.2).chain(rest).collect()
 }
 
 /// The routing names for a chain of `n` channels: L and R for stereo,

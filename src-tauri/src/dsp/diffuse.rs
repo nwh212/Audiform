@@ -350,7 +350,9 @@ impl Steer {
             for ((f, x), w) in self.frame.iter_mut().zip(src).zip(&self.window) {
                 *f = x * w;
             }
-            let _ = self.fft.process_with_scratch(&mut self.frame, spec, &mut self.scratch);
+            let _ = self
+                .fft
+                .process_with_scratch(&mut self.frame, spec, &mut self.scratch);
         }
         for buf in [&mut self.in_l, &mut self.in_r] {
             buf.copy_within(STEER_HOP.., 0);
@@ -374,9 +376,17 @@ impl Steer {
             let behind = (-self.plr[k].re / cross.max(TINY)).clamp(0.0, 1.0) * alike;
             // The direct part: its strength on both sides together, with
             // the phase of the louder side.
-            let base = if cl.norm_sqr() >= cr.norm_sqr() { cl } else { cr };
+            let base = if cl.norm_sqr() >= cr.norm_sqr() {
+                cl
+            } else {
+                cr
+            };
             let mag = (cl.norm_sqr() + cr.norm_sqr()).sqrt();
-            let dir = if base.norm() > TINY { base * (mag / base.norm()) } else { Complex::new(0.0, 0.0) };
+            let dir = if base.norm() > TINY {
+                base * (mag / base.norm())
+            } else {
+                Complex::new(0.0, 0.0)
+            };
             let direct = dir * alike;
             let ambient = (1.0 - alike * alike).max(0.0).sqrt();
             // Where it sits: across the front by its balance, out to the
@@ -401,7 +411,9 @@ impl Steer {
             let spec = &mut self.out_spec[c];
             spec[0].im = 0.0;
             spec[BINS - 1].im = 0.0;
-            let _ = self.ifft.process_with_scratch(spec, &mut self.time, &mut self.scratch);
+            let _ = self
+                .ifft
+                .process_with_scratch(spec, &mut self.time, &mut self.scratch);
             for ((a, t), w) in self.acc[c].iter_mut().zip(&self.time).zip(&self.window) {
                 *a += t * w * scale;
             }
@@ -680,14 +692,22 @@ mod tests {
 
     #[test]
     fn place_elements_puts_each_part_where_it_sits() {
-        let names: Vec<&str> = speakers(SpaceLayout::Surround71).iter().map(|s| s.name).collect();
+        let names: Vec<&str> = speakers(SpaceLayout::Surround71)
+            .iter()
+            .map(|s| s.name)
+            .collect();
         let at = |n: &str| names.iter().position(|x| *x == n).unwrap();
         let loudest = |e: &[f32]| (0..e.len()).max_by(|a, b| e[*a].total_cmp(&e[*b])).unwrap();
         // Centered: the center speaker.
         assert_eq!(names[loudest(&steer_energy(1.0, 1.0))], "C");
         // Hard left: the left side of the room, not the front right.
         let e = steer_energy(1.0, 0.0);
-        let left: f32 = names.iter().zip(&e).filter(|(n, _)| n.starts_with('L')).map(|(_, v)| v).sum();
+        let left: f32 = names
+            .iter()
+            .zip(&e)
+            .filter(|(n, _)| n.starts_with('L'))
+            .map(|(_, v)| v)
+            .sum();
         assert!(left > 50.0 * e[at("R")], "{e:?}");
         // Alike but in opposite phase: behind.
         let e = steer_energy(1.0, -1.0);
@@ -695,5 +715,4 @@ mod tests {
         assert!(back > 4.0 * (e[at("L")] + e[at("R")] + e[at("C")]), "{e:?}");
         assert!(e.iter().all(|v| v.is_finite()));
     }
-
 }

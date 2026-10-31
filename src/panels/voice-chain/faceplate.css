@@ -1,0 +1,224 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) The Audiform contributors.
+ * This file is part of Audiform, based on Altered Audio Editor.
+ *
+ * The hardware look shared by the Delay and Echo, Modulation and Reverb
+ * windows: a dark faceplate lit in the kind's color (set --face, --face2,
+ * --panel-ink and --glow on .fp-unit), lit switches across the top, two
+ * big dials either side of a display, and groups of small dials below.
+ */
+.fp-shell {
+  container-type: inline-size;
+}
+.fp-unit {
+  --face: #1f262c;
+  --face2: #141a1f;
+  --panel-ink: #d6e6ee;
+  --panel-accent: #5fd3f3;
+  --glow: #5fd3f3;
+  display: grid;
+  gap: 12px;
+  margin: 4px 6px 6px;
+  padding: 12px 14px 14px;
+  border: 1px solid #000;
+  border-radius: 8px;
+  background:
+    radial-gradient(130% 90% at 50% 0%, color-mix(in srgb, var(--glow) 10%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--face), var(--face2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 10px rgba(0, 0, 0, 0.5);
+  color: var(--panel-ink);
+}
+.fp-unit.fp-tape {
+  --face: #3a2c1e;
+  --face2: #221911;
+  --panel-ink: #f1e2c6;
+  --panel-accent: #f0b35a;
+  --glow: #f0b35a;
+}
+.fp-unit.fp-analog {
+  --face: #331d1f;
+  --face2: #1c1011;
+  --panel-ink: #f0d6d2;
+  --panel-accent: #ff6b5e;
+  --glow: #ff6b5e;
+}
+.fp-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+.fp-kinds,
+.fp-switches {
+  display: flex;
+  gap: 4px;
+}
+/* A faceplate's own switches: the theme's button look stays out. */
+.fp-unit .fp-top button {
+  min-width: 0;
+  height: auto;
+  padding: 4px 10px !important;
+  border: 1px solid #000 !important;
+  border-radius: 4px !important;
+  background: linear-gradient(180deg, #3b3b3b, #232323) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  color: color-mix(in srgb, var(--panel-ink) 70%, transparent) !important;
+  text-shadow: none !important;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.fp-unit .fp-top button.lit {
+  color: #111 !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glow) 90%, #fff), var(--glow)) !important;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--glow) 60%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+}
+.fp-mid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+.fp-screen {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 2px solid #000;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #070908, #0f1311);
+  box-shadow:
+    inset 0 0 14px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.fp-readout {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.fp-readout {
+  flex-wrap: wrap;
+}
+.fp-big {
+  white-space: nowrap;
+  color: var(--glow);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--glow) 70%, transparent);
+}
+.fp-small {
+  color: color-mix(in srgb, var(--glow) 70%, #888);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+}
+.fp-echoes {
+  width: 100%;
+  height: 64px;
+}
+.fp-axis {
+  stroke: color-mix(in srgb, var(--glow) 25%, transparent);
+  stroke-width: 1;
+}
+.fp-dry {
+  fill: color-mix(in srgb, var(--panel-ink) 60%, transparent);
+}
+.fp-rep {
+  fill: var(--glow);
+  filter: drop-shadow(0 0 2px var(--glow));
+}
+.fp-use {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--glow) 50%, transparent);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--glow);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.fp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.fp-group {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.fp-gname {
+  color: color-mix(in srgb, var(--panel-ink) 60%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.fp-knobs {
+  display: flex;
+  gap: 2px;
+}
+.fp-knobs {
+  gap: 6px;
+}
+.fp-knobs .box {
+  width: 62px;
+}
+.fp-unit .bk .name {
+  white-space: nowrap;
+}
+/* Small dials: their names fit their own width. */
+.fp-knobs .bk .name {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+/* Groups two to a row, each row filling the width. */
+.fp-row.fp-pairs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+@container (max-width: 520px) {
+  .fp-row.fp-pairs {
+    grid-template-columns: 1fr;
+  }
+}
+/* Narrow windows: the display gets its own row above the two big dials,
+   and the small dials go two groups to a row. */
+@container (max-width: 600px) {
+  .fp-mid {
+    grid-template-columns: 1fr 1fr;
+    justify-items: center;
+  }
+  .fp-screen {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: stretch;
+  }
+  .fp-row {
+    flex-wrap: wrap;
+  }
+}
+.fp-unit .fp-top button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.fp-readout > * {
+  min-width: 0;
+}

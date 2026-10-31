@@ -469,7 +469,9 @@ impl Graph {
             // Bus's inputs were placed (and held back) already.
             let held = |d: &Dest, main: bool| -> u64 {
                 let placed = match d {
-                    Dest::Master => main && !matches!(n, Node::Bus(i) if rooms.get(i).copied().unwrap_or(false)),
+                    Dest::Master => {
+                        main && !matches!(n, Node::Bus(i) if rooms.get(i).copied().unwrap_or(false))
+                    }
                     Dest::Bus(b) => rooms.get(*b).copied().unwrap_or(false),
                     Dest::Direct(_) => false,
                 };
@@ -899,7 +901,9 @@ impl Graph {
                             }
                         }
                         // Place Elements: each part of the sound to where it sits.
-                        if let (true, Some(fl), Some(dc)) = (steering, field, st.diffuse.as_deref_mut()) {
+                        if let (true, Some(fl), Some(dc)) =
+                            (steering, field, st.diffuse.as_deref_mut())
+                        {
                             if let Some(steer) = dc.steer.as_deref_mut() {
                                 let g = fl.steer;
                                 let bed_n = if make_bed { nb } else { 0 };
@@ -921,7 +925,8 @@ impl Graph {
                                         }
                                     }
                                     if room_bus.is_none() {
-                                        if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
+                                        if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2)
+                                        {
                                             o[0] += ol;
                                             o[1] += or;
                                         }

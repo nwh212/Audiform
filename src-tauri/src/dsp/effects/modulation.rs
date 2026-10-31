@@ -16,6 +16,12 @@
 //!
 //! Rate, depth, feedback, stereo width and the dry and wet levels are
 //! shared; each kind has its own time setting.
+//!
+//! On a speaker bed every speaker has its own moving copy, its sweep a
+//! step further round the turn than the speaker before it in the room's
+//! ring, so the movement travels around the listener. Room spread feeds
+//! each copy a share of the neighbouring speakers' sound, so a part in
+//! front shimmers out into the sides and rear too.
 
 use super::{choice, num, EffectInfo, Params, Processor};
 
@@ -37,6 +43,7 @@ pub fn modulation_info() -> EffectInfo {
             num("depth", "Depth", "%", 0.0, 100.0, 50.0, 1.0),
             num("feedback", "Feedback", "%", -95.0, 95.0, 0.0, 1.0),
             num("width", "Stereo width", "%", 0.0, 100.0, 100.0, 1.0),
+            num("spread", "Room spread", "%", 0.0, 100.0, 50.0, 1.0),
             num("voices", "Voices", "", 2.0, 6.0, 3.0, 1.0).group("Chorus"),
             num("chorus_delay", "Delay", "ms", 5.0, 40.0, 18.0, 0.1).group("Chorus"),
             num("flange_delay", "Delay", "ms", 0.1, 10.0, 1.5, 0.01).log().group("Flanger"),
@@ -149,8 +156,8 @@ impl Wander {
 pub struct Modulation {
     sr: f64,
     kind: usize,
-    lines: [Line; 2],
-    stages: [[Stage; 12]; 2],
+    lines: Vec<Line>,
+    stages: Vec<[Stage; 12]>,
     n_stages: usize,
     phase: f64,
     step: f64,
@@ -163,21 +170,58 @@ pub struct Modulation {
     center: f64,
     dt_ms: f64,
     wander: f64,
-    walk: [Wander; 2],
-    fb: [f32; 2],
+    walk: Vec<Wander>,
+    fb: Vec<f32>,
     dry: f32,
     wet: f32,
+    spread: f32,
+    /// On a speaker bed; None for stereo.
+    bed: Option<Bed>,
+}
+
+/// The speakers a bed's copies work on.
+struct Bed {
+    names: Vec<String>,
+    /// The channels in ring order (no LFE); copy `a` works on `chans[a]`.
+    chans: Vec<usize>,
+    /// This frame's input and wet sound per copy.
+    x: Vec<f32>,
+    w: Vec<f32>,
+}
+
+/// A seed for copy `k`'s random wander.
+fn seed(k: usize) -> u32 {
+    let k = k as u32;
+    0x9e37_79b9 ^ k.wrapping_mul(0x2545_f491) ^ (k << 7)
 }
 
 impl Modulation {
     pub fn new(p: &Params, rate: u32) -> Self {
         let sr = f64::from(rate.max(1));
+        Self::with_copies(p, sr, 2)
+    }
+
+    /// A Modulation over a speaker bed with channels named `names`.
+    pub fn wide(p: &Params, rate: u32, names: &[String]) -> Self {
+        let chans = super::wide::ring(names);
+        let n = chans.len().max(1);
+        let mut m = Self::with_copies(p, f64::from(rate.max(1)), n);
+        m.bed = Some(Bed {
+            names: names.to_vec(),
+            chans,
+            x: vec![0.0; n],
+            w: vec![0.0; n],
+        });
+        m
+    }
+
+    fn with_copies(p: &Params, sr: f64, n: usize) -> Self {
         let len = (MAX_MS / 1000.0 * sr) as usize + 8;
         let mut m = Self {
             sr,
             kind: p.index("kind").min(KINDS.len() - 1),
-            lines: [Line::new(len), Line::new(len)],
-            stages: [[Stage::default(); 12]; 2],
+            lines: (0..n).map(|_| Line::new(len)).collect(),
+            stages: vec![[Stage::default(); 12]; n],
             n_stages: 6,
             phase: 0.0,
             step: 0.0,
@@ -190,13 +234,18 @@ impl Modulation {
             center: 700.0,
             dt_ms: 28.0,
             wander: 0.4,
-            walk: [
-                Wander::new(0x9e37_79b9, 0.6, sr),
-                Wander::new(0x85eb_ca6b, 0.6, sr),
-            ],
-            fb: [0.0; 2],
+            walk: (0..n)
+                .map(|k| match k {
+                    0 => Wander::new(0x9e37_79b9, 0.6, sr),
+                    1 => Wander::new(0x85eb_ca6b, 0.6, sr),
+                    _ => Wander::new(seed(k), 0.6, sr),
+                })
+                .collect(),
+            fb: vec![0.0; n],
             dry: 1.0,
             wet: 0.5,
+            spread: 0.5,
+            bed: None,
         };
         m.set(p);
         m
@@ -220,6 +269,46 @@ impl Modulation {
         }
         self.dry = (p.get("dry") / 100.0) as f32;
         self.wet = (p.get("wet") / 100.0) as f32;
+        self.spread = (p.get("spread") / 100.0).clamp(0.0, 1.0) as f32;
+    }
+
+    /// Processes interleaved frames over the bed's speakers.
+    fn process_bed(&mut self, buf: &mut [f32]) {
+        let Some(mut bed) = self.bed.take() else {
+            return;
+        };
+        let ch = bed.names.len().max(1);
+        let n = bed.chans.len();
+        // Copies spread evenly round the turn (chorus a whole turn, the
+        // others half), narrowed by the width.
+        let turn = f64::from(self.width) * if self.kind == 0 { 1.0 } else { 0.5 };
+        // A share of each neighbour's sound, the same loudness overall.
+        let side = 0.5 * self.spread;
+        for f in buf.chunks_exact_mut(ch) {
+            for (a, c) in bed.chans.iter().enumerate() {
+                bed.x[a] = f[*c];
+            }
+            for a in 0..n {
+                let (prev, next) = (bed.x[(a + n - 1) % n], bed.x[(a + 1) % n]);
+                let x = if n > 1 {
+                    bed.x[a] * (1.0 - self.spread) + (prev + next) * side
+                } else {
+                    bed.x[a]
+                };
+                bed.w[a] = self.wet_of(a, x, turn * a as f64 / n as f64);
+            }
+            self.phase += self.step;
+            if self.phase > std::f64::consts::TAU {
+                self.phase -= std::f64::consts::TAU;
+            }
+            // Width: 0 is the same moving copy in every speaker.
+            let mid = bed.w.iter().sum::<f32>() / n.max(1) as f32;
+            for (a, c) in bed.chans.iter().enumerate() {
+                let w = mid + (bed.w[a] - mid) * self.width;
+                f[*c] = f[*c] * self.dry + w * self.wet;
+            }
+        }
+        self.bed = Some(bed);
     }
 
     fn ms(&self, v: f64) -> f64 {
@@ -280,6 +369,10 @@ impl Modulation {
 
 impl Processor for Modulation {
     fn process(&mut self, buf: &mut [f32]) {
+        if self.bed.is_some() {
+            self.process_bed(buf);
+            return;
+        }
         // The right side's sweep runs up to a quarter turn behind (half for chorus).
         let offset = f64::from(self.width) * if self.kind == 0 { 0.5 } else { 0.25 };
         for f in buf.as_chunks_mut::<2>().0 {
@@ -302,8 +395,15 @@ impl Processor for Modulation {
         for l in &mut self.lines {
             l.clear();
         }
-        self.stages = [[Stage::default(); 12]; 2];
-        self.fb = [0.0; 2];
+        self.stages.fill([Stage::default(); 12]);
+        self.fb.fill(0.0);
+    }
+
+    fn channels(&self) -> (Vec<String>, Vec<String>) {
+        match &self.bed {
+            Some(b) => (b.names.clone(), b.names.clone()),
+            None => (super::routing::stereo(), super::routing::stereo()),
+        }
     }
 
     fn vary(&mut self, k: usize) {
@@ -311,11 +411,10 @@ impl Processor for Modulation {
         self.phase = (k as f64 * 0.382).fract() * std::f64::consts::TAU;
         let sr = self.sr;
         let rate = self.step * sr / std::f64::consts::TAU;
-        let k = k as u32;
-        self.walk = [
-            Wander::new(0x9e37_79b9 ^ k.wrapping_mul(0x2545_f491), rate, sr),
-            Wander::new(0x85eb_ca6b ^ k.wrapping_mul(0x9e37_79b9), rate, sr),
-        ];
+        let n = self.walk.len();
+        self.walk = (0..n)
+            .map(|c| Wander::new(seed(k * n + c + 2), rate, sr))
+            .collect();
     }
 
     fn update(&mut self, p: &Params) -> bool {
@@ -388,5 +487,43 @@ mod tests {
             .0
             .iter()
             .all(|f| (f[0] - f[1]).abs() < 1e-5));
+    }
+
+    #[test]
+    fn on_a_bed_a_sound_in_front_spreads_round_the_room() {
+        let names: Vec<String> = ["L", "R", "C", "LFE", "Ls", "Rs"]
+            .iter()
+            .map(|x| (*x).to_string())
+            .collect();
+        for k in 0..KINDS.len() {
+            let p = params(&[("kind", k as f64), ("dry", 0.0), ("wet", 100.0)]);
+            let mut m = Modulation::wide(&p, R, &names);
+            let frames = R as usize;
+            let mut b = vec![0.0f32; frames * 6];
+            for (i, f) in b.as_chunks_mut::<6>().0.iter_mut().enumerate() {
+                f[2] = (i as f32 * 440.0 * std::f32::consts::TAU / R as f32).sin() * 0.5;
+            }
+            for c in b.chunks_mut(6 * 256) {
+                m.process(c);
+            }
+            let energy = |c: usize| {
+                b.as_chunks::<6>()
+                    .0
+                    .iter()
+                    .map(|f| f[c] * f[c])
+                    .sum::<f32>()
+            };
+            assert!(b.iter().all(|v| v.is_finite()));
+            assert!(energy(0) > 1.0 && energy(1) > 1.0, "{k}: reaches L and R");
+            assert!(energy(3) == 0.0, "{k}: LFE left alone");
+            // The copies differ: the room moves, not one copy everywhere.
+            let diff: f32 = b
+                .as_chunks::<6>()
+                .0
+                .iter()
+                .map(|f| (f[0] - f[1]).abs())
+                .sum();
+            assert!(diff > 10.0, "{k}: copies move on their own: {diff}");
+        }
     }
 }
