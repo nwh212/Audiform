@@ -125,6 +125,7 @@
     setAudioOutput,
     setOutputMap,
     setAudioDriver,
+    logLine,
     pluginShowBypassed,
     launchPaths,
     onOpenPaths,
@@ -168,6 +169,7 @@
   import { get, writable } from "svelte/store";
   import type { SessionRow } from "../panels/files/session-row";
   import { recordControl } from "../stores/record";
+  import { needsSteps, noteStep, recentSteps } from "./trail";
 
   let info = $state<AppInfo | null>(null);
   let coreError = $state<string | null>(null);
@@ -180,6 +182,12 @@
 
   function showError(e: unknown) {
     lastError = e instanceof Error ? e.message : String(e);
+    // An error with no detail of its own: say what led up to it, here and in the audio log.
+    if (needsSteps(lastError)) {
+      const steps = recentSteps();
+      lastError = `${lastError} (after: ${steps.slice(-4).join("; ") || "nothing noted"})`;
+      if (isTauri()) void logLine(`interface error: ${e instanceof Error ? e.message : String(e)}; last steps: ${steps.join(" | ")}`).catch(() => undefined);
+    }
     console.error(e);
     clearTimeout(errorTimer);
     errorTimer = setTimeout(() => (lastError = null), 12000);
@@ -1411,6 +1419,7 @@
   }
   /** Saves the settings and puts them into effect; Apply keeps the dialog open, OK closes it. */
   function applySettingsDraft(d: SettingsDraft, keepOpen = false) {
+    noteStep("settings applied");
     if (!keepOpen) settingsDraft = null;
     const autosaveChanged = d.app.autosave !== settings.current.autosave || d.app.autosaveMinutes !== settings.current.autosaveMinutes;
     settings.set(d.app);
@@ -2169,10 +2178,10 @@
 
 {#if settingsDraft}
   {#await import("./settings/SettingsDialog.svelte") then { default: SettingsDialog }}
-  <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onClose={() => {
+  <SettingsDialog initial={settingsDraft} onApply={(d, keep) => applySettingsDraft(d, keep)} onNotice={showNotice} onDriverChanged={() => syncMonitor(true)} onClose={() => {
       settingsDraft = null;
       // The ASIO picker tells the core as it changes, so cancelling puts the saved choice back.
-      if (isTauri()) void setAudioDriver(settings.current.driver === "asio", settings.current.asioDriver, settings.current.asioBuffer).catch(() => undefined);
+      if (isTauri()) void setAudioDriver(settings.current.driver === "asio", settings.current.asioDriver, settings.current.asioBuffer).then(() => syncMonitor(true)).catch(() => undefined);
     }}
   />
   {/await}

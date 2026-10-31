@@ -478,14 +478,7 @@ fn vox_strip_params(text: &str) -> Option<(std::collections::BTreeMap<String, f6
     put("fx_style", k("sfx_mode").map(f64::round));
     put("fx", k("sfx_control").map(|v| (v * 100.0).round()));
     put("fx_trim", k("sfx_trim"));
-    put("space_on", on("space_enable"));
-    put("space_style", k("space_mode").map(f64::round));
-    put(
-        "reverb",
-        k("space_reverb_level").map(|v| (v * 100.0).round()),
-    );
-    put("delay", k("space_delay_level").map(|v| (v * 100.0).round()));
-    put("space_trim", k("space_trim"));
+    // The plug-in's space (reverb and delay) has no place in Vox Strip.
     let enabled = k("globalEnable").is_none_or(|v| v >= 0.5);
     Some((out, enabled))
 }
@@ -1346,7 +1339,7 @@ mod tests {
         assert_eq!(p["comp"], 25.0);
         assert_eq!(p["low"], -6.0);
         assert_eq!(p["low_cut"], 1.0);
-        assert_eq!(p["space_on"], 0.0);
+        assert!(!p.contains_key("space_on"));
     }
 
     #[test]

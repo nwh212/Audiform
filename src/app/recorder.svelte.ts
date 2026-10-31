@@ -218,7 +218,7 @@ export function createRecorder(deps: RecorderDeps) {
     }
 
     function recordTarget(t: TrackDoc): RecordTarget {
-      return { key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: `${t.name} ${stamp()}`, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan };
+      return { key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: `${t.name} ${stamp()}`, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan, plugins: !t.monitor_dry };
     }
 
     /** Tracks recording in the current multitrack take, and seconds recorded at the last poll. */
@@ -272,7 +272,7 @@ export function createRecorder(deps: RecorderDeps) {
         return;
       }
       const armed = (session.current?.tracks ?? []).filter((t) => t.record_armed);
-      const key = armed.map((t) => `${t.id}:${t.input ?? ""}:${t.channels}:${t.monitor_input ? 1 : 0}`).join("|");
+      const key = armed.map((t) => `${t.id}:${t.input ?? ""}:${t.channels}:${t.monitor_input ? (t.monitor_dry ? 2 : 1) : 0}`).join("|");
       const tune = armed
         .filter((t) => t.monitor_input)
         .map((t) => `${t.id}:${t.volume_db}:${t.pan}:${JSON.stringify(t.effects ?? null)}`)
@@ -282,7 +282,7 @@ export function createRecorder(deps: RecorderDeps) {
         monitorRetune = undefined;
         monitorKey = key;
         monitorTune = tune;
-        const targets: RecordTarget[] = armed.map((t) => ({ key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: t.name, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan }));
+        const targets: RecordTarget[] = armed.map((t) => ({ key: t.id, input: t.input ?? null, channels: t.channels === "mono" ? 1 : 2, name: t.name, monitor: !!t.monitor_input, chain: t.monitor_input ? (t.effects ?? null) : null, gainDb: t.volume_db, pan: t.pan, plugins: !t.monitor_dry }));
         void recordMonitor(targets).catch(() => {});
         if (targets.length) startInputPoll();
         else stopInputPoll();

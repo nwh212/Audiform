@@ -5,7 +5,7 @@
 //! Vox Strip: a whole vocal chain in one effect, in four modules that
 //! each pick a style and are run by one or two controls.
 //!
-//! Signal path: Input, Low Cut, Dynamics, Tone, Effects, Space, Output.
+//! Signal path: Input, Low Cut, Dynamics, Tone, Effects, Output.
 //!
 //! * Dynamics: a compressor whose style sets how it reacts (Smooth +
 //!   Fast: a slow leveler into a fast peak catcher; Clean: one even
@@ -16,9 +16,9 @@
 //!   Modern), and Air.
 //! * Effects: one of Chorus, Doubler, Saturate, Radio or Widen, with
 //!   one Amount control.
-//! * Space: a reverb (Plate, Room, Hall, Chamber) or a short Slap or
-//!   Tape Echo, with Reverb and Delay amounts; the delay follows a note
-//!   value at the given tempo.
+//!
+//! There is no reverb or delay module: the strip is meant to go before
+//! the Reverb and Delay and Echo effects, which do that job better.
 //!
 //! Air is not a plain treble boost. It does three things at once:
 //! 1. a very wide, gentle shelf that starts around 10 kHz and keeps
@@ -45,15 +45,13 @@ pub const VOCAL: &str = "altaudio.vox_strip";
 pub const DYN_STYLES: &[&str] = &["Smooth + Fast", "Clean", "Warm"];
 pub const TONE_STYLES: &[&str] = &["Clean", "Vintage", "Modern"];
 pub const FX_STYLES: &[&str] = &["Chorus", "Doubler", "Saturate", "Radio", "Widen"];
-pub const SPACE_STYLES: &[&str] = &["Plate", "Room", "Hall", "Chamber", "Slap", "Tape Echo"];
-pub const NOTES: &[&str] = &["1/16", "1/8", "Dotted 1/8", "1/4", "1/2"];
 
 pub fn vocal_info() -> EffectInfo {
     EffectInfo {
         id: VOCAL,
         name: "Vox Strip",
         category: "Vocal",
-        description: "A full vocal chain in one: Dynamics (compressor and de-esser), Tone (with Air), Effects and Space, each with its own style and one-knob controls.",
+        description: "A full vocal chain in one: Dynamics (compressor and de-esser), Tone (with Air) and Effects, each with its own style and one-knob controls.",
         params: vec![
             num("input", "Input", "dB", -24.0, 24.0, 0.0, 0.1),
             num("output", "Output", "dB", -24.0, 24.0, 0.0, 0.1),
@@ -74,13 +72,6 @@ pub fn vocal_info() -> EffectInfo {
             choice("fx_style", "Effects Style", FX_STYLES, 0),
             num("fx", "Amount", "%", 0.0, 100.0, 30.0, 1.0),
             num("fx_trim", "Effects Trim", "dB", -12.0, 12.0, 0.0, 0.1),
-            toggle("space_on", "Space", false),
-            choice("space_style", "Space Style", SPACE_STYLES, 0),
-            num("reverb", "Reverb", "%", 0.0, 100.0, 25.0, 1.0),
-            num("delay", "Delay", "%", 0.0, 100.0, 0.0, 1.0),
-            choice("note", "Delay Time", NOTES, 3),
-            num("tempo", "Tempo", "BPM", 40.0, 240.0, 120.0, 0.1),
-            num("space_trim", "Space Trim", "dB", -12.0, 12.0, 0.0, 0.1),
         ],
     }
 }
@@ -207,104 +198,6 @@ impl Line {
     }
 }
 
-// ---- Reverb: an 8-line feedback delay network ----
-
-const FDN: usize = 8;
-const FDN_PRIMES: [f32; FDN] = [1.000, 1.137, 1.283, 1.379, 1.523, 1.669, 1.801, 1.949];
-
-struct Reverb {
-    lines: Vec<Line>,
-    len: [f32; FDN],
-    gain: [f32; FDN],
-    damp: [f32; FDN],
-    lp: [f32; FDN],
-    pre: [Line; 2],
-    pre_len: f32,
-    diff: Vec<(Line, f32, f32)>,
-    rate: f32,
-}
-
-#[allow(clippy::needless_range_loop)]
-impl Reverb {
-    fn new(rate: f32) -> Self {
-        let max = (0.25 * rate) as usize;
-        Self {
-            lines: (0..FDN).map(|_| Line::new(max)).collect(),
-            len: [1000.0; FDN],
-            gain: [0.0; FDN],
-            damp: [0.5; FDN],
-            lp: [0.0; FDN],
-            pre: [
-                Line::new((0.1 * rate) as usize),
-                Line::new((0.1 * rate) as usize),
-            ],
-            pre_len: 1.0,
-            diff: [0.0047f32, 0.0036, 0.0127, 0.0093]
-                .iter()
-                .map(|s| {
-                    let n = (s * rate) as usize;
-                    (Line::new(n + 4), n as f32, 0.62)
-                })
-                .collect(),
-            rate,
-        }
-    }
-
-    /// Size (base line length, s), decay (T60, s), brightness (0 dark to 1), predelay (s).
-    fn set(&mut self, size: f32, t60: f32, bright: f32, pre: f32) {
-        for i in 0..FDN {
-            self.len[i] =
-                (size * FDN_PRIMES[i] * self.rate).min(self.lines[i].buf.len() as f32 - 4.0);
-            let secs = self.len[i] / self.rate;
-            self.gain[i] = 10f32.powf(-3.0 * secs / t60.max(0.05));
-            self.damp[i] = 0.05 + (1.0 - bright) * 0.6;
-        }
-        self.pre_len = (pre * self.rate).max(1.0);
-    }
-
-    #[inline]
-    fn run(&mut self, l: f32, r: f32) -> (f32, f32) {
-        self.pre[0].push(l);
-        self.pre[1].push(r);
-        let mut x = (self.pre[0].tap(self.pre_len) + self.pre[1].tap(self.pre_len)) * 0.5;
-        // Input diffusion: all-pass sections smear the attack.
-        for (line, d, g) in &mut self.diff {
-            let v = line.tap(*d);
-            let w = x + v * *g;
-            line.push(w);
-            x = v - w * *g;
-        }
-        let mut outs = [0f32; FDN];
-        for i in 0..FDN {
-            let y = self.lines[i].tap(self.len[i]);
-            self.lp[i] = y + (self.lp[i] - y) * self.damp[i];
-            outs[i] = self.lp[i] * self.gain[i];
-        }
-        // Householder mixing: each line feeds all the others.
-        let sum: f32 = outs.iter().sum::<f32>() * (2.0 / FDN as f32);
-        for i in 0..FDN {
-            let fb = outs[i] - sum;
-            self.lines[i].push(fb + x * if i % 2 == 0 { 1.0 } else { -1.0 } * 0.35);
-        }
-        let l = outs[0] + outs[2] + outs[4] + outs[6];
-        let r = outs[1] + outs[3] + outs[5] + outs[7];
-        (l * 0.5, r * 0.5)
-    }
-
-    fn clear(&mut self) {
-        for l in &mut self.lines {
-            l.clear();
-        }
-        for l in &mut self.pre {
-            l.clear();
-        }
-        for (l, _, _) in &mut self.diff {
-            l.clear();
-        }
-        self.lp = [0.0; FDN];
-    }
-}
-
 // ---- The strip ----
 
 pub struct VoxStrip {
@@ -355,20 +248,6 @@ pub struct VoxStrip {
     fx_band: [[Biquad; 2]; 2],
     fx_hp: Biquad,
     fx_trim: f32,
-    // Space
-    space_on: bool,
-    space_style: usize,
-    reverb: Reverb,
-    rev_amt: f32,
-    dly: [Line; 2],
-    dly_len: f32,
-    dly_fb: f32,
-    dly_amt: f32,
-    dly_lp: [f32; 2],
-    dly_lp_c: f32,
-    dly_hp: [Biquad; 2],
-    wow: f32,
-    space_trim: f32,
     // Meters
     out_env: f32,
     out_fall: f32,
@@ -433,19 +312,6 @@ impl VoxStrip {
             fx_band: [[Biquad::new(flat); 2]; 2],
             fx_hp: Biquad::new(flat),
             fx_trim: 1.0,
-            space_on: false,
-            space_style: 0,
-            reverb: Reverb::new(r),
-            rev_amt: 0.0,
-            dly: [Line::new((2.1 * r) as usize), Line::new((2.1 * r) as usize)],
-            dly_len: 1.0,
-            dly_fb: 0.0,
-            dly_amt: 0.0,
-            dly_lp: [0.0; 2],
-            dly_lp_c: 0.0,
-            dly_hp: pair(flat),
-            wow: 0.0,
-            space_trim: 1.0,
             out_env: 0.0,
             out_fall: coef(0.3, r),
             gr_show: 0.0,
@@ -586,50 +452,6 @@ impl VoxStrip {
         self.fx_hp
             .set(Coeffs::new(Shape::HighPass, rate, 300.0, 0.707, 0.0));
         self.fx_trim = db_to_gain(p.get("fx_trim"));
-
-        // Space.
-        self.space_on = on("space_on");
-        self.space_style = p.get("space_style").round() as usize;
-        let (size, t60, bright, pre) = match self.space_style {
-            0 => (0.019, 1.8, 0.85, 0.012), // Plate: dense and bright
-            1 => (0.011, 0.6, 0.45, 0.004), // Room
-            2 => (0.034, 2.8, 0.6, 0.028),  // Hall
-            3 => (0.022, 1.2, 0.55, 0.010), // Chamber
-            4 => (0.012, 0.5, 0.5, 0.004),  // Slap: small room under the echo
-            _ => (0.016, 0.9, 0.4, 0.006),  // Tape Echo
-        };
-        self.reverb.set(size, t60, bright, pre);
-        self.rev_amt = pc("reverb").powf(1.5) * 0.7;
-        let d = pc("delay");
-        self.dly_amt = d * 0.6;
-        let beat = 60.0 / p.get("tempo").max(1.0) as f32;
-        let note = match p.get("note").round() as usize {
-            0 => 0.25,
-            1 => 0.5,
-            2 => 0.75,
-            3 => 1.0,
-            _ => 2.0,
-        };
-        let (secs, fb) = match self.space_style {
-            4 => (0.095, 0.12),
-            5 => (beat * note, 0.3 + 0.35 * d),
-            _ => (beat * note, 0.2 + 0.3 * d),
-        };
-        self.dly_len = (secs * r).clamp(1.0, self.dly[0].buf.len() as f32 - 4.0);
-        self.dly_fb = fb;
-        self.dly_lp_c = coef(
-            1.0 / (std::f32::consts::TAU
-                * if self.space_style == 5 {
-                    2500.0
-                } else {
-                    6000.0
-                }),
-            r,
-        );
-        for b in &mut self.dly_hp {
-            b.set(Coeffs::new(Shape::HighPass, rate, 180.0, 0.707, 0.0));
-        }
-        self.space_trim = db_to_gain(p.get("space_trim"));
     }
 
     #[inline]
@@ -807,42 +629,6 @@ impl VoxStrip {
             *v *= self.fx_trim;
         }
     }
-
-    #[inline]
-    fn space(&mut self, f: &mut [f32; 2]) {
-        let mut wl = 0.0;
-        let mut wr = 0.0;
-        if self.rev_amt > 0.0 {
-            let (l, r) = self.reverb.run(f[0], f[1]);
-            wl += l * self.rev_amt;
-            wr += r * self.rev_amt;
-        }
-        if self.dly_amt > 0.0 {
-            // A ping-pong echo: each repeat crosses sides, filtered in the loop.
-            let mut len = self.dly_len;
-            if self.space_style == 5 {
-                self.wow = (self.wow + 0.6 / self.rate).fract();
-                len *= 1.0 + 0.002 * (self.wow * std::f32::consts::TAU).sin();
-            }
-            let ol = self.dly[0].tap(len);
-            let or = self.dly[1].tap(len);
-            let mut fb = [or, ol];
-            for (c, v) in fb.iter_mut().enumerate() {
-                self.dly_lp[c] = *v + (self.dly_lp[c] - *v) * self.dly_lp_c;
-                *v = self.dly_hp[c].run(self.dly_lp[c]);
-                if self.space_style == 5 {
-                    *v = soft(*v, 1.5);
-                }
-            }
-            let input = (f[0] + f[1]) * 0.5;
-            self.dly[0].push(input + fb[0] * self.dly_fb);
-            self.dly[1].push(fb[1] * self.dly_fb);
-            wl += ol * self.dly_amt;
-            wr += or * self.dly_amt;
-        }
-        f[0] = (f[0] + wl) * self.space_trim;
-        f[1] = (f[1] + wr) * self.space_trim;
-    }
 }
 
 impl Processor for VoxStrip {
@@ -867,9 +653,6 @@ impl Processor for VoxStrip {
             }
             if self.fx_on {
                 self.effects(f);
-            }
-            if self.space_on {
-                self.space(f);
             }
             for v in f.iter_mut() {
                 *v *= self.output;
@@ -901,12 +684,7 @@ impl Processor for VoxStrip {
         self.air_duck = 1.0;
         let p = self.p.clone();
         // Rebuilding the filters clears them along with their settings.
-        for b in self
-            .low_cut
-            .iter_mut()
-            .chain(self.ds_split.iter_mut())
-            .chain(self.dly_hp.iter_mut())
-        {
+        for b in self.low_cut.iter_mut().chain(self.ds_split.iter_mut()) {
             b.reset();
         }
         for b in self
@@ -936,11 +714,9 @@ impl Processor for VoxStrip {
         ] {
             b.reset();
         }
-        for l in self.fx_lines.iter_mut().chain(self.dly.iter_mut()) {
+        for l in self.fx_lines.iter_mut() {
             l.clear();
         }
-        self.reverb.clear();
-        self.dly_lp = [0.0; 2];
         self.out_env = 0.0;
         self.set(&p);
     }
@@ -1030,12 +806,7 @@ mod tests {
         (re * re + im * im).sqrt()
     }
 
-    const ALL_OFF: [(&str, f64); 4] = [
-        ("dyn_on", 0.0),
-        ("tone_on", 0.0),
-        ("fx_on", 0.0),
-        ("space_on", 0.0),
-    ];
+    const ALL_OFF: [(&str, f64); 3] = [("dyn_on", 0.0), ("tone_on", 0.0), ("fx_on", 0.0)];
 
     #[test]
     fn with_every_module_off_it_passes_sound_unchanged() {
@@ -1125,7 +896,9 @@ mod tests {
     }
 
     #[test]
-    fn the_space_adds_a_tail() {
+    fn old_space_settings_add_nothing() {
+        // Sessions saved with the Space module on still load; it is gone,
+        // so the sound has no tail after the input stops.
         let s = slot(&[
             ("dyn_on", 0.0),
             ("tone_on", 0.0),
@@ -1137,27 +910,14 @@ mod tests {
         x.extend(vec![0.0; 48_000]);
         fx.process(&mut x);
         let tail = rms(&x[(4800 + 9600) * 2..(4800 + 24_000) * 2]);
-        assert!(tail > 0.001, "reverb tail {tail}");
-        assert!(x.iter().all(|v| v.is_finite() && v.abs() < 4.0));
+        assert!(tail < 1e-6, "tail {tail}");
     }
 
     #[test]
     fn every_style_runs_clean() {
-        for (k, n) in [
-            ("dyn_style", 3),
-            ("tone_style", 3),
-            ("fx_style", 5),
-            ("space_style", 6),
-        ] {
+        for (k, n) in [("dyn_style", 3), ("tone_style", 3), ("fx_style", 5)] {
             for i in 0..n {
-                let s = slot(&[
-                    (k, i as f64),
-                    ("fx_on", 1.0),
-                    ("space_on", 1.0),
-                    ("delay", 50.0),
-                    ("air", 50.0),
-                    ("fx", 80.0),
-                ]);
+                let s = slot(&[(k, i as f64), ("fx_on", 1.0), ("air", 50.0), ("fx", 80.0)]);
                 let mut fx = build(&s, 44_100).unwrap();
                 let mut x = tone(44_100, 0.5, 220.0);
                 fx.process(&mut x);

@@ -3,8 +3,8 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The Vox Strip window: four modules side by side in signal order
-  (Dynamics, Tone, Effects, Space), each with a power light, a style
+  The Vox Strip window: three modules side by side in signal order
+  (Dynamics, Tone, Effects), each with a power light, a style
   stepper and its one or two main controls, over an Input and Output
   bar. Our own look: a graphite faceplate with numbered modules in one
   accent color (the theme's), so the flow reads left to right.
@@ -19,12 +19,10 @@
   interface Props {
     slot: EffectSlotDoc;
     info: EffectInfo;
-    /** The session tempo, for the Space module's delay. */
-    tempo?: number | undefined;
     onParams: (changes: [EffectParamInfo, number][], label: string, done: boolean) => void;
   }
 
-  const { slot, info, tempo, onParams }: Props = $props();
+  const { slot, info, onParams }: Props = $props();
 
   const byKey = $derived(new Map(info.params.map((p) => [p.key, p])));
   const P = (k: string) => byKey.get(k)!;
@@ -48,7 +46,6 @@
     { key: "dyn", name: "Dynamics", power: "dyn_on", style: "dyn_style", trim: "dyn_trim", color: "var(--accent)" },
     { key: "tone", name: "Tone", power: "tone_on", style: "tone_style", trim: "tone_trim", color: "var(--accent)" },
     { key: "fx", name: "Effects", power: "fx_on", style: "fx_style", trim: "fx_trim", color: "var(--accent)" },
-    { key: "space", name: "Space", power: "space_on", style: "space_style", trim: "space_trim", color: "var(--accent)" },
   ];
 
   function step(m: Module, d: number) {
@@ -115,14 +112,6 @@
     Radio: "M5 11h20v11H5zM8 7l9 4M19 16a2.5 2.5 0 1 0 0.01 0",
     Widen: "M15 6v16M4 14h7M8 11l-4 3 4 3M26 14h-7M22 11l4 3-4 3",
   };
-  const SPACE_ICONS: Record<string, string> = {
-    Plate: "M5 7h16l4 4v10H9l-4-4z",
-    Room: "M5 22V10l10-5 10 5v12z",
-    Hall: "M3 22V12l12-7 12 7v10M8 22v-6M15 22v-6M22 22v-6",
-    Chamber: "M5 22V8h20v14M10 22v-8h10v8",
-    Slap: "M6 14h4M12 10v8M18 12v4M22 13v2",
-    "Tape Echo": "M9 14a4 4 0 1 0 0.01 0M21 14a4 4 0 1 0 0.01 0M9 18h12",
-  };
   const DYN_ICONS: Record<string, string> = {
     "Smooth + Fast": "M4 20c6 0 6-12 11-12M15 8l3 6 3-10 3 16",
     Clean: "M4 20L15 9h11",
@@ -134,7 +123,7 @@
     Modern: "M3 18l6-8 6 6 6-10 6 4",
   };
   const iconFor = (m: Module, name: string) =>
-    (m.key === "fx" ? FX_ICONS : m.key === "space" ? SPACE_ICONS : m.key === "dyn" ? DYN_ICONS : TONE_ICONS)[name] ?? "";
+    (m.key === "fx" ? FX_ICONS : m.key === "dyn" ? DYN_ICONS : TONE_ICONS)[name] ?? "";
 
   const TONE_SLIDERS = ["low", "mid", "high"];
 </script>
@@ -224,20 +213,6 @@
             </div>
           {:else if m.key === "fx"}
             <div class="one">{@render knob("fx", 112)}</div>
-          {:else}
-            <div class="knobs">
-              {@render knob("reverb", 74)}
-              {@render knob("delay", 74)}
-            </div>
-            <div class="sync">
-              <select aria-label="Delay time" value={Math.round(val("note"))} onchange={(e) => set("note", Number(e.currentTarget.value), true)} disabled={style === "Slap"} title={style === "Slap" ? "Slap uses its own short echo" : "Delay time, as a note value at the tempo"}>
-                {#each choicesOf("note") as c, i (c)}<option value={i}>{c}</option>{/each}
-              </select>
-              <span class="bpm">{Math.round(val("tempo"))} BPM</span>
-              {#if tempo && Math.abs(tempo - val("tempo")) > 0.05}
-                <button type="button" title="Use the session tempo ({tempo} BPM)" onclick={() => set("tempo", tempo, true)}>Sync</button>
-              {/if}
-            </div>
           {/if}
         </div>
         <footer>
@@ -313,7 +288,7 @@
   }
   .modules {
     display: grid;
-    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
     gap: 8px;
   }
   .mod {
@@ -482,11 +457,6 @@
     align-items: center;
     gap: 2px;
   }
-  .body > .knobs {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
   .one {
     display: grid;
     flex: 1;
@@ -542,24 +512,6 @@
     color: var(--ink-dim);
     font-variant-numeric: tabular-nums;
     font-size: 9px;
-  }
-  .sync {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .sync select,
-  .sync button {
-    padding: 1px 4px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 3px;
-    background: #15171a;
-    color: var(--ink);
-    font-size: 10px;
-  }
-  .bpm {
-    color: var(--ink-dim);
-    font-variant-numeric: tabular-nums;
   }
   .mod footer {
     display: flex;

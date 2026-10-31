@@ -940,7 +940,7 @@
           {/await}
         {:else if winSlot.effect === "altaudio.vox_strip"}
           {#await import("./VoxStripPanel.svelte") then { default: VoxStripPanel }}
-          <VoxStripPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          <VoxStripPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
           {/await}
         {:else if winSlot.effect === "altaudio.amp_model"}
           {#await import("./AmpPanel.svelte") then { default: AmpPanel }}

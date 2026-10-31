@@ -15,6 +15,9 @@
   import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, setAudioDriver, type AudioDriver, type AudioInput } from "../core";
   import { prefs } from "../../stores/prefs";
   import { keepLast } from "./device-cache";
+  import { get } from "svelte/store";
+  import { recording } from "../../stores/record";
+  import { noteStep } from "../trail";
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
   import { themeColor } from "../colors";
@@ -25,11 +28,13 @@
     page?: Page;
     /** Saves the settings; `keepOpen` (the Apply button) leaves the dialog open. */
     onApply: (d: SettingsDraft, keepOpen?: boolean) => void;
+    /** The ASIO driver or buffer size changed: inputs open for meters or monitoring are opened again with it. */
+    onDriverChanged?: () => void;
     onNotice?: (m: string) => void;
     onClose: () => void;
   }
 
-  const { initial, page: startPage = "General", onApply, onNotice = () => {}, onClose }: Props = $props();
+  const { initial, page: startPage = "General", onApply, onNotice = () => {}, onDriverChanged = () => {}, onClose }: Props = $props();
 
   // Settings backups (General page).
   let backingUp = $state(false);
@@ -127,7 +132,11 @@
   }
   /** A new ASIO driver or buffer size: tell the core, then look the devices up again. */
   async function applyAsio() {
+    noteStep(`ASIO set to ${d.app.asioDriver ?? "auto"}, buffer ${d.app.asioBuffer || "driver's own"}`);
     await setAudioDriver(d.app.driver === "asio", d.app.asioDriver, d.app.asioBuffer).catch(() => undefined);
+    // A recording keeps its streams to the end; meters and monitoring reopen now.
+    if (get(recording).active) onNotice("The new ASIO setting takes effect when this recording stops.");
+    else onDriverChanged();
     d.app.output = null;
     d.app.waveInput = null;
     refreshDevices();

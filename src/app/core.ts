@@ -936,6 +936,8 @@ export interface RecordTarget {
   /** With monitor: the track's fader in dB and pan (-100 to 100), so the input is heard as the track plays. */
   gainDb?: number;
   pan?: number;
+  /** With monitor: the chain's plug-ins are heard too (each its own copy). */
+  plugins?: boolean;
 }
 
 export interface Take {
@@ -1025,6 +1027,11 @@ export function audioDriver(): Promise<AudioDriver> {
 }
 
 /** ASIO (true) or the system driver (false), from the next stream opened; with ASIO, which driver (null lets the app pick) and the buffer size (0 keeps the driver's own). */
+/** Writes one line to the audio log (for errors with no detail of their own). */
+export function logLine(line: string): Promise<void> {
+  return invoke<void>("log_line", { line });
+}
+
 export function setAudioDriver(asio: boolean, driver: string | null = null, buffer = 0): Promise<void> {
   return invoke<void>("set_audio_driver", { asio, driver, buffer });
 }

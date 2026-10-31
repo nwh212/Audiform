@@ -52,6 +52,8 @@ pub struct TrackChanges {
     pub hidden: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monitor_input: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitor_dry: Option<bool>,
     /// Hardware input; `Some(None)` clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<Option<String>>,
@@ -176,6 +178,9 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.monitor_input {
                 old.monitor_input = Some(std::mem::replace(&mut t.monitor_input, v));
+            }
+            if let Some(v) = changes.monitor_dry {
+                old.monitor_dry = Some(std::mem::replace(&mut t.monitor_dry, v));
             }
             if let Some(v) = &changes.input {
                 old.input = Some(std::mem::replace(&mut t.input, v.clone()));

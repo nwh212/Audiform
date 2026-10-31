@@ -761,6 +761,21 @@ fn pool() -> &'static Mutex<HashMap<Id, Pooled>> {
 }
 
 thread_local! {
+    /// Inside [`dedicated`]: never borrow playback's host.
+    static OWN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Runs `f` with every plug-in host it starts a copy of its own, never
+/// playback's (which may be playing at the same time): input monitoring
+/// with plug-ins.
+pub fn dedicated<T>(f: impl FnOnce() -> T) -> T {
+    let was = OWN.with(|c| c.replace(true));
+    let out = fresh(f);
+    OWN.with(|c| c.set(was));
+    out
+}
+
+thread_local! {
     static FRESH: Cell<bool> = const { Cell::new(false) };
     /// Which shared processes plug-ins join: 0 for playback, a new number per mixdown.
     static SCOPE: Cell<u64> = const { Cell::new(0) };
@@ -795,8 +810,10 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
     let found = find(&slot.effect)?;
     let fresh = FRESH.with(|c| c.get());
     if fresh {
-        if let Some(h) = borrowable(slot, rate) {
-            return Some(h);
+        if !OWN.with(Cell::get) {
+            if let Some(h) = borrowable(slot, rate) {
+                return Some(h);
+            }
         }
     } else {
         // One start per slot: if it is already starting (in the background,
@@ -840,7 +857,13 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         found.info.name,
         if started.is_ok() { "loaded" } else { "failed" },
         t0.elapsed().as_secs_f64() * 1e3,
-        if fresh { " (for a mixdown)" } else { "" }
+        if OWN.with(Cell::get) {
+            " (for monitoring)"
+        } else if fresh {
+            " (for a mixdown)"
+        } else {
+            ""
+        }
     ));
     if !fresh {
         if let Ok(mut s) = starting().lock() {

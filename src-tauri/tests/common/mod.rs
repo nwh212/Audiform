@@ -146,6 +146,7 @@ pub fn track() -> Track {
         space: None,
         record_armed: true,
         monitor_input: false,
+        monitor_dry: false,
         input: Some("Mic 1".into()),
         output: Output::Bus { bus_id: id(400) },
         sends: vec![Send {

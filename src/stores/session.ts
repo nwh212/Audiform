@@ -10,6 +10,7 @@
  * Field names match the session file format (snake_case; `.audfrm`, formerly `.altaudio`).
  */
 
+import { noteStep } from "../app/trail";
 import { DEFAULT_TEMPO, beatsToSeconds, type TempoDoc } from "./tempo";
 import type { Command } from "../commands";
 import type { CommandRunner } from "./media-pool";
@@ -257,6 +258,8 @@ export interface TrackDoc {
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
   hidden?: boolean;
   monitor_input?: boolean;
+  /** Monitoring leaves the plug-ins out (built-in effects, fader and pan still apply). */
+  monitor_dry?: boolean;
   input?: string | null;
   effects?: EffectChainDoc;
   output?: OutputDoc;
@@ -494,6 +497,7 @@ export interface TrackChanges {
   show_automation?: boolean;
   hidden?: boolean;
   monitor_input?: boolean;
+  monitor_dry?: boolean;
   input?: string | null;
   role?: "standard" | "guest";
   /** The host profile applied; "" clears it. */
@@ -749,6 +753,7 @@ export class SessionStore {
   }
 
   edit(label: string, op: Op, runner: CommandRunner): Promise<void> {
+    noteStep(`edit ${label}`);
     const cmd = new OpCommand(this, op, label);
     const key = mergeKey(op);
     if (key) this.newest.set(key, cmd);

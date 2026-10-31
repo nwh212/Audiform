@@ -59,6 +59,7 @@ fn monitor_mixes_only_marked_targets_to_stereo() {
         chain: None,
         gain_db: 0.0,
         pan: 0.0,
+        plugins: false,
     };
     assert!(MonitorMix::new(&[(mk("a", false), vec![0])], 3, 48_000).is_none());
     // Device has 3 channels: a mono mic on 0 (monitored), a stereo pair
@@ -95,6 +96,7 @@ fn monitor_applies_the_tracks_built_in_effects() {
         chain: Some(chain),
         gain_db: 0.0,
         pan: 0.0,
+        plugins: false,
     };
     let mut m = MonitorMix::new(&[(target, vec![0])], 1, 48_000).unwrap();
     let mut out = Vec::new();
@@ -114,6 +116,7 @@ fn live_tap_measures_each_target() {
         chain: None,
         gain_db: 0.0,
         pan: 0.0,
+        plugins: false,
     };
     let mut tap = LiveTap::new(&[(mk("a"), vec![0]), (mk("b"), vec![1])], 2);
     let mut live = HashMap::new();
@@ -141,6 +144,7 @@ fn writer_splits_device_channels_into_takes() {
         chain: None,
         gain_db: 0.0,
         pan: 0.0,
+        plugins: false,
     };
     let mut w = TakeWriter::create(
         dir.path(),
@@ -187,6 +191,7 @@ fn tracks_armed_while_recording_get_their_own_takes() {
         chain: None,
         gain_db: 0.0,
         pan: 0.0,
+        plugins: false,
     };
     let mut w = TakeWriter::create(dir.path(), &[], 48_000, 1).unwrap();
     w.push(&[0.1, 0.2]).unwrap();

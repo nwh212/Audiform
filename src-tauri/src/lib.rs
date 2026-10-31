@@ -170,6 +170,7 @@ pub fn run() {
             commands::devices::output_channels,
             commands::devices::audio_driver,
             commands::devices::set_audio_driver,
+            commands::devices::log_line,
             commands::cache::cache_info,
             commands::cache::cache_clear_peaks,
             commands::cache::cache_set_folder,

@@ -263,6 +263,14 @@ pub fn set_audio_driver(asio: bool, driver: Option<String>, buffer: Option<u32>)
     ));
 }
 
+/// Writes one line from the interface to the audio log: an error that
+/// came with no detail of its own, with the steps that led to it.
+#[tauri::command]
+pub fn log_line(line: String) {
+    let line: String = line.chars().take(2000).collect();
+    crate::engine::host::log(&line);
+}
+
 /// The audio inputs available now. Empty when there are none.
 #[tauri::command]
 pub async fn audio_inputs(asio: Option<bool>) -> Result<Vec<AudioInput>, String> {

@@ -551,6 +551,10 @@ pub struct Track {
     pub record_armed: bool,
     /// Scaffolding (P4): input monitoring on.
     pub monitor_input: bool,
+    /// Monitoring leaves the track's plug-ins out (built-in effects, fader
+    /// and pan still apply), for less delay. Left out of the file when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub monitor_dry: bool,
     /// Scaffolding (P4): hardware input name.
     pub input: Option<String>,
 
@@ -602,6 +606,7 @@ impl Track {
             space: None,
             record_armed: false,
             monitor_input: false,
+            monitor_dry: false,
             input: None,
             output: Output::Master,
             sends: Vec::new(),

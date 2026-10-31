@@ -45,10 +45,14 @@ pub struct RecordTarget {
     /// Also play this input through the speakers.
     #[serde(default)]
     pub monitor: bool,
-    /// The track's Voice Chain. With `monitor`, the player hears the
-    /// built-in effects in it, as they were when monitoring started.
+    /// The track's Voice Chain. With `monitor`, the player hears it, as it
+    /// was when monitoring started.
     #[serde(default)]
     pub chain: Option<EffectChain>,
+    /// With `monitor`: the chain's plug-ins are heard too (each in its own
+    /// copy, so playback's are left alone), at the cost of their delay.
+    #[serde(default)]
+    pub plugins: bool,
     /// With `monitor`: the track's fader, in dB, so the input is heard at
     /// the level the track plays at.
     #[serde(default, alias = "gainDb")]
@@ -332,15 +336,30 @@ impl LiveTap {
     }
 }
 
-/// The chain a monitored track's player hears: the track's own built-in
-/// effects. A VST3 plug-in is left out, since it runs in another process
-/// and its delay would be heard, and so is an effect that listens to
-/// another track.
-fn monitor_chain(chain: Option<&EffectChain>, rate: u32) -> Option<ChainProcessor> {
+/// The chain a monitored track's player hears: the track's own effects.
+/// With `plugins`, its VST3 plug-ins too, each a copy of its own (playback
+/// keeps its own copies running); without, only the built-in ones. An
+/// effect that listens to another track is always left out.
+fn monitor_chain(chain: Option<&EffectChain>, rate: u32, plugins: bool) -> Option<ChainProcessor> {
     let mut c = chain?.clone();
     c.slots
-        .retain(|s| !crate::plugins::is_plugin(&s.effect) && s.sidechain.is_none());
-    ChainProcessor::new(&c, rate)
+        .retain(|s| s.sidechain.is_none() && (plugins || !crate::plugins::is_plugin(&s.effect)));
+    if plugins && c.slots.iter().any(|s| crate::plugins::is_plugin(&s.effect)) {
+        crate::plugins::instance::dedicated(|| ChainProcessor::new(&c, rate))
+    } else {
+        ChainProcessor::new(&c, rate)
+    }
+}
+
+/// True when a target's monitoring asks for plug-ins it has.
+fn wants_plugins(t: &RecordTarget) -> bool {
+    t.monitor
+        && t.plugins
+        && t.chain.as_ref().is_some_and(|c| {
+            c.slots
+                .iter()
+                .any(|s| s.enabled && crate::plugins::is_plugin(&s.effect))
+        })
 }
 
 /// Mixes the monitored targets' channels to stereo for the speakers. A
@@ -370,7 +389,7 @@ impl MonitorMix {
         let picks: Vec<Vec<usize>> = monitored.iter().map(|(_, c)| c.clone()).collect();
         let chains = monitored
             .iter()
-            .map(|(t, _)| monitor_chain(t.chain.as_ref(), rate))
+            .map(|(t, _)| monitor_chain(t.chain.as_ref(), rate, t.plugins))
             .collect();
         let gains = monitored.iter().map(|(t, _)| t.monitor_gains()).collect();
         (!picks.is_empty()).then_some(Self {
@@ -849,10 +868,34 @@ fn run(
 
     // Input monitoring. A system-audio take is already what the speakers
     // play, so it is never sent back to them.
-    let mut mix = if loopback {
-        None
+    // Plug-ins take a moment to start: monitoring begins at once with the
+    // built-in effects only, and the full chain takes over when its
+    // plug-ins are running. The take never waits on them.
+    let (mut mix, mut full_mix) = if loopback {
+        (None, None)
+    } else if targets.iter().any(|(t, _)| wants_plugins(t)) {
+        let dry: Vec<(RecordTarget, Vec<usize>)> = targets
+            .iter()
+            .map(|(t, c)| {
+                (
+                    RecordTarget {
+                        plugins: false,
+                        ..t.clone()
+                    },
+                    c.clone(),
+                )
+            })
+            .collect();
+        let (tx, rx) = mpsc::channel();
+        let full = targets.clone();
+        let _ = thread::Builder::new()
+            .name("monitor-plugins".into())
+            .spawn(move || {
+                let _ = tx.send(MonitorMix::new(&full, channels, rate));
+            });
+        (MonitorMix::new(&dry, channels, rate), Some(rx))
     } else {
-        MonitorMix::new(&targets, channels, rate)
+        (MonitorMix::new(&targets, channels, rate), None)
     };
     // An ASIO driver opens for one program at a time, so ASIO monitoring
     // plays on the input's own driver.
@@ -875,6 +918,7 @@ fn run(
     let mut drain = |consumer: &mut Consumer<f32>,
                      writer: &mut Option<TakeWriter>,
                      tap: &mut LiveTap,
+                     mix: &mut Option<MonitorMix>,
                      monitor: &mut Option<(Producer<f32>, cpal::Stream)>|
      -> Result<u64, String> {
         let mut frames = 0u64;
@@ -917,7 +961,17 @@ fn run(
     let mut quiet = Vec::new();
     let mut result = Ok(0);
     while !shared.stop.load(Ordering::SeqCst) {
-        match drain(&mut consumer, &mut writer, &mut tap, &mut monitor) {
+        if let Some(rx) = &full_mix {
+            match rx.try_recv() {
+                Ok(m) => {
+                    mix = m;
+                    full_mix = None;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => full_mix = None,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        match drain(&mut consumer, &mut writer, &mut tap, &mut mix, &mut monitor) {
             Ok(n) => got += n,
             Err(e) => {
                 result = Err(e);
@@ -976,7 +1030,7 @@ fn run(
     }
     drop(stream);
     if result.is_ok() {
-        result = drain(&mut consumer, &mut writer, &mut tap, &mut monitor);
+        result = drain(&mut consumer, &mut writer, &mut tap, &mut mix, &mut monitor);
     }
     drop(monitor);
     let takes = match writer {

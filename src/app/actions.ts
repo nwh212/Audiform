@@ -8,6 +8,7 @@
  * registered action shows disabled: the feature is not built yet.
  */
 
+import { noteStep } from "./trail";
 import { writable, type Readable } from "svelte/store";
 
 export interface Action {
@@ -102,6 +103,7 @@ export class ActionRegistry {
   async run(id: string): Promise<boolean> {
     const a = this.get(id);
     if (!a || !(a.enabled?.() ?? true)) return false;
+    noteStep(`action ${id}`);
     await a.run();
     this.invalidate();
     return true;

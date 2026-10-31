@@ -1776,6 +1776,10 @@
             "$ref": "#/$defs/MidiClip"
           }
         },
+        "monitor_dry": {
+          "description": "Monitoring leaves the track's plug-ins out (built-in effects, fader\nand pan still apply), for less delay. Left out of the file when off.",
+          "type": "boolean"
+        },
         "monitor_input": {
           "description": "Scaffolding (P4): input monitoring on.",
           "type": "boolean"

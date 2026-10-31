@@ -327,15 +327,26 @@
         <button type="button" class="ms solo" class:on={track.solo} title="Solo. Ctrl+click to hear only this track." aria-pressed={track.solo} onclick={(e) => (e.ctrlKey || e.metaKey ? soloOnly(track.id) : setTrack(track, { solo: !track.solo }, track.solo ? "Unsolo Track" : "Solo Track"))}>S</button>
         {#if !isMidi(track)}
         <button type="button" class="ms rec" class:on={track.record_armed} title="Arm for recording: Record records this track's input" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
+        {@const mon = !track.monitor_input ? "off" : track.monitor_dry ? "dry" : "full"}
         <button
           type="button"
           class="ms mon"
-          class:on={!!track.monitor_input}
-          title="Monitor Input: hear this track's input through the speakers while it is armed. Use headphones: speakers feed back into the mic."
-          aria-pressed={!!track.monitor_input}
-          onclick={() => setTrack(track, { monitor_input: !track.monitor_input }, "Monitor Input")}
+          class:on={mon !== "off"}
+          class:dry={mon === "dry"}
+          title={mon === "off"
+            ? "Monitor Input: off. Click to hear this track's input through the speakers while it is armed, through all its effects and plug-ins. Use headphones: speakers feed back into the mic."
+            : mon === "full"
+              ? "Monitor Input: on, with plug-ins. Click to leave the plug-ins out (less delay)."
+              : "Monitor Input: on, without plug-ins (built-in effects, fader and pan still apply). Click to turn monitoring off."}
+          aria-pressed={mon !== "off"}
+          onclick={() =>
+            setTrack(
+              track,
+              mon === "off" ? { monitor_input: true, monitor_dry: false } : mon === "full" ? { monitor_dry: true } : { monitor_input: false, monitor_dry: false },
+              mon === "off" ? "Monitor Input With Plug-ins" : mon === "full" ? "Monitor Input Without Plug-ins" : "Monitor Input Off",
+            )}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" /></svg>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor" /><path d="M5 5a4.2 4.2 0 0 0 0 6M11 5a4.2 4.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.3" />{#if mon === "full"}<path d="M2.5 3a7.5 7.5 0 0 0 0 10M13.5 3a7.5 7.5 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.3" />{/if}</svg>
         </button>
         {/if}
         <button type="button" class="ms mono short" class:on={!!track.mono} title="Mono: folds this track's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!track.mono} onclick={() => setTrack(track, { mono: !track.mono }, track.mono ? "Track Stereo" : "Track Mono")}><MonoIcon /></button>
@@ -951,6 +962,13 @@
   .ms.mon.on {
     background: var(--clip-1);
     color: #fff;
+  }
+
+  /* Monitoring without plug-ins: the same color, outlined. */
+  .ms.mon.on.dry {
+    background: transparent;
+    color: var(--clip-1);
+    box-shadow: inset 0 0 0 1.5px var(--clip-1);
   }
 
   .ms.pol {
