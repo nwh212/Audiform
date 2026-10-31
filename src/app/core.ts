@@ -1510,3 +1510,29 @@ export interface RackImport {
 export function importRackPresets(): Promise<RackImport | null> {
   return invoke<RackImport | null>("rack_presets_import");
 }
+
+/** A file's tags, as Track Details edits them. Missing fields are empty. */
+export interface FileTags {
+  title?: string;
+  artist?: string;
+  album?: string;
+  year?: string;
+  genre?: string;
+  comment?: string;
+  track?: string;
+}
+
+/** A file's tags and cover (a data: URL), and whether they can be saved into it. */
+export function trackDetailsRead(path: string): Promise<{ tags: FileTags; cover: string | null; writable: boolean }> {
+  return invoke("track_details_read", { path });
+}
+
+/** Asks for a cover picture; it comes back shrunk and as JPEG. Null on cancel. */
+export function trackDetailsPickCover(): Promise<string | null> {
+  return invoke<string | null>("track_details_pick_cover");
+}
+
+/** Saves the tags and cover into the file (no cover removes it). */
+export function trackDetailsWrite(path: string, tags: FileTags, cover: string | null): Promise<void> {
+  return invoke<void>("track_details_write", { path, tags, cover });
+}

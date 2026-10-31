@@ -11,6 +11,7 @@ pub mod app;
 pub mod batch;
 pub mod browse;
 pub mod cache;
+pub mod details;
 pub mod devices;
 pub mod effects;
 pub mod export;

@@ -476,7 +476,11 @@ mod tests {
             let s = slot(info.id, &[]);
             let Some(mut p) = build_wide(&s, 48_000, &names) else {
                 // Only the effects whose controls name left and right stay stereo.
-                assert!(STEREO_ONLY.contains(&info.id), "{} has no multichannel form", info.id);
+                assert!(
+                    STEREO_ONLY.contains(&info.id),
+                    "{} has no multichannel form",
+                    info.id
+                );
                 continue;
             };
             wide += 1;
@@ -489,5 +493,4 @@ mod tests {
         }
         assert!(wide > 20, "{wide}");
     }
-
 }

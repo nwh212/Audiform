@@ -302,6 +302,46 @@ pub(crate) fn set_flac_comments(
     }
 }
 
+/// Replaces a FLAC file's pictures with `picture` (a PICTURE block body),
+/// or removes them when None. Other blocks and the audio stay as they are.
+pub(crate) fn set_flac_picture(path: &Path, picture: Option<Vec<u8>>) -> std::io::Result<()> {
+    let bad = || std::io::Error::new(std::io::ErrorKind::InvalidData, "Not a FLAC file.");
+    let mut src = BufReader::new(File::open(path)?);
+    let mut magic = [0u8; 4];
+    src.read_exact(&mut magic).map_err(|_| bad())?;
+    if &magic != b"fLaC" {
+        return Err(bad());
+    }
+    let mut blocks: Vec<(u8, Vec<u8>)> = Vec::new();
+    loop {
+        let mut head = [0u8; 4];
+        src.read_exact(&mut head).map_err(|_| bad())?;
+        let len = (usize::from(head[1]) << 16) | (usize::from(head[2]) << 8) | usize::from(head[3]);
+        let mut body = vec![0u8; len];
+        src.read_exact(&mut body).map_err(|_| bad())?;
+        let kind = head[0] & 0x7f;
+        if kind != 6 {
+            blocks.push((kind, body));
+        }
+        if head[0] & 0x80 != 0 {
+            break;
+        }
+    }
+    if let Some(p) = picture {
+        blocks.insert(blocks.len().min(2), (6, p));
+    }
+    let tmp = path.with_extension("picture.tmp");
+    let written = write_flac_copy(&tmp, &blocks, &mut src);
+    drop(src);
+    match written.and_then(|_| fs::rename(&tmp, path)) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
 /// A new FLAC file at `tmp`: the marker, `blocks` (the last flagged as last), then
 /// everything left in `rest`, which is the audio.
 fn write_flac_copy(

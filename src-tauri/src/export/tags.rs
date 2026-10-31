@@ -45,7 +45,7 @@ pub struct Tags {
 }
 
 /// Each field with its ID3 frame, Vorbis key and RIFF INFO id.
-const FIELDS: [(&[u8; 4], &str, &[u8; 4]); 7] = [
+pub(crate) const FIELDS: [(&[u8; 4], &str, &[u8; 4]); 7] = [
     (b"TIT2", "TITLE", b"INAM"),
     (b"TPE1", "ARTIST", b"IART"),
     (b"TALB", "ALBUM", b"IPRD"),
@@ -69,7 +69,7 @@ impl Tags {
     }
 
     /// Fields that are set and not blank.
-    fn set(&self) -> impl Iterator<Item = (usize, &str)> {
+    pub(crate) fn set(&self) -> impl Iterator<Item = (usize, &str)> {
         self.values().into_iter().enumerate().filter_map(|(i, v)| {
             v.as_deref()
                 .map(str::trim)
@@ -230,7 +230,7 @@ pub fn write_tags(path: &Path, tags: &Tags) -> std::io::Result<bool> {
 }
 
 /// An ID3v2.3 comment frame: encoding, language, empty description, text.
-fn comment_frame(text: &str) -> Vec<u8> {
+pub(crate) fn comment_frame(text: &str) -> Vec<u8> {
     let mut body = vec![1u8];
     body.extend_from_slice(b"eng");
     body.extend_from_slice(&[0xff, 0xfe, 0, 0]);
@@ -306,7 +306,7 @@ pub fn info_chunk(tags: &Tags) -> Vec<u8> {
 
 /// Replaces any `LIST`/`INFO` chunk in the WAV with the tags, just before
 /// the `data` chunk.
-fn write_wav(path: &Path, tags: &Tags) -> std::io::Result<()> {
+pub(crate) fn write_wav(path: &Path, tags: &Tags) -> std::io::Result<()> {
     let bad = || std::io::Error::new(std::io::ErrorKind::InvalidData, "Not a WAV file.");
     let data = fs::read(path)?;
     if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WAVE" {

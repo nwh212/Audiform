@@ -67,6 +67,7 @@ Most dependencies are MIT or Apache-2.0 and are listed in `Cargo.lock` and `pack
 | FFmpeg DTS core decoder (`libavcodec/dca_core.c`, `dcadsp.c`, `dcadct.c`, `synth_filter.c`, tables from `dcadata.c` and `dcahuff.c`, FFmpeg 6.1.1; Copyright (C) 2016 foo86, 2004 Gildas Bazin and others) | LGPL-2.1-or-later | Ported to Rust in `src-tauri/src/codecs/dts/` (core.rs and the generated tables.rs keep the LGPL-2.1-or-later notice), to decode DTS WAV and `.dts` files. Fixed-point core only; output matches FFmpeg's bit-exact decode. LGPL-2.1-or-later is compatible with the app's GPL-3.0-or-later. |
 | ASIO SDK 2.3 (Steinberg, via `cpal`'s `asio` feature, Windows release builds only) | GPL-3.0 (dual licensed by Steinberg; we use the GPLv3 option) | Talking to ASIO audio drivers. ASIO is a trademark of Steinberg Media Technologies GmbH. We do not use the ASIO logo. |
 | `zip` | MIT | Reading zip downloads of recordings. |
+| `image` | MIT or Apache-2.0 | Reading album art pictures, shrinking them and saving them as JPEG (Track Details). |
 | `sha2` | MIT or Apache-2.0 | Checking Audio Separation downloads. |
 | `vst3` (bindings generated from the VST 3 SDK headers) and `com-scrape-types` | MIT or Apache-2.0 | Hosting VST3 plug-ins, in a separate process (`src-tauri/plughost`). The VST 3 SDK itself is MIT licensed by Steinberg (since 2025). VST is a trademark of Steinberg Media Technologies GmbH; we do not use the VST logo. VST2 is not supported (its SDK is no longer licensed). |
 | `libloading` | ISC | Loading a plug-in's library inside the plug-in host process. |

@@ -366,6 +366,7 @@
     });
     const out: ContextItem[] = [
       item("files.edit", "Edit File"),
+      item("files.track-details", "Track Details..."),
       {
         kind: "sub",
         label: "Insert into Multitrack",

@@ -84,6 +84,12 @@ fn track_item(text: &str) -> Option<Vec<u8>> {
 
 /// The `meta` box holding the tags.
 pub fn meta_box(tags: &Tags) -> Vec<u8> {
+    meta_box_with(tags, None)
+}
+
+/// The `meta` box holding the tags and, when given, the cover picture
+/// (JPEG or PNG, told apart by its first bytes).
+pub fn meta_box_with(tags: &Tags, cover: Option<&[u8]>) -> Vec<u8> {
     fn field(v: &Option<String>) -> Option<&str> {
         v.as_deref().map(str::trim).filter(|s| !s.is_empty())
     }
@@ -102,6 +108,17 @@ pub fn meta_box(tags: &Tags) -> Vec<u8> {
     }
     if let Some(item) = field(&tags.track).and_then(track_item) {
         items.extend(item);
+    }
+    if let Some(pic) = cover {
+        // Data type 13 is JPEG, 14 PNG.
+        let kind = if pic.starts_with(b"\x89PNG") {
+            14u8
+        } else {
+            13
+        };
+        let mut data = vec![0, 0, 0, kind, 0, 0, 0, 0];
+        data.extend_from_slice(pic);
+        items.extend(make_box(b"covr", &make_box(b"data", &data)));
     }
     // meta is a full box: version and flags first.
     let mut body = vec![0, 0, 0, 0];
@@ -155,6 +172,12 @@ fn shift_offsets(moov: &mut [u8], from: u64, delta: i64) -> std::io::Result<()> 
         }
     }
     Ok(())
+}
+
+/// Writes `tags` and the cover picture into an M4A file, replacing any
+/// tags and picture already there (no cover: none).
+pub fn write_m4a_with_cover(path: &Path, tags: &Tags, cover: Option<&[u8]>) -> std::io::Result<()> {
+    rewrite_udta(path, b"meta", &meta_box_with(tags, cover))
 }
 
 /// Writes `tags` into an M4A file, replacing any tags already there.

@@ -9,6 +9,7 @@ pub mod aac;
 pub mod adpcm;
 pub mod chapters;
 pub mod convert;
+pub mod details;
 pub mod encode;
 pub mod loudness;
 pub mod m4a_tags;

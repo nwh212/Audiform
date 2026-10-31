@@ -1171,6 +1171,8 @@
   }
 
   const actions = new ActionRegistry();
+  /** The file Track Details is open on, if any. */
+  let trackDetailsPath = $state<string | null>(null);
 
   // Waveform editor. Edits act on the selection; Amplify and Normalize
   // act on the whole file when nothing is selected.
@@ -1785,6 +1787,15 @@
       }),
       // Files panel right-click.
       actions.register({
+        id: "files.track-details",
+        run: () => {
+          const it = mediaPool.selectedItems()[0];
+          if (it) trackDetailsPath = it.path;
+        },
+        enabled: () => mediaPool.selectedItems().length === 1,
+        reason: () => "Select one file in the Files panel.",
+      }),
+      actions.register({
         id: "files.edit",
         run: () => {
           const it = mediaPool.selectedItems().find((x) => x.status === "ready");
@@ -2298,6 +2309,12 @@
       r?.(v);
     }}
   />
+{/if}
+
+{#if trackDetailsPath}
+  {#await import("./TrackDetailsDialog.svelte") then { default: TrackDetailsDialog }}
+  <TrackDetailsDialog path={trackDetailsPath} onNotice={showNotice} onDone={() => (trackDetailsPath = null)} />
+  {/await}
 {/if}
 
 {#if propertiesOpen && session.current}
