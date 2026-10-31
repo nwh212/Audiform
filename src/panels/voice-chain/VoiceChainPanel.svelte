@@ -605,7 +605,7 @@
   const canLearn = $derived(inWave || target?.kind === "track" || target?.kind === "clip");
   /** Effects whose window draws all of its own controls. */
   const BAND_EQS = ["altaudio.band_eq_10", "altaudio.band_eq_20", "altaudio.band_eq_30"];
-  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width", "altaudio.limiter", "altaudio.channel_mixer", "altaudio.reverb", "altaudio.echo"]);
+  const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width", "altaudio.limiter", "altaudio.channel_mixer", "altaudio.reverb", "altaudio.echo", "altaudio.modulation"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
     const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
@@ -930,6 +930,10 @@
         {:else if winSlot.effect === "altaudio.echo"}
           {#await import("./DelayPanel.svelte") then { default: DelayPanel }}
           <DelayPanel slot={winSlot} info={winInfo} tempo={doc?.tempo?.bpm} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
+        {:else if winSlot.effect === "altaudio.modulation"}
+          {#await import("./ModPanel.svelte") then { default: ModPanel }}
+          <ModPanel slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
           {/await}
         {:else if winSlot.effect === REVERB_ID}
           {#await import("./VerbPanel.svelte") then { default: VerbPanel }}

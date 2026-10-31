@@ -7,7 +7,12 @@
 //! Convert, from 3.0 up to 7.1.4.
 //!
 //! - The Reverb runs natively on the bed: one room, heard differently in
-//!   every speaker (see `verb.rs`).
+//!   every speaker (see `verb.rs`). The Convolution Reverb's recorded
+//!   space is stereo: it fills the room by an upmix (see `reverb.rs`).
+//! - Every copy works on its own speakers' sound, so the surrounds and
+//!   heights are processed, not copied from the fronts. Effects that
+//!   sweep or drift (Modulation) start each copy at its own point, so
+//!   the speakers do not move in lockstep.
 //! - Gain works on every channel as it is.
 //! - Every other effect runs as a set of stereo copies with the same
 //!   settings, one per speaker pair (L and R, Ls and Rs, the height
@@ -45,7 +50,7 @@ const SKIP_LFE: [&str; 9] = [
     "altaudio.echo",
     "altaudio.pitch_shift",
     "altaudio.phase_curve",
-    "altaudio.convolution_reverb",
+    super::modulation::ID,
     super::amp::AMP,
     super::tube::PREAMP,
     super::tube::OPTO,
@@ -68,6 +73,15 @@ pub fn build_wide(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<
         let p = Params::resolve(&info, &slot.params);
         return Some(Box::new(verb::Reverb::wide(&p, rate, names)));
     }
+    if info.id == super::reverb::ID {
+        let p = Params::resolve(&info, &slot.params);
+        return Some(Box::new(super::reverb::ConvolutionReverb::wide(
+            &p,
+            rate,
+            slot.data.as_deref(),
+            names,
+        )));
+    }
     if info.id == "altaudio.gain" {
         let p = Params::resolve(&info, &slot.params);
         return Some(Box::new(AllChannels {
@@ -77,10 +91,13 @@ pub fn build_wide(slot: &EffectSlot, rate: u32, names: &[String]) -> Option<Box<
     }
     let skip_lfe = SKIP_LFE.contains(&info.id);
     let mut units = Vec::new();
-    for group in groups(names, skip_lfe) {
+    for (k, group) in groups(names, skip_lfe).into_iter().enumerate() {
+        let mut proc = build(slot, rate)?;
+        // Each pair its own: sweeps and drifts start at their own point.
+        proc.vary(k);
         units.push(Unit {
             chans: group,
-            proc: build(slot, rate)?,
+            proc,
             buf: Vec::new(),
         });
     }

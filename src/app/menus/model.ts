@@ -57,7 +57,7 @@ const sep: MenuItem = { kind: "sep" };
 const popup = (id: string, label: string): MenuItem => ({ kind: "popup", id, label });
 
 /** The built-in effect families, as the effects catalog names them. */
-export const EFFECT_FAMILIES = ["Amplitude", "Delay and Reverb", "Dynamics", "Filter and EQ", "Restoration", "Stereo", "Time and Pitch", "Vocal"] as const;
+export const EFFECT_FAMILIES = ["Amplitude", "Delay and Reverb", "Dynamics", "Filter and EQ", "Modulation", "Restoration", "Stereo", "Time and Pitch", "Vocal"] as const;
 
 const P2 = "Arrives with playback (P2).";
 const P3 = "Arrives with editing (P3).";

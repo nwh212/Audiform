@@ -260,6 +260,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Time and Pitch": "#d86f9b",
   Stereo: "#4fc8b8",
   "Delay and Reverb": "#9d7cf0",
+  Modulation: "#5fb0e8",
   Vocal: "#ec6a92",
 };
 

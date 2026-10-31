@@ -29,7 +29,9 @@ pub fn preferences_save(app: AppHandle, values: BTreeMap<String, Value>) -> Resu
 /// every setting in one `.afbackup` file. Returns the file and how many
 /// settings files went in, or None on cancel.
 #[tauri::command]
-pub async fn settings_backup(app: AppHandle) -> Result<Option<(std::path::PathBuf, usize)>, String> {
+pub async fn settings_backup(
+    app: AppHandle,
+) -> Result<Option<(std::path::PathBuf, usize)>, String> {
     use tauri_plugin_dialog::DialogExt;
     let dir = config_dir(&app)?;
     let version = app.package_info().version.to_string();

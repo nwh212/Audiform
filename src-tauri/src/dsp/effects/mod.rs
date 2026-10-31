@@ -21,6 +21,7 @@ mod echo;
 mod eq;
 mod filters;
 pub mod mixer;
+pub mod modulation;
 mod phase;
 pub mod phase_curve;
 mod pitch;
@@ -202,6 +203,7 @@ pub fn catalog() -> Vec<EffectInfo> {
         verb::verb_info(),
         reverb::reverb_info(),
         mixer::mixer_info(),
+        modulation::modulation_info(),
         pitch::pitch_info(),
         echo::echo_info(),
         restore::noise_info(),
@@ -364,6 +366,9 @@ pub trait Processor: Send {
     fn channels(&self) -> (Vec<String>, Vec<String>) {
         (routing::stereo(), routing::stereo())
     }
+    /// One of several copies on a speaker bed (`k` counts from 0): an
+    /// effect that sweeps or drifts starts this copy at its own point.
+    fn vary(&mut self, _k: usize) {}
 }
 
 /// A fixed delay for a stereo interleaved stream.
@@ -495,6 +500,7 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         width::WIDTH => Box::new(width::StereoWidth::new(&p, rate)),
         verb::ID => Box::new(verb::Reverb::new(&p, rate)),
         mixer::ID => Box::new(mixer::ChannelMixer::new(&p)),
+        modulation::ID => Box::new(modulation::Modulation::new(&p, rate)),
         reverb::ID => Box::new(reverb::ConvolutionReverb::new(
             &p,
             rate,
