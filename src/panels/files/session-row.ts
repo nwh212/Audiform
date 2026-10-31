@@ -14,6 +14,8 @@ export interface SessionRow {
   active: boolean;
   /** In front: the session the Multitrack editor shows. False for sessions set aside. */
   front: boolean;
+  /** Its saved file, null while never saved. A saved session set aside can be dragged onto a track as a clip. */
+  path: string | null;
 }
 
 /** Seconds as m:ss.mmm (or h:mm:ss.mmm). */

@@ -28,6 +28,8 @@ export interface DropTarget {
    * again when Alt goes down or up, so the preview can change with it.
    */
   onMove?(paths: string[], at: { x: number; y: number } | null, alt: boolean): void;
+  /** Session files dropped here come to this panel instead of opening (the Multitrack lanes place them as clips). */
+  readonly takesSessions?: boolean;
 }
 
 export type DropEvent =
@@ -87,7 +89,7 @@ export class FileDropRouter {
         this.setHovered(null);
         this.last = null;
         if (e.paths.length === 0) return;
-        if (this.sessions && e.paths.some(isSessionFile)) this.sessions(e.paths);
+        if (this.sessions && e.paths.some(isSessionFile) && !target?.takesSessions) this.sessions(e.paths);
         else if (target) target.onDrop(e.paths, { x: e.x, y: e.y }, this.alt);
         else this.fallback(e.paths);
         break;

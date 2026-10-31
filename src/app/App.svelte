@@ -894,9 +894,9 @@
     const rows: SessionRow[] = [];
     // A never-saved session with nothing in it (files imported only) is not listed as "Untitled Session".
     if (d && !session.isScratch(d)) {
-      rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true });
+      rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true, path: session.path });
     }
-    for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false });
+    for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false, path: p.path });
     const cur = get(sessionRows);
     if (JSON.stringify(cur) !== JSON.stringify(rows)) sessionRows.set(rows);
   }
@@ -1087,6 +1087,9 @@
             onError: showError,
             onPlaceFiles: (paths: string[], trackId: string | null, at: number, asTracks: boolean) =>
               void (session.current && session.isScratch(session.current) ? openInEmptyWindow(paths) : placeFiles(paths, trackId, at, { asTracks })).catch(showError),
+            // A session dropped on the lanes goes in as one clip of its mix; on an empty window it opens.
+            onPlaceSession: (path: string, trackId: string | null, at: number) =>
+              void (!session.current || session.isScratch(session.current) ? openPaths([path]) : linkedTools.insert(path, { trackId, at })).catch(showError),
             prompt: promptText,
             wave,
             waveFile,

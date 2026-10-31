@@ -67,11 +67,14 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
     }
   }
 
-  /** Multitrack > Insert Session as Clip. */
-  async function insert() {
+  /**
+   * Multitrack > Insert Session as Clip, or a session file dropped on the
+   * lanes (`path` and where it landed given).
+   */
+  async function insert(picked?: string, where?: { trackId: string | null; at: number }) {
     const doc = session.current;
     if (!doc || exporting()) return;
-    const path = await linkedPick().catch((e) => (showError(e), null));
+    const path = picked ?? (await linkedPick().catch((e) => (showError(e), null)));
     if (!path) return;
     const folder = await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.");
     if (!folder) return;
@@ -84,7 +87,8 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
       const now = session.current;
       if (!now) return;
       const ops: Op[] = [];
-      const sel = now.tracks.find((t) => t.id === editor.current().selectedTrack && t.kind !== "midi");
+      const want = where ? where.trackId : editor.current().selectedTrack;
+      const sel = now.tracks.find((t) => t.id === want && t.kind !== "midi");
       let trackId = sel?.id;
       if (!trackId) {
         trackId = uuid();
@@ -95,7 +99,7 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
         op: "add_media",
         media: { id: mediaId, path: r.path, relative_path: null, sample_rate: r.sampleRate, channels: 2, length: r.frames, linked: { path, stamp: r.stamp } },
       });
-      const clip = { id: uuid(), name: r.name, media_id: mediaId, start: Math.max(0, Math.round(playheadNow())), source_in: 0, source_out: r.frames };
+      const clip = { id: uuid(), name: r.name, media_id: mediaId, start: Math.max(0, Math.round(where ? where.at : playheadNow())), source_in: 0, source_out: r.frames };
       ops.push({ op: "add_clips", track_id: trackId, clips: [clip] });
       await session.edit("Insert Linked Session", { op: "batch", ops }, sessionHistory);
       editor.selectClips([clip.id], trackId);

@@ -91,6 +91,17 @@ describe("session files", () => {
     expect(isSessionFile("x.audfrm")).toBe(true);
     expect(isSessionFile("x.wav")).toBe(false);
   });
+
+  it("gives a dropped session to a panel that places sessions (the Multitrack lanes)", () => {
+    const opened: string[][] = [];
+    const dropped: string[][] = [];
+    const router = new FileDropRouter(() => {}, (p) => opened.push(p));
+    router.register({ element: box(0, 0, 250, 400), takesSessions: true, onDrop: (p) => dropped.push(p) });
+    router.handle({ type: "drop", paths: ["C:\\Beat.audfrm"], x: 10, y: 10 });
+    router.handle({ type: "drop", paths: ["C:\\Beat.audfrm"], x: 500, y: 10 });
+    expect(dropped).toEqual([["C:\\Beat.audfrm"]]);
+    expect(opened).toEqual([["C:\\Beat.audfrm"]]);
+  });
 });
 
 describe("dropScale", () => {

@@ -2156,3 +2156,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - Its media remembers the session file and a stamp of it (size and modified time) when rendered. When this session comes to the front, and when the app window comes back into focus, linked clips are checked; one whose session was saved since is rendered again and the new file swapped in (one undo step, "Update Linked Session"). A longer or shorter mix moves the clip's end as an edited file does. Decided: updates follow saves, not every edit, and the clip is one stereo mix, not stems; both can grow later without changing the clip.
 - Right-click a linked clip: Open Linked Session brings it to the front for editing; Update Linked Session Now renders it again at once. A session cannot hold its own mix; a session file that moved keeps its last mix, with a notice once.
 - Stored as `linked` on the media reference, left out of the file for ordinary media, so older files read as before.
+
+## 2026-10-31: Drop a session on a track to insert it as a clip
+- A session file (.audfrm, .altaudio or .sesx) dropped on the Multitrack lanes now goes in as one linked clip of its mix, on the track under the pointer at the drop point (a new track when dropped below the last), the same as Insert Session as Clip. Dropped anywhere else, or on an empty window, it still opens.
+- A saved session set aside in the Files panel can be dragged from its row onto a track the same way. The session in front cannot, since a session cannot hold itself.

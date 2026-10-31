@@ -15,7 +15,7 @@
   import type { ActionRegistry } from "../../app/actions";
   import { liveCopies, liveCopyOf } from "../../stores/wave";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
-  import type { FileDropRouter } from "../../app/filedrop";
+  import { isSessionFile, type FileDropRouter } from "../../app/filedrop";
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
@@ -77,6 +77,8 @@
     /** Adds files as clips on a track (null makes a new track) at a session sample. */
     /** `asTracks`: several files go one per track, all from `at`. */
     onPlaceFiles: (paths: string[], trackId: string | null, at: number, asTracks: boolean) => void;
+    /** A session file dropped on the lanes: its mix goes in as one linked clip. */
+    onPlaceSession?: (path: string, trackId: string | null, at: number) => void;
     shortcutFor?: (id: string) => string | undefined;
     onError?: (e: unknown) => void;
     /** Asks for one line of text. */
@@ -99,6 +101,7 @@
     router,
     actions,
     onPlaceFiles,
+    onPlaceSession,
     shortcutFor = () => undefined,
     onError = console.error,
     prompt = async () => null,
@@ -402,11 +405,16 @@
     return router.register({
       element: lanesEl,
       onHover: (over) => (dropping = over),
-      onMove: (paths, at, alt) => showDropGhost(paths, at, alt),
+      onMove: (paths, at, alt) => showDropGhost(paths.filter((p) => !isSessionFile(p)), at, alt),
+      takesSessions: !!onPlaceSession,
       // Without Alt, several files go one per track; with Alt, one after another on one track.
+      // A session file goes in as one clip of its mix (the first one dropped).
       onDrop: (paths, at, alt) => {
         const { trackId, sample } = hitLanes(at.x, at.y);
-        onPlaceFiles(paths, trackId, dropSample(sample), !alt);
+        const sessionPath = paths.find(isSessionFile);
+        const audio = paths.filter((p) => !isSessionFile(p));
+        if (sessionPath && onPlaceSession) onPlaceSession(sessionPath, trackId, dropSample(sample));
+        if (audio.length) onPlaceFiles(audio, trackId, dropSample(sample), !alt);
       },
     });
   });

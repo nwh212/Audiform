@@ -565,6 +565,13 @@
           list?.focus();
         }}
         ondblclick={() => onOpenSession(sr.id)}
+        onpointerdown={(e) => {
+          // A saved session set aside drags onto a track as one clip of its mix.
+          if (!sr.front && sr.path && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            const path = sr.path;
+            beginPathDrag(e, drop, () => [path], () => "1 session", root ?? undefined);
+          }
+        }}
         oncontextmenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
