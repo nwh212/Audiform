@@ -145,6 +145,9 @@ pub enum Op {
         name: String,
         stereo: bool,
         index: usize,
+        /// Adds it as a 3D Bus.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        room: bool,
     },
     /// Puts back a removed bus exactly as it was. Routes that pointed at
     /// it are put back by the ops batched with this one.

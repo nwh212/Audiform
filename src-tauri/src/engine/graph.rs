@@ -87,6 +87,12 @@ struct Strip {
     auto: Option<super::automation::StripAuto>,
     /// 3D Space sessions: the decorrelators and delay for Spread and Spatialize.
     diffuse: Option<Box<crate::dsp::diffuse::Diffuser>>,
+    /// A 3D Bus in a 3D Space session: what feeds it arrives placed on
+    /// the speakers in `bed_in`, its chain runs there, and the bed goes
+    /// on to the master's, held back by `bed_delay` to line up.
+    room: bool,
+    bed_in: Vec<f32>,
+    bed_delay: Delay,
 }
 
 /// Peaks since the last read, 0 to 1 (and above on overs).
@@ -247,13 +253,32 @@ impl Graph {
                 ..Strip::default()
             })
             .collect();
+        // 3D Space sessions: the master chain runs on the speakers.
+        let bed_names: Vec<String> = s
+            .space
+            .map(|sp| {
+                crate::dsp::space::speakers(sp.layout)
+                    .iter()
+                    .map(|x| x.name.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut buses: Vec<Strip> = if routed {
             s.buses
                 .iter()
                 .map(|b| Strip {
                     id: b.id,
                     mono: b.channels == ChannelLayout::Mono,
-                    fx: fx(&b.effects),
+                    // A 3D Bus outside a 3D Space session is a plain stereo bus.
+                    room: b.room && !bed_names.is_empty(),
+                    fx: if b.room && !bed_names.is_empty() {
+                        Fx::with_channels(&b.effects, rate, &bed_names).map(|mut f| {
+                            f.primed = true;
+                            f
+                        })
+                    } else {
+                        fx(&b.effects)
+                    },
                     auto: super::automation::StripAuto::new(
                         &b.envelopes,
                         &b.sends,
@@ -272,16 +297,7 @@ impl Graph {
                 st.diffuse = Some(Box::new(crate::dsp::diffuse::Diffuser::new(rate, k)));
             }
         }
-        // 3D Space sessions: the master chain runs on the speakers.
-        let bed_names: Vec<String> = s
-            .space
-            .map(|sp| {
-                crate::dsp::space::speakers(sp.layout)
-                    .iter()
-                    .map(|x| x.name.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+
         let mut master = Strip {
             id: Id::nil(),
             fx: match (routed, bed_names.is_empty()) {
@@ -350,6 +366,7 @@ impl Graph {
         };
         // Where each strip's output and sends go, kept only when the
         // routing order kept them (a damaged file's loop goes to the master).
+        let rooms: Vec<bool> = buses.iter().map(|b| b.room).collect();
         let main_dest = |n: Node| -> Dest {
             if !routed {
                 if let Node::Track(i) = n {
@@ -358,6 +375,8 @@ impl Graph {
             }
             let output = match n {
                 Node::Track(i) => &s.tracks[i].output,
+                // A 3D Bus goes straight to the master's speakers.
+                Node::Bus(i) if rooms.get(i).copied().unwrap_or(false) => return Dest::Master,
                 Node::Bus(i) => &s.buses[i].output,
             };
             match routing::output_bus(s, output) {
@@ -465,6 +484,10 @@ impl Graph {
             };
             if let Node::Track(_) = n {
                 st.in_delay = Delay::new(me as usize);
+            }
+            if st.room {
+                let frames = routes[0].delay.frames();
+                st.bed_delay = Delay::with_channels(frames, bed_names.len());
             }
             st.routes = routes;
         }
@@ -584,7 +607,11 @@ impl Graph {
         }
         for (id, chain) in &update.buses {
             if let Some(st) = self.buses.iter_mut().find(|st| st.id == *id) {
-                ok &= swap_fx(&mut st.fx, chain, rate);
+                ok &= if st.room {
+                    swap_fx_ch(&mut st.fx, chain, rate, &self.bed_names)
+                } else {
+                    swap_fx(&mut st.fx, chain, rate)
+                };
             }
         }
         if let Some(chain) = &update.master {
@@ -635,13 +662,17 @@ impl Graph {
     pub fn process(&mut self, raw: &[Vec<f32>], out: &mut [Vec<f32>]) {
         let n = raw.first().map_or(0, Vec::len);
         let frames = n / 2;
+        let nb = self.bed_channels;
         for st in &mut self.buses {
             st.input.clear();
             st.input.resize(n, 0.0);
+            if st.room {
+                st.bed_in.clear();
+                st.bed_in.resize(frames * nb, 0.0);
+            }
         }
         self.master.input.clear();
         self.master.input.resize(n, 0.0);
-        let nb = self.bed_channels;
         // 3D sessions always make the bed: its channels are metered.
         let make_bed = nb > 0;
         if make_bed {
@@ -660,6 +691,11 @@ impl Graph {
                 Node::Track(i) => std::mem::take(&mut self.tracks[i]),
                 Node::Bus(i) => std::mem::take(&mut self.buses[i]),
             };
+            if let (Node::Bus(i), true) = (node, st.room) {
+                self.run_room_bus(i, &mut st, n);
+                self.buses[i] = st;
+                continue;
+            }
             let ran = matches!(node, Node::Track(i) if done.get(i).copied().unwrap_or(false));
             if !ran {
                 if let Node::Track(i) = node {
@@ -710,15 +746,24 @@ impl Graph {
                     }
                 }
                 route.delay.run(&mut scratch);
-                // 3D Space: placed into the room, and folded to stereo to listen.
-                if r == 0 && matches!(route.dest, Dest::Master) {
+                // 3D Space: placed into the room, and folded to stereo to
+                // listen. A 3D Bus hears it placed too, on its own speakers.
+                let room_bus = match route.dest {
+                    Dest::Bus(b) if self.buses[b].room => Some(b),
+                    _ => None,
+                };
+                if (r == 0 && matches!(route.dest, Dest::Master)) || room_bus.is_some() {
                     if let Some(p) = moved.as_ref().or(to.place.as_ref()) {
+                        let (fold_to, bed): (Option<&mut Vec<f32>>, &mut Vec<f32>) = match room_bus
+                        {
+                            // Its stereo comes from its speakers later.
+                            Some(b) => (None, &mut self.buses[b].bed_in),
+                            None => (Some(&mut self.master.input), &mut self.bed),
+                        };
                         let f = p.fold;
-                        for (o, v) in self
-                            .master
-                            .input
-                            .as_chunks_mut::<2>()
-                            .0
+                        for (o, v) in fold_to
+                            .map(|v| v.as_chunks_mut::<2>().0)
+                            .unwrap_or_default()
                             .iter_mut()
                             .zip(scratch.as_chunks::<2>().0.iter())
                         {
@@ -727,8 +772,7 @@ impl Graph {
                         }
                         if make_bed {
                             let [gl, gr] = &p.bed;
-                            for (o, v) in self
-                                .bed
+                            for (o, v) in bed
                                 .chunks_exact_mut(nb)
                                 .zip(scratch.as_chunks::<2>().0.iter())
                             {
@@ -737,8 +781,7 @@ impl Graph {
                                 }
                             }
                             if let Some((c, g)) = p.lfe {
-                                for (o, v) in self
-                                    .bed
+                                for (o, v) in bed
                                     .chunks_exact_mut(nb)
                                     .zip(scratch.as_chunks::<2>().0.iter())
                                 {
@@ -747,9 +790,10 @@ impl Graph {
                             }
                         }
                         // Spread and Spatialize: decorrelated copies to the speakers,
-                        // and folded to stereo for listening.
-                        if let (Some(fl), Some(dc)) = (p.field.as_ref(), st.diffuse.as_deref_mut())
-                        {
+                        // and folded to stereo for listening. Only on the main
+                        // output: the decorrelators run once a block.
+                        let field = if r == 0 { p.field.as_ref() } else { None };
+                        if let (Some(fl), Some(dc)) = (field, st.diffuse.as_deref_mut()) {
                             use crate::session::model::SpatializeMode as M;
                             let bed_n = if make_bed { nb } else { 0 };
                             for (k, v) in scratch.as_chunks::<2>().0.iter().enumerate() {
@@ -796,14 +840,20 @@ impl Graph {
                                         continue;
                                     }
                                     if c < bed_n {
-                                        self.bed[k * nb + c] += e;
+                                        if let Some(b) = room_bus {
+                                            self.buses[b].bed_in[k * nb + c] += e;
+                                        } else {
+                                            self.bed[k * nb + c] += e;
+                                        }
                                     }
                                     ol += e * fl.fold[c][0];
                                     or += e * fl.fold[c][1];
                                 }
-                                if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
-                                    o[0] += ol;
-                                    o[1] += or;
+                                if room_bus.is_none() {
+                                    if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
+                                        o[0] += ol;
+                                        o[1] += or;
+                                    }
                                 }
                             }
                         }
@@ -889,6 +939,59 @@ impl Graph {
         }
         self.scratch = scratch;
         self.applied = self.levels.clone();
+    }
+
+    /// A 3D Bus's block: its chain over its speakers, its fader (and
+    /// volume automation), then on to the master's speakers, and folded
+    /// to stereo to listen.
+    fn run_room_bus(&mut self, i: usize, st: &mut Strip, n: usize) {
+        let nb = self.bed_channels.max(1);
+        let frames = n / 2;
+        self.fill_keys(&mut st.keys, n);
+        if let Some(fx) = st.fx.as_mut() {
+            if let Some(a) = st.auto.as_ref() {
+                for l in &a.params {
+                    fx.chain
+                        .set_param(l.slot, &l.param, f64::from(l.value_at(self.pos)));
+                }
+            }
+            let keys: Vec<(Id, &[f32])> =
+                st.keys.iter().map(|t| (t.id, t.buf.as_slice())).collect();
+            fx.run_keyed(&mut st.bed_in, &keys);
+        }
+        // The fader, ramped across the block, as a per-frame gain (with
+        // its volume automation, read off a stereo buffer of ones).
+        let from = self.applied.buses[i].main;
+        let to = self.levels.buses[i].main;
+        // (Its stereo input is unused: everything reaches it placed.)
+        let mut gain = std::mem::take(&mut st.input);
+        gain.clear();
+        gain.resize(n, 1.0);
+        ramp(&mut gain, from, to, frames);
+        if let Some(a) = st.auto.as_mut().filter(|a| a.moves_level()) {
+            a.fill(self.pos, frames);
+            a.apply(0, &mut gain);
+        }
+        st.bed_delay.run(&mut st.bed_in);
+        for (k, f) in st.bed_in.chunks_exact(nb).enumerate() {
+            let g = 0.5 * (gain[2 * k] + gain[2 * k + 1]);
+            let (mut l, mut r) = (0.0f32, 0.0f32);
+            for (c, v) in f.iter().enumerate() {
+                let v = v * g;
+                if let Some(o) = self.bed.get_mut(k * nb + c) {
+                    *o += v;
+                }
+                l += v * self.bed_fold[c][0];
+                r += v * self.bed_fold[c][1];
+            }
+            st.peak[0] = st.peak[0].max(l.abs());
+            st.peak[1] = st.peak[1].max(r.abs());
+            if let Some(o) = self.master.input.get_mut(2 * k..2 * k + 2) {
+                o[0] += l;
+                o[1] += r;
+            }
+        }
+        st.input = gain;
     }
 
     /// Runs, side by side, the chains of tracks that hold a plug-in and

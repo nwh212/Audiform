@@ -1953,3 +1953,8 @@ Not changed: Mall Pastel and Analog cost about three times the dark theme's rast
 
 ## 2026-10-31: Subtle rounded corners
 - Dialogs (and effect windows) round their corners by 7 px, menus by 5 px and text fields and drop-down boxes by 3 px. They come from `--radius-dialog`, `--radius-menu` and `--radius-field` in `tokens.css`, applied to every element with the dialog or menu role and to every field, so no component needs its own rule. Panel lists stay square. The 95 and Phosphor themes set the three to 0 to keep their square look.
+
+## 2026-10-31: 3D Bus
+- A bus can be a 3D Bus (the `room` flag on a bus, left out of the file when off, so older sessions and versions read the same). In a 3D Space session, a track or bus that feeds or sends to a 3D Bus is placed in the room as it would be on the master (its spot, Spread and Spatialize on its output; sends use the spot only), the 3D Bus's effects run on all the speakers (see the multichannel effects entry), and its sound goes straight into the master's speakers after its fader, held back to line up with everything else. Its own output picker is greyed out, and it does not show in the 3D Space panel (it is not placed).
+- With 3D Space off, a 3D Bus is a plain stereo bus with stereo effects, exactly as before, and turns back into a 3D Bus when 3D Space is on again.
+- Made from Multitrack > Add Track > 3D Bus Track (and the lane right-click menu), which adds it already on, or with the 3D button on a bus header next to Mono, which only shows while 3D Space is on. Every change is one undoable step.

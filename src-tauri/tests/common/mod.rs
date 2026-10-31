@@ -183,6 +183,7 @@ pub fn bus() -> Bus {
         position: None,
         mono: false,
         space: None,
+        room: false,
     }
 }
 

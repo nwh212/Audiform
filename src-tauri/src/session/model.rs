@@ -655,6 +655,12 @@ pub struct Bus {
     /// the master (in place of its pan).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub space: Option<SpacePos>,
+    /// A 3D Bus (3D Space sessions only): what feeds it is placed in the
+    /// room as if it fed the master, its effects run on the speaker bed,
+    /// and the bed goes straight on to the master's. Left out of the file
+    /// when off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub room: bool,
 }
 
 impl Bus {
@@ -677,6 +683,7 @@ impl Bus {
             position: None,
             mono: false,
             space: None,
+            room: false,
         }
     }
 }

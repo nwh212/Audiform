@@ -99,7 +99,7 @@ export function emptyLaneItems(ctx: MenuCtx): ContextItem[] {
       sep,
       act("Add Mono Bus Track", "multitrack.add.bus-mono"),
       act("Add Stereo Bus Track", "multitrack.add.bus"),
-      off("Add 5.1 Bus Track", "Surround tracks are not planned."),
+      act("Add 3D Bus Track", "multitrack.add.bus-3d"),
       sep,
       act("Delete Empty Tracks", "multitrack.delete-empty"),
       sep,

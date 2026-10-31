@@ -18,7 +18,7 @@
 <script lang="ts">
   import type { CommandRunner } from "../../stores/media-pool";
   import { editor, type EditorState } from "../../stores/editor";
-  import { SPACE_LAYOUTS, type EnvelopeDoc, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
+  import { SPACE_LAYOUTS, type EnvelopeDoc, type OutputDoc, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
   import { transport } from "../../stores/open-session";
   import type { TransportState } from "../../stores/transport";
@@ -92,8 +92,12 @@
   const sources = $derived.by((): Source[] => {
     if (!doc) return [];
     const out: Source[] = [];
+    // Placed: what feeds the master, or feeds or sends to a 3D Bus.
+    const rooms = new Set((doc.buses ?? []).filter((b) => b.room).map((b) => b.id));
+    const placed = (o: OutputDoc | undefined, sends: { bus_id: string }[] | undefined) =>
+      !o || o.type === "master" || rooms.has(o.bus_id) || (sends ?? []).some((x) => rooms.has(x.bus_id));
     doc.tracks.forEach((t, i) => {
-      if (t.output && t.output.type !== "master") return;
+      if (!placed(t.output, t.sends)) return;
       // A track with nothing on it has nothing to place.
       if (t.clips.length === 0 && !(t.midi_clips?.length ?? 0)) return;
       out.push({
@@ -106,7 +110,8 @@
       });
     });
     for (const b of doc.buses ?? []) {
-      if (b.output && b.output.type !== "master") continue;
+      // A 3D Bus is not placed: it plays on the speakers as it is.
+      if (b.room || !placed(b.output, b.sends)) continue;
       out.push({ id: b.id, kind: "bus", name: b.name, color: b.color ? cssColor(b.color) : "var(--clip-3)", stereo: b.channels !== "mono" && !b.mono, pos: live?.id === b.id ? live.pos : automatedPos(tidyPos(b.space), b.envelopes as EnvelopeDoc[] | undefined, at) });
     }
     return out;

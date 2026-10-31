@@ -203,6 +203,22 @@ pub fn audible(s: &Session) -> (Vec<bool>, Vec<bool>) {
     (t, b)
 }
 
+/// True when a track or bus is placed in the room: it feeds the master,
+/// or feeds or sends to a 3D Bus (which hears it placed, as the master
+/// would).
+fn placed(
+    s: &Session,
+    output: crate::session::model::Output,
+    sends: &[crate::session::model::Send],
+) -> bool {
+    use crate::session::model::Output;
+    let room = |id: crate::session::model::Id| s.buses.iter().any(|b| b.id == id && b.room);
+    match output {
+        Output::Master => true,
+        Output::Bus { bus_id } => room(bus_id) || sends.iter().any(|x| room(x.bus_id)),
+    }
+}
+
 /// Every level from the session: faders, pans, mutes, solos, polarity
 /// and sends. A post-fader send follows the fader but not the pan (it
 /// has its own); a pre-fader send ignores both. Every send follows mute
@@ -255,7 +271,7 @@ pub fn levels(s: &Session) -> Levels {
                     t.pan
                 };
                 let stereo = t.channels != crate::session::model::ChannelLayout::Mono && !t.mono;
-                let place = (t.output == crate::session::model::Output::Master)
+                let place = placed(s, t.output, &t.sends)
                     .then(|| match (t.speaker, s.space) {
                         (Some(c), Some(sp)) => Some(Arc::new(Place::speaker(sp.layout, c))),
                         _ => Place::new(s, t.space.as_ref(), stereo),
@@ -280,7 +296,7 @@ pub fn levels(s: &Session) -> Levels {
                     b.pan
                 };
                 let stereo = b.channels != crate::session::model::ChannelLayout::Mono && !b.mono;
-                let place = (b.output == crate::session::model::Output::Master)
+                let place = (!b.room && placed(s, b.output, &b.sends))
                     .then(|| Place::new(s, b.space.as_ref(), stereo))
                     .flatten();
                 node(h, 1.0, vol, pan, &b.sends, b.mono, place)

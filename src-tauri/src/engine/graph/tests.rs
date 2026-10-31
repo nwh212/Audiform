@@ -517,3 +517,60 @@ fn a_damaged_loop_still_plays() {
         "the loop's back edge goes to the master"
     );
 }
+
+/// Renders a 3D Space session, returning each block's bed (one channel per speaker).
+fn render_bed(s: &Session, frames: usize) -> Vec<f32> {
+    let mut m = mix(s, true, 0);
+    m.graph().set_want_bed(true);
+    let mut out = vec![Vec::new(); m.outputs()];
+    let mut bed = Vec::new();
+    let mut done = 0;
+    while done < frames {
+        done += m.render(1_024.min(frames - done), &mut out);
+        bed.extend_from_slice(m.graph().bed());
+    }
+    bed
+}
+
+#[test]
+fn a_3d_bus_runs_its_effects_on_the_whole_room() {
+    use crate::session::model::{Space, SpaceLayout, SpacePos};
+    let dir = tempfile::tempdir().unwrap();
+    let path = click(dir.path());
+    let mut s = Session::new("t", RATE);
+    s.space = Some(Space {
+        layout: SpaceLayout::Surround51,
+        listen: Default::default(),
+    });
+    let t = track(&mut s, &path, 0, 0, 20_000);
+    s.tracks[t].space = Some(SpacePos {
+        x: -1.0,
+        y: 1.0,
+        ..SpacePos::default()
+    });
+    let mut bus = Bus::new("Room", ChannelLayout::Stereo);
+    bus.room = true;
+    bus.effects = chain("altaudio.reverb", &[("dry", 0.0), ("wet", 100.0)]);
+    let bus_id = bus.id;
+    s.buses.push(bus);
+    s.tracks[t].output = Output::Bus { bus_id };
+    let bed = render_bed(&s, 20_000);
+    let energy = |c: usize| {
+        bed.as_chunks::<6>()
+            .0
+            .iter()
+            .map(|f| f[c] * f[c])
+            .sum::<f32>()
+    };
+    // The click sits front left; the bus's reverb reaches every speaker
+    // (L R C LFE Ls Rs), the rear right too, but not the LFE.
+    for c in [0, 1, 2, 4, 5] {
+        assert!(energy(c) > 1e-4, "speaker {c}: {}", energy(c));
+    }
+    assert!(energy(3) < 1e-6);
+
+    // Without 3D Space it is a plain stereo bus and still plays.
+    s.space = None;
+    let out = render(&s, true, 0, 20_000);
+    assert!(peak(&out[0], 0, 20_000) > 1e-3);
+}

@@ -549,12 +549,15 @@
           <Dial value={b.volume_db} min={-60} max={12} step={0.1} origin={0} label="Volume" icon="volume" format={(v) => `${formatDb(v)}`} onChange={(v) => setBus(b, { volume_db: v }, "Bus Volume")} />
           <Dial value={b.pan} min={-100} max={100} step={1} origin={0} label="Pan" icon="pan" format={formatPan} onChange={(v) => setBus(b, { pan: v }, "Bus Pan")} />
           <button type="button" class="ms mono" class:on={!!b.mono} title="Mono: folds this bus's left and right into one centered signal, after its effects and before its fader and pan. Part of the mix, so exports hear it too." aria-pressed={!!b.mono} onclick={() => setBus(b, { mono: !b.mono }, b.mono ? "Bus Stereo" : "Bus Mono")}><MonoIcon /></button>
+          {#if doc?.space}
+            <button type="button" class="ms room3d" class:on={!!b.room} title="3D Bus: what feeds it is placed in the room as it would be on the master, its effects run on every speaker, and it plays straight into the master's speakers. Off, it is a stereo bus. With 3D Space off it is always a stereo bus." aria-pressed={!!b.room} onclick={() => setBus(b, { room: !b.room }, b.room ? "Make Stereo Bus" : "Make 3D Bus")}>3D</button>
+          {/if}
         </div>
         {#if busHeight(b) >= ROW_OUTPUT - 8 && doc}
           <div class="line">
             <label class="pick outpick" title="Where this bus's sound goes after its fader: the master or another bus">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
-              <select aria-label="{b.name} output" value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
+              <select aria-label="{b.name} output" disabled={!!(b.room && doc.space)} title={b.room && doc.space ? "A 3D Bus plays straight into the master's speakers" : undefined} value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
                 <option value={MASTER_ID}>Master</option>
                 {#each busChoices(doc, b.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
               </select>
@@ -570,7 +573,7 @@
         <div class="line">
           <label class="pick outpick" title="Where this bus's sound goes after its fader: the master or another bus">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 8h-9M8.5 5l-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M3 3v10" stroke="currentColor" stroke-width="1.4" /></svg>
-            <select aria-label="{b.name} output" value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
+            <select aria-label="{b.name} output" disabled={!!(b.room && doc.space)} title={b.room && doc.space ? "A 3D Bus plays straight into the master's speakers" : undefined} value={b.output.type === "bus" ? b.output.bus_id : MASTER_ID} onchange={(e) => setOutput("bus", b.id, e.currentTarget.value)}>
               <option value={MASTER_ID}>Master</option>
               {#each busChoices(doc, b.id) as bc (bc.id)}<option value={bc.id}>{bc.name}</option>{/each}
             </select>
@@ -903,6 +906,17 @@
     font-size: var(--font-size-small);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .ms.room3d {
+    width: 26px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .ms.room3d.on {
+    background: var(--accent);
+    color: #111;
   }
 
   .ms.space3d {

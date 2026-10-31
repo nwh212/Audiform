@@ -111,6 +111,10 @@ export interface BusDoc {
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
+  /** A 3D Bus: in a 3D Space session what feeds it is placed in the room,
+   * its effects run on the speakers, and it goes straight to the master's.
+   * A plain stereo bus otherwise. Missing when off. */
+  room?: boolean;
   [key: string]: unknown;
 }
 
@@ -517,6 +521,7 @@ export interface BusChanges {
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
+  room?: boolean;
 }
 
 /** An edit the core understands. */
@@ -549,7 +554,7 @@ export type Op =
   | { op: "set_playlist"; ids: string[] }
   | { op: "set_effects"; target: EffectTarget; chain: EffectChainDoc }
   | { op: "set_master_volume"; volume_db: number }
-  | { op: "add_bus"; id: string; name: string; stereo: boolean; index: number }
+  | { op: "add_bus"; id: string; name: string; stereo: boolean; index: number; room?: boolean }
   | { op: "restore_bus"; bus: BusDoc; index: number }
   | { op: "remove_bus"; id: string }
   | { op: "move_bus"; id: string; to: number }

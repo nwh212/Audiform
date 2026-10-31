@@ -64,8 +64,9 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
   const { actions, dock, uuid, showNotice, showError, inWave, selectedTrack, timeSel, nextTrackName, profileTrack, withUnzipped, stem, spaceToggle, toggleRecord, finishRecord, placeFiles, rec, balancing, propertiesOpen, addTracksOpen, generateMode, openPanels, set_balancing, set_propertiesOpen, set_addTracksOpen, set_generateMode, set_openPanels } = deps;
 
 
-  /** Multitrack > Add > Bus Track: a bus at the end of the Mixer, shown there. */
-  async function addBus(stereo = true) {
+  /** Multitrack > Add > Bus Track: a bus at the end of the Mixer, shown
+   * there. `room` adds a 3D Bus (3D Space sessions). */
+  async function addBus(stereo = true, room = false) {
     const doc = session.current;
     if (!doc) return;
     const buses = doc.buses ?? [];
@@ -73,8 +74,13 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
     let n = buses.length + 1;
     while (taken.has(`Bus ${n}`)) n++;
     const id = uuid();
-    await session.edit(stereo ? "Add Bus Track" : "Add Mono Bus Track", { op: "add_bus", id, name: `Bus ${n}`, stereo, index: buses.length }, sessionHistory);
+    const name = room ? `3D Bus ${n}` : `Bus ${n}`;
+    await session.edit(room ? "Add 3D Bus Track" : stereo ? "Add Bus Track" : "Add Mono Bus Track", { op: "add_bus", id, name, stereo, index: buses.length, ...(room ? { room: true } : {}) }, sessionHistory);
     editor.selectTrack(id);
+    if (room) {
+      showNotice(`Added ${name}. Route tracks to it: they are placed in the room as they would be on the master, its effects run on every speaker, and it plays straight into the master's speakers.`);
+      return;
+    }
     showNotice(`Added Bus ${n}. Route a track to it with the track's output or a send (the track header, made taller, the right-click menu, or the Mixer).`);
   }
 
@@ -278,6 +284,7 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
       actions.register({ id: "multitrack.add.midi", run: () => addMidiTrack(), enabled: () => session.current !== null }),
       actions.register({ id: "multitrack.add.bus", run: () => addBus(true), enabled: () => session.current !== null }),
       actions.register({ id: "multitrack.add.bus-mono", run: () => addBus(false), enabled: () => session.current !== null }),
+      actions.register({ id: "multitrack.add.bus-3d", run: () => addBus(true, true), enabled: () => !!session.current?.space }),
       actions.register({
         id: "multitrack.delete-track",
         run: async () => {

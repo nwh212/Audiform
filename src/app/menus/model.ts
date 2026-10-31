@@ -221,6 +221,7 @@ export const MENUS: readonly Menu[] = [
         item("multitrack.add.guest", "Guest Track", { pending: P5 }),
         item("multitrack.add.bus", "Bus Track"),
         item("multitrack.add.bus-mono", "Mono Bus Track"),
+        item("multitrack.add.bus-3d", "3D Bus Track"),
       ]),
       item("multitrack.duplicate-track", "Duplicate Track"),
       item("multitrack.delete-track", "Delete Track"),

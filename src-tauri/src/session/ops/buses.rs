@@ -43,6 +43,9 @@ pub struct BusChanges {
     /// Folds the bus to mono after its Voice Chain.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mono: Option<bool>,
+    /// Makes it a 3D Bus, or a plain one again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<bool>,
 }
 
 /// Applies a bus edit and returns its inverse.
@@ -53,6 +56,7 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             name,
             stereo,
             index,
+            room,
         } => {
             if id_taken(s, *id) {
                 return Err(OpError::DuplicateId(*id));
@@ -64,6 +68,7 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             };
             let mut b = Bus::new(name.clone(), layout);
             b.id = *id;
+            b.room = *room;
             s.buses.insert((*index).min(s.buses.len()), b);
             Ok(Op::RemoveBus { id: *id })
         }
@@ -115,6 +120,9 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.mono {
                 old.mono = Some(std::mem::replace(&mut b.mono, v));
+            }
+            if let Some(v) = changes.room {
+                old.room = Some(std::mem::replace(&mut b.room, v));
             }
             if let Some(v) = changes.output {
                 old.output = Some(std::mem::replace(&mut b.output, v));
@@ -281,6 +289,7 @@ mod tests {
                     name: "B".into(),
                     stereo: true,
                     index: i,
+                    room: false,
                 },
             );
         }

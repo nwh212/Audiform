@@ -110,6 +110,10 @@
           "format": "uint32",
           "minimum": 0
         },
+        "room": {
+          "description": "A 3D Bus (3D Space sessions only): what feeds it is placed in the\nroom as if it fed the master, its effects run on the speaker bed,\nand the bed goes straight on to the master's. Left out of the file\nwhen off.",
+          "type": "boolean"
+        },
         "sends": {
           "description": "Aux sends to other buses.",
           "type": "array",
