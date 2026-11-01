@@ -843,7 +843,10 @@
           );
           surrounds = pick === "sides" ? "sides" : "behind";
         }
-        return sessionImportSesx<SessionDoc>(p, surrounds);
+        const r = await sessionImportSesx<SessionDoc>(p, surrounds);
+        // A 5.1 session comes in as a 3D Space session: show it in the room.
+        if (r.session.space) setTimeout(() => void actions.run("multitrack.space"), 0);
+        return r;
       },
       park: () => sessionPark(),
       resume: (id) => sessionResume<SessionDoc>(id),
