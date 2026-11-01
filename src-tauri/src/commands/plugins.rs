@@ -163,7 +163,7 @@ fn view(reg: &Registry) -> RegistryView {
         }
     }
     RegistryView {
-        shared: instance::shared_maker_list(),
+        shared: plugins::together_makers(reg),
         folders,
         plugins: reg
             .plugins
@@ -199,10 +199,10 @@ pub fn plugins_registry() -> RegistryView {
     view(&plugins::snapshot())
 }
 
-/// Sets the makers whose plug-ins run together in one process.
+/// Sets the makers whose plug-ins run together in one process; every other maker's run apart.
 #[tauri::command]
 pub fn plugins_set_shared(makers: Vec<String>) -> RegistryView {
-    view(&plugins::set_shared_makers(makers))
+    view(&plugins::set_together(makers))
 }
 
 /// Scans the folders. Each bundle is read by a host process of its own,

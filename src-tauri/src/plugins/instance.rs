@@ -73,10 +73,11 @@ impl Events {
     }
 }
 
-/// One host process and its pipes. Usually it runs one plug-in; plug-ins
-/// from a maker set to run together (see [`set_shared_makers`]) share one,
-/// so they can find each other (an immersive panner and its renderer, for
-/// example). A crash or hang stops every plug-in in the process.
+/// One host process and its pipes. Plug-ins from one maker share a
+/// process (unless the maker is set apart, see [`set_separate_makers`]):
+/// the maker's runtime is loaded once, and plug-ins that need to find each
+/// other can (an immersive panner and its renderer, for example). A crash
+/// or hang stops every plug-in in the process.
 struct Conn {
     child: Mutex<Child>,
     /// The pipe in, and which plug-in its last frames were for.
@@ -235,29 +236,27 @@ impl Drop for Conn {
     }
 }
 
-/// Makers known to need their plug-ins in one process: their immersive
-/// tools (a panner per track and a renderer on the mix) talk to each other.
-pub fn default_shared_makers() -> Vec<String> {
-    vec!["fiedler audio".to_string()]
-}
-
-/// Makers whose plug-ins run together in one process, lower case.
-fn shared_makers() -> &'static Mutex<HashSet<String>> {
+/// Makers whose plug-ins each run in a process of their own, lower case.
+/// Every other maker's plug-ins run together in one process: a host on
+/// its own is tens of MB before the plug-in (the maker's runtime, loaded
+/// again for every copy), and some makers' plug-ins need to find each
+/// other (an immersive panner per track and the renderer on the mix).
+fn separate_makers() -> &'static Mutex<HashSet<String>> {
     static S: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-    S.get_or_init(|| Mutex::new(default_shared_makers().into_iter().collect()))
+    S.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-/// Sets the makers whose plug-ins run together in one process (from the
-/// Plug-in Manager). Playback's running plug-ins from a maker whose choice
-/// changed stop, so they start again the new way at the next playback
-/// (from the settings saved in the session; fetch those first).
-pub fn set_shared_makers(makers: Vec<String>) {
+/// Sets the makers whose plug-ins run apart (from the Plug-in Manager).
+/// Playback's running plug-ins from a maker whose choice changed stop, so
+/// they start again the new way at the next playback (from the settings
+/// saved in the session; fetch those first).
+pub fn set_separate_makers(makers: Vec<String>) {
     let new: HashSet<String> = makers
         .into_iter()
         .map(|m| m.trim().to_lowercase())
         .filter(|m| !m.is_empty())
         .collect();
-    let changed: HashSet<String> = match shared_makers().lock() {
+    let changed: HashSet<String> = match separate_makers().lock() {
         Ok(mut s) => {
             let changed = s.symmetric_difference(&new).cloned().collect();
             *s = new;
@@ -275,9 +274,9 @@ pub fn set_shared_makers(makers: Vec<String>) {
     }
 }
 
-/// The makers whose plug-ins run together.
-pub fn shared_maker_list() -> Vec<String> {
-    let mut v: Vec<String> = shared_makers()
+/// The makers whose plug-ins run apart.
+pub fn separate_maker_list() -> Vec<String> {
+    let mut v: Vec<String> = separate_makers()
         .lock()
         .map(|s| s.iter().cloned().collect())
         .unwrap_or_default();
@@ -293,11 +292,11 @@ fn shared_conns() -> &'static SharedConns {
     C.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// The process a plug-in by `vendor` runs in: a shared one for makers set
-/// to run together, otherwise a new one of its own.
+/// The process a plug-in by `vendor` runs in: the maker's shared one,
+/// or a new one of its own for a maker set apart.
 fn conn_for(vendor: &str, rate: u32) -> Result<Arc<Conn>, String> {
     let maker = vendor.trim().to_lowercase();
-    let shared = shared_makers().lock().is_ok_and(|s| s.contains(&maker));
+    let shared = !separate_makers().lock().is_ok_and(|s| s.contains(&maker));
     if !shared {
         return Conn::spawn();
     }

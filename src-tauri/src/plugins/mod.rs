@@ -84,10 +84,57 @@ pub struct Registry {
     /// Each scanned bundle's modified time, so a rescan skips the unchanged.
     #[serde(default)]
     pub stamps: BTreeMap<PathBuf, u64>,
-    /// Makers whose plug-ins run together in one process (lower case).
-    /// None until changed: then a built-in list of makers known to need it.
+    /// Older files: the makers chosen to run together, from when every
+    /// other maker's plug-ins ran apart. Read once to carry that choice
+    /// over; never written again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_makers: Option<Vec<String>>,
+    /// Makers whose plug-ins each run in a process of their own (lower
+    /// case). Every other maker's run together. None: all together.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub separate_makers: Option<Vec<String>>,
+}
+
+/// Every maker with plug-ins in `reg`, lower case.
+fn makers_of(reg: &Registry) -> std::collections::HashSet<String> {
+    reg.plugins
+        .iter()
+        .map(|p| p.info.vendor.trim().to_lowercase())
+        .filter(|m| !m.is_empty())
+        .collect()
+}
+
+/// The makers whose plug-ins run apart. A file from before plug-ins ran
+/// together by default keeps its choice: the makers it had not picked
+/// stay apart.
+fn separate_of(reg: &Registry) -> Vec<String> {
+    if let Some(apart) = &reg.separate_makers {
+        return apart.clone();
+    }
+    match &reg.shared_makers {
+        Some(together) => {
+            let together: std::collections::HashSet<String> =
+                together.iter().map(|m| m.trim().to_lowercase()).collect();
+            let mut v: Vec<String> = makers_of(reg)
+                .into_iter()
+                .filter(|m| !together.contains(m))
+                .collect();
+            v.sort();
+            v
+        }
+        None => Vec::new(),
+    }
+}
+
+/// The makers whose plug-ins run together: every maker not set apart.
+pub fn together_makers(reg: &Registry) -> Vec<String> {
+    let apart: std::collections::HashSet<String> = separate_of(reg).into_iter().collect();
+    let mut v: Vec<String> = makers_of(reg)
+        .into_iter()
+        .filter(|m| !apart.contains(m))
+        .collect();
+    v.sort();
+    v
 }
 
 fn registry() -> &'static RwLock<Registry> {
@@ -119,11 +166,7 @@ pub fn load(config_dir: &Path) {
     if let Ok(mut f) = config_file().lock() {
         *f = Some(file);
     }
-    instance::set_shared_makers(
-        reg.shared_makers
-            .clone()
-            .unwrap_or_else(instance::default_shared_makers),
-    );
+    instance::set_separate_makers(separate_of(&reg));
     if let Ok(mut r) = registry().write() {
         *r = reg;
     }
@@ -156,11 +199,20 @@ pub fn note_sidechain(cid: &str) {
     }
 }
 
-/// Sets the makers whose plug-ins run together in one process, and saves it.
-pub fn set_shared_makers(makers: Vec<String>) -> Registry {
+/// Sets the makers whose plug-ins run together in one process (every
+/// other maker's run apart), and saves it.
+pub fn set_together(makers: Vec<String>) -> Registry {
     let mut reg = snapshot();
-    reg.shared_makers = Some(makers.clone());
-    instance::set_shared_makers(makers);
+    let together: std::collections::HashSet<String> =
+        makers.iter().map(|m| m.trim().to_lowercase()).collect();
+    let mut apart: Vec<String> = makers_of(&reg)
+        .into_iter()
+        .filter(|m| !together.contains(m))
+        .collect();
+    apart.sort();
+    reg.separate_makers = Some(apart.clone());
+    reg.shared_makers = None;
+    instance::set_separate_makers(apart);
     save(&reg);
     set(reg.clone());
     reg

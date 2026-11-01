@@ -187,9 +187,10 @@
       {#if makers.length}
         <h2>Run together</h2>
         <p class="note">
-          Some plug-ins talk to each other while they play, for example an immersive panner on each track and the renderer on the mix. Those need to run in one shared
-          process. Tick a maker to run all its plug-ins together. If one of them crashes, the others from that maker stop too. Takes effect from the next playback or export
-          (their current settings are kept).
+          A maker's plug-ins run together in one process: the maker's own runtime loads once instead of once per plug-in, which saves tens of MB per copy, and plug-ins that
+          talk to each other (an immersive panner on each track and the renderer on the mix) can. If one of them crashes, the others from that maker stop too. Untick a maker
+          to give each of its plug-ins a process of its own, for example one whose plug-ins are unstable. Takes effect from the next playback or export (their current settings
+          are kept).
         </p>
         <div class="makers">
           {#each makers as m (m.key)}
