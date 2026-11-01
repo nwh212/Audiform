@@ -233,13 +233,23 @@ export class MediaPool {
       if (old === id) continue;
       if (old !== undefined) {
         const it = this.known.get(old)!;
+        // The session's id may already be listed for another path (the
+        // file was relinked while another session had it open). That row
+        // keeps its place under a fresh id, so no id is listed twice: the
+        // list is keyed by id, and a repeat would break it.
+        const stale = this.order.includes(id) ? this.known.get(id) : undefined;
+        const moved = stale ? this.newId() : undefined;
+        if (stale && moved) {
+          this.known.set(moved, { ...stale, id: moved });
+          byPath.set(pathKey(stale.path, ignore), moved);
+        }
+        const rename = (o: string) => (o === old ? id : o === id && moved ? moved : o);
         this.known.delete(old);
         this.known.set(id, { ...it, id });
-        this.order = this.order.map((o) => (o === old ? id : o));
-        const w = this.waiting.indexOf(old);
-        if (w >= 0) this.waiting[w] = id;
+        this.order = this.order.map(rename);
+        for (let k = 0; k < this.waiting.length; k++) this.waiting[k] = rename(this.waiting[k]!);
         // Being measured under the old id: measure again under the new one.
-        else if (it.status === "probing") this.waiting.push(id);
+        if (it.status === "probing" && !this.waiting.includes(id)) this.waiting.push(id);
         byPath.set(pathKey(path, ignore), id);
         continue;
       }

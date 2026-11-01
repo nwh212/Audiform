@@ -161,6 +161,22 @@ describe("MediaPool", () => {
     expect(pool.readyItems().map((i) => i.id)).toEqual([pool.current.items[0]!.id, "s1", "s2"]);
   });
 
+  it("lists an id once when the session's id is already listed for another path", async () => {
+    const { pool, stack } = setup();
+    await pool.importPaths(["C:\\a.wav", "C:\\b.wav"], stack);
+    await pool.whenIdle();
+    // The session knew a.wav as s1, then (in another session) relinked s1 to b.wav, which the pool also lists.
+    pool.merge([{ id: "s1", path: "C:\\a.wav" }]);
+    pool.merge([{ id: "s1", path: "C:\\b.wav" }]);
+    const ids = pool.current.items.map((it) => it.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(names(pool)).toEqual(["a.wav", "b.wav"]);
+    expect(pool.get("s1")?.path).toBe("C:\\b.wav");
+    expect(pool.current.items[0]!.id).not.toBe("s1");
+    await pool.whenIdle();
+    expect(pool.readyItems()).toHaveLength(2);
+  });
+
   it("reads file names from either slash style", () => {
     expect(fileName("C:\\Shows\\ep 12.wav")).toBe("ep 12.wav");
     expect(fileName("/home/host/bumper.mp3")).toBe("bumper.mp3");

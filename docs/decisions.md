@@ -2218,3 +2218,8 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - Now: such a picture runs in a borrow-only mode (`plugins::instance::borrow_only`) at playback's rate. A plug-in playback has loaded and idle serves as it is; one not running is skipped. Nothing is started, stopped or restarted by looking. A session at another rate than playback's is converted as playback converts it.
 - The earlier change stays: it is right that plug-ins started ahead of Play take the rate playback's stream opened at. Still to look at, the same way: Batch Convert (`export/convert.rs`) and Apply in the Waveform editor (`commands/wave_fx.rs`) build plug-in chains at a file's rate outside `fresh` too.
 - Not compiled here: the machine this was written on has no Rust toolchain. A test build must confirm it.
+- Confirmed: CI and the test build of that commit passed, and the lead's next audio.log (on that build, 19 and 32 track sessions with the same panels open) has no restart at all.
+
+## 2026-11-01: A file listed twice in the Files panel broke the panel
+- The lead hit Svelte's `each_key_duplicate` while opening a large .sesx beside other sessions. The Files panel keys its rows by file id, and the pool's `merge` (run whenever a session is opened or brought to the front) could list one id twice: a file already in the pool under one id takes the session's id, and when that id was already listed for another path (the file had been relinked while another session held it), the rename left the id in the list twice.
+- Now that other row keeps its place under a fresh id, so an id is listed once and nothing imported disappears. A test covers the case.
