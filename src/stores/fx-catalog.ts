@@ -14,15 +14,15 @@ import { get, readable, type Readable } from "svelte/store";
 import { effectsCatalog, pluginsRegistry, type EffectInfo } from "../app/core";
 import { pluginsVersion } from "./plugins";
 
-/** A value fetched once per `version` and handed to every caller; a failed fetch is tried again next time. */
-export function shared<T>(fetch: () => Promise<T>, version: Readable<number>): () => Promise<T> {
+/** A value loaded once per `version` and handed to every caller; a failed load is tried again next time. */
+export function shared<T>(load: () => Promise<T>, version: Readable<number>): () => Promise<T> {
   let seen = -1;
   let pending: Promise<T> | null = null;
   return () => {
     const v = get(version);
     if (!pending || v !== seen) {
       seen = v;
-      const p = fetch();
+      const p = load();
       pending = p;
       p.catch(() => {
         if (pending === p) pending = null;
