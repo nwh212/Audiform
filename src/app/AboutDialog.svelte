@@ -26,6 +26,20 @@
     return () => clearInterval(timer);
   });
   const pluginsMb = $derived(memory ? memory.plugins.reduce((n, p) => n + p.memoryMb, 0) : 0);
+  /** What the page itself holds: script memory and canvas pixels (the rest of the view is the browser's own). */
+  let page = $state<{ scriptMb: number; canvases: number; canvasMb: number } | null>(null);
+  function readPage() {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+    let bytes = 0;
+    const list = document.querySelectorAll("canvas");
+    for (const c of list) bytes += c.width * c.height * 4;
+    page = { scriptMb: mem ? mem.usedJSHeapSize / 1048576 : 0, canvases: list.length, canvasMb: bytes / 1048576 };
+  }
+  onMount(() => {
+    readPage();
+    const timer = setInterval(readPage, 2000);
+    return () => clearInterval(timer);
+  });
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
@@ -63,6 +77,9 @@
         <p>
           Audiform {formatMb(memory.appMb)}, editor view {formatMb(memory.viewMb)}{memory.viewProcesses > 1 ? ` (${memory.viewProcesses} processes)` : ""}, plug-ins {formatMb(pluginsMb)}{memory.otherMb > 0 ? `, other ${formatMb(memory.otherMb)}` : ""}.
         </p>
+        {#if page}
+          <p>Of the editor view, the page itself holds {formatMb(page.scriptMb)} of script memory and {formatMb(page.canvasMb)} in {page.canvases} canvases.</p>
+        {/if}
         {#if memory.plugins.length > 0}
           <ul>
             {#each memory.plugins as p (p.name + p.memoryMb)}

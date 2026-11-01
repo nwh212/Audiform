@@ -127,9 +127,24 @@ pub fn output_device_any() -> Option<cpal::Device> {
     output_device(&host).or_else(|| output_device(&cpal::default_host()))
 }
 
-/// The rate playback runs at: the output device's own. 48 kHz when there
-/// is no device.
+/// The rate the last playback stream ran at, 0 before any.
+static LAST_RATE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Notes the rate a playback stream opened at (see [`device_rate`]).
+pub fn note_rate(rate: u32) {
+    LAST_RATE.store(rate, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The rate playback runs at: the rate its last stream opened at (the
+/// driver can pick another than the device's default, ASIO at a set
+/// rate for one), else the output device's own. 48 kHz when there is no
+/// device. Plug-ins started ahead of Play run at this rate, so Play does
+/// not restart them at another.
 pub fn device_rate() -> u32 {
+    let last = LAST_RATE.load(std::sync::atomic::Ordering::Relaxed);
+    if last > 0 {
+        return last;
+    }
     output_device_any()
         .and_then(|d| d.default_output_config().ok())
         .map_or(48_000, |c| super::host::sane_rate(c.config().sample_rate))

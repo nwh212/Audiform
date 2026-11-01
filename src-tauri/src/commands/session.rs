@@ -89,7 +89,9 @@ pub fn session_resume(
     }
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
     *s = back;
-    // Its plug-ins are usually still running; any that stopped start now.
+    // Its plug-ins are usually still running; any that stopped start now
+    // (not those of tracks whose render is ready).
+    super::prerender::refresh(&app, &s.session);
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
         &super::live::heard(&s.session),
     ));
@@ -307,12 +309,13 @@ pub fn session_apply(
     // Plug-ins taken out of the session stop running. Those of a session
     // set aside keep running, so switching back plays at once.
     crate::plugins::instance::retain(&open_plugin_slots(&s.session, &parked));
+    // Pre-rendered tracks whose sound changed start a new render. First,
+    // so the plug-ins of tracks whose render is ready are not started.
+    super::prerender::refresh(&app, &s.session);
     // New plug-ins and instruments start loading now, not when Play is pressed.
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
         &super::live::heard(&s.session),
     ));
-    // Pre-rendered tracks whose sound changed start a new render.
-    super::prerender::refresh(&app, &s.session);
     // Playback follows edits: gains at once, timing changes by restarting.
     // Not while the Waveform editor's file is the one playing.
     if playing.is(super::wave::PlayingDoc::Session) {
@@ -549,10 +552,12 @@ pub async fn session_open(app: AppHandle, path: PathBuf) -> Result<SessionWithPa
         &s.session,
         &app.state::<ParkedSessions>(),
     ));
+    // Renders in the cache are picked up first, so their tracks' plug-ins
+    // are not started only to rest again.
+    super::prerender::refresh(&app, &s.session);
     crate::plugins::instance::warm(crate::commands::plugins::playing_plugin_slots(
         &super::live::heard(&s.session),
     ));
-    super::prerender::refresh(&app, &s.session);
     Ok(SessionWithPath {
         session: opened.session,
         path: Some(path),

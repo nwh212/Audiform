@@ -775,6 +775,7 @@ fn run(
     super::host::log(&super::host::describe("play", &device, &config, format));
     let out_rate = config.sample_rate;
     super::scope::set_rate(out_rate);
+    super::output::note_rate(out_rate);
     let channels = usize::from(config.channels);
 
     if session.tracks.is_empty() {
