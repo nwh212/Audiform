@@ -198,7 +198,6 @@ struct Panner {
     radius: PanSetting,
     spread: PanSetting,
     lfe: PanSetting,
-    center: PanSetting,
     mono: bool,
 }
 
@@ -267,12 +266,6 @@ fn read_panner(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> Option<Panner> {
             |v| v.clamp(0.0, 1.0),
             0.0,
         ),
-        center: setting(
-            "Pan: Center",
-            |v| v.clamp(0.0, 1.0),
-            |v| v.clamp(0.0, 1.0),
-            1.0,
-        ),
         mono,
     })
 }
@@ -282,21 +275,17 @@ fn read_panner(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> Option<Panner> {
 /// (the spread, an angle on the same circle; below 0 swaps them) and how
 /// much feeds the LFE. Each side keeps its own direction, so the pair's
 /// spot, width and turn follow from where its two sides land. The
-/// panner's Center (how much of it stays at its spot rather than bleeding
-/// into the other speakers; 100% is none) becomes the spot's size.
-#[allow(clippy::too_many_arguments)]
+/// panner's center level has no match here and is left out.
 fn panner_pos(
     angle: f64,
     radius: f64,
     spread: f64,
     lfe: f64,
-    center: f64,
     stereo: bool,
     surrounds: Surrounds,
 ) -> SpacePos {
     let mut pos = SpacePos {
         lfe,
-        size: (1.0 - center).clamp(0.0, 1.0),
         ..SpacePos::default()
     };
     if !stereo {
@@ -337,13 +326,12 @@ fn surround_place(
             p.radius.at(t),
             p.spread.at(t),
             p.lfe.at(t),
-            p.center.at(t),
             stereo,
             surrounds,
         )
     };
     let start = pos_at(0);
-    let mut times: Vec<u64> = [&p.angle, &p.radius, &p.spread, &p.lfe, &p.center]
+    let mut times: Vec<u64> = [&p.angle, &p.radius, &p.spread, &p.lfe]
         .iter()
         .flat_map(|s| s.keys.iter().map(|k| k.0))
         .collect();
@@ -382,8 +370,7 @@ fn surround_place(
         value: (value * 1000.0).round() / 1000.0,
         curve: EnvelopeCurve::Linear,
     };
-    let (mut xs, mut ys, mut ws, mut rs, mut ls, mut ss) =
-        (vec![], vec![], vec![], vec![], vec![], vec![]);
+    let (mut xs, mut ys, mut ws, mut rs, mut ls) = (vec![], vec![], vec![], vec![], vec![]);
     let mut last_rot: Option<(u64, f64)> = None;
     for &t in &at {
         let q = pos_at(t);
@@ -391,7 +378,6 @@ fn surround_place(
         ys.push(point(t, q.y));
         ws.push(point(t, q.width));
         ls.push(point(t, q.lfe));
-        ss.push(point(t, q.size));
         // The turn wraps at half a turn: step across it instead of sweeping
         // back the long way round.
         if let Some((pt, pr)) = last_rot {
@@ -417,7 +403,6 @@ fn surround_place(
         (SpaceParam::Width, ws, stereo),
         (SpaceParam::Rotation, rs, stereo),
         (SpaceParam::Lfe, ls, true),
-        (SpaceParam::Size, ss, true),
     ] {
         if use_it && varies(&pts) {
             lanes.push(lane(param, pts));
@@ -1602,7 +1587,6 @@ mod tests {
         );
         assert!(p.width > 0.05 && p.width < 0.4);
         assert_eq!(p.lfe, 0.25);
-        assert_eq!(p.size, 0.0, "Center 100% stays a point");
         // Straight ahead with a wide spread fills the front.
         let front = r#"<t><component componentID="Audition.StereoTo51Panner">
           <parameter index="0" name="Pan: Angle" parameterValue="1.57079637050628662109375"/>
