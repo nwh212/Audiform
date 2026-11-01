@@ -10,7 +10,8 @@
 -->
 <script lang="ts">
   import { busChoices, busOp, keyOp, keyTargets, MASTER_ID, newSend, removeSend, setSend, type KeyTarget } from "./routing";
-  import { effectsCatalog, type EffectInfo } from "../../app/core";
+  import type { EffectInfo } from "../../app/core";
+  import { fxCatalog } from "../../stores/fx-catalog";
   import { dbToFader, formatDb } from "./fader";
   import type { CommandRunner } from "../../stores/media-pool";
   import type { Op, OutputDoc, SendDoc, SessionDoc, SessionStore } from "../../stores/session";
@@ -35,13 +36,11 @@
   const choices = $derived(busChoices(doc, id));
 
   // Effects with a sidechain input this sound can drive (built-in ducking
-  // effects, plug-ins with a second input).
-  let catalog = $state<EffectInfo[]>([]);
-  $effect(() => {
-    effectsCatalog()
-      .then((c) => (catalog = c))
-      .catch(() => {});
-  });
+  // effects, plug-ins with a second input). The catalog is the shared
+  // one: this row exists for every track and bus, and a copy each of
+  // every plug-in's controls once cost hundreds of MB.
+  let catalog = $state.raw<readonly EffectInfo[]>([]);
+  $effect(() => fxCatalog.subscribe((c) => (catalog = c)));
   const keyed = (effect: string) => catalog.some((e) => e.id === effect && e.sidechain);
   const keys = $derived(catalog.length ? keyTargets(doc, id, keyed) : []);
   const keyName = (k: KeyTarget) => `${catalog.find((e) => e.id === k.effect)?.name ?? k.effect} on ${k.owner}`;

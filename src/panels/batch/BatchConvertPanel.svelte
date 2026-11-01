@@ -13,7 +13,8 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { onDestroy } from "svelte";
-  import { batchCancel, batchConvert, effectsCatalog, expandMediaPaths, exportPickFolder, pickMediaFiles, pickMediaFolder, unzipMedia, type BatchProgress } from "../../app/core";
+  import { batchCancel, batchConvert, expandMediaPaths, exportPickFolder, pickMediaFiles, pickMediaFolder, unzipMedia, type BatchProgress } from "../../app/core";
+  import { sharedCatalog } from "../../stores/fx-catalog";
   import type { FileDropRouter } from "../../app/filedrop";
   import type { MediaPool } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
@@ -77,7 +78,7 @@
   // svelte-ignore state_referenced_locally
   void prefs.load().then(() => (userPresets = sanitizePresets(prefs.raw("voiceChain.presets"))));
   let known = $state<Set<string> | null>(null);
-  void effectsCatalog()
+  void sharedCatalog()
     .then((c) => (known = new Set(c.map((e) => e.id))))
     .catch(() => (known = null));
   const allPresets = $derived([...userPresets, ...BUILTIN_PRESETS]);

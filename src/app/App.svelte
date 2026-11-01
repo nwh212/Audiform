@@ -84,6 +84,7 @@
   import { takeAnchor } from "../panels/editor/insert-anchor";
   import { PluginSync } from "./plugin-sync";
   import { markStopped, pluginsVersion } from "../stores/plugins";
+  import { sharedCatalog, sharedRegistry } from "../stores/fx-catalog";
   import { newTrackNames } from "./track-names";
   import { CompoundCommand } from "../commands/compound";
   import { repointPlan, toCopy } from "./session-media";
@@ -132,10 +133,8 @@
     launchPaths,
     onOpenPaths,
     pluginHideWindows,
-    effectsCatalog,
     pluginsNeedRescan,
     pluginsScan,
-    pluginsRegistry,
     musicFit,
     type EffectInfo,
     type Recoverable,
@@ -1221,7 +1220,7 @@
   }
   let fxCatalog: EffectInfo[] | null = null;
   // Loaded up front so the Effects menu's search finds everything the first time.
-  void effectsCatalog()
+  void sharedCatalog()
     .then((c) => (fxCatalog ??= c))
     .catch(() => {});
   /** Effect plug-ins for Effects > Plug-ins (instruments are picked on MIDI tracks). */
@@ -1258,7 +1257,7 @@
   async function addEffectFromMenu(effect: string) {
     const at = fxTarget();
     if (!at) return;
-    fxCatalog ??= await effectsCatalog();
+    fxCatalog ??= await sharedCatalog();
     const info = fxCatalog.find((e) => e.id === effect);
     if (!info) return;
     const made = newSlot(info, uuid());
@@ -1975,7 +1974,7 @@
         })
         .catch(() => {});
     const stopCatalog = pluginsVersion.subscribe(() => {
-      void pluginsRegistry()
+      void sharedRegistry()
         .then((r) => {
           menuPlugins = r.plugins
             .filter((p) => !p.instrument)
@@ -1983,7 +1982,7 @@
           actions.invalidate();
         })
         .catch(() => {});
-      void effectsCatalog()
+      void sharedCatalog()
         .then((c) => {
           fxCatalog = c;
           setFxCatalog(c);
@@ -2036,7 +2035,7 @@
         transport.returnOnStop = prefs.raw(KEY_RETURN_ON_STOP) === true;
         // Once, on Windows with plug-ins scanned: offer to stop the network prompts if nothing stops them yet.
         if (PLATFORM === "windows" && prefs.raw(KEY_FIREWALL_OFFERED) !== true)
-          void pluginsRegistry()
+          void sharedRegistry()
             .then((r) => (r.plugins.length ? offerFirewallRule(true) : undefined))
             .catch(() => {});
         settings.set(sanitizeSettings(prefs.raw(KEY_SETTINGS)));

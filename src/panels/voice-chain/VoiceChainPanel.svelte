@@ -23,7 +23,8 @@
   import { channelNames } from "../space/space";
   import { untrack } from "svelte";
   import Knob from "../../app/Knob.svelte";
-  import { effectsCatalog, importRackPresets, learnNoisePrint, pluginOpenWindow, pluginRestart, pluginsRegistry, type EffectInfo, type EffectParamInfo, type LearnSource, type RackImport } from "../../app/core";
+  import { importRackPresets, learnNoisePrint, pluginOpenWindow, pluginRestart, type EffectInfo, type EffectParamInfo, type LearnSource, type RackImport } from "../../app/core";
+  import { sharedCatalog, sharedRegistry } from "../../stores/fx-catalog";
   import { markStopped, pluginsVersion, stoppedPlugins } from "../../stores/plugins";
   import { editor, type EditorState } from "../../stores/editor";
   import { chainTarget } from "../../stores/chain-target";
@@ -120,21 +121,22 @@
     }),
   );
 
-  let catalog = $state<EffectInfo[]>([]);
+  // The shared catalog and registry, never changed here.
+  let catalog = $state.raw<EffectInfo[]>([]);
   let loadError = $state<string | null>(null);
   // Loads again after a plug-in scan.
   $effect(() =>
     pluginsVersion.subscribe(() => {
-      void effectsCatalog()
+      void sharedCatalog()
         .then((c) => (catalog = c))
         .catch((e) => (loadError = String(e)));
-      void pluginsRegistry()
+      void sharedRegistry()
         .then((r) => (menuPlugins = r.plugins.filter((p) => !p.instrument)))
         .catch(() => (menuPlugins = []));
     }),
   );
   /** Installed effect plug-ins with their maker and type, for the Add effect menu. */
-  let menuPlugins = $state<MenuPlugin[]>([]);
+  let menuPlugins = $state.raw<MenuPlugin[]>([]);
 
   /**
    * Opens a slot the way its effect is best edited: a plug-in in its own

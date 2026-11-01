@@ -18,7 +18,8 @@ import { prefs } from "../stores/prefs";
 import { type EffectChainDoc } from "../stores/session";
 import { settings } from "../stores/settings";
 import { wave } from "../stores/wave";
-import { type LearnSource, learnNoisePrint, effectsCatalog, firewallStatus, firewallBlock, pluginCloseWindow } from "./core";
+import { type LearnSource, learnNoisePrint, firewallStatus, firewallBlock, pluginCloseWindow } from "./core";
+import { sharedCatalog } from "../stores/fx-catalog";
 import type { ActionRegistry } from "./actions";
 import type { DockController } from "./docking/dock";
 import type { ChoiceButton } from "./ChoiceDialog.svelte";
@@ -105,7 +106,7 @@ export function createEffectsTools(deps: EffectsToolsDeps) {
       : { kind: at.target.kind, id: at.target.id, start: sel.start, end: sel.end };
     try {
       const learned = await learnNoisePrint(source);
-      const catalog = fxCatalog() ?? (await effectsCatalog());
+      const catalog = fxCatalog() ?? (await sharedCatalog());
       set_fxCatalog(catalog);
       const info = catalog.find((e) => e.id === "altaudio.noise_print");
       if (!info) return;

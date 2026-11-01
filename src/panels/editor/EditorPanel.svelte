@@ -22,7 +22,8 @@
   import { clipLength, isMidi, midiEnd, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc, type ViewDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
   import { replaceClip, transferClips } from "./midi";
-  import { transportAuditionClip, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginsRegistry, type EffectInfo } from "../../app/core";
+  import { transportAuditionClip, midiAudition, midiPlayNotes, previewStop, type EffectInfo } from "../../app/core";
+  import { sharedCatalog, sharedRegistry } from "../../stores/fx-catalog";
   import type { MenuPlugin } from "../voice-chain/chain";
   import type { EnvelopeDoc, Op } from "../../stores/session";
   import { newTrackNames } from "../../app/track-names";
@@ -251,18 +252,19 @@
   // MIDI tracks: the instruments to pick from, the piano roll, the tempo.
   let instruments = $state<{ effect: string; name: string; vendor: string; kind: string; hasWindow: boolean }[]>([]);
   /** For the headers' Effects view: every effect, and the effect plug-ins for the Add menu. */
-  let fxCatalog = $state<EffectInfo[]>([]);
-  let fxPlugins = $state<MenuPlugin[]>([]);
+  // Both lists are shared with the rest of the interface and never changed here.
+  let fxCatalog = $state.raw<EffectInfo[]>([]);
+  let fxPlugins = $state.raw<MenuPlugin[]>([]);
   $effect(() =>
     pluginsVersion.subscribe(() => {
-      void pluginsRegistry()
+      void sharedRegistry()
         .then((r) => {
           // One per id, whatever the list holds, so the picker can never break.
           instruments = r.plugins.filter((p, i, all) => p.instrument && all.findIndex((q) => q.effect.toUpperCase() === p.effect.toUpperCase()) === i);
           fxPlugins = r.plugins.filter((p) => !p.instrument);
         })
         .catch(() => (instruments = []));
-      void effectsCatalog()
+      void sharedCatalog()
         .then((c) => (fxCatalog = c))
         .catch(() => (fxCatalog = []));
     }),
