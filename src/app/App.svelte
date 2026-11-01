@@ -897,9 +897,9 @@
     const rows: SessionRow[] = [];
     // A never-saved session with nothing in it (files imported only) is not listed as "Untitled Session".
     if (d && !session.isScratch(d)) {
-      rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true, path: session.path });
+      rows.push({ id: d.id, name: files.name, dirty: files.unsaved, seconds: sessionEnd(d) / Math.max(1, d.sample_rate), sampleRate: d.sample_rate, active: !inWave(), front: true, path: session.home });
     }
-    for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false, path: p.path });
+    for (const p of files.others) rows.push({ id: p.id, name: displayName(p.path, null) === "Untitled Session" ? p.name : displayName(p.path, null), dirty: p.dirty, seconds: p.seconds, sampleRate: p.sampleRate, active: false, front: false, path: p.path ?? session.importedFrom(p.id) });
     const cur = get(sessionRows);
     if (JSON.stringify(cur) !== JSON.stringify(rows)) sessionRows.set(rows);
   }
@@ -1320,8 +1320,11 @@
     folderBesideSession,
     playheadNow,
     uuid,
+    openIdFor: (p) => files.idFor(p),
     openSession: async (p) => {
-      const ok = await files.open(p);
+      // Already open (also one imported from a .sesx): bring it to the front.
+      const id = files.idFor(p);
+      const ok = id ? await files.switchTo(id) : /\.sesx$/i.test(p) ? await files.importSesx(p) : await files.open(p);
       if (ok) await actions.run("view.editor.multitrack");
       return ok;
     },

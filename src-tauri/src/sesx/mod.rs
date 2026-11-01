@@ -537,14 +537,51 @@ fn phase_curve_params(text: &str) -> Option<std::collections::BTreeMap<String, f
 /// Reads every effect rack directly inside `n` into one chain.
 fn racks(n: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> EffectChain {
     let mut chain = EffectChain::default();
+    let mut levels_read = false;
     for r in n.children().filter(|c| c.has_tag_name("effectsRack")) {
         chain.slots.extend(read_rack(r, report).slots);
+        if !levels_read {
+            levels_read = true;
+            rack_levels(r, &mut chain);
+        }
     }
     if chain.slots.len() > MAX_SLOTS {
         report.skipped_effects += chain.slots.len() - MAX_SLOTS;
         chain.slots.truncate(MAX_SLOTS);
     }
     chain
+}
+
+/// The rack's input and output levels and its mix. They are stored as
+/// components `rackInput` and `rackOutput` whose first parameter is a
+/// gain factor (1 is 0 dB), and `rackMix`, whose first parameter is 0 at
+/// fully wet, read here as the dry share. A part switched off counts as
+/// unchanged.
+fn rack_levels(rack: roxmltree::Node<'_, '_>, chain: &mut EffectChain) {
+    let first = |id: &str| -> Option<f64> {
+        let c = rack
+            .children()
+            .find(|c| c.has_tag_name("component") && c.attribute("id") == Some(id))?;
+        if c.attribute("powered") == Some("false") {
+            return None;
+        }
+        c.children()
+            .find(|p| p.has_tag_name("parameter") && p.attribute("index") == Some("0"))?
+            .attribute("parameterValue")?
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+    };
+    let db = |g: f64| ((20.0 * g.max(1e-6).log10()) * 10.0).round() / 10.0;
+    if let Some(g) = first("rackInput") {
+        chain.input_gain_db = db(g);
+    }
+    if let Some(g) = first("rackOutput") {
+        chain.output_gain_db = db(g);
+    }
+    if let Some(dry) = first("rackMix") {
+        chain.mix = (1.0 - dry).clamp(0.0, 1.0);
+    }
 }
 
 /// A VST3 component id in a `.sesx` ("3:" then four groups of eight hex
@@ -1172,6 +1209,28 @@ mod tests {
     <file id="1" absolutePath="Z:\nowhere\gone.wav"/>
   </files>
 </sesx>"#;
+
+    #[test]
+    fn rack_input_output_and_mix_carry_over() {
+        let xml = r#"<t><effectsRack preFader="true">
+          <component id="rackMix" powered="true"><parameter index="0" parameterValue="0.25"/></component>
+          <component id="rackInput" powered="true"><parameter index="0" parameterValue="1"/></component>
+          <component id="rackOutput" powered="true"><parameter index="0" parameterValue="0.421696484088897705078125"/></component>
+        </effectsRack></t>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        let mut report = ImportReport::default();
+        let chain = racks(doc.root_element(), &mut report);
+        assert_eq!(chain.input_gain_db, 0.0);
+        assert_eq!(chain.output_gain_db, -7.5);
+        assert!((chain.mix - 0.75).abs() < 1e-9);
+        // A rack without them keeps the defaults.
+        let doc = roxmltree::Document::parse("<t><effectsRack/></t>").unwrap();
+        let chain = racks(doc.root_element(), &mut report);
+        assert_eq!(
+            (chain.input_gain_db, chain.output_gain_db, chain.mix),
+            (0.0, 0.0, 1.0)
+        );
+    }
 
     #[test]
     fn imports_tracks_clips_and_finds_media_by_relative_path() {

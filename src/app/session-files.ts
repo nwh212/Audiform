@@ -212,10 +212,22 @@ export class SessionFiles {
     return true;
   }
 
+  /**
+   * The id of the open session (in front or set aside) whose file is
+   * `path`, or that was imported from that .sesx file; null when none is.
+   */
+  idFor(path: string): string | null {
+    const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
+    const k = key(path);
+    const s = this.d.session;
+    const front = s.current;
+    if (front && (key(s.path) === k || key(s.importedFrom(front.id)) === k)) return front.id;
+    return this.parked.find((p) => key(p.path) === k || key(s.importedFrom(p.id)) === k)?.id ?? null;
+  }
+
   /** True when the session file at `path` is open, in front or set aside. */
   isOpen(path: string): boolean {
-    const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
-    return key(this.d.session.path) === key(path) || this.parked.some((p) => key(p.path) === key(path));
+    return this.idFor(path) !== null;
   }
 
   /** Brings an open session to the front, setting the current one aside. */

@@ -672,6 +672,11 @@ export class SessionStore {
   /** The other editor's session file each imported session came from, by session id. */
   private readonly imported = new Map<string, string>();
 
+  /** The other editor's session file the session `id` was imported from, if it was. */
+  importedFrom(id: string): string | null {
+    return this.imported.get(id) ?? null;
+  }
+
   /** Notes that the open session was brought in from `sesx`. */
   markImported(sesx: string): void {
     if (this.doc) this.imported.set(this.doc.id, sesx);

@@ -35,6 +35,8 @@ export interface LinkedToolsDeps {
   folderBesideSession: (name: string, why: string) => Promise<string | null>;
   playheadNow: () => number;
   uuid: () => string;
+  /** The id of the open session whose file (or imported .sesx) is `path`, else null. */
+  openIdFor?: (path: string) => string | null;
   /** Brings a session file to the front (opening it if needed). */
   openSession: (path: string) => Promise<boolean>;
   /**
@@ -58,13 +60,15 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
 
   /** Renders a session with the progress window up. */
   async function render(title: string, sessionPath: string, folder: string, live = false): Promise<LinkedRender | null> {
+    // An open session renders as it is in the editor, matched by id (one imported from a .sesx has no file of its own).
+    const openId = live ? (deps.openIdFor?.(sessionPath) ?? null) : null;
     setExporting({ title, progress: 0, floating: true });
     let off: (() => void) | null = null;
     try {
       off = await listen<{ done: number; total: number }>("export-progress", (e) => {
         if (exporting()) setExporting({ ...exporting()!, progress: e.payload.total > 0 ? e.payload.done / e.payload.total : 0 });
       });
-      const r = await linkedRender(sessionPath, folder, live);
+      const r = await linkedRender(sessionPath, folder, live, openId);
       return r.cancelled ? null : r;
     } finally {
       off?.();
@@ -82,14 +86,14 @@ export function createLinkedTools(deps: LinkedToolsDeps) {
     const path = picked ?? (await linkedPick().catch((e) => (showError(e), null)));
     if (!path) return;
     const key = (p: string | null) => (p ?? "").replace(/\\/g, "/").toLowerCase();
-    if (key(path) === key(session.path)) {
+    if (key(path) === key(session.path) || (!!session.current && deps.openIdFor?.(path) === session.current.id)) {
       showNotice(`${nameOf(path)} is the session in front, and a session cannot hold its own mix. Bring the session you want it in to the front (double-click its row in the Files panel), then drag this one onto a track.`);
       return;
     }
     const folder = await folderBesideSession(FOLDER, "The linked session's mix is saved beside this session.");
     if (!folder) return;
     try {
-      const r = await render(`Rendering ${nameOf(path)}`, path, folder);
+      const r = await render(`Rendering ${nameOf(path)}`, path, folder, true);
       if (!r) {
         showNotice("Insert Session as Clip cancelled.");
         return;

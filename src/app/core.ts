@@ -1048,8 +1048,8 @@ export function linkedPick(): Promise<string | null> {
  * `live`: when that session is open (set aside), render it as it is now,
  * unsaved edits included, instead of its file.
  */
-export function linkedRender(sessionPath: string, folder: string, live = false): Promise<LinkedRender> {
-  return invoke<LinkedRender>("linked_render", { session: sessionPath, folder, live });
+export function linkedRender(sessionPath: string, folder: string, live = false, openId: string | null = null): Promise<LinkedRender> {
+  return invoke<LinkedRender>("linked_render", { session: sessionPath, folder, live, openId });
 }
 
 /** Which linked media files' sessions were saved since they were rendered, or are gone. */

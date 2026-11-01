@@ -74,6 +74,7 @@ struct Progress {
 /// otherwise, and when it is not open, its file is. Emits
 /// `export-progress` and stops on `export_cancel`.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri commands take their states and arguments flat.
 pub async fn linked_render(
     app: AppHandle,
     open: State<'_, OpenSession>,
@@ -82,18 +83,35 @@ pub async fn linked_render(
     session: PathBuf,
     folder: PathBuf,
     live: Option<bool>,
+    open_id: Option<String>,
 ) -> Result<LinkedRender, String> {
-    let own = open.0.lock().map_err(|e| e.to_string())?.path.clone();
-    if own.as_deref().is_some_and(|p| same_file(p, &session)) {
-        return Err("A session cannot hold its own mix. Pick another session.".into());
+    {
+        let front = open.0.lock().map_err(|e| e.to_string())?;
+        let same_id = open_id
+            .as_deref()
+            .is_some_and(|id| front.session.id.to_string() == id);
+        if same_id
+            || front
+                .path
+                .as_deref()
+                .is_some_and(|p| same_file(p, &session))
+        {
+            return Err("A session cannot hold its own mix. Pick another session.".into());
+        }
     }
+    // An open session (set aside) found by its id, or else by its file.
     let open_copy = if live.unwrap_or(false) {
-        parked
-            .0
-            .lock()
-            .map_err(|e| e.to_string())?
-            .iter()
-            .find(|o| o.path.as_deref().is_some_and(|p| same_file(p, &session)))
+        let p = parked.0.lock().map_err(|e| e.to_string())?;
+        p.iter()
+            .find(|o| {
+                open_id
+                    .as_deref()
+                    .is_some_and(|id| o.session.id.to_string() == id)
+            })
+            .or_else(|| {
+                p.iter()
+                    .find(|o| o.path.as_deref().is_some_and(|f| same_file(f, &session)))
+            })
             .map(|o| o.session.clone())
     } else {
         None
