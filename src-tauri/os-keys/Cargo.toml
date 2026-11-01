@@ -8,7 +8,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Reads modifier keys for Audiform while the system runs a drag."
+description = "System calls for Audiform that need unsafe: modifier keys during a drag, and process memory."
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_Threading"] }

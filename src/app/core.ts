@@ -22,6 +22,27 @@ export function getAppInfo(): Promise<AppInfo> {
   return invoke<AppInfo>("app_info");
 }
 
+/** Where the memory goes: the app, the editor's browser view, each plug-in host. */
+export interface MemoryReport {
+  appMb: number;
+  viewMb: number;
+  viewProcesses: number;
+  plugins: { name: string; memoryMb: number }[];
+  otherMb: number;
+  totalMb: number;
+  /** False where the system does not say. */
+  known: boolean;
+}
+
+export function memoryReport(): Promise<MemoryReport> {
+  return invoke<MemoryReport>("memory_report");
+}
+
+/** "640 MB" or "1.3 GB". */
+export function formatMb(mb: number): string {
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
 /** Quits the app. */
 export function exitApp(): Promise<void> {
   return invoke<void>("app_exit");

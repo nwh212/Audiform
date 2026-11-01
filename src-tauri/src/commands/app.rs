@@ -27,6 +27,12 @@ pub fn app_info() -> AppInfo {
     current_app_info()
 }
 
+/// Where the memory goes, for Help > About.
+#[tauri::command]
+pub fn memory_report() -> crate::memory::Report {
+    crate::memory::report()
+}
+
 /// Minimizes the main window. Called from Window > Minimize.
 #[tauri::command]
 pub fn app_minimize(window: tauri::WebviewWindow) -> Result<(), String> {

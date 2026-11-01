@@ -16,6 +16,7 @@ pub mod dsp;
 pub mod engine;
 pub mod export;
 pub mod library;
+pub mod memory;
 pub mod peaks;
 pub mod plugins;
 pub mod separation;
@@ -83,6 +84,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
+            commands::app::memory_report,
             commands::app::app_exit,
             commands::app::app_minimize,
             commands::browse::browse_locations,

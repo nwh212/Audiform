@@ -6,7 +6,9 @@
   Help > About.
 -->
 <script lang="ts">
+  import { onMount } from "svelte";
   import logo from "../assets/logo-dark.png";
+  import { formatMb, memoryReport, type MemoryReport } from "./core";
 
   interface Props {
     version: string | null;
@@ -14,6 +16,16 @@
   }
 
   const { version, onClose }: Props = $props();
+
+  // Where the memory goes, refreshed while the window is open.
+  let memory = $state<MemoryReport | null>(null);
+  onMount(() => {
+    const read = () => memoryReport().then((r) => (memory = r)).catch(() => {});
+    void read();
+    const timer = setInterval(() => void read(), 2000);
+    return () => clearInterval(timer);
+  });
+  const pluginsMb = $derived(memory ? memory.plugins.reduce((n, p) => n + p.memoryMb, 0) : 0);
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
@@ -45,6 +57,21 @@
     <p class="fine">
       Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor. Please report problems to Audiform (Help &gt; Report a Problem).
     </p>
+    {#if memory?.known}
+      <div class="memory">
+        <p class="credit-head">Memory in use: {formatMb(memory.totalMb)}</p>
+        <p>
+          Audiform {formatMb(memory.appMb)}, editor view {formatMb(memory.viewMb)}{memory.viewProcesses > 1 ? ` (${memory.viewProcesses} processes)` : ""}, plug-ins {formatMb(pluginsMb)}{memory.otherMb > 0 ? `, other ${formatMb(memory.otherMb)}` : ""}.
+        </p>
+        {#if memory.plugins.length > 0}
+          <ul>
+            {#each memory.plugins as p (p.name + p.memoryMb)}
+              <li><span>{p.name}</span><span>{formatMb(p.memoryMb)}</span></li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
     <div class="actions">
       <button type="button" onclick={onClose}>OK</button>
     </div>
@@ -52,6 +79,30 @@
 </div>
 
 <style>
+  .memory {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: left;
+  }
+  .memory p {
+    margin: 2px 0;
+  }
+  .memory ul {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 120px;
+    overflow: auto;
+  }
+  .memory li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-muted);
+  }
   .backdrop {
     position: fixed;
     inset: 0;

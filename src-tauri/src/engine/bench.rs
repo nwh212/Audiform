@@ -22,6 +22,18 @@ use crate::session::model::{
 };
 use crate::session::ops::{apply, ClipSpec, Op};
 
+/// This process's memory now and at its peak (MB), where the system says.
+fn memory_mb() -> Option<(u64, u64)> {
+    let text = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb = |key: &str| {
+        text.lines()
+            .find(|l| l.starts_with(key))
+            .and_then(|l| l.split_whitespace().nth(1))
+            .and_then(|v| v.parse::<u64>().ok())
+    };
+    Some((kb("VmRSS:")? / 1024, kb("VmHWM:")? / 1024))
+}
+
 fn env(name: &str, default: usize) -> usize {
     std::env::var(name)
         .ok()
@@ -198,6 +210,9 @@ fn bench_dense() {
     let secs = env("BENCH_SECS", 30) as u64;
     let fx = env("BENCH_FX", 1) == 1;
     let block = env("BENCH_BLOCK", 2048);
+    if let Some((now, peak)) = memory_mb() {
+        println!("memory before: {now} MB (peak {peak} MB)");
+    }
     crate::engine::host::init_threads();
     let s = dense_session(&path, tracks, secs, fx);
     let clips: usize = s.tracks.iter().map(|t| t.clips.len()).sum();
@@ -220,6 +235,9 @@ fn bench_dense() {
         all.as_secs_f64() * 1000.0 / (secs as f64 * 48_000.0 / 2048.0),
         2048.0 / 48.0
     );
+    if let Some((now, peak)) = memory_mb() {
+        println!("memory after: {now} MB (peak {peak} MB)");
+    }
 }
 
 /// Each built-in effect alone over 30 s of stereo sound: the time it takes.

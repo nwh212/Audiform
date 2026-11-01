@@ -8,7 +8,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 - **Monitor Input with or without plug-ins.** The monitor button steps through off, on with plug-ins, and on without plug-ins (less delay). Monitoring goes through the track's effects, fader and pan, and follows changes to them. Plug-ins for monitoring start in the background, so recording never waits on them.
 - **Insert Session as Clip** (Multitrack menu). Another session's whole mix lands on a track as one clip, so a heavy instrumental session costs the session you are working in no more than one audio clip. Save the inner session again and the clip updates itself. Drop a session file (or drag a session row from the Files panel) onto a track to do the same at that spot. Session clips are marked with a striped title and a dashed frame. Double-click one to edit its session, or click the arrow in its corner to render it again without saving. Opening a session also opens the sessions inside it.
 - **Stereo input meters.** An armed track on a stereo input shows left and right on their own bars.
-- **Audio log.** `audio.log` in the app's config folder records the driver, every stream opened, how long Play took to start and why, how hard rendering works while playing, and every plug-in start and stop. Settings shows where it is. Attach it to problem reports.
+- **Audio log.** `audio.log` in the app's config folder records the driver, every stream opened, how long Play took to start and why, how hard rendering works while playing, where the memory goes, and every plug-in start and stop. Settings shows where it is. Attach it to problem reports.
+- **Memory readout.** Help > About shows the memory in use by Audiform itself, by the editor's browser view, and by each plug-in host, so a heavy session can say what is heavy.
 
 ## Faster
 

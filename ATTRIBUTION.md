@@ -73,7 +73,7 @@ Most dependencies are MIT or Apache-2.0 and are listed in `Cargo.lock` and `pack
 | `sha2` | MIT or Apache-2.0 | Checking Audio Separation downloads. |
 | `vst3` (bindings generated from the VST 3 SDK headers) and `com-scrape-types` | MIT or Apache-2.0 | Hosting VST3 plug-ins, in a separate process (`src-tauri/plughost`). The VST 3 SDK itself is MIT licensed by Steinberg (since 2025). VST is a trademark of Steinberg Media Technologies GmbH; we do not use the VST logo. VST2 is not supported (its SDK is no longer licensed). |
 | `libloading` | ISC | Loading a plug-in's library inside the plug-in host process. |
-| `windows-sys` (Windows only, plug-in host) | MIT or Apache-2.0 | The window a plug-in draws its own controls in. |
+| `windows-sys` (Windows only, plug-in host and `os-keys`) | MIT or Apache-2.0 | The window a plug-in draws its own controls in; Alt during a system drag; the memory each process of the app uses (Help > About). |
 | Symphonia | MPL-2.0 | Decoding WAV, AIFF, FLAC, MP3, AAC, ALAC, Ogg Vorbis and ADPCM. |
 | `windows` (Windows only) | MIT or Apache-2.0 | Calls the AAC encoder built into Windows (Media Foundation) for M4A export. No AAC encoder is bundled; the operating system provides it. |
 

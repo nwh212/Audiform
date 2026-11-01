@@ -1053,6 +1053,29 @@ pub fn release(slots: &HashSet<Id>, why: &str, gently: bool) {
     }
 }
 
+/// The process id of each plug-in host running now, with the names of the
+/// plug-ins in it (several share one when their maker is set to). A host
+/// busy on the audio thread at this moment is left out.
+pub fn host_pids() -> Vec<(u32, Vec<String>)> {
+    let mut out: Vec<(u32, Vec<String>)> = Vec::new();
+    let Ok(p) = pool().lock() else {
+        return out;
+    };
+    for e in p.values() {
+        let Ok(h) = e.host.try_lock() else { continue };
+        let Ok(c) = h.conn.child.try_lock() else {
+            continue;
+        };
+        let pid = c.id();
+        let name = find(&e.effect).map_or(e.effect.clone(), |f| f.info.name.clone());
+        match out.iter_mut().find(|(id, _)| *id == pid) {
+            Some((_, names)) => names.push(name),
+            None => out.push((pid, vec![name])),
+        }
+    }
+    out
+}
+
 /// The controls of a running copy of plug-in `effect`, for plug-ins whose
 /// scan could not read them (they are learned when it runs).
 pub fn live_params(effect: &str) -> Option<Vec<ParamInfo>> {

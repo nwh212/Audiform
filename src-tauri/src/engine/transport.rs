@@ -1154,6 +1154,9 @@ impl Load {
                 self.max * 100.0,
                 self.n
             ));
+            if let Some(line) = crate::memory::line() {
+                super::host::log(&line);
+            }
         }
         *self = Self::default();
     }
