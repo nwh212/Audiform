@@ -2223,3 +2223,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: A file listed twice in the Files panel broke the panel
 - The lead hit Svelte's `each_key_duplicate` while opening a large .sesx beside other sessions. The Files panel keys its rows by file id, and the pool's `merge` (run whenever a session is opened or brought to the front) could list one id twice: a file already in the pool under one id takes the session's id, and when that id was already listed for another path (the file had been relinked while another session held it), the rename left the id in the list twice.
 - Now that other row keeps its place under a fresh id, so an id is listed once and nothing imported disappears. A test covers the case.
+
+## 2026-11-01: Wheel zoom once per frame; lane canvases keep their bitmaps
+- The lead found horizontal zoom sluggish on a 32-track session (vertical scrolling was fine). Each wheel event changed the view at once, and a smooth wheel or trackpad sends many per frame. Every view change rewrites the session document, so every panel re-derives from it, and every lane canvas was resized (which throws its bitmap away and allocates a new one, the slowest thing a canvas does) and redrawn pixel by pixel.
+- Now the wheel's zoom steps and scroll distance are gathered and applied once per animation frame, as one view change (`zoomSteps` lands the gathered steps as if applied one by one, around the same anchor; a test checks it). Lane, ruler and overview canvases are resized only when their size changed and cleared otherwise.
+- Still as it was: a view change is a whole new session document to every subscriber. Keeping the view apart from the document would spare the panels that do not draw the timeline; that is a wider change for later.
+- Not run here (no Node on this machine): CI's checks and the lead's next try are the test.

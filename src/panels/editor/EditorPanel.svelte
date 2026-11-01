@@ -51,7 +51,7 @@
   import { markerAt, markerCss } from "../markers/markers";
   import type { MeterLevel, TransportState, TransportStore } from "../../stores/transport";
   import { appearanceTick } from "../../stores/appearance";
-  import { trackHeight, maxSppFor, ticksFor, setDisplayTempo, sampleAt, xOf, zoomAround, type Viewport, TRACK_GAP } from "./timeline";
+  import { trackHeight, maxSppFor, ticksFor, setDisplayTempo, sampleAt, xOf, zoomSteps, type Viewport, TRACK_GAP } from "./timeline";
   import { busHeight, HEADER_MAX, HEADER_MIN, HEADER_W, trackColor } from "./editor-layout";
   import { prefs } from "../../stores/prefs";
   import { chipAt as hitChip, clipAt as hitClip, CURSORS, envBox, RAZOR_CURSOR, SNAP_PX, zoneAt as hitZone, type Gesture, type LaneGeometry } from "./lane-hit";
@@ -647,18 +647,41 @@
    * Alt + Shift + wheel scales the waveforms, Ctrl + wheel zooms the
    * timeline, Shift + wheel (or a sideways wheel) scrolls along it.
    */
+  // Wheel zoom and scroll steps are gathered and applied once per
+  // animation frame. A smooth wheel or a trackpad fires many events per
+  // frame, and every view change redraws every lane and wakes every panel.
+  let wheelQueue: { steps: number; scrollPx: number; x: number; overRuler: boolean } | null = null;
+  function queueWheel(steps: number, scrollPx: number, x: number, overRuler: boolean) {
+    if (wheelQueue) {
+      wheelQueue.steps += steps;
+      wheelQueue.scrollPx += scrollPx;
+      wheelQueue.x = x;
+      wheelQueue.overRuler = wheelQueue.overRuler || overRuler;
+      return;
+    }
+    wheelQueue = { steps, scrollPx, x, overRuler };
+    requestAnimationFrame(() => {
+      const q = wheelQueue;
+      wheelQueue = null;
+      if (!q || !lanesEl) return;
+      let v: Viewport = { spp: view.spp, scroll: view.scroll + q.scrollPx * view.spp };
+      if (q.steps !== 0) {
+        const r = zoomRatios();
+        // Over the ruler the zoom always goes toward the pointer.
+        const at = wheelAnchorX(q.x, lanesEl.clientWidth, xOf(playhead, v), q.overRuler);
+        v = zoomSteps(v, q.steps > 0 ? r.zoomOut : r.zoomIn, Math.abs(q.steps), at, maxSppFor(lanesWidth, contentEnd, rate));
+      }
+      setView({ spp: v.spp, scroll: v.scroll });
+    });
+  }
+
   function onWheel(e: WheelEvent) {
     if (!lanesEl) return;
     const left = lanesEl.getBoundingClientRect().left;
     const overRuler = (e.target as HTMLElement | null)?.closest(".ruler-wrap") != null;
     const zoomTime = () => {
       e.preventDefault();
-      const r = zoomRatios();
-      const mouse = Math.max(0, e.clientX - left);
-      // Over the ruler the zoom always goes toward the pointer.
-      const at = wheelAnchorX(mouse, lanesEl!.clientWidth, xOf(playhead, view), overRuler);
-      const z = zoomAround(view, e.deltaY > 0 ? r.zoomOut : r.zoomIn, at, maxSppFor(lanesWidth, contentEnd, rate));
-      setView({ spp: z.spp, scroll: z.scroll });
+      queueWheel(e.deltaY > 0 ? 1 : -1, 0, Math.max(0, e.clientX - left), overRuler);
     };
     if (e.clientX < left && !overRuler) {
       // Over the track headers the wheel zooms the tracks, as over the track
@@ -681,7 +704,7 @@
     } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       e.preventDefault();
       const d = e.shiftKey ? e.deltaY : e.deltaX;
-      setView({ scroll: view.scroll + d * view.spp });
+      queueWheel(0, d, Math.max(0, e.clientX - left), overRuler);
     } else if (overRuler || e.ctrlKey) {
       // Over the ruler (and the overview above it) the wheel zooms in time;
       // Ctrl+wheel zooms anywhere.

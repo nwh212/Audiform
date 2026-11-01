@@ -51,11 +51,13 @@
     const c = canvas;
     if (!c || width <= 0) return;
     const dpr = window.devicePixelRatio || 1;
-    c.width = Math.round(width * dpr);
-    c.height = Math.round(H * dpr);
+    // Sized only when the size changed: setting it throws the bitmap away.
+    if (c.width !== Math.round(width * dpr)) c.width = Math.round(width * dpr);
+    if (c.height !== Math.round(H * dpr)) c.height = Math.round(H * dpr);
     const g = c.getContext("2d");
     if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, width, H);
     g.fillStyle = css("--surface-0");
     g.fillRect(0, 0, width, H);
     const k = width / Math.max(1, total);

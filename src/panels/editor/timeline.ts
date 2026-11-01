@@ -58,6 +58,22 @@ export function zoomAround(
 }
 
 /**
+ * `steps` wheel zoom steps of `factor` each, around the same anchor, as
+ * one view change: the steps a frame gathered land as if applied one by
+ * one (the anchor sample keeps its pixel either way).
+ */
+export function zoomSteps(
+  v: Viewport,
+  factor: number,
+  steps: number,
+  anchorX: number,
+  maxSpp = MAX_SPP,
+  minSpp = MIN_SPP,
+): Viewport {
+  return steps > 0 ? zoomAround(v, Math.pow(factor, steps), anchorX, maxSpp, minSpp) : v;
+}
+
+/**
  * Fits `length` samples into `width` pixels, with a little room at the end
  * (`room` 1.05 is 5% more; 1 fits exactly, as for a single file).
  */

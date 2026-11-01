@@ -56,13 +56,15 @@ export function drawRuler(c: HTMLCanvasElement, s: RulerScene): void {
   const { view, rate, timeFormat, playhead } = s;
   const dpr = window.devicePixelRatio || 1;
   const w = s.width;
-  c.width = Math.round(w * dpr);
-  c.height = Math.round(RULER_H * dpr);
+  // Sized only when the size changed: setting it throws the bitmap away.
+  if (c.width !== Math.round(w * dpr)) c.width = Math.round(w * dpr);
+  if (c.height !== Math.round(RULER_H * dpr)) c.height = Math.round(RULER_H * dpr);
   c.style.width = `${w}px`;
   c.style.height = `${RULER_H}px`;
   const g = c.getContext("2d");
   if (!g) return;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, RULER_H);
   const cs = getComputedStyle(document.documentElement);
   g.fillStyle = cs.getPropertyValue("--surface-2");
   g.fillRect(0, 0, w, RULER_H);

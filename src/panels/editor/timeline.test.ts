@@ -19,6 +19,7 @@ import {
   sampleAt,
   xOf,
   zoomAround,
+  zoomSteps,
   MIN_SPP,
 } from "./timeline";
 
@@ -37,6 +38,17 @@ describe("timeline geometry", () => {
     expect(sampleAt(200, z)).toBe(sampleAt(200, v));
     expect(zoomAround({ spp: MIN_SPP, scroll: 0 }, 0.1, 0).spp).toBe(MIN_SPP);
     expect(zoomAround({ spp: 100, scroll: 0 }, 2, 500).scroll).toBe(0);
+  });
+
+  it("applies the wheel steps a frame gathered as if one by one", () => {
+    const v = { spp: 100, scroll: 100_000 };
+    let step = v;
+    for (let i = 0; i < 3; i++) step = zoomAround(step, 1.25, 300);
+    const once = zoomSteps(v, 1.25, 3, 300);
+    expect(once.spp).toBeCloseTo(step.spp, 9);
+    expect(once.scroll).toBeCloseTo(step.scroll, 6);
+    expect(sampleAt(300, once)).toBeCloseTo(sampleAt(300, v), 6);
+    expect(zoomSteps(v, 1.25, 0, 300)).toEqual(v);
   });
 
   it("fits a session into the width", () => {

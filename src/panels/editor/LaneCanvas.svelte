@@ -165,8 +165,11 @@
     const h = trackHeight(track);
     const bw = Math.max(1, Math.round(width * dpr));
     const bh = Math.max(1, Math.round(h * dpr));
-    c.width = bw;
-    c.height = bh;
+    // Setting a canvas's size throws its bitmap away and allocates a new
+    // one, so it is set only when the size changed; clearRect below does
+    // the clearing a redraw needs.
+    if (c.width !== bw) c.width = bw;
+    if (c.height !== bh) c.height = bh;
     c.style.width = `${width}px`;
     c.style.height = `${h}px`;
     const g = c.getContext("2d");
