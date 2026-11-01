@@ -575,3 +575,82 @@ fn a_3d_bus_runs_its_effects_on_the_whole_room() {
     let out = render(&s, true, 0, 20_000);
     assert!(peak(&out[0], 0, 20_000) > 1e-3);
 }
+
+#[test]
+fn a_level_change_in_a_3d_session_leaves_the_other_tracks_where_they_are() {
+    use crate::session::model::{
+        Envelope, EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Space, SpaceLayout, SpaceParam,
+        SpacePos,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let dc = wav(dir.path(), "dc.wav", |i| ((i as f32) * 0.01).sin() * 0.5);
+    let mut s = Session::new("t", RATE);
+    s.space = Some(Space {
+        layout: SpaceLayout::Surround51,
+        listen: Default::default(),
+    });
+    for (x, y) in [(-1.0, 1.0), (1.0, -1.0), (0.3, 0.2)] {
+        let t = track(&mut s, &dc, 0, 0, 40_000);
+        s.tracks[t].space = Some(SpacePos {
+            x,
+            y,
+            width: 0.3,
+            ..SpacePos::default()
+        });
+    }
+    // The second track's spot travels round the room.
+    s.tracks[1].envelopes.push(Envelope {
+        id: new_id(),
+        target: EnvelopeTarget::Space {
+            param: SpaceParam::X,
+        },
+        enabled: true,
+        points: vec![
+            EnvelopePoint {
+                position: 0,
+                value: -1.0,
+                curve: EnvelopeCurve::Linear,
+            },
+            EnvelopePoint {
+                position: 40_000,
+                value: 1.0,
+                curve: EnvelopeCurve::Linear,
+            },
+        ],
+        height: None,
+    });
+    // The third feeds a 3D Bus.
+    let mut bus = Bus::new("Room", ChannelLayout::Stereo);
+    bus.room = true;
+    let bus_id = bus.id;
+    s.buses.push(bus);
+    s.tracks[2].output = Output::Bus { bus_id };
+
+    // Played through: the first track's level drops after 4096 frames.
+    let mut changed = s.clone();
+    changed.tracks[0].volume_db = -6.0;
+    let mut m = mix(&s, true, 0);
+    m.graph().set_want_bed(true);
+    let mut out = vec![Vec::new(); m.outputs()];
+    let mut live = Vec::new();
+    let mut done = 0;
+    while done < 16_384 {
+        if done == 4_096 {
+            m.graph().set_levels(levels(&changed));
+        }
+        done += m.render(1_024, &mut out);
+        live.extend_from_slice(m.graph().bed());
+    }
+    // Started with the new level.
+    let fresh = render_bed(&changed, 16_384);
+    let from = 8_192 * 6;
+    let worst = live[from..]
+        .iter()
+        .zip(&fresh[from..])
+        .map(|(a, b)| (a - b).abs())
+        .fold(0f32, f32::max);
+    assert!(
+        worst < 1e-4,
+        "after the ramp the mix matches a fresh start: off by {worst}"
+    );
+}

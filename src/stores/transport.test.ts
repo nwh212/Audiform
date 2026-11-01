@@ -22,7 +22,7 @@ function doc(playhead: number): SessionDoc {
   };
 }
 
-function setup() {
+function setup(loops = false) {
   const calls: string[] = [];
   let position = 0;
   const session = new SessionStore({
@@ -44,6 +44,7 @@ function setup() {
         return position + 96_000;
       },
       status: async () => ({ playing: true, position, trackIds: [], meters: [], master: [0, 0], underruns: 0 }),
+      loops: () => loops,
     },
     session,
     () => {},
@@ -53,6 +54,31 @@ function setup() {
 }
 
 describe("TransportStore", () => {
+  it("Loop Playback: a new selection made while playing takes over the loop at once", async () => {
+    const { t, calls, session } = setup(true);
+    await t.play(10_000);
+    const view = session.current!.view;
+    // A selection away from the playhead: playback moves to its start.
+    session.setView({ ...view, selection: { start: 200_000, end: 300_000 } });
+    await new Promise((r) => setTimeout(r, 260));
+    expect(calls).toEqual(["play:10000", "play:200000"]);
+    expect(t.current.anchor).toBe(10_000);
+    // One around the playhead: it carries on from where it is, with the new loop.
+    session.setView({ ...session.current!.view, selection: { start: 150_000, end: 400_000 } });
+    await new Promise((r) => setTimeout(r, 260));
+    expect(calls[2]).toBe("play:200000");
+    await t.stop();
+  });
+
+  it("Without Loop Playback a new selection leaves playback alone", async () => {
+    const { t, calls, session } = setup(false);
+    await t.play(10_000);
+    session.setView({ ...session.current!.view, selection: { start: 200_000, end: 300_000 } });
+    await new Promise((r) => setTimeout(r, 260));
+    expect(calls).toEqual(["play:10000"]);
+    await t.stop();
+  });
+
   it("Space plays, and stops with the playhead where playback reached", async () => {
     const { t, calls, session } = setup();
     await t.toggle();

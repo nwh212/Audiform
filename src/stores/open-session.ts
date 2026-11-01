@@ -40,6 +40,6 @@ export const peaks = new PeakStore({
 export const transport: TransportStore = new TransportStore(
   // While recording, playback runs straight on: it never loops back or
   // skips, so a take can go on past the end of the old audio.
-  { play: (from) => transportPlay(from, transport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip" },
+  { play: (from) => transportPlay(from, transport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip", loops: () => editor.current().playMode === "loop" },
   session,
 );

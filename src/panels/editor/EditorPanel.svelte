@@ -797,7 +797,7 @@
       return;
     }
     if (ed.tool === "time") {
-      hoverCursor = "text";
+      hoverCursor = selectionEdgeAt(x, doc?.view.selection, view) ? "ew-resize" : "text";
       return;
     }
     if (ed.tool === "razor") {
@@ -1045,6 +1045,17 @@
   }
 
   /** Drag on empty lane space selects a time range; a plain click moves the playhead and clears it. */
+  /** How close (pixels) a press must be to an edge of the time selection to drag it. */
+  const SEL_EDGE_PX = 5;
+  /** The edge of the time selection at lane x, if any. */
+  function selectionEdgeAt(x: number, sel: { start: number; end: number } | null | undefined, v: typeof view): "start" | "end" | null {
+    if (!sel || sel.end <= sel.start) return null;
+    const ds = Math.abs(x - xOf(sel.start, v));
+    const de = Math.abs(x - xOf(sel.end, v));
+    if (Math.min(ds, de) > SEL_EDGE_PX) return null;
+    return ds <= de ? "start" : "end";
+  }
+
   function startRange(e: PointerEvent, leftEdge?: number) {
     if (!doc || !lanesEl) return;
     e.preventDefault();
@@ -1058,9 +1069,13 @@
       const hit = snap.on && !shift ? nearest(s, targets, SNAP_PX * v.spp) : null;
       return hit ?? s;
     };
-    const anchor = at(e.clientX, e.shiftKey);
+    // Pressed on an edge of the time selection: drag that edge, the other stays.
+    const edge = selectionEdgeAt(e.clientX - left, d0.view.selection, v);
+    const sel0 = d0.view.selection;
+    const anchor = edge && sel0 ? (edge === "start" ? sel0.end : sel0.start) : at(e.clientX, e.shiftKey);
     const startX = e.clientX;
     let moved = false;
+    if (edge) document.body.style.cursor = "ew-resize";
     const move = (ev: PointerEvent) => {
       if (!moved && Math.abs(ev.clientX - startX) < 3) return;
       moved = true;
@@ -1071,7 +1086,9 @@
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
-      if (moved) return;
+      if (edge) document.body.style.cursor = "";
+      // A click on an edge keeps the selection.
+      if (moved || edge) return;
       const cur = session.current;
       if (cur?.view.selection) session.setView({ ...cur.view, selection: null });
       // While playing, only the ruler moves the playhead; a click in the lanes leaves playback alone.

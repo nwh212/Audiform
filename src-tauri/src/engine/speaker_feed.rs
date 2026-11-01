@@ -107,6 +107,10 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
                     continue;
                 };
                 let mut one = c.clone();
+                // Each channel's copy has its own stable id, so live changes
+                // (level, channel mix), which find clips by id, reach every
+                // copy with its own channel and not the first copy's.
+                one.id = uuid::Uuid::from_u128(c.id.as_u128() ^ (0xc1a0_0000_u128 + k as u128 + 1));
                 one.channel_mix = Some(ChannelMix {
                     sends: (0..n)
                         .map(|j| {
@@ -231,5 +235,31 @@ mod tests {
         let mut plain = session(SpaceLayout::Surround51, 6, None);
         plain.space = None;
         assert!(matches!(expanded(&plain), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn each_channel_copy_has_its_own_clip_id() {
+        let s = session(SpaceLayout::Surround51, 6, None);
+        let e = expanded(&s);
+        let ids: Vec<_> = e
+            .tracks
+            .iter()
+            .flat_map(|t| t.clips.iter().map(|c| c.id))
+            .collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        assert!(ids.len() > 1);
+        assert_eq!(ids.len(), unique.len(), "copies of one clip share an id");
+        // And they stay the same from one call to the next.
+        let again: Vec<_> = expanded(&s)
+            .tracks
+            .iter()
+            .flat_map(|t| t.clips.iter().map(|c| c.id))
+            .collect();
+        assert_eq!(ids, again);
+        // Live updates give each copy its own channel.
+        let live = crate::engine::plan::clip_gains(&e);
+        let mixes: std::collections::HashSet<String> =
+            live.iter().map(|(_, _, m)| format!("{m:?}")).collect();
+        assert!(mixes.len() > 1, "each copy keeps its own channel");
     }
 }

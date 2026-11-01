@@ -55,7 +55,7 @@ export const waveZoom: { run: ((kind: "in" | "out" | "full" | "selection" | "amp
 export const waveHistory = new UndoStack({ baseLabel: "Open" });
 
 /** Play, pause and stop for the Waveform editor's file. */
-export const waveTransport: TransportStore = new TransportStore({ play: (from) => wavePlay(from, waveTransport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip" }, wave);
+export const waveTransport: TransportStore = new TransportStore({ play: (from) => wavePlay(from, waveTransport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip", loops: () => editor.current().playMode === "loop" }, wave);
 
 function adopt(doc: WaveDocRaw<SessionDoc>): void {
   wave.set(doc.session, doc.path);

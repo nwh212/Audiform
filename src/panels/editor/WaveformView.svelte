@@ -606,6 +606,13 @@
     return e.clientX - el.getBoundingClientRect().left;
   }
 
+  /** True when lane x is within a few pixels of an edge of the selection (so it can be dragged). */
+  function selectionEdge(x: number): boolean {
+    if (!selection || selection.end <= selection.start) return false;
+    return Math.min(Math.abs(x - xOf(selection.start, view)), Math.abs(x - xOf(selection.end, view))) <= 5;
+  }
+  let edgeHover = $state(false);
+
   function onPointer(e: PointerEvent) {
     if (!doc || e.button !== 0) return;
     const el = e.currentTarget as HTMLElement;
@@ -614,8 +621,11 @@
     const clamp = (s: number) => Math.max(0, Math.min(total, s));
     const v = view;
     const at = (cx: number) => clamp(Math.round(sampleAt(cx - el.getBoundingClientRect().left, v)));
-    const anchor = e.shiftKey && selection ? (Math.abs(at(e.clientX) - selection.start) < Math.abs(at(e.clientX) - selection.end) ? selection.end : selection.start) : at(e.clientX);
-    let dragged = e.shiftKey && !!selection;
+    // Pressed on an edge of the selection (or Shift held): that edge moves, the other stays.
+    const edge = selectionEdge(xIn(e, el));
+    const anchor =
+      (e.shiftKey || edge) && selection ? (Math.abs(at(e.clientX) - selection.start) < Math.abs(at(e.clientX) - selection.end) ? selection.end : selection.start) : at(e.clientX);
+    let dragged = (e.shiftKey || edge) && !!selection;
     const move = (ev: PointerEvent) => {
       const s = at(ev.clientX);
       if (!dragged && Math.abs(s - anchor) / v.spp < 3) return;
@@ -849,7 +859,14 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="area" bind:this={area} bind:clientHeight={height} onwheel={onWheel} oncontextmenu={onMenu}>
       <div class="measure" bind:clientWidth={width} style:right="{SCALE_W}px"></div>
-      <canvas bind:this={canvas} onpointerdown={onPointer} ondblclick={() => run("edit.select-all")}></canvas>
+      <canvas
+        bind:this={canvas}
+        onpointerdown={onPointer}
+        onpointermove={(e) => (edgeHover = e.buttons === 0 && selectionEdge(xIn(e, e.currentTarget as HTMLElement)))}
+        onpointerleave={() => (edgeHover = false)}
+        style:cursor={edgeHover ? "ew-resize" : null}
+        ondblclick={() => run("edit.select-all")}
+      ></canvas>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="hud" class:active={levelDrag} onpointerdown={onLevelPointer} title="Drag right or up to turn the selection (or the whole file) up, left or down to turn it down. Release to apply. Shift for fine steps.">
         <span class="knob">

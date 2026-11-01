@@ -22,7 +22,12 @@ export interface TransportBackend {
   stopAtEnd?: () => boolean;
   /** True when playback jumps over the time selection (Skip Selection), so play never moves into it. */
   skipsSelection?: () => boolean;
+  /** True while Loop Playback is on: a new time selection takes over the loop at once while playing. */
+  loops?: () => boolean;
 }
+
+/** A time selection as a short key, "" for none. */
+const selectionKey = (sel: { start: number; end: number } | null | undefined): string => (sel && sel.end > sel.start ? `${sel.start}-${sel.end}` : "");
 
 /**
  * Where Play starts: the playhead, or the start of the time selection
@@ -139,10 +144,59 @@ export class TransportStore {
       const v = this.session.current?.view;
       const at = Math.max(0, Math.round(from ?? playStart(v?.playhead ?? 0, v?.selection, this.backend.skipsSelection?.() ?? false)));
       await this.session.flushView?.();
+      this.playedSelection = selectionKey(this.session.current?.view.selection);
       await this.backend.play(at);
       const resume = this.state.paused && from === undefined && this.state.anchor !== null;
       this.set({ playing: true, paused: false, position: at, anchor: resume ? this.state.anchor : at });
       this.loop();
+      this.watchSelection();
+    });
+  }
+
+  /** The time selection playback last started with (see [`selectionKey`]). */
+  private playedSelection = "";
+  private offSelection: (() => void) | null = null;
+  private selectionTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * While playing with Loop Playback on, a new time selection takes over
+   * the loop as soon as it settles: playback moves into it (to its start
+   * when the playhead is outside it, else carrying on where it is), so the
+   * new range loops at once. The start marker stays where it was.
+   */
+  private watchSelection(): void {
+    if (this.offSelection) return;
+    this.offSelection = this.session.subscribe((d) => {
+      if (!this.state.playing || !this.backend.loops?.()) return;
+      if (selectionKey(d?.view.selection) === this.playedSelection) return;
+      if (this.selectionTimer) clearTimeout(this.selectionTimer);
+      // Wait for a drag to settle, so playback restarts once, not on every move.
+      this.selectionTimer = setTimeout(() => {
+        this.selectionTimer = null;
+        const sel = this.session.current?.view.selection;
+        if (!this.state.playing || !this.backend.loops?.() || selectionKey(sel) === this.playedSelection) return;
+        const pos = this.state.position;
+        const at = sel && sel.end > sel.start && (pos < sel.start || pos >= sel.end) ? sel.start : pos;
+        void this.relaunch(at);
+      }, 200);
+    });
+  }
+
+  private unwatchSelection(): void {
+    if (this.selectionTimer) clearTimeout(this.selectionTimer);
+    this.selectionTimer = null;
+    this.offSelection?.();
+    this.offSelection = null;
+  }
+
+  /** Plays on from `at` with the session's current loop, keeping the start marker. */
+  private relaunch(at: number): Promise<void> {
+    return this.serial(async () => {
+      if (!this.state.playing) return;
+      await this.session.flushView?.();
+      this.playedSelection = selectionKey(this.session.current?.view.selection);
+      await this.backend.play(Math.max(0, Math.round(at)));
+      this.set({ position: at });
     });
   }
 
@@ -190,6 +244,7 @@ export class TransportStore {
   private halt(position: number, paused = false): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.unwatchSelection();
     const v = this.session.current?.view;
     if (v) this.session.setView({ ...v, playhead: Math.max(0, Math.round(position)) });
     // Levels drop at once; over lights stay lit until clicked.
