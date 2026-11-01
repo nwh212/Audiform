@@ -22,6 +22,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 ## Changed
 
 - **Turning an effect's dial while playing** no longer pauses or pops: the effect takes the new setting in place. EQs, filters and dynamics keep their state as they change.
+- **5.1 sessions from the other editor** open as 3D Space sessions: every track's 5.1 panning becomes its place in the room.
 - **Effects rack levels from .sesx sessions:** input, output and dry/wet mix now carry over.
 - **Vox Strip** no longer has a Space module. Use the Reverb and Delay and Echo effects after it.
 

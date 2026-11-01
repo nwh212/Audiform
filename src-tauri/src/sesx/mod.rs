@@ -29,7 +29,8 @@ use crate::codecs::{probe, AudioInfo};
 use crate::session::model::{
     new_id, Bus, ChannelLayout, ChannelMix, ChannelSend, Clip, ClipStretch, EffectChain,
     EffectSlot, Envelope, EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id,
-    MediaRef, Output, Session, StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
+    MediaRef, Output, Session, Space, SpaceLayout, SpaceListen, SpacePos, StretchAdvanced, Track,
+    STRETCH_MAX, STRETCH_MIN,
 };
 
 #[derive(Debug, Error)]
@@ -109,6 +110,87 @@ fn component_param(
         .find(|p| p.attribute("name") == Some(param))
         .and_then(|p| p.attribute("parameterValue"))
         .and_then(|v| v.parse::<f64>().ok())
+}
+
+/// The 5.1 panner's speaker angles (degrees from the front, clockwise)
+/// against where those speakers sit in a 3D Space room, whose front
+/// speakers are its front corners and surrounds its back corners: front
+/// 0 to 0, L/R 30 to 45, Ls/Rs 110 to 135, straight back 180 to 180, in
+/// straight lines between. A sound aimed at a speaker there lands on the
+/// same speaker here.
+fn room_angle(deg: f64) -> f64 {
+    let d = (deg + 180.0).rem_euclid(360.0) - 180.0;
+    let m = d.abs();
+    let w = if m <= 30.0 {
+        m * 45.0 / 30.0
+    } else if m <= 110.0 {
+        45.0 + (m - 30.0) * 90.0 / 80.0
+    } else {
+        135.0 + (m - 110.0) * 45.0 / 70.0
+    };
+    w.copysign(d)
+}
+
+/// A point `radius` (0 middle, 1 wall) of the way out toward `deg` (from
+/// the front, clockwise) in the square room.
+fn room_point(deg: f64, radius: f64) -> (f64, f64) {
+    let a = room_angle(deg).to_radians();
+    let (sx, sy) = (a.sin(), a.cos());
+    let k = sx.abs().max(sy.abs()).max(1e-9);
+    (radius * sx / k, radius * sy / k)
+}
+
+/// A track's or bus's place in a 3D Space room from its 5.1 panner: the
+/// direction (angle) and distance (radius) it points to, how far apart a
+/// stereo source's sides are (stereo spread, as an angle on the same
+/// circle; below 0 swaps them), and how much feeds the LFE. Each side
+/// keeps its own direction, so the pair's spot, width and turn follow
+/// from where its two sides land. The panner's center level has no match
+/// here and is left out. None without a 5.1 panner.
+fn surround_pos(nodes: &[Option<roxmltree::Node<'_, '_>>], stereo: bool) -> Option<SpacePos> {
+    let (panner, angle) = ["Audition.StereoTo51Panner", "Audition.MonoTo51Panner"]
+        .iter()
+        .find_map(|c| {
+            nodes
+                .iter()
+                .flatten()
+                .find_map(|n| component_param(*n, c, "Pan: Angle"))
+                .map(|a| (*c, a))
+        })?;
+    let param = |name: &str| {
+        nodes
+            .iter()
+            .flatten()
+            .find_map(|n| component_param(*n, panner, name))
+    };
+    // Stored in radians with the front at a quarter turn; shown (and used
+    // here) as degrees from the front, clockwise.
+    let dir = angle.to_degrees() - 90.0;
+    let radius = param("Pan: Radius").unwrap_or(1.0).clamp(0.0, 1.0);
+    let lfe = param("Pan: LFE").unwrap_or(0.0).clamp(0.0, 1.0);
+    let mut pos = SpacePos {
+        lfe,
+        ..SpacePos::default()
+    };
+    let spread = param("Pan: Stereo Spread").unwrap_or(0.0).to_degrees();
+    if !stereo || panner == "Audition.MonoTo51Panner" {
+        (pos.x, pos.y) = room_point(dir, radius);
+        pos.width = 0.0;
+        return Some(pos.tidy());
+    }
+    let l = room_point(dir - spread / 2.0, radius);
+    let r = room_point(dir + spread / 2.0, radius);
+    pos.x = (l.0 + r.0) / 2.0;
+    pos.y = (l.1 + r.1) / 2.0;
+    let (dx, dy) = ((r.0 - l.0) / 2.0, (r.1 - l.1) / 2.0);
+    pos.width = dx.hypot(dy);
+    pos.rotation = if pos.width > 1e-6 {
+        let a = (-dy).atan2(dx).to_degrees();
+        (a * 10.0).round() / 10.0
+    } else {
+        0.0
+    };
+    Some(pos.tidy())
 }
 
 /// Most slots a Voice Chain holds.
@@ -866,6 +948,15 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         .unwrap_or_else(|| "Imported Session".into());
     let mut session = Session::new(name, sample_rate);
     let mut report = ImportReport::default();
+    // A 5.1 session comes in as a 3D Space session in the 5.1 layout, heard
+    // folded to stereo while working; each panner becomes a spot in the room.
+    let surround = session_node.attribute("audioChannelType") == Some("fivePointOne");
+    if surround {
+        session.space = Some(Space {
+            layout: SpaceLayout::Surround51,
+            listen: SpaceListen::default(),
+        });
+    }
 
     // Files.
     let mut files: HashMap<String, FileEntry> = HashMap::new();
@@ -916,6 +1007,9 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         );
         let env;
         (bus.volume_db, bus.muted, bus.pan, env) = mix_params(&[audio, Some(*b)]);
+        if surround {
+            bus.space = surround_pos(&[audio, Some(*b)], !mono);
+        }
         bus.envelopes.extend(env);
         if let Some(id) = b.attribute("id") {
             bus_ids.insert(id.to_string(), bus.id);
@@ -970,6 +1064,9 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         }
         let env;
         (track.volume_db, track.muted, track.pan, env) = mix_params(&[audio, Some(t)]);
+        if surround {
+            track.space = surround_pos(&[audio, Some(t)], stereo);
+        }
         track.envelopes.extend(env);
         track.output = output_of(audio, &bus_ids);
         track.effects = racks(t, &mut report);
@@ -1209,6 +1306,49 @@ mod tests {
     <file id="1" absolutePath="Z:\nowhere\gone.wav"/>
   </files>
 </sesx>"#;
+
+    #[test]
+    fn five_one_panners_become_room_spots() {
+        // Speakers land on speakers: front, L/R and the surrounds.
+        assert!((room_angle(0.0)).abs() < 1e-9);
+        assert!((room_angle(30.0) - 45.0).abs() < 1e-9);
+        assert!((room_angle(-110.0) + 135.0).abs() < 1e-9);
+        let (x, y) = room_point(110.0, 1.0);
+        assert!((x - 1.0).abs() < 1e-9 && (y + 1.0).abs() < 1e-9);
+        // A stereo track pointed just behind the right (shown as -268°),
+        // 15° spread, full radius, as in the lead's 5.1 session.
+        let xml = r#"<t><component componentID="Audition.StereoTo51Panner">
+          <parameter index="0" name="Pan: Angle" parameterValue="-3.106686115264892578125"/>
+          <parameter index="1" name="Pan: Radius" parameterValue="1"/>
+          <parameter index="2" name="Pan: Center" parameterValue="1"/>
+          <parameter index="3" name="Pan: LFE" parameterValue="0.25"/>
+          <parameter index="4" name="Pan: Stereo Spread" parameterValue="0.2617993950843811035156"/>
+        </component></t>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        let p = surround_pos(&[Some(doc.root_element())], true).unwrap();
+        assert!((p.x - 1.0).abs() < 1e-6, "on the right wall: {p:?}");
+        assert!(p.y < -0.2 && p.y > -0.7, "between R and Rs: {p:?}");
+        assert!(
+            (p.rotation - 90.0).abs() < 0.5,
+            "left side toward the front: {p:?}"
+        );
+        assert!(p.width > 0.05 && p.width < 0.4);
+        assert_eq!(p.lfe, 0.25);
+        // Straight ahead with a wide spread fills the front.
+        let front = r#"<t><component componentID="Audition.StereoTo51Panner">
+          <parameter index="0" name="Pan: Angle" parameterValue="1.57079637050628662109375"/>
+          <parameter index="4" name="Pan: Stereo Spread" parameterValue="1.0471975511965976"/>
+        </component></t>"#;
+        let doc = roxmltree::Document::parse(front).unwrap();
+        let p = surround_pos(&[Some(doc.root_element())], true).unwrap();
+        assert!(
+            p.x.abs() < 1e-6
+                && (p.y - 1.0).abs() < 1e-6
+                && (p.width - 1.0).abs() < 1e-6
+                && p.rotation.abs() < 1e-6,
+            "{p:?}"
+        );
+    }
 
     #[test]
     fn rack_input_output_and_mix_carry_over() {
