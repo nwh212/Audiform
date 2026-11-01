@@ -181,40 +181,55 @@ pub async fn scope_phase_at(
         open.0.lock().map_err(|e| e.to_string())?.session.clone()
     };
     let n = window(size);
-    let rate = session.sample_rate.max(1);
-    let p = spawn_blocking(move || scope::analyse(&mix_before(&session, position, n), a, b, rate))
-        .await
-        .map_err(|e| e.to_string())?;
+    let p = spawn_blocking(move || {
+        let (frames, rate) = mix_before(&session, position, n);
+        scope::analyse(&frames, a, b, rate)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(phase_bytes(&p))
 }
 
-/// The `n` frames of `session`'s mix that end at `position`, after the master fader.
-fn mix_before(session: &crate::session::model::Session, position: u64, n: usize) -> Vec<[f32; 2]> {
-    use crate::engine::{graph, plan, render::Renderer};
-    let rate = session.sample_rate.max(1);
-    let start = position.saturating_sub(n as u64);
+/// The `n` frames of `session`'s mix that end at `position` (a session
+/// sample), after the master fader, with the rate they are at.
+///
+/// Rendered at playback's rate, so playback's plug-ins serve as they are
+/// when idle; one not running is skipped, never started. A picture of the
+/// sound at the playhead must not start, stop or restart anything: at the
+/// session's own rate this restarted every plug-in playback had running
+/// (and Play restarted them back) each time the playhead moved.
+fn mix_before(
+    session: &crate::session::model::Session,
+    position: u64,
+    n: usize,
+) -> (Vec<[f32; 2]>, u32) {
+    use crate::engine::{graph, output, plan, render::Renderer};
+    let rate = output::device_rate();
+    let start = plan::to_out(position, session.sample_rate.max(1), rate).saturating_sub(n as u64);
     let master = plan::master_gain(session);
     let session = &*crate::engine::speaker_feed::expanded(session);
-    let mut mix = graph::Mix::new(
-        Renderer::new(plan::build(session, rate), start),
-        graph::Graph::new(session, rate, true),
-    );
-    let mut out = vec![Vec::new(); mix.outputs()];
-    let mut frames: Vec<[f32; 2]> = Vec::with_capacity(n);
-    while frames.len() < n {
-        let got = mix.render((n - frames.len()).min(4_096), &mut out);
-        if got == 0 {
-            break;
-        }
-        frames.extend(
-            out[0][..got * 2]
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|f| [f[0] * master, f[1] * master]),
+    crate::plugins::instance::borrow_only(|| {
+        let mut mix = graph::Mix::new(
+            Renderer::new(plan::build(session, rate), start),
+            graph::Graph::new(session, rate, true),
         );
-    }
-    frames
+        let mut out = vec![Vec::new(); mix.outputs()];
+        let mut frames: Vec<[f32; 2]> = Vec::with_capacity(n);
+        while frames.len() < n {
+            let got = mix.render((n - frames.len()).min(4_096), &mut out);
+            if got == 0 {
+                break;
+            }
+            frames.extend(
+                out[0][..got * 2]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|f| [f[0] * master, f[1] * master]),
+            );
+        }
+        (frames, rate)
+    })
 }
 
 /// The spectrum of what is playing, for drawing behind an EQ's curve:
@@ -244,9 +259,9 @@ pub async fn scope_spectrum(
             } else {
                 open.0.lock().map_err(|e| e.to_string())?.session.clone()
             };
-            let rate = session.sample_rate.max(1);
             spawn_blocking(move || {
-                scope::spectrum(&mix_before(&session, position, n), rate, points)
+                let (frames, rate) = mix_before(&session, position, n);
+                scope::spectrum(&frames, rate, points)
             })
             .await
             .map_err(|e| e.to_string())?

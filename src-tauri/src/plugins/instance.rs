@@ -796,6 +796,20 @@ thread_local! {
     static FRESH: Cell<bool> = const { Cell::new(false) };
     /// Which shared processes plug-ins join: 0 for playback, a new number per mixdown.
     static SCOPE: Cell<u64> = const { Cell::new(0) };
+    /// Inside [`borrow_only`]: use playback's idle hosts, start nothing.
+    static BORROW_ONLY: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Runs `f` with plug-ins borrowed from playback when they are loaded at
+/// `f`'s rate and idle, and skipped otherwise: nothing is started,
+/// stopped or restarted. For pictures of the sound at the playhead while
+/// stopped (the Phase Wheel, the spectrum behind an EQ), which must not
+/// touch what playback has running.
+pub fn borrow_only<T>(f: impl FnOnce() -> T) -> T {
+    let was = BORROW_ONLY.with(|c| c.replace(true));
+    let out = f();
+    BORROW_ONLY.with(|c| c.set(was));
+    out
 }
 
 /// Runs `f` with fresh plug-in hosts instead of playback's (a mixdown).
@@ -825,6 +839,9 @@ fn slot_params(slot: &EffectSlot) -> Vec<(u32, f64)> {
 /// fresh one inside [`fresh`]. Errors are reported on the slot.
 pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
     let found = find(&slot.effect)?;
+    if BORROW_ONLY.with(Cell::get) {
+        return borrowable(slot, rate);
+    }
     let fresh = FRESH.with(|c| c.get());
     if fresh {
         if !OWN.with(Cell::get) {
