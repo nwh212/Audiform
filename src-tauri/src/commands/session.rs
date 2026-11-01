@@ -8,6 +8,7 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::async_runtime::spawn_blocking;
@@ -33,6 +34,18 @@ pub struct OpenSession(pub Mutex<OpenState>);
 #[derive(Default)]
 pub struct ParkedSessions(pub Mutex<Vec<OpenState>>);
 
+/// When each set-aside session was set aside. Its plug-ins rest after
+/// [`PARKED_PLUGINS_FOR`]; switching back loads them again.
+fn parked_at() -> &'static Mutex<std::collections::HashMap<crate::session::model::Id, Instant>> {
+    static P: std::sync::OnceLock<
+        Mutex<std::collections::HashMap<crate::session::model::Id, Instant>>,
+    > = std::sync::OnceLock::new();
+    P.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+/// How long a set-aside session's plug-ins stay loaded for a quick switch back.
+const PARKED_PLUGINS_FOR: Duration = Duration::from_secs(60);
+
 /// Sets a copy of the session in front aside, keyed by its id, before
 /// another session takes its place (New Session, Open, switching).
 #[tauri::command]
@@ -45,6 +58,9 @@ pub fn session_park(
     let s = open.0.lock().map_err(|e| e.to_string())?;
     let mut p = parked.0.lock().map_err(|e| e.to_string())?;
     p.retain(|x| x.session.id != s.session.id);
+    if let Ok(mut at) = parked_at().lock() {
+        at.insert(s.session.id, Instant::now());
+    }
     p.push(OpenState {
         session: s.session.clone(),
         path: s.path.clone(),
@@ -68,6 +84,9 @@ pub fn session_resume(
         .position(|x| x.session.id == id)
         .ok_or("That session is not open any more.")?;
     let back = p.remove(i);
+    if let Ok(mut at) = parked_at().lock() {
+        at.remove(&id);
+    }
     let mut s = open.0.lock().map_err(|e| e.to_string())?;
     *s = back;
     // Its plug-ins are usually still running; any that stopped start now.
@@ -96,6 +115,67 @@ fn open_plugin_slots(
     all
 }
 
+/// The plug-in slots that need to stay loaded now: the session in front's,
+/// less those of tracks playing a finished pre-render, and those of
+/// sessions set aside less than [`PARKED_PLUGINS_FOR`] ago.
+fn needed_plugin_slots(
+    front: &crate::session::model::Session,
+    parked: &ParkedSessions,
+) -> std::collections::HashSet<crate::session::model::Id> {
+    let mut all = crate::commands::plugins::plugin_slots(&super::live::heard(front));
+    let at = parked_at().lock().map(|m| m.clone()).unwrap_or_default();
+    if let Ok(p) = parked.0.lock() {
+        for x in p.iter() {
+            let fresh = at
+                .get(&x.session.id)
+                .is_none_or(|t| t.elapsed() < PARKED_PLUGINS_FOR);
+            if fresh {
+                all.extend(crate::commands::plugins::plugin_slots(&x.session));
+            }
+        }
+    }
+    all
+}
+
+/// Every few seconds: lets plug-ins nobody needs rest (see
+/// [`needed_plugin_slots`]; never one with its window open), and loads in
+/// the background any the session in front needs again (a pre-rendered
+/// track that changed, before its new render is ready).
+pub fn spawn_plugin_rest(app: AppHandle) {
+    let _ = std::thread::Builder::new()
+        .name("plugin-rest".into())
+        .spawn(move || {
+            // Slots asked for last time, so one that will not load (not
+            // installed) is not tried again every few seconds.
+            let mut asked: std::collections::HashSet<crate::session::model::Id> =
+                std::collections::HashSet::new();
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+                let open = app.state::<OpenSession>();
+                let parked = app.state::<ParkedSessions>();
+                let Ok(front) = open.0.lock().map(|s| s.session.clone()) else {
+                    continue;
+                };
+                crate::plugins::instance::release(
+                    &needed_plugin_slots(&front, &parked),
+                    "is resting (its session is set aside, or its track plays a pre-render)",
+                    true,
+                );
+                let want =
+                    crate::commands::plugins::playing_plugin_slots(&super::live::heard(&front));
+                let new: Vec<_> = want
+                    .iter()
+                    .filter(|x| !asked.contains(&x.id))
+                    .cloned()
+                    .collect();
+                asked = want.iter().map(|x| x.id).collect();
+                if !new.is_empty() {
+                    crate::plugins::instance::warm(new);
+                }
+            }
+        });
+}
+
 /// Drops a set-aside session and its unsaved edits.
 #[tauri::command]
 pub fn session_forget(
@@ -107,6 +187,9 @@ pub fn session_forget(
         .lock()
         .map_err(|e| e.to_string())?
         .retain(|x| x.session.id != id);
+    if let Ok(mut at) = parked_at().lock() {
+        at.remove(&id);
+    }
     Ok(())
 }
 

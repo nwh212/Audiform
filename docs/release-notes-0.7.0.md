@@ -14,6 +14,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 - **Dense sessions play on every core.** Tracks and buses render side by side, so a session with dozens of tracks and effects plays about three times faster than before on a four-core machine. Mixdowns and bounces speed up the same way.
 - **Starting Play.** Plug-ins of every open session stay loaded when you switch between sessions, and any that need starting load side by side, so Play starts in under a second where it took 20 seconds and more.
+- **Plug-ins rest when not needed:** a session set aside for a minute, and pre-rendered tracks, stop their plug-ins until they are needed again.
 - **Cheaper Reverb and Modulation**, with the same sound.
 - **The editor** draws one playhead line over all lanes instead of repainting every lane, and only draws lanes that are on screen.
 - **Opening sessions from the other editor** measures all their source files at once.

@@ -57,6 +57,7 @@ pub fn run() {
         .manage(commands::session::ParkedSessions::default())
         .manage(commands::wave::Playing::default())
         .setup(|app| {
+            commands::session::spawn_plugin_rest(app.handle().clone());
             use tauri::Manager;
             // Settings from Altered Audio Editor, the first time.
             for dir in [app.path().app_config_dir(), app.path().app_data_dir()]

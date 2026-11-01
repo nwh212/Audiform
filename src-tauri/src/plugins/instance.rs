@@ -92,6 +92,8 @@ struct Route {
     replies: mpsc::Sender<Message>,
     events: Arc<Mutex<Events>>,
     known: Arc<Mutex<HashMap<u32, Known>>>,
+    /// Its window is open (set here when opened, cleared when it closes).
+    window: Arc<AtomicBool>,
 }
 
 impl Conn {
@@ -147,6 +149,7 @@ impl Conn {
                                 }
                                 Message::Dirty => e.dirty = true,
                                 Message::EditorClosed => {
+                                    r.window.store(false, Ordering::Relaxed);
                                     e.window_closed = true;
                                     e.dirty = true;
                                 }
@@ -329,6 +332,8 @@ pub struct Host {
     dead: Arc<AtomicBool>,
     /// The control values the plug-in has: sent from here or moved in its window.
     known: Arc<Mutex<HashMap<u32, Known>>>,
+    /// Its window is open.
+    window: Arc<AtomicBool>,
     pub latency: usize,
     pub params: Vec<ParamInfo>,
     pub has_editor: bool,
@@ -387,6 +392,7 @@ impl Host {
         let (atx, arx) = mpsc::channel();
         let (rtx, rrx) = mpsc::channel();
         let events = Arc::new(Mutex::new(Events::default()));
+        let window = Arc::new(AtomicBool::new(false));
         let known = Arc::new(Mutex::new(
             params
                 .iter()
@@ -400,6 +406,7 @@ impl Host {
                 replies: rtx,
                 events: events.clone(),
                 known: known.clone(),
+                window: window.clone(),
             },
         );
         let mut host = Host {
@@ -410,6 +417,7 @@ impl Host {
             replies: rrx,
             events,
             known,
+            window,
             latency: 0,
             params: Vec::new(),
             has_editor: false,
@@ -658,7 +666,10 @@ impl Host {
             },
             REQUEST_TIMEOUT,
         ) {
-            Some(Message::Ok) => Ok(()),
+            Some(Message::Ok) => {
+                self.window.store(true, Ordering::Relaxed);
+                Ok(())
+            }
             Some(Message::Error { message }) => Err(message),
             _ => Err("The plug-in did not open its window.".into()),
         }
@@ -666,6 +677,12 @@ impl Host {
 
     pub fn close_window(&mut self) {
         let _ = self.request(&Request::CloseEditor, REQUEST_TIMEOUT);
+        self.window.store(false, Ordering::Relaxed);
+    }
+
+    /// Its window is open.
+    pub fn window_open(&self) -> bool {
+        self.window.load(Ordering::Relaxed)
     }
 
     /// Sets the power button on the plug-in's window, if it is open.
@@ -1011,12 +1028,23 @@ pub fn latency(slot: &EffectSlot) -> usize {
 
 /// Stops the hosts of slots no longer in the session.
 pub fn retain(slots: &HashSet<Id>) {
+    release(slots, "is no longer in an open session", false);
+}
+
+/// Stops every running plug-in not in `slots`, saying `why` in the log.
+/// With `gently`, one whose window is open or that is busy right now is
+/// kept.
+pub fn release(slots: &HashSet<Id>, why: &str, gently: bool) {
     if let Ok(mut p) = pool().lock() {
         p.retain(|id, e| {
-            let keep = slots.contains(id);
+            let keep = slots.contains(id)
+                || (gently
+                    && e.host
+                        .try_lock()
+                        .map_or(true, |h| h.window_open() && !h.is_dead()));
             if !keep {
                 crate::engine::host::log(&format!(
-                    "plug-in stop: \"{}\" is no longer in an open session",
+                    "plug-in stop: \"{}\" {why}",
                     find(&e.effect).map_or(e.effect.clone(), |f| f.info.name.clone())
                 ));
             }
