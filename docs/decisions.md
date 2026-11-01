@@ -2229,3 +2229,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - Now the wheel's zoom steps and scroll distance are gathered and applied once per animation frame, as one view change (`zoomSteps` lands the gathered steps as if applied one by one, around the same anchor; a test checks it). Lane, ruler and overview canvases are resized only when their size changed and cleared otherwise.
 - Still as it was: a view change is a whole new session document to every subscriber. Keeping the view apart from the document would spare the panels that do not draw the timeline; that is a wider change for later.
 - Not run here (no Node on this machine): CI's checks and the lead's next try are the test.
+
+## 2026-11-01: The each_key_duplicate error was Help > About
+- The lead saw Svelte's `each_key_duplicate` and, separately, no memory numbers in Help > About. Same cause: About listed each plug-in host keyed by its name and size, and two hosts often match on both (two copies of the same plug-in at the same size, as the audio.log memory lines show). The list threw, so the whole memory block failed to show.
+- The list is now keyed by place. The Files pool fix above stands on its own; it was not what the lead hit.

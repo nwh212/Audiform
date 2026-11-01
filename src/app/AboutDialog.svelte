@@ -82,7 +82,8 @@
         {/if}
         {#if memory.plugins.length > 0}
           <ul>
-            {#each memory.plugins as p (p.name + p.memoryMb)}
+            <!-- Keyed by place: two hosts can carry the same plug-in at the same size. -->
+            {#each memory.plugins as p, i (i)}
               <li><span>{p.name}</span><span>{formatMb(p.memoryMb)}</span></li>
             {/each}
           </ul>
