@@ -19,7 +19,7 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import type { CommandRunner } from "../../stores/media-pool";
-  import { clipLength, isMidi, midiEnd, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc } from "../../stores/session";
+  import { clipLength, isMidi, midiEnd, tempoOf, type BusDoc, type ClipChange, type ClipDoc, type MidiClipDoc, type SessionDoc, type SessionStore, type TempoDoc, type TrackChanges, type TrackDoc, type ViewDoc } from "../../stores/session";
   import MidiLane from "./MidiLane.svelte";
   import { replaceClip, transferClips } from "./midi";
   import { transportAuditionClip, effectsCatalog, midiAudition, midiPlayNotes, previewStop, pluginsRegistry, type EffectInfo } from "../../app/core";
@@ -132,6 +132,13 @@
       doc = d;
     }),
   );
+  // Zoom, scroll, playhead and time selection come apart from the document, so they never redraw the rest of the app.
+  let viewDoc = $state<ViewDoc | null>(null);
+  $effect(() =>
+    session.subscribeView((v) => {
+      viewDoc = v;
+    }),
+  );
 
   let ed = $state<EditorState>(editor.current());
   $effect(() =>
@@ -182,7 +189,7 @@
 
   /** What the menu builders read and run. */
   const menuCtx: MenuCtx = {
-    doc: () => doc,
+    doc: () => session.current,
     ed: () => ed,
     edit: (label, op) => session.edit(label, op, runner),
     onError: (e) => onError(e),
@@ -320,10 +327,10 @@
   $effect(() => editor.setWidth(lanesWidth));
 
   const rate = $derived(doc?.sample_rate ?? 48000);
-  const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
+  const view = $derived<Viewport>({ spp: viewDoc?.samples_per_pixel ?? 1024, scroll: viewDoc?.scroll ?? 0 });
   /** While the playhead is being dragged on the ruler: where the pointer has it, shown at once. */
   let dragHead = $state<number | null>(null);
-  const playhead = $derived(dragHead ?? (tp?.playing ? tp.position : (doc?.view.playhead ?? 0)));
+  const playhead = $derived(dragHead ?? (tp?.playing ? tp.position : (viewDoc?.playhead ?? 0)));
   /** The start marker: shown while playing or paused, where playback began. */
   const startMark = $derived(tp && (tp.playing || tp.paused) ? tp.anchor : null);
 
@@ -384,19 +391,20 @@
 
   /** Changes the view. `auto` is the follow's own paging; anything else is the user's. */
   function setView(v: Partial<{ spp: number; scroll: number; playhead: number }>, auto = false) {
-    if (!doc) return;
+    const cur = session.current?.view;
+    if (!cur) return;
     if (!auto && tp?.playing) {
       if (v.playhead !== undefined) followHeld = false;
-      else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) {
+      else if ((v.scroll !== undefined && v.scroll !== cur.scroll) || (v.spp !== undefined && v.spp !== cur.samples_per_pixel)) {
         followHeld = true;
         userViewAt = performance.now();
       }
     }
     session.setView({
-      ...doc.view,
-      samples_per_pixel: v.spp ?? doc.view.samples_per_pixel,
-      scroll: Math.max(0, Math.round(v.scroll ?? doc.view.scroll)),
-      playhead: Math.max(0, Math.round(v.playhead ?? doc.view.playhead)),
+      ...cur,
+      samples_per_pixel: v.spp ?? cur.samples_per_pixel,
+      scroll: Math.max(0, Math.round(v.scroll ?? cur.scroll)),
+      playhead: Math.max(0, Math.round(v.playhead ?? cur.playhead)),
     });
   }
 
@@ -486,7 +494,7 @@
     void tick;
     const c = ruler;
     if (!c) return;
-    drawRuler(c, { width: lanesWidth, view, rate, timeFormat: ed.timeFormat, selection: doc?.view.selection, markers: shownMarkers, playhead, startMark });
+    drawRuler(c, { width: lanesWidth, view, rate, timeFormat: ed.timeFormat, selection: viewDoc?.selection, markers: shownMarkers, playhead, startMark });
   });
 
   /**
@@ -820,7 +828,7 @@
       return;
     }
     if (ed.tool === "time") {
-      hoverCursor = selectionEdgeAt(x, doc?.view.selection, view) ? "ew-resize" : "text";
+      hoverCursor = selectionEdgeAt(x, viewDoc?.selection, view) ? "ew-resize" : "text";
       return;
     }
     if (ed.tool === "razor") {
@@ -1093,8 +1101,8 @@
       return hit ?? s;
     };
     // Pressed on an edge of the time selection: drag that edge, the other stays.
-    const edge = selectionEdgeAt(e.clientX - left, d0.view.selection, v);
-    const sel0 = d0.view.selection;
+    const edge = selectionEdgeAt(e.clientX - left, session.current?.view.selection ?? null, v);
+    const sel0 = session.current?.view.selection ?? null;
     const anchor = edge && sel0 ? (edge === "start" ? sel0.end : sel0.start) : at(e.clientX, e.shiftKey);
     const startX = e.clientX;
     let moved = false;
@@ -1846,9 +1854,9 @@
               <div class="marker-line" style:left="{mx}px" style:border-color={markerCss(m)}></div>
             {/if}
           {/each}
-          {#if doc.view.selection}
-            {@const sx0 = xOf(doc.view.selection.start, view)}
-            {@const sx1 = xOf(doc.view.selection.end, view)}
+          {#if viewDoc?.selection}
+            {@const sx0 = xOf(viewDoc.selection.start, view)}
+            {@const sx1 = xOf(viewDoc.selection.end, view)}
             {#if sx1 > 0 && sx0 < lanesWidth}
               <div class="range" style:left="{Math.max(0, sx0)}px" style:width="{Math.min(lanesWidth, sx1) - Math.max(0, sx0)}px"></div>
             {/if}
@@ -1897,7 +1905,7 @@
     {rate}
     {playhead}
     end={contentEnd}
-    hasSelection={!!doc?.view.selection}
+    hasSelection={!!viewDoc?.selection}
     {shortcutFor}
     zoom={onZoom}
     amplitude

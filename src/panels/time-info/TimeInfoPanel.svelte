@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
   import { editor, type EditorState } from "../../stores/editor";
-  import { clipLength, sessionEnd, type SessionDoc, type SessionStore } from "../../stores/session";
+  import { clipLength, sessionEnd, type SessionDoc, type SessionStore, type ViewDoc } from "../../stores/session";
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { formatIn } from "../editor/timeline";
   import { formatSize } from "../files/format";
@@ -37,6 +37,12 @@
       sessionDoc = d;
     }),
   );
+  let sessionView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    session.subscribeView((v) => {
+      sessionView = v;
+    }),
+  );
   let sessionTp = $state<TransportState | null>(null);
   $effect(() =>
     transport.subscribe((t) => {
@@ -47,6 +53,12 @@
   $effect(() =>
     wave?.subscribe((d) => {
       waveDoc = d;
+    }),
+  );
+  let waveView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    wave?.subscribeView((v) => {
+      waveView = v;
     }),
   );
   let waveTp = $state<TransportState | null>(null);
@@ -63,6 +75,7 @@
   );
   const inWave = $derived(ed.mode === "waveform" && waveDoc !== null);
   const doc = $derived(inWave ? waveDoc : sessionDoc);
+  const vd = $derived(inWave ? waveView : sessionView);
   const tp = $derived(inWave ? waveTp : sessionTp);
 
   const rate = $derived(doc?.sample_rate ?? 48000);
@@ -70,7 +83,7 @@
 
   /** The time selection if there is one, otherwise the span of the selected clips. */
   const span = $derived.by(() => {
-    if (doc?.view.selection) return doc.view.selection;
+    if (vd?.selection) return vd.selection;
     if (!doc || inWave || ed.selectedClips.size === 0) return null;
     const media = new Map(doc.media.map((m) => [m.id, m]));
     let start = Infinity;
@@ -85,7 +98,7 @@
   });
 
   const length = $derived(doc ? sessionEnd(doc) : 0);
-  const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  const playhead = $derived(tp?.playing ? tp.position : (vd?.playhead ?? 0));
   const store = $derived(inWave ? wave! : session);
   const player = $derived(inWave ? waveTransport! : transport);
   let widths = $state({ multitrack: 0, waveform: 0 });
@@ -95,11 +108,11 @@
     }),
   );
   const laneW = $derived(inWave ? widths.waveform : widths.multitrack);
-  const step = $derived(doc?.view.samples_per_pixel ?? 1);
+  const step = $derived(vd?.samples_per_pixel ?? 1);
   const parse = (text: string) => parseTime(text, rate, ed.timeFormat, settings.current.timecodeFps);
-  const vis = $derived(doc && laneW > 0 ? viewRange(doc.view, laneW) : null);
+  const vis = $derived(vd && laneW > 0 ? viewRange(vd, laneW) : null);
   /** Only a time selection can be edited here; the span of selected clips is shown as it is. */
-  const timeSel = $derived(doc?.view.selection ?? null);
+  const timeSel = $derived(vd?.selection ?? null);
 
   function setSel(part: "start" | "end" | "duration", v: number) {
     const d = store.current;

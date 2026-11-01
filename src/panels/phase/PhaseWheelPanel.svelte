@@ -108,14 +108,14 @@
    */
   let follow = $state<{ wave: boolean; at: number }>({ wave: false, at: -1 });
   $effect(() =>
-    transport.session.subscribe((d) => {
-      const at = d?.view.playhead;
+    transport.session.subscribeView((v) => {
+      const at = v?.playhead;
       if (at !== undefined && (follow.wave || at !== follow.at)) follow = { wave: false, at };
     }),
   );
   $effect(() =>
-    wave?.session.subscribe((d) => {
-      const at = d?.view.playhead;
+    wave?.session.subscribeView((v) => {
+      const at = v?.playhead;
       if (at !== undefined && (!follow.wave || at !== follow.at)) follow = { wave: true, at };
     }),
   );

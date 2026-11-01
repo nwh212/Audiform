@@ -2,9 +2,9 @@
 // Copyright (c) The GeekCast Radio Network, LLC.
 // This file is part of Audiform, based on Altered Audio Editor.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { UndoStack } from "../commands";
-import { SessionStore, type Op, type SessionDoc } from "./session";
+import { SessionStore, type Op, type SessionDoc, type ViewDoc } from "./session";
 
 function doc(volume: number): SessionDoc {
   return {
@@ -88,5 +88,72 @@ describe("fader drags", () => {
     expect(volume()).toBe(0);
     await stack.redo();
     expect(volume()).toBe(-5);
+  });
+});
+
+describe("view changes", () => {
+  const zoomed = (): ViewDoc => ({ samples_per_pixel: 256, scroll: 48_000, scroll_y: 0, playhead: 96_000, selection: null });
+
+  it("reach view listeners only, never document listeners", async () => {
+    const { store } = setup();
+    await store.load();
+    const docs = vi.fn();
+    const views = vi.fn();
+    store.subscribe(docs);
+    store.subscribeView(views);
+    expect(docs).toHaveBeenCalledTimes(1);
+    expect(views).toHaveBeenCalledTimes(1);
+    const before = store.current;
+    store.setView(zoomed());
+    // A wheel zoom on a session with many tracks: the panels keyed on the document hear nothing.
+    expect(docs).toHaveBeenCalledTimes(1);
+    expect(views).toHaveBeenCalledTimes(2);
+    expect(views).toHaveBeenLastCalledWith(zoomed());
+    // The document still carries the view, for saving and for anything that reads it on demand.
+    expect(store.current?.view).toEqual(zoomed());
+    expect(store.current?.tracks).toBe(before?.tracks);
+  });
+
+  it("still reach the core after a pause, and at once on flush", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: ViewDoc[] = [];
+      const store = new SessionStore({
+        get: async () => ({ session: doc(0), path: null }),
+        setView: async (v) => void sent.push(v),
+        apply: async () => {
+          throw new Error("unexpected");
+        },
+      });
+      await store.load();
+      store.setView(zoomed());
+      store.setView({ ...zoomed(), scroll: 0 });
+      expect(sent).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(sent).toEqual([{ ...zoomed(), scroll: 0 }]);
+      store.setView(zoomed());
+      await store.flushView();
+      expect(sent).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sent).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("follow a loaded, undone or redone document", async () => {
+    const { store, stack } = setup();
+    await store.load();
+    const views = vi.fn();
+    store.subscribeView(views);
+    store.setView(zoomed());
+    // The core answers an edit with its own view (the one it was last told).
+    await store.edit("Track Volume", { op: "set_track", id: "t", changes: { volume_db: -3 } }, stack);
+    expect(store.current?.view.samples_per_pixel).toBe(1024);
+    expect(views).toHaveBeenLastCalledWith(doc(0).view);
+    const calls = views.mock.calls.length;
+    // A document with the same view says nothing to view listeners.
+    await stack.undo();
+    expect(views.mock.calls.length).toBe(calls);
   });
 });

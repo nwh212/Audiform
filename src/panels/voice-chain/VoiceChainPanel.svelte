@@ -34,7 +34,7 @@
   import { keyChoices, MASTER_ID } from "../mixer/routing";
   import { trackOp } from "../mixer/solo";
   import { defaultTrackColor } from "../editor/timeline";
-  import type { EffectChainDoc, EffectSlotDoc, EffectTarget, SessionDoc, SessionStore } from "../../stores/session";
+  import type { EffectChainDoc, EffectSlotDoc, EffectTarget, SessionDoc, SessionStore, ViewDoc } from "../../stores/session";
   import {
     addsOne,
     addSlot,
@@ -95,10 +95,22 @@
       doc = d;
     }),
   );
+  let sessionView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    session.subscribeView((v) => {
+      sessionView = v;
+    }),
+  );
   let waveDoc = $state<SessionDoc | null>(null);
   $effect(() =>
     wave?.subscribe((d) => {
       waveDoc = d;
+    }),
+  );
+  let waveView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    wave?.subscribeView((v) => {
+      waveView = v;
     }),
   );
   let ed = $state<EditorState>(editor.current());
@@ -392,7 +404,7 @@
     else void session.edit(what, op, runner).catch(onError);
   }
 
-  const waveSel = $derived(waveDoc?.view.selection && waveDoc.view.selection.end > waveDoc.view.selection.start ? waveDoc.view.selection : null);
+  const waveSel = $derived(waveView?.selection && waveView.selection.end > waveView.selection.start ? waveView.selection : null);
   let applying = $state(false);
   async function applyWave() {
     if (!onApplyWave || applying) return;
@@ -641,7 +653,7 @@
   const OWN_CONTROLS = new Set(["altaudio.parametric_eq", "altaudio.phase_curve", ...BAND_EQS, "altaudio.notch", "altaudio.center_extractor", "altaudio.convolution_reverb", "altaudio.shaped_noise", "altaudio.opto_leveler", "altaudio.tube_preamp", "altaudio.amp_model", "altaudio.vox_strip", "altaudio.stereo_width", "altaudio.limiter", "altaudio.channel_mixer", "altaudio.reverb", "altaudio.echo", "altaudio.modulation"]);
   const LEARNS = new Set(["altaudio.noise_print", "altaudio.sound_eraser", "altaudio.shaped_noise"]);
   const learnSel = $derived.by(() => {
-    const v = inWave ? waveDoc?.view.selection : doc?.view.selection;
+    const v = inWave ? waveView?.selection : sessionView?.selection;
     return v && v.end > v.start ? v : null;
   });
   let learning = $state(false);
@@ -914,7 +926,7 @@
             slot={winSlot}
             info={winInfo}
             playing={!!ts?.playing}
-            playhead={ts?.playing ? ts.position : ((inWave ? waveDoc : doc)?.view.playhead ?? 0)}
+            playhead={ts?.playing ? ts.position : ((inWave ? waveView : sessionView)?.playhead ?? 0)}
             wave={inWave}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
           />
@@ -925,7 +937,7 @@
             slot={winSlot}
             info={winInfo}
             playing={!!ts?.playing}
-            playhead={ts?.playing ? ts.position : ((inWave ? waveDoc : doc)?.view.playhead ?? 0)}
+            playhead={ts?.playing ? ts.position : ((inWave ? waveView : sessionView)?.playhead ?? 0)}
             wave={inWave}
             onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)}
           />

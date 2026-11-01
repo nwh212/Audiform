@@ -166,9 +166,9 @@ export class TransportStore {
    */
   private watchSelection(): void {
     if (this.offSelection) return;
-    this.offSelection = this.session.subscribe((d) => {
+    this.offSelection = this.session.subscribeView((v) => {
       if (!this.state.playing || !this.backend.loops?.()) return;
-      if (selectionKey(d?.view.selection) === this.playedSelection) return;
+      if (selectionKey(v?.selection) === this.playedSelection) return;
       if (this.selectionTimer) clearTimeout(this.selectionTimer);
       // Wait for a drag to settle, so playback restarts once, not on every move.
       this.selectionTimer = setTimeout(() => {

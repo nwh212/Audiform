@@ -579,6 +579,20 @@ export interface SessionBackend {
 }
 
 type Listener = (doc: SessionDoc | null) => void;
+type ViewListener = (view: ViewDoc | null) => void;
+
+/** True when two views show the same place: zoom, scroll, playhead and selection alike. */
+export function sameView(a: ViewDoc | null | undefined, b: ViewDoc | null | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.samples_per_pixel === b.samples_per_pixel &&
+    a.scroll === b.scroll &&
+    a.scroll_y === b.scroll_y &&
+    a.playhead === b.playhead &&
+    (a.selection === b.selection || (!!a.selection && !!b.selection && a.selection.start === b.selection.start && a.selection.end === b.selection.end))
+  );
+}
 
 /** Timeline length of a clip, in session samples. */
 export function clipLength(
@@ -648,15 +662,35 @@ export class SessionStore {
   private doc: SessionDoc | null = null;
   private filePath: string | null = null;
   private readonly listeners = new Set<Listener>();
+  private readonly viewListeners = new Set<ViewListener>();
   private viewTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly backend: SessionBackend) {}
 
+  /**
+   * Hears the document change: a session opened, an edit, undo or redo.
+   * A view change (zoom, scroll, playhead, time selection) is not one;
+   * `subscribeView` hears those, so panels that do not draw the timeline
+   * are left alone while it zooms.
+   */
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     fn(this.doc);
     return () => {
       this.listeners.delete(fn);
+    };
+  }
+
+  /**
+   * Hears the view change: `setView`, and a document that arrives with
+   * another view (opened, undone or redone). `current.view` is always the
+   * latest view, whichever way it came.
+   */
+  subscribeView(fn: ViewListener): () => void {
+    this.viewListeners.add(fn);
+    fn(this.doc?.view ?? null);
+    return () => {
+      this.viewListeners.delete(fn);
     };
   }
 
@@ -746,11 +780,27 @@ export class SessionStore {
     }
   }
 
-  /** Replaces the whole document, for example after opening a file. */
+  private notifyView(view: ViewDoc | null): void {
+    for (const fn of this.viewListeners) {
+      try {
+        fn(view);
+      } catch (e) {
+        reportError(e);
+      }
+    }
+  }
+
+  /**
+   * Replaces the whole document, for example after opening a file. The
+   * document's view is the view from then on; view listeners hear of it
+   * when it differs from the one shown.
+   */
   set(doc: SessionDoc, path?: string | null): void {
+    const before = this.doc?.view;
     this.doc = doc;
     if (path !== undefined) this.filePath = path;
     this.notify(doc);
+    if (!sameView(before, doc.view)) this.notifyView(doc.view);
   }
 
   /** Runs an op as one undoable step. */
@@ -779,11 +829,17 @@ export class SessionStore {
     return r.inverse;
   }
 
-  /** View changes (zoom, scroll, playhead) are not edits; sent to the core after a pause. */
+  /**
+   * View changes (zoom, scroll, playhead, selection) are not edits: only
+   * view listeners hear of them, never document listeners, so a zoom on a
+   * session with many tracks redraws the timeline and nothing else. The
+   * document keeps the view for `current.view`, for saving and for the
+   * core, which hears after a pause.
+   */
   setView(view: ViewDoc): void {
     if (!this.doc) return;
     this.doc = { ...this.doc, view };
-    this.notify(this.doc);
+    this.notifyView(view);
     clearTimeout(this.viewTimer);
     this.viewTimer = setTimeout(() => {
       this.viewTimer = undefined;

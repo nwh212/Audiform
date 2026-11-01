@@ -20,7 +20,7 @@
   import { editor, type EditorState } from "../../stores/editor";
   import type { PeakStore } from "../../stores/peaks";
   import { liveTakes, type LiveTakes } from "../../stores/record";
-  import { clipLength, sessionEnd, stretchOf, type ClipDoc, type SessionDoc, type SessionStore } from "../../stores/session";
+  import { clipLength, sessionEnd, stretchOf, type ClipDoc, type SessionDoc, type SessionStore, type ViewDoc } from "../../stores/session";
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { onDestroy, untrack } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
@@ -70,6 +70,12 @@
   $effect(() =>
     wave.subscribe((d) => {
       doc = d;
+    }),
+  );
+  let viewDoc = $state<ViewDoc | null>(null);
+  $effect(() =>
+    wave.subscribeView((v) => {
+      viewDoc = v;
     }),
   );
   let tp = $state<TransportState | null>(null);
@@ -123,30 +129,31 @@
 
   const rate = $derived(doc?.sample_rate ?? 48_000);
   const total = $derived(doc ? sessionEnd(doc) : 0);
-  const view = $derived<Viewport>({ spp: doc?.view.samples_per_pixel ?? 1024, scroll: doc?.view.scroll ?? 0 });
-  const playhead = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  const view = $derived<Viewport>({ spp: viewDoc?.samples_per_pixel ?? 1024, scroll: viewDoc?.scroll ?? 0 });
+  const playhead = $derived(tp?.playing ? tp.position : (viewDoc?.playhead ?? 0));
   /** The start marker: shown while playing or paused, where playback began. */
   const startMark = $derived(tp && (tp.playing || tp.paused) ? tp.anchor : null);
-  const selection = $derived(doc?.view.selection ?? null);
+  const selection = $derived(viewDoc?.selection ?? null);
   const channels = $derived(Math.max(1, Math.min(64, doc?.media[0]?.channels ?? 1)));
   const chNames = $derived(channelLabels(channels));
   const clips = $derived((doc?.tracks[0]?.clips ?? []).slice().sort((a, b) => a.start - b.start));
 
   function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>, auto = false) {
-    if (!doc) return;
+    const cur = wave.current?.view;
+    if (!doc || !cur) return;
     // Scrolling or zooming by hand while playing stops the following until playback starts again or the playhead is moved.
     if (!auto && tp?.playing) {
       if (v.playhead !== undefined) followHeld = false;
-      else if ((v.scroll !== undefined && v.scroll !== doc.view.scroll) || (v.spp !== undefined && v.spp !== doc.view.samples_per_pixel)) followHeld = true;
+      else if ((v.scroll !== undefined && v.scroll !== cur.scroll) || (v.spp !== undefined && v.spp !== cur.samples_per_pixel)) followHeld = true;
     }
     // The view never runs past the end of the file.
     const maxScroll = Math.max(0, total - width * (v.spp ?? view.spp));
     wave.setView({
-      ...doc.view,
-      samples_per_pixel: v.spp ?? doc.view.samples_per_pixel,
-      scroll: Math.max(0, Math.min(maxScroll, Math.round(v.scroll ?? doc.view.scroll))),
-      playhead: Math.max(0, Math.round(v.playhead ?? doc.view.playhead)),
-      selection: v.selection === undefined ? doc.view.selection : v.selection,
+      ...cur,
+      samples_per_pixel: v.spp ?? cur.samples_per_pixel,
+      scroll: Math.max(0, Math.min(maxScroll, Math.round(v.scroll ?? cur.scroll))),
+      playhead: Math.max(0, Math.round(v.playhead ?? cur.playhead)),
+      selection: v.selection === undefined ? cur.selection : v.selection,
     });
   }
 
@@ -159,7 +166,7 @@
   $effect(() => {
     if (!doc || !file || width <= 0) return;
     const key = file.path + doc.id;
-    const untouched = fittedFor === key && doc.view.samples_per_pixel === fittedSpp && doc.view.scroll === 0;
+    const untouched = fittedFor === key && viewDoc?.samples_per_pixel === fittedSpp && viewDoc?.scroll === 0;
     if (fittedFor === key && !(untouched && width !== fittedWidth)) return;
     fittedFor = key;
     const f = fit(total, width, 1);
@@ -176,7 +183,7 @@
     const prev = lastTotal;
     lastTotal = t;
     if (!doc || width <= 0 || t <= 0 || prev <= 0 || t >= prev) return;
-    const showedAll = untrack(() => doc!.view.scroll === 0 && doc!.view.samples_per_pixel >= fit(prev, width, 1).spp * 0.95);
+    const showedAll = untrack(() => viewDoc?.scroll === 0 && (viewDoc?.samples_per_pixel ?? 0) >= fit(prev, width, 1).spp * 0.95);
     if (!showedAll) return;
     const f = fit(t, width, 1);
     fittedSpp = f.spp;
@@ -637,7 +644,7 @@
       window.removeEventListener("pointerup", up, true);
       if (dragged) {
         move(ev);
-        const sel = doc?.view.selection;
+        const sel = wave.current?.view.selection;
         if (sel && !tp?.playing) setView({ playhead: sel.start });
         return;
       }
@@ -764,7 +771,7 @@
   function audition(db: number) {
     cancelAnimationFrame(auditionFrame);
     auditionFrame = requestAnimationFrame(() => {
-      const sel = doc?.view.selection;
+      const sel = wave.current?.view.selection;
       void transportAuditionLevel(db, sel ? sel.start : 0, sel ? sel.end : 0).catch(() => {});
     });
   }

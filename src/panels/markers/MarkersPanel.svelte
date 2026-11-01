@@ -14,7 +14,7 @@
   import type { ActionRegistry } from "../../app/actions";
   import type { CommandRunner } from "../../stores/media-pool";
   import { editor, type EditorState } from "../../stores/editor";
-  import type { MarkerChange, MarkerDoc, MarkerKind, SessionDoc, SessionStore } from "../../stores/session";
+  import type { MarkerChange, MarkerDoc, MarkerKind, SessionDoc, SessionStore, ViewDoc } from "../../stores/session";
   import type { TransportStore } from "../../stores/transport";
   import { formatIn } from "../editor/timeline";
   import { KIND_LABELS, markerCss } from "./markers";
@@ -42,10 +42,22 @@
       sessionDoc = d;
     }),
   );
+  let sessionView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    session.subscribeView((v) => {
+      sessionView = v;
+    }),
+  );
   let waveDoc = $state<SessionDoc | null>(null);
   $effect(() =>
     wave?.subscribe((d) => {
       waveDoc = d;
+    }),
+  );
+  let waveView = $state<ViewDoc | null>(null);
+  $effect(() =>
+    wave?.subscribeView((v) => {
+      waveView = v;
     }),
   );
   let waveHasFile = $state(false);
@@ -64,6 +76,7 @@
   // The Waveform editor wins while it is in front with a file open.
   const onWave = $derived(ed.mode === "waveform" && !!wave && !!waveDoc && waveHasFile);
   const doc = $derived(onWave ? waveDoc : sessionDoc);
+  const timeSel = $derived((onWave ? waveView : sessionView)?.selection ?? null);
   const store = $derived(onWave && wave ? wave : session);
   const run = $derived(onWave && waveRunner ? waveRunner : runner);
   const tp = $derived(onWave && waveTransport ? waveTransport : transport);
@@ -88,7 +101,7 @@
 <section class="markers" aria-label="Markers">
   <div class="toolbar">
     <button type="button" onclick={() => void actions.run("edit.marker.cue")}>+ Cue</button>
-    <button type="button" disabled={!doc?.view.selection} title="Needs a time selection" onclick={() => void actions.run("edit.marker.range")}>+ Range</button>
+    <button type="button" disabled={!timeSel} title="Needs a time selection" onclick={() => void actions.run("edit.marker.range")}>+ Range</button>
   </div>
   {#if !doc || doc.markers.length === 0}
     <p class="empty">No markers yet. Add one at the playhead with Edit &gt; Markers, or right-click the ruler.</p>

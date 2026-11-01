@@ -18,7 +18,7 @@
 <script lang="ts">
   import type { CommandRunner } from "../../stores/media-pool";
   import { editor, type EditorState } from "../../stores/editor";
-  import { SPACE_LAYOUTS, type EnvelopeDoc, type OutputDoc, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode } from "../../stores/session";
+  import { SPACE_LAYOUTS, type EnvelopeDoc, type OutputDoc, type SessionDoc, type SessionStore, type SpaceDoc, type SpaceLayout, type SpacePosDoc, type SpatializeMode, type ViewDoc } from "../../stores/session";
   import { defaultTrackColor } from "../editor/timeline";
   import { transport } from "../../stores/open-session";
   import type { TransportState } from "../../stores/transport";
@@ -44,6 +44,12 @@
       doc = d;
     }),
   );
+  let viewDoc = $state<ViewDoc | null>(null);
+  $effect(() =>
+    session.subscribeView((v) => {
+      viewDoc = v;
+    }),
+  );
   let ed = $state<EditorState>(editor.current());
   $effect(() =>
     editor.subscribe((s) => {
@@ -58,7 +64,7 @@
       tp = s;
     }),
   );
-  const at = $derived(tp?.playing ? tp.position : (doc?.view.playhead ?? 0));
+  const at = $derived(tp?.playing ? tp.position : (viewDoc?.playhead ?? 0));
 
   const space = $derived(doc?.space ?? null);
   let snapOn = $state(settings.current.spaceSnap);
