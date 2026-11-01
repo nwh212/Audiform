@@ -379,6 +379,14 @@
           // A looped clip wraps back to the start of its region.
           const region = clip.source_out - clip.source_in;
           const phase = clip.looped ? clip.looped.phase : 0;
+          // One column per pixel, gathered into one path per channel and
+          // filled once: a draw call per pixel made a repaint of a large
+          // session take over a second.
+          const columns: Path2D[] = [];
+          for (let k = 0; k < ch; k++) columns.push(new Path2D());
+          const fileLen = m?.length ?? clip.source_out;
+          const half = laneH / 2 - 1;
+          const scale = ampZoom * clipLevel;
           for (let px = Math.floor(left); px < Math.ceil(right); px++) {
             const tl0 = view.scroll + px * view.spp - clip.start;
             let into = (tl0 * srcRate) / sessionRate / ratio;
@@ -386,22 +394,23 @@
             const s0 = clip.source_in + into;
             const s1 = s0 + framesPerPx;
             if (s1 < clip.source_in || s0 >= clip.source_out) continue;
-            const faded = fadeAt(clip, tl0 + view.spp / 2, len);
+            const faded = fadeAt(clip, tl0 + view.spp / 2, len) * scale;
+            const a0 = Math.max(s0, clip.source_in);
+            const a1 = Math.min(s1, clip.source_out);
             for (let k = 0; k < ch; k++) {
               // Reversed: positions count from the file's end.
-              const fileLen = m?.length ?? clip.source_out;
-              const [a0, a1] = [Math.max(s0, clip.source_in), Math.min(s1, clip.source_out)];
               const [lo0, hi0] = clip.reversed ? peakRange(level, ch, k, fileLen - a1, fileLen - a0) : peakRange(level, ch, k, a0, a1);
               // Inverted: drawn upside down.
               const flipped = clip.inverted && (!clip.invert_channel || clip.invert_channel === "both" || (ch === 2 && (clip.invert_channel === "left" ? k === 0 : k === 1)));
-              const [lo, hi] = flipped ? [-hi0, -lo0] : [lo0, hi0];
+              const lo = flipped ? -hi0 : lo0;
+              const hi = flipped ? -lo0 : hi0;
               const mid = body.top + laneH * (k + 0.5);
-              const amp = (v: number) => Math.max(-1, Math.min(1, v * ampZoom * clipLevel * faded));
-              const y0 = mid - amp(hi) * (laneH / 2 - 1);
-              const y1 = mid - amp(lo) * (laneH / 2 - 1);
-              g.fillRect(px, y0, 1, Math.max(1, y1 - y0));
+              const y0 = mid - Math.max(-1, Math.min(1, hi * faded)) * half;
+              const y1 = mid - Math.max(-1, Math.min(1, lo * faded)) * half;
+              columns[k]!.rect(px, y0, 1, Math.max(1, y1 - y0));
             }
           }
+          for (const path of columns) g.fill(path);
           g.globalAlpha = 1;
         }
         // Multichannel files: each row's channel name, when rows are tall enough.

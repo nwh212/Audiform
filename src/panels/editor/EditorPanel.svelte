@@ -329,7 +329,17 @@
   $effect(() => editor.setWidth(lanesWidth));
 
   const rate = $derived(doc?.sample_rate ?? 48000);
-  const view = $derived<Viewport>({ spp: viewDoc?.samples_per_pixel ?? 1024, scroll: viewDoc?.scroll ?? 0 });
+  // The same object for as long as zoom and scroll stay the same: a new
+  // one on every view change (a playhead move, say) would hand every lane
+  // a changed `view` and repaint all of them, which takes over a second
+  // on a large session.
+  let lastView: Viewport = { spp: 1024, scroll: 0 };
+  const view = $derived.by<Viewport>(() => {
+    const spp = viewDoc?.samples_per_pixel ?? 1024;
+    const scroll = viewDoc?.scroll ?? 0;
+    if (lastView.spp !== spp || lastView.scroll !== scroll) lastView = { spp, scroll };
+    return lastView;
+  });
   /** While the playhead is being dragged on the ruler: where the pointer has it, shown at once. */
   let dragHead = $state<number | null>(null);
   const playhead = $derived(dragHead ?? (tp?.playing ? tp.position : (viewDoc?.playhead ?? 0)));
