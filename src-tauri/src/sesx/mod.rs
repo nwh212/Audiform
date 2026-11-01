@@ -29,8 +29,8 @@ use crate::codecs::{probe, AudioInfo};
 use crate::session::model::{
     new_id, Bus, ChannelLayout, ChannelMix, ChannelSend, Clip, ClipStretch, EffectChain,
     EffectSlot, Envelope, EnvelopeCurve, EnvelopePoint, EnvelopeTarget, Fade, FadeShape, Id,
-    MediaRef, Output, Session, Space, SpaceLayout, SpaceListen, SpacePos, StretchAdvanced, Track,
-    STRETCH_MAX, STRETCH_MIN,
+    MediaRef, Output, Session, Space, SpaceLayout, SpaceListen, SpaceParam, SpacePos,
+    StretchAdvanced, Track, STRETCH_MAX, STRETCH_MIN,
 };
 
 #[derive(Debug, Error)]
@@ -112,85 +112,303 @@ fn component_param(
         .and_then(|v| v.parse::<f64>().ok())
 }
 
-/// The 5.1 panner's speaker angles (degrees from the front, clockwise)
-/// against where those speakers sit in a 3D Space room, whose front
-/// speakers are its front corners and surrounds its back corners: front
-/// 0 to 0, L/R 30 to 45, Ls/Rs 110 to 135, straight back 180 to 180, in
-/// straight lines between. A sound aimed at a speaker there lands on the
-/// same speaker here.
-fn room_angle(deg: f64) -> f64 {
+/// Where a 5.1 session's surround speakers are taken to sit in a 3D Space
+/// room, chosen when it is imported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Surrounds {
+    /// Behind the listener: the room's back corners.
+    #[default]
+    Behind,
+    /// Beside the listener: halfway along the side walls.
+    Sides,
+}
+
+/// The 5.1 panner's directions (degrees from the front, clockwise) bent
+/// onto the square 3D Space room, whose front speakers are its front
+/// corners: front stays front, the front speakers' 30 degrees land on the
+/// front corners (45), the surrounds' 110 on the back corners (135) or,
+/// with `Sides`, halfway along the side walls (90), and straight back
+/// stays straight back, in straight lines between.
+fn room_angle(deg: f64, surrounds: Surrounds) -> f64 {
     let d = (deg + 180.0).rem_euclid(360.0) - 180.0;
     let m = d.abs();
+    let rear = match surrounds {
+        Surrounds::Behind => 135.0,
+        Surrounds::Sides => 90.0,
+    };
     let w = if m <= 30.0 {
         m * 45.0 / 30.0
     } else if m <= 110.0 {
-        45.0 + (m - 30.0) * 90.0 / 80.0
+        45.0 + (m - 30.0) * (rear - 45.0) / 80.0
     } else {
-        135.0 + (m - 110.0) * 45.0 / 70.0
+        rear + (m - 110.0) * (180.0 - rear) / 70.0
     };
     w.copysign(d)
 }
 
 /// A point `radius` (0 middle, 1 wall) of the way out toward `deg` (from
 /// the front, clockwise) in the square room.
-fn room_point(deg: f64, radius: f64) -> (f64, f64) {
-    let a = room_angle(deg).to_radians();
+fn room_point(deg: f64, radius: f64, surrounds: Surrounds) -> (f64, f64) {
+    let a = room_angle(deg, surrounds).to_radians();
     let (sx, sy) = (a.sin(), a.cos());
     let k = sx.abs().max(sy.abs()).max(1e-9);
     (radius * sx / k, radius * sy / k)
 }
 
-/// A track's or bus's place in a 3D Space room from its 5.1 panner: the
-/// direction (angle) and distance (radius) it points to, how far apart a
-/// stereo source's sides are (stereo spread, as an angle on the same
-/// circle; below 0 swaps them), and how much feeds the LFE. Each side
-/// keeps its own direction, so the pair's spot, width and turn follow
-/// from where its two sides land. The panner's center level has no match
-/// here and is left out. None without a 5.1 panner.
-fn surround_pos(nodes: &[Option<roxmltree::Node<'_, '_>>], stereo: bool) -> Option<SpacePos> {
-    let (panner, angle) = ["Audition.StereoTo51Panner", "Audition.MonoTo51Panner"]
+/// One 5.1 panner setting: its fixed value, or its drawn line (session
+/// samples, value, held until the next point), in the setting's own
+/// units.
+struct PanSetting {
+    fixed: f64,
+    keys: Vec<(u64, f64, bool)>,
+}
+
+impl PanSetting {
+    fn at(&self, t: u64) -> f64 {
+        let Some(first) = self.keys.first() else {
+            return self.fixed;
+        };
+        if t <= first.0 {
+            return first.1;
+        }
+        for w in self.keys.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if t < b.0 {
+                if a.2 || b.0 <= a.0 {
+                    return a.1;
+                }
+                return a.1 + (b.1 - a.1) * (t - a.0) as f64 / (b.0 - a.0) as f64;
+            }
+        }
+        self.keys[self.keys.len() - 1].1
+    }
+}
+
+/// A drawn angle's value (0 to 1 for a whole turn) in degrees.
+fn turn(v: f64) -> f64 {
+    v * 360.0 - 180.0
+}
+
+/// The settings of a 5.1 panner, as directions in degrees from the front
+/// (clockwise) and amounts from 0 to 1. Angles are stored in radians with
+/// the front at a quarter turn; their drawn lines in 0 to 1 for a whole
+/// turn from straight back round to straight back.
+struct Panner {
+    angle: PanSetting,
+    radius: PanSetting,
+    spread: PanSetting,
+    lfe: PanSetting,
+    mono: bool,
+}
+
+fn read_panner(nodes: &[Option<roxmltree::Node<'_, '_>>]) -> Option<Panner> {
+    let (comp, mono) = ["Audition.StereoTo51Panner", "Audition.MonoTo51Panner"]
         .iter()
-        .find_map(|c| {
+        .find_map(|id| {
             nodes
                 .iter()
                 .flatten()
-                .find_map(|n| component_param(*n, c, "Pan: Angle"))
-                .map(|a| (*c, a))
+                .find_map(|n| {
+                    n.children().find(|c| {
+                        c.has_tag_name("component") && c.attribute("componentID") == Some(*id)
+                    })
+                })
+                .map(|c| (c, *id == "Audition.MonoTo51Panner"))
         })?;
-    let param = |name: &str| {
-        nodes
-            .iter()
-            .flatten()
-            .find_map(|n| component_param(*n, panner, name))
+    let setting = |name: &str, fixed: fn(f64) -> f64, keyed: fn(f64) -> f64, default: f64| {
+        let p = comp
+            .children()
+            .find(|p| p.has_tag_name("parameter") && p.attribute("name") == Some(name));
+        let num = |n: roxmltree::Node<'_, '_>, k: &str| {
+            n.attribute(k)
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite())
+        };
+        let mut keys: Vec<(u64, f64, bool)> = p
+            .into_iter()
+            .flat_map(|p| {
+                p.descendants()
+                    .filter(|k| k.has_tag_name("parameterKeyframe"))
+            })
+            .filter_map(|k| {
+                Some((
+                    num(k, "sampleOffset")?.max(0.0) as u64,
+                    keyed(num(k, "value")?),
+                    k.attribute("type") == Some("hold"),
+                ))
+            })
+            .collect();
+        keys.sort_by_key(|k| k.0);
+        PanSetting {
+            fixed: p
+                .and_then(|p| num(p, "parameterValue"))
+                .map_or(default, fixed),
+            keys,
+        }
     };
-    // Stored in radians with the front at a quarter turn; shown (and used
-    // here) as degrees from the front, clockwise.
-    let dir = angle.to_degrees() - 90.0;
-    let radius = param("Pan: Radius").unwrap_or(1.0).clamp(0.0, 1.0);
-    let lfe = param("Pan: LFE").unwrap_or(0.0).clamp(0.0, 1.0);
+    Some(Panner {
+        angle: setting(
+            "Pan: Angle",
+            |r| r.to_degrees() - 90.0,
+            |v| turn(v) - 90.0,
+            0.0,
+        ),
+        radius: setting(
+            "Pan: Radius",
+            |v| v.clamp(0.0, 1.0),
+            |v| v.clamp(0.0, 1.0),
+            1.0,
+        ),
+        spread: setting("Pan: Stereo Spread", f64::to_degrees, turn, 0.0),
+        lfe: setting(
+            "Pan: LFE",
+            |v| v.clamp(0.0, 1.0),
+            |v| v.clamp(0.0, 1.0),
+            0.0,
+        ),
+        mono,
+    })
+}
+
+/// The room spot for the panner's settings at one moment: the direction
+/// and distance it points to, how far apart a stereo source's sides are
+/// (the spread, an angle on the same circle; below 0 swaps them) and how
+/// much feeds the LFE. Each side keeps its own direction, so the pair's
+/// spot, width and turn follow from where its two sides land. The
+/// panner's center level has no match here and is left out.
+fn panner_pos(
+    angle: f64,
+    radius: f64,
+    spread: f64,
+    lfe: f64,
+    stereo: bool,
+    surrounds: Surrounds,
+) -> SpacePos {
     let mut pos = SpacePos {
         lfe,
         ..SpacePos::default()
     };
-    let spread = param("Pan: Stereo Spread").unwrap_or(0.0).to_degrees();
-    if !stereo || panner == "Audition.MonoTo51Panner" {
-        (pos.x, pos.y) = room_point(dir, radius);
+    if !stereo {
+        (pos.x, pos.y) = room_point(angle, radius, surrounds);
         pos.width = 0.0;
-        return Some(pos.tidy());
+        return pos.tidy();
     }
-    let l = room_point(dir - spread / 2.0, radius);
-    let r = room_point(dir + spread / 2.0, radius);
+    let l = room_point(angle - spread / 2.0, radius, surrounds);
+    let r = room_point(angle + spread / 2.0, radius, surrounds);
     pos.x = (l.0 + r.0) / 2.0;
     pos.y = (l.1 + r.1) / 2.0;
     let (dx, dy) = ((r.0 - l.0) / 2.0, (r.1 - l.1) / 2.0);
     pos.width = dx.hypot(dy);
     pos.rotation = if pos.width > 1e-6 {
-        let a = (-dy).atan2(dx).to_degrees();
-        (a * 10.0).round() / 10.0
+        ((-dy).atan2(dx).to_degrees() * 10.0).round() / 10.0
     } else {
         0.0
     };
-    Some(pos.tidy())
+    pos.tidy()
+}
+
+/// A track's or bus's place in the room from its 5.1 panner, and the
+/// panner's drawn lines replayed as automation of that place: left to
+/// right, front to back, width, turn and LFE. Where a line turns the
+/// direction, points are added every few degrees so the spot travels
+/// round the room instead of cutting across it. None without a 5.1
+/// panner.
+fn surround_place(
+    nodes: &[Option<roxmltree::Node<'_, '_>>],
+    stereo: bool,
+    surrounds: Surrounds,
+) -> Option<(SpacePos, Vec<Envelope>)> {
+    let p = read_panner(nodes)?;
+    let stereo = stereo && !p.mono;
+    let pos_at = |t: u64| {
+        panner_pos(
+            p.angle.at(t),
+            p.radius.at(t),
+            p.spread.at(t),
+            p.lfe.at(t),
+            stereo,
+            surrounds,
+        )
+    };
+    let start = pos_at(0);
+    let mut times: Vec<u64> = [&p.angle, &p.radius, &p.spread, &p.lfe]
+        .iter()
+        .flat_map(|s| s.keys.iter().map(|k| k.0))
+        .collect();
+    times.sort_unstable();
+    times.dedup();
+    if times.is_empty() {
+        return Some((start, Vec::new()));
+    }
+    // Moments to look at: each drawn point, and enough between two of them
+    // that a direction never moves more than a few degrees between looks.
+    const STEP_DEG: f64 = 5.0;
+    const MAX_POINTS: usize = 20_000;
+    let mut at: Vec<u64> = vec![times[0]];
+    for w in times.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let turn = (p.angle.at(b) - p.angle.at(a))
+            .abs()
+            .max((p.spread.at(b) - p.spread.at(a)).abs() / 2.0);
+        let steps = ((turn / STEP_DEG).ceil() as u64).clamp(1, (b - a).max(1));
+        for k in 1..=steps {
+            at.push(a + (b - a) * k / steps);
+        }
+        if at.len() > MAX_POINTS {
+            break;
+        }
+    }
+    let lane = |param: SpaceParam, pts: Vec<EnvelopePoint>| Envelope {
+        id: new_id(),
+        target: EnvelopeTarget::Space { param },
+        enabled: true,
+        points: pts,
+        height: None,
+    };
+    let point = |position: u64, value: f64| EnvelopePoint {
+        position,
+        value: (value * 1000.0).round() / 1000.0,
+        curve: EnvelopeCurve::Linear,
+    };
+    let (mut xs, mut ys, mut ws, mut rs, mut ls) = (vec![], vec![], vec![], vec![], vec![]);
+    let mut last_rot: Option<(u64, f64)> = None;
+    for &t in &at {
+        let q = pos_at(t);
+        xs.push(point(t, q.x));
+        ys.push(point(t, q.y));
+        ws.push(point(t, q.width));
+        ls.push(point(t, q.lfe));
+        // The turn wraps at half a turn: step across it instead of sweeping
+        // back the long way round.
+        if let Some((pt, pr)) = last_rot {
+            if (q.rotation - pr).abs() > 180.0 && t > pt + 2 {
+                let edge = 180f64.copysign(pr);
+                rs.push(point(t - 2, edge));
+                rs.push(point(t - 1, -edge));
+            }
+        }
+        rs.push(point(t, q.rotation));
+        last_rot = Some((t, q.rotation));
+    }
+    let varies = |pts: &[EnvelopePoint]| {
+        let (lo, hi) = pts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| {
+            (lo.min(p.value), hi.max(p.value))
+        });
+        hi - lo > 1e-3
+    };
+    let mut lanes = Vec::new();
+    for (param, pts, use_it) in [
+        (SpaceParam::X, xs, true),
+        (SpaceParam::Y, ys, true),
+        (SpaceParam::Width, ws, stereo),
+        (SpaceParam::Rotation, rs, stereo),
+        (SpaceParam::Lfe, ls, true),
+    ] {
+        if use_it && varies(&pts) {
+            lanes.push(lane(param, pts));
+        }
+    }
+    Some((start, lanes))
 }
 
 /// Most slots a Voice Chain holds.
@@ -922,6 +1140,24 @@ fn fade(node: Option<roxmltree::Node<'_, '_>>, fade_in: bool) -> Fade {
 /// Parses a `.sesx` file and builds a session. Media paths are tried
 /// relative to the `.sesx` file first, then as stored.
 pub fn import(path: &Path) -> Result<Imported, SesxError> {
+    import_with(path, Surrounds::default())
+}
+
+/// True when the .sesx at `path` is a 5.1 session (only its first part is read).
+pub fn is_surround(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = vec![0u8; 8192];
+    let n = std::fs::File::open(path)
+        .and_then(|mut f| f.read(&mut head))
+        .unwrap_or(0);
+    let text = String::from_utf8_lossy(&head[..n]);
+    text.find("<session")
+        .and_then(|i| text[i..].find('>').map(|j| &text[i..i + j]))
+        .is_some_and(|tag| tag.contains(r#"audioChannelType="fivePointOne""#))
+}
+
+/// [`import`], with where a 5.1 session's surround speakers are taken to sit.
+pub fn import_with(path: &Path, surrounds: Surrounds) -> Result<Imported, SesxError> {
     let text = std::fs::read_to_string(path)?;
     // Some files start with a byte order mark.
     let text = text.trim_start_matches('\u{feff}');
@@ -1008,7 +1244,16 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         let env;
         (bus.volume_db, bus.muted, bus.pan, env) = mix_params(&[audio, Some(*b)]);
         if surround {
-            bus.space = surround_pos(&[audio, Some(*b)], !mono);
+            // A 5.1 bus carries a whole surround mix: what feeds it is placed
+            // in the room and its effects run on the speaker bed (a 3D Bus).
+            // A stereo bus has a 5.1 panner of its own, read as its spot.
+            if audio.and_then(|a| a.attribute("audioChannelType")) == Some("fivePointOne") {
+                bus.room = true;
+            } else if let Some((pos, lanes)) = surround_place(&[audio, Some(*b)], !mono, surrounds)
+            {
+                bus.space = Some(pos);
+                bus.envelopes.extend(lanes);
+            }
         }
         bus.envelopes.extend(env);
         if let Some(id) = b.attribute("id") {
@@ -1065,7 +1310,10 @@ pub fn import(path: &Path) -> Result<Imported, SesxError> {
         let env;
         (track.volume_db, track.muted, track.pan, env) = mix_params(&[audio, Some(t)]);
         if surround {
-            track.space = surround_pos(&[audio, Some(t)], stereo);
+            if let Some((pos, lanes)) = surround_place(&[audio, Some(t)], stereo, surrounds) {
+                track.space = Some(pos);
+                track.envelopes.extend(lanes);
+            }
         }
         track.envelopes.extend(env);
         track.output = output_of(audio, &bus_ids);
@@ -1309,12 +1557,16 @@ mod tests {
 
     #[test]
     fn five_one_panners_become_room_spots() {
+        let b = Surrounds::Behind;
         // Speakers land on speakers: front, L/R and the surrounds.
-        assert!((room_angle(0.0)).abs() < 1e-9);
-        assert!((room_angle(30.0) - 45.0).abs() < 1e-9);
-        assert!((room_angle(-110.0) + 135.0).abs() < 1e-9);
-        let (x, y) = room_point(110.0, 1.0);
+        assert!(room_angle(0.0, b).abs() < 1e-9);
+        assert!((room_angle(30.0, b) - 45.0).abs() < 1e-9);
+        assert!((room_angle(-110.0, b) + 135.0).abs() < 1e-9);
+        assert!((room_angle(110.0, Surrounds::Sides) - 90.0).abs() < 1e-9);
+        let (x, y) = room_point(110.0, 1.0, b);
         assert!((x - 1.0).abs() < 1e-9 && (y + 1.0).abs() < 1e-9);
+        let (x, y) = room_point(110.0, 1.0, Surrounds::Sides);
+        assert!((x - 1.0).abs() < 1e-9 && y.abs() < 1e-9);
         // A stereo track pointed just behind the right (shown as -268°),
         // 15° spread, full radius, as in the lead's 5.1 session.
         let xml = r#"<t><component componentID="Audition.StereoTo51Panner">
@@ -1325,7 +1577,8 @@ mod tests {
           <parameter index="4" name="Pan: Stereo Spread" parameterValue="0.2617993950843811035156"/>
         </component></t>"#;
         let doc = roxmltree::Document::parse(xml).unwrap();
-        let p = surround_pos(&[Some(doc.root_element())], true).unwrap();
+        let (p, lanes) = surround_place(&[Some(doc.root_element())], true, b).unwrap();
+        assert!(lanes.is_empty());
         assert!((p.x - 1.0).abs() < 1e-6, "on the right wall: {p:?}");
         assert!(p.y < -0.2 && p.y > -0.7, "between R and Rs: {p:?}");
         assert!(
@@ -1340,7 +1593,7 @@ mod tests {
           <parameter index="4" name="Pan: Stereo Spread" parameterValue="1.0471975511965976"/>
         </component></t>"#;
         let doc = roxmltree::Document::parse(front).unwrap();
-        let p = surround_pos(&[Some(doc.root_element())], true).unwrap();
+        let (p, _) = surround_place(&[Some(doc.root_element())], true, b).unwrap();
         assert!(
             p.x.abs() < 1e-6
                 && (p.y - 1.0).abs() < 1e-6
@@ -1348,6 +1601,41 @@ mod tests {
                 && p.rotation.abs() < 1e-6,
             "{p:?}"
         );
+    }
+
+    #[test]
+    fn five_one_panner_lines_become_room_automation() {
+        // A full turn drawn from 1 to 0 over 72000 samples: the spot goes
+        // round the room, through the back, with points every few degrees.
+        let xml = r#"<t><component componentID="Audition.MonoTo51Panner">
+          <parameter index="0" name="Pan: Angle" parameterValue="1.5707963">
+            <parameterKeyframes>
+              <parameterKeyframe sampleOffset="0" type="linear" value="1"/>
+              <parameterKeyframe sampleOffset="72000" type="linear" value="0"/>
+            </parameterKeyframes>
+          </parameter>
+        </component></t>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        let (_, lanes) =
+            surround_place(&[Some(doc.root_element())], false, Surrounds::Behind).unwrap();
+        let lane = |p: SpaceParam| {
+            lanes
+                .iter()
+                .find(|l| l.target == EnvelopeTarget::Space { param: p })
+                .unwrap()
+        };
+        let ys = &lane(SpaceParam::Y).points;
+        assert!(ys.len() >= 70, "{} points", ys.len());
+        assert!(ys.iter().any(|p| p.value > 0.99), "passes the front");
+        assert!(ys.iter().any(|p| p.value < -0.99), "passes the back");
+        assert!(lane(SpaceParam::X)
+            .points
+            .windows(2)
+            .all(|w| w[0].position < w[1].position));
+        assert!(!lanes.iter().any(|l| l.target
+            == EnvelopeTarget::Space {
+                param: SpaceParam::Rotation
+            }));
     }
 
     #[test]

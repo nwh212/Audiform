@@ -709,8 +709,25 @@ pub struct SesxImported {
 }
 
 /// Imports a .sesx session as a new, unsaved session.
+/// True when a .sesx is a 5.1 session, so the import can ask where its
+/// surround speakers sit.
 #[tauri::command]
-pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxImported, String> {
+pub async fn sesx_is_surround(path: PathBuf) -> bool {
+    spawn_blocking(move || crate::sesx::is_surround(&path))
+        .await
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn session_import_sesx(
+    app: AppHandle,
+    path: PathBuf,
+    surrounds: Option<String>,
+) -> Result<SesxImported, String> {
+    let surrounds = match surrounds.as_deref() {
+        Some("sides") => crate::sesx::Surrounds::Sides,
+        _ => crate::sesx::Surrounds::Behind,
+    };
     let imported = spawn_blocking(move || {
         let is_project = path
             .extension()
@@ -718,7 +735,7 @@ pub async fn session_import_sesx(app: AppHandle, path: PathBuf) -> Result<SesxIm
         if is_project {
             crate::aup3::import(&path, &crate::aup3::audio_folder(&path)).map_err(|e| e.to_string())
         } else {
-            crate::sesx::import(&path).map_err(|e| e.to_string())
+            crate::sesx::import_with(&path, surrounds).map_err(|e| e.to_string())
         }
     })
     .await

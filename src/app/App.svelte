@@ -119,6 +119,7 @@
     loudnessCheck,
     sessionPickSave,
     sessionImportSesx,
+    sesxIsSurround,
     sessionRecover,
     sessionRecoverable,
     sessionSave,
@@ -828,7 +829,22 @@
       pickSave: (name) => sessionPickSave(name),
       pickOpen: () => sessionPickOpen(false),
       pickSesx: () => sessionPickOpen(true),
-      importSesx: (p) => sessionImportSesx<SessionDoc>(p),
+      importSesx: async (p) => {
+        // A 5.1 session: where its surround speakers sit in the 3D Space room.
+        let surrounds: "behind" | "sides" | null = null;
+        if (/\.sesx$/i.test(p) && (await sesxIsSurround(p))) {
+          const pick = await ask(
+            "5.1 session",
+            "This session was mixed in 5.1. It opens as a 3D Space session, with each track's surround panning (and its automation) as its place in the room. Where were the surround speakers?",
+            [
+              { label: "Beside me", value: "sides" },
+              { label: "Behind me", value: "behind", primary: true },
+            ],
+          );
+          surrounds = pick === "sides" ? "sides" : "behind";
+        }
+        return sessionImportSesx<SessionDoc>(p, surrounds);
+      },
       park: () => sessionPark(),
       resume: (id) => sessionResume<SessionDoc>(id),
       forget: (id) => sessionForget(id),

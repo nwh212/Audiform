@@ -2190,3 +2190,8 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - In the session in front, the plug-ins of a pre-rendered track stop while its render is current: playback and export play the render. A change to the track (or its effects) makes the live track play again; its plug-ins load in the background within a few seconds, and the next render takes over when it is ready.
 - A plug-in with its window open is never stopped this way, nor one busy at that moment. Settings are not lost: a session's plug-in settings are fetched before it is set aside, and pre-rendered tracks keep theirs in the session.
 - One background check every five seconds does this; each stop is written to audio.log with the reason.
+
+## 2026-11-01: 5.1 import: where the surrounds sit, panner automation, 5.1 buses
+- Importing a 5.1 .sesx asks where the surround speakers were: behind the listener (the room's back corners, as before) or beside the listener (halfway along the side walls). Front speakers still land on the front corners and straight back stays straight back.
+- Drawn panner lines now come across as 3D Space automation. Angle and spread lines hold 0 to 1 for a whole turn (from straight back round to straight back); radius and LFE hold 0 to 1. The panner is replayed over time and written as left/right, front/back, width, turn and LFE lanes, with points added every 5 degrees of movement, so a spinning sound travels round the room instead of cutting across it. The turn steps across its half-turn wrap instead of sweeping back the long way. Lanes that never change are left out.
+- Buses that are 5.1 there carry a whole surround mix, with what feeds them panned into it: they come in as 3D Buses. Stereo buses keep their own panner's place.

@@ -265,6 +265,7 @@ pub fn run() {
             commands::workspace::workspace_put,
             commands::workspace::workspace_delete,
             commands::session::session_import_sesx,
+            commands::session::sesx_is_surround,
             commands::session::session_export_sesx,
             commands::app::app_set_title,
             commands::workspace::workspace_load,

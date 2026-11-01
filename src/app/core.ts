@@ -533,8 +533,13 @@ export interface SesxReport {
 }
 
 /** Imports a .sesx session as the new, unsaved session. */
-export function sessionImportSesx<T>(path: string): Promise<SessionResult<T> & { report: SesxReport }> {
-  return invoke<SessionResult<T> & { report: SesxReport }>("session_import_sesx", { path });
+export function sessionImportSesx<T>(path: string, surrounds: "behind" | "sides" | null = null): Promise<SessionResult<T> & { report: SesxReport }> {
+  return invoke<SessionResult<T> & { report: SesxReport }>("session_import_sesx", { path, surrounds });
+}
+
+/** True when the .sesx at `path` is a 5.1 session. */
+export function sesxIsSurround(path: string): Promise<boolean> {
+  return invoke<boolean>("sesx_is_surround", { path }).catch(() => false);
 }
 
 export interface TransportStatus {
