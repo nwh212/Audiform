@@ -2329,3 +2329,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: Dragging a take into a session brings its edited file
 - The lead dragged a recording's take from Files into a session and got the full unedited take; opening the same entry showed the edits. The edits live in the file the take was recorded into, and a new file never saved has no audio on disk for a session to play.
 - Now a dragged take whose file has unsaved edits goes in as that file. A file saved before goes in as it is, and the session hears the edits through its live copy. A new file never saved is saved first as a WAV (in the session's media folder when the session is saved, else beside the take, a number added when the name is taken); the Waveform editor and the Files entry move to it, so later edits reach the session too, and a notice says where it went.
+
+## 2026-11-01: Save Audio As remembers its format settings
+- The lead asked that FLAC (and its compression level) stay picked the next time a file is saved. Save Audio As started from the file's own format with default settings each time; Export and Batch Convert already remembered theirs.
+- Now the window starts from the settings it last saved with (format, compression, bit depth, sample rate, channels, kept in prefs as `save-audio.format` and checked like the export settings), and from the file's own format only the first time. A file with more than two channels still starts on WAV, and its forced WAV is not remembered.

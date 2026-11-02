@@ -30,7 +30,7 @@ import { mediaPool } from "../stores/media";
 import type { ActionRegistry } from "./actions";
 import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
-import { DEFAULT_FORMAT, kindOfPath, type OutputFormat } from "./output-format";
+import { DEFAULT_FORMAT, kindOfPath, type OutputFormat, sanitizeFormat } from "./output-format";
 import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
 import { prefs } from "../stores/prefs";
 import { listen } from "@tauri-apps/api/event";
@@ -68,6 +68,8 @@ export interface WaveToolsDeps {
 
 /** Where Save Audio As last saved, for new files. */
 const KEY_SAVE_FOLDER = "save-audio.folder";
+/** The format settings Save Audio As last used, for the next time. */
+const KEY_SAVE_FORMAT = "save-audio.format";
 
 /** The progress dialog for long work. */
 export interface Exporting {
@@ -239,10 +241,15 @@ export function createWaveTools(deps: WaveToolsDeps) {
       const d = wave.current;
       const own = kindOfPath(f.path);
       const lastFolder = prefs.string(KEY_SAVE_FOLDER, "");
+      // The format settings last used here (format, compression, depth and so
+      // on), else the file's own format. More than two channels only save as WAV.
+      const lastFormat = prefs.raw(KEY_SAVE_FORMAT);
+      const startFormat = lastFormat ? sanitizeFormat(lastFormat) : { ...DEFAULT_FORMAT, kind: own && !f.untitled ? own : "wav" };
+      const multi = (d?.media[0]?.channels ?? 2) > 2;
       const picked = await pickSaveAudio({
         name: stemName,
         folder: (f.untitled ? lastFolder : folder) ?? lastFolder,
-        format: { ...DEFAULT_FORMAT, kind: own && !f.untitled ? own : "wav" },
+        format: multi ? { ...startFormat, kind: "wav" } : startFormat,
         markers: true,
         seconds: d ? sessionEnd(d) / Math.max(1, d.sample_rate) : 0,
         source: { sampleRate: d?.sample_rate ?? 48_000, channels: d?.media[0]?.channels ?? 2, bitDepth: f.bitDepth ?? 24 },
@@ -254,6 +261,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       markers = picked.markers;
       const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
       if (cut > 0) prefs.set(KEY_SAVE_FOLDER, path.slice(0, cut));
+      if (!multi) prefs.set(KEY_SAVE_FORMAT, format);
       const [exists] = await pathsExist([path]);
       if (exists) {
         const ok = await ask("Replace the file?", `${path.slice(cut + 1)} already exists in that folder. Replace it?`, [
