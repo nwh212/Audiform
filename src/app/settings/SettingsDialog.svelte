@@ -9,7 +9,8 @@
   reason, never faked.
 -->
 <script lang="ts">
-  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, openThemesDir, type CacheInfo } from "../core";
+  import { cacheInfo, cacheClearPeaks, cacheSetFolder, libraryPickFolder, openSoundSettings, revealMedia, openThemesDir, openLink, type CacheInfo } from "../core";
+  import { LINKS } from "../links";
   import { listThemes, type ThemeCatalog } from "../../themes/loader";
   import { themeId } from "../../stores/settings";
   import { audioDriver, audioInputs, audioOutputs, backupSettings, outputChannels, restoreSettings, setAudioDriver, type AudioDriver, type AudioInput } from "../core";
@@ -310,8 +311,9 @@
           <div class="row">
             <button type="button" onclick={() => void openThemesFolder()}>Open Themes Folder</button>
             <button type="button" onclick={() => void loadThemes(true)}>Look Again</button>
+            <button type="button" onclick={() => void openLink(LINKS.themeMaker)}>Make a Theme...</button>
           </div>
-          <p class="note">To add a theme, put its .audtheme file in the Themes folder, then choose Look Again. Themes in that folder are listed above under Your themes.</p>
+          <p class="note">To add a theme, put its .audtheme file in the Themes folder, then choose Look Again. Themes in that folder are listed above under Your themes. Make a Theme opens the Theme Maker page in your browser, where you pick colors and pictures and save a theme file. Audiform itself stays offline.</p>
           {#if catalog?.problems.length}
             <p class="note">These theme files could not be used:</p>
             <ul class="note">

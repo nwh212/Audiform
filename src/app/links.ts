@@ -19,6 +19,10 @@ export const LINKS = {
   releases: "https://github.com/nwh212/audiform/releases/latest",
   /** Opens Audiform's bug form: problems with Audiform come here, not to the original project. */
   report: "https://github.com/nwh212/audiform/issues/new/choose",
+  /** The Theme Maker page: makes .audtheme files outside the app. */
+  themeMaker: "https://nwh212.github.io/Audiform/theme-maker/",
+  /** Where people share their themes. */
+  themes: "https://github.com/nwh212/Audiform/discussions/categories/themes",
   /** Community chat invite (Help menu and the small button in the status bar). */
   discord: "https://discord.gg/AxECgkCy6a" as string | null,
   /** The original project, Altered Audio Editor. */

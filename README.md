@@ -39,7 +39,7 @@ An audio editor and a music workstation in one, free, with no account and no sub
 - **VST3 plug-ins, safely.** Each plug-in runs in its own process, so a crashing plug-in never takes your session with it. Plug-ins open their own windows, keep their presets in the standard preset folders, get the song position, and can run with their own channel layout on a surround master.
 - **Sound tools built in.** A neural amp model player (`.nam` captures with a cabinet), Convolution Reverb (any audio file as the space), a Center Channel Extractor to take a vocal out or keep only the vocal, Parametric, Band and Notch EQ windows with graphs, Phase Curve, Opto Leveler, Tube Preamp, and a clear time stretch that keeps chords and drum hits clean.
 - **Edits that never touch your files.** Reverse and invert clips, stretch them, change their pitch, fade with curves you bend by dragging, all undoable, all non-destructive.
-- **Your look.** Five themes, from a plain dark studio to glassy Prism, Moonlight, Aqua and Meadow.
+- **Your look.** Five themes, from a plain dark studio to glassy Prism, Moonlight, Aqua and Meadow. Make your own with the [Theme Maker](https://nwh212.github.io/Audiform/theme-maker/) page and share the file (see `docs/themes.md`).
 
 ![The same session in each theme: Prism, Moonlight, Aqua, Meadow and Dark](docs/images/themes.png)
 

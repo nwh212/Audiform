@@ -8,10 +8,11 @@
   "type": "module",
   "scripts": {
     "bump": "node scripts/bump-version.mjs",
+    "theme-maker": "node tools/theme-maker/build.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.node.json && node scripts/check-headers.mjs && node scripts/check-privacy.mjs && node scripts/check-private-terms.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.node.json && node scripts/check-headers.mjs && node scripts/check-privacy.mjs && node scripts/check-private-terms.mjs && node tools/theme-maker/build.mjs --check",
     "test": "vitest run",
     "tauri": "tauri"
   },

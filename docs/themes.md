@@ -11,6 +11,23 @@ A theme is one file with the extension `.audtheme`. It holds a style sheet and t
 
 A file that cannot be used is listed in the same place with the reason, and the rest keep working. Themes never touch the network. Remove a theme by deleting its file; if it was in use, Audiform goes back to the Dark look.
 
+## Make a theme
+
+You do not need to write the file by hand. The Theme Maker is a web page, outside Audiform so the app stays small, at https://nwh212.github.io/Audiform/theme-maker/ (Edit > Settings > Appearance > Make a Theme opens it). It is one page with no libraries and no network calls of its own: it works just as well opened from a copy on disk, `docs/theme-maker/index.html`.
+
+1. Pick a starting point: the Dark look or one of the shipped themes. Or open a `.audtheme` you already have.
+2. Give the theme a name, an id, your name and a line about it.
+3. Change colors, corner sizes and fonts group by group. A mock of the Audiform window shows the result as you go.
+4. Add a background picture, a font file or mouse pointers if you like. Pictures become assets inside the file. A background of any size and shape works: big ones are shrunk to 2560 pixels across, and you choose how it meets the window (fill and crop, fit inside, tile or stretch), which part stays in view, a darkening tint, a blur, and how see-through the panels are so the picture shows through. The page says what will be cropped and warns when a small picture would look soft. Pointers of any size are scaled to Audiform's 16 by 16 pixels, hot spot included.
+5. Advanced: an extra style sheet for anything the colors do not cover. It is checked with the same rules Audiform uses, so a saved file is one Audiform accepts.
+6. Save. The page downloads `your-id.audtheme`. Install it as above.
+
+The page is built from `tools/theme-maker/template.html` by `node tools/theme-maker/build.mjs` (also `npm run theme-maker`), which reads the token list from `src/styles/tokens.css` and puts the smaller shipped themes in as starting points. `npm run check` fails when the built page is out of date, so a token change always reaches the Theme Maker.
+
+## Share a theme
+
+A theme is one file, so sharing is sending the file. Post it, with a screenshot, in the Themes category of the Audiform discussions on GitHub: https://github.com/nwh212/Audiform/discussions/categories/themes. Only share pictures and fonts you have the right to redistribute. Audiform never downloads themes on its own; people install them from the file.
+
 ## The file
 
 The file is JSON. `schemas/theme.schema.json` describes it exactly. A small example is in `docs/examples/sunset.audtheme`.

@@ -11,7 +11,8 @@
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-/// Hosts the app may open: GitHub (Audiform's own pages and the original
+/// Hosts the app may open: GitHub (Audiform's own pages, the Theme Maker
+/// page it serves, and the original
 /// project's), and the original project's links, credited in the Help
 /// menu: the GCRN site, the store page for Steve Phillips's book, Altered
 /// Audio: Podcasting Demystified, and the original author's support page.
@@ -21,6 +22,7 @@ const ALLOWED_HOSTS: &[&str] = &[
     "www.barnesandnoble.com",
     "paypal.me",
     "github.com",
+    "nwh212.github.io",
     "discord.gg",
 ];
 

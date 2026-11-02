@@ -6,6 +6,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- Theme Maker: a web page (Settings > Appearance > Make a Theme, or docs/theme-maker/index.html) where you pick colors, fonts, a background picture and pointers on a mock of the Audiform window and save a .audtheme file to share. It lives outside the app, so Audiform stays small and offline.
+
 - **Repeat Last Command** in the Waveform editor. Shift+R applies the last effect or plug-in again with exactly the same settings, to the selection or the whole file. Ctrl+R opens it again with those settings, to adjust before Apply. The Edit menu names it, for example Repeat Parametric EQ.
 - **Linear fades.** Effects > Fade In (Linear) and Fade Out (Linear), next to Invert and Reverse, fade the selection in a straight line, or the whole file when nothing is selected. The curved fades under Process are unchanged.
 - **FLAC compression levels.** Save Audio As, Export and Batch Convert offer Compression 0 to 8 for FLAC (5 by default). Every level is lossless; higher levels make smaller files and take longer to save.

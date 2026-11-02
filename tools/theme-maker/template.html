@@ -1,0 +1,935 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (c) The Audiform contributors.
+  This file is part of Audiform, based on Altered Audio Editor.
+
+  Audiform Theme Maker: one page, no libraries, no network. It builds a
+  .audtheme file from color and picture choices and shows the result on a
+  mock of the Audiform window as you go. docs/theme-maker/index.html is
+  made from this template by tools/theme-maker/build.mjs, which fills in
+  the tokens from src/styles/tokens.css and a few shipped themes to start
+  from. Edit the template, not the built page.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audiform Theme Maker</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0f0f11;
+    --panel: #1a1a1d;
+    --line: #2e2e34;
+    --ink: #d8d8dc;
+    --ink-dim: #9a9aa2;
+    --blue: #3fa9f5;
+    --red: #e5534b;
+    font: 13px/1.45 "Segoe UI", system-ui, -apple-system, "Noto Sans", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--page); color: var(--ink); display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  main { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+  aside { overflow: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 10px 12px 40px; }
+  section.view { overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  details { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 8px; background: #141417; }
+  details > summary { cursor: pointer; padding: 6px 10px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+  details > summary::before { content: "\25B8"; color: var(--ink-dim); }
+  details[open] > summary::before { content: "\25BE"; }
+  details > div { padding: 4px 10px 10px; }
+  .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 3px 0; }
+  .row label { display: flex; flex-direction: column; min-width: 0; }
+  .row label small, .row > span:first-child small { color: var(--ink-dim); font-size: 11px; }
+  .row > span:first-child { display: flex; flex-direction: column; min-width: 0; }
+  input[type="range"] { width: 120px; }
+  .row code { font-size: 11px; color: var(--ink-dim); }
+  input[type="color"] { width: 44px; height: 26px; padding: 0 2px; border: 1px solid var(--line); border-radius: 4px; background: #222; cursor: pointer; }
+  input[type="text"], input[type="number"], textarea, select { background: #101013; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  input[type="text"] { width: 100%; }
+  input[type="number"] { width: 84px; }
+  textarea { width: 100%; min-height: 120px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
+  .pair { display: flex; gap: 6px; align-items: center; }
+  .pair input[type="text"] { width: 90px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  button { background: #26262c; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  button:hover { background: #30303a; }
+  button.primary { background: var(--blue); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .meta { display: grid; grid-template-columns: 90px 1fr; gap: 6px 8px; align-items: center; }
+  .note { color: var(--ink-dim); font-size: 12px; margin: 4px 0; }
+  .problems { color: var(--red); font-size: 12px; margin: 6px 0; white-space: pre-wrap; }
+  .ok { color: #5fbf8f; }
+  .pointers { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px 8px; align-items: center; font-size: 12px; }
+  .pointers img { width: 16px; height: 16px; image-rendering: pixelated; background: #333; }
+  .assets li { display: flex; gap: 8px; align-items: center; font-size: 12px; margin: 2px 0; }
+  .assets code { flex: 1; }
+  .drop { border: 1px dashed var(--line); border-radius: 6px; padding: 10px; text-align: center; color: var(--ink-dim); font-size: 12px; }
+  .drop.over { border-color: var(--blue); color: var(--ink); }
+  .hidden { display: none !important; }
+
+  /* The mock window. Everything in it reads the theme's variables from
+     #preview, the way Audiform's own views read them from :root. */
+  #preview {
+    --font-ui: "Segoe UI", system-ui, sans-serif;
+    width: 100%; max-width: 1100px; aspect-ratio: 16 / 10; min-height: 520px;
+    background: var(--surface-0); color: var(--text); font-family: var(--font-ui); font-size: var(--font-size);
+    border: 1px solid #000; border-radius: 6px; overflow: hidden; display: grid;
+    grid-template-rows: 26px 30px 1fr 24px; position: relative; user-select: none;
+  }
+  #preview .menubar { display: flex; align-items: center; gap: 2px; padding: 0 6px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: var(--font-size-small); }
+  #preview .menubar span { padding: 2px 8px; border-radius: var(--radius-field); }
+  #preview .menubar span.open { background: var(--accent); color: var(--on-accent, #fff); }
+  #preview .toolbar { display: flex; align-items: center; gap: 6px; padding: 0 8px; background: var(--surface-1); border-bottom: 1px solid var(--border); }
+  #preview .tab { padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--radius-field); background: var(--surface-2); color: var(--text-dim); font-size: var(--font-size-small); }
+  #preview .tab.on { color: var(--text); border-color: var(--accent); }
+  #preview .body { display: grid; grid-template-columns: 170px 1fr; min-height: 0; }
+  #preview .files { background: var(--surface-1); border-right: 1px solid var(--gutter); display: flex; flex-direction: column; font-size: var(--font-size-small); }
+  #preview .files .title { padding: 4px 8px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-weight: 600; }
+  #preview .files .frow { display: flex; justify-content: space-between; padding: 0 8px; height: var(--row-height); align-items: center; }
+  #preview .files .frow.sel { background: var(--accent); color: var(--selected-text, #fff); }
+  #preview .files .frow .num { color: var(--value); font-family: var(--font-mono); }
+  #preview .files .frow.dim { color: var(--text-dim); }
+  #preview .editor { display: grid; grid-template-rows: 22px 1fr; min-height: 0; position: relative; }
+  #preview .ruler { background: var(--surface-2); border-bottom: 1px solid var(--border); position: relative; font-size: 10px; color: var(--text-dim); }
+  #preview .ruler i { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border-strong); padding-left: 3px; font-style: normal; }
+  #preview .lanes { display: flex; flex-direction: column; background: var(--gutter); overflow: hidden; }
+  #preview .track { display: grid; grid-template-columns: 150px 1fr; height: 72px; border-bottom: 2px solid var(--track-gap); }
+  #preview .head { padding: 4px 6px; font-size: var(--font-size-small); display: flex; flex-direction: column; gap: 4px; }
+  #preview .track:nth-child(odd) .head { background: var(--header-a); }
+  #preview .track:nth-child(even) .head { background: var(--header-b); }
+  #preview .track:nth-child(odd) .lane { background: var(--lane-a); }
+  #preview .track:nth-child(even) .lane { background: var(--lane-b); }
+  #preview .track.sel .lane { background: var(--lane-selected); }
+  #preview .head .btns { display: flex; gap: 3px; }
+  #preview .head .btns b { width: 18px; height: 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-field); font-size: 10px; display: grid; place-items: center; font-weight: 600; color: var(--text-dim); background: var(--surface-2); }
+  #preview .head .btns b.on { background: var(--accent); color: var(--on-accent, #fff); border-color: transparent; }
+  #preview .head .btns b.rec { color: var(--danger); }
+  #preview .head .db { color: var(--value); font-family: var(--font-mono); font-size: 11px; }
+  #preview .lane { position: relative; }
+  #preview .lane canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #preview .playhead { position: absolute; top: 0; bottom: 0; left: 38%; width: 1px; background: var(--playhead); z-index: 2; }
+  #preview .playhead::before { content: ""; position: absolute; top: 0; left: -5px; border: 5px solid transparent; border-top: 7px solid var(--playhead); }
+  #preview .transport { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--surface-2); border-top: 1px solid var(--border); font-size: var(--font-size-small); }
+  #preview .transport .time { font-family: var(--font-mono); color: var(--value); font-size: 14px; }
+  #preview .transport b { width: 20px; height: 16px; display: inline-grid; place-items: center; border: 1px solid var(--border-strong); border-radius: var(--radius-field); background: var(--surface-3); font-weight: 400; }
+  #preview .transport b.rec { color: var(--danger); }
+  #preview .transport .meter { flex: 1; height: 8px; background: var(--surface-0); border: 1px solid var(--border); position: relative; }
+  #preview .transport .meter i { position: absolute; left: 0; top: 0; bottom: 0; width: 62%; background: linear-gradient(90deg, var(--ok, #3fb950), var(--ok, #3fb950) 70%, var(--warning, #e0a030) 85%, var(--danger)); }
+  #preview .menu { position: absolute; top: 26px; left: 44px; background: var(--menu-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-menu); padding: 4px 0; min-width: 180px; z-index: 5; font-size: var(--font-size-small); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  #preview .menu div { padding: 3px 12px; display: flex; justify-content: space-between; gap: 16px; }
+  #preview .menu div.hot { background: var(--accent); color: var(--on-accent, #fff); }
+  #preview .menu div.dim { color: var(--text-faint); }
+  #preview .menu div span:last-child { color: var(--text-dim); }
+  #preview .dialog { position: absolute; right: 22px; top: 70px; width: 300px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-dialog); padding: 12px; z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-size: var(--font-size-small); }
+  #preview .dialog h3 { margin: 0 0 8px; font-size: var(--font-size); }
+  #preview .dialog .field { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  #preview .dialog .field span.box { flex: 1; background: var(--surface-0); border: 1px solid var(--border); border-radius: var(--radius-field); padding: 3px 6px; color: var(--value); font-family: var(--font-mono); }
+  #preview .dialog .acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+  #preview .dialog .acts span { padding: 3px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-field); background: var(--surface-3); }
+  #preview .dialog .acts span.primary { background: var(--accent); color: var(--on-accent, #fff); border-color: transparent; }
+  #preview .dialog .warn { color: var(--danger); }
+  #preview .hint { position: absolute; bottom: 30px; right: 22px; font-size: 11px; color: var(--text-faint); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Audiform Theme Maker</h1>
+  <label>Start from <select id="starter"></select></label>
+  <button id="openBtn" type="button">Open .audtheme...</button>
+  <input id="openFile" type="file" accept=".audtheme,application/json" class="hidden" />
+  <span class="spacer"></span>
+  <button id="copyBtn" type="button" title="Copies the theme file's text, to paste somewhere">Copy</button>
+  <button id="saveBtn" class="primary" type="button">Save .audtheme</button>
+</header>
+<main>
+  <aside>
+    <details open>
+      <summary>About this theme</summary>
+      <div class="meta">
+        <label for="m-name">Name</label><input id="m-name" type="text" value="My Theme" maxlength="80" />
+        <label for="m-id">Id</label><input id="m-id" type="text" value="my-theme" maxlength="48" title="Lowercase letters, digits and single dashes. Audiform remembers your choice by this." />
+        <label for="m-author">Author</label><input id="m-author" type="text" maxlength="100" />
+        <label for="m-desc">Description</label><input id="m-desc" type="text" maxlength="500" />
+        <label for="m-base">Base</label>
+        <select id="m-base"><option value="dark">Dark (dark form controls and scroll bars)</option><option value="light">Light (light form controls and scroll bars)</option></select>
+      </div>
+      <p class="note">A theme is one file. Save it, then put it in Audiform's Themes folder (Edit &gt; Settings &gt; Appearance &gt; Open Themes Folder) and choose Look Again.</p>
+    </details>
+    <div id="groups"></div>
+    <details>
+      <summary>Pictures and fonts</summary>
+      <div>
+        <p class="note">Window background: a picture behind the panels. Any size works: big pictures are shrunk to 2560 pixels across so the theme stays small, and the fit below decides what happens when the picture's shape is not the window's. Panels cover it unless you make them see-through.</p>
+        <div class="pair"><button id="bgBtn" type="button">Choose background...</button><button id="bgClear" type="button">None</button></div>
+        <p id="bgName" class="note"></p>
+        <input id="bgFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml" class="hidden" />
+        <div id="bgOptions">
+          <label class="row"><span>Fit<small>How the picture meets the window's shape</small></span><select id="bgFit"><option value="cover">Fill the window (crop the edges)</option><option value="contain">Fit inside (bars of the window color)</option><option value="tile">Tile (repeat, sharp)</option><option value="stretch">Stretch (may distort)</option></select></label>
+          <label class="row"><span>Anchor<small>Which part stays in view when cropped</small></span><select id="bgPos"><option value="center">Center</option><option value="top">Top</option><option value="bottom">Bottom</option><option value="left">Left</option><option value="right">Right</option></select></label>
+          <label class="row"><span>Darken<small>A tint over the picture so text stays readable</small></span><span class="pair"><input id="bgDim" type="range" min="0" max="85" value="0" /><span id="bgDimV" class="note">0%</span></span></label>
+          <label class="row"><span>Blur<small>Softens the picture (redrawn from your file)</small></span><span class="pair"><input id="bgBlur" type="range" min="0" max="24" value="0" /><span id="bgBlurV" class="note">0 px</span></span></label>
+          <label class="row"><span>See-through panels<small>Lets the picture show through panels, bars and menus</small></span><span class="pair"><input id="bgGlass" type="range" min="0" max="90" value="0" /><span id="bgGlassV" class="note">0%</span></span></label>
+        </div>
+        <p class="note" style="margin-top:10px">Fonts: a WOFF2, WOFF, TTF or OTF file becomes the interface font (and the mono font if you tick it). Only fonts you may redistribute.</p>
+        <div class="pair"><button id="fontBtn" type="button">Choose font file...</button><button id="fontClear" type="button">None</button><span id="fontName" class="note"></span></div>
+        <input id="fontFile" type="file" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" class="hidden" />
+        <label class="row"><span>Use it for numbers too (mono font)</span><input id="fontMono" type="checkbox" /></label>
+      </div>
+    </details>
+    <details>
+      <summary>Mouse pointers</summary>
+      <div>
+        <p class="note">PNG pictures. Audiform draws pointers at 16 by 16 pixels, so any other size is scaled to that when you pick it (and the hot spot with it). The hot spot is the point that does the pointing, in pixels from the top left, 0 to 15. Kinds left out keep the standard pointer.</p>
+        <div class="pointers" id="pointers"></div>
+      </div>
+    </details>
+    <details>
+      <summary>Extra style sheet (advanced)</summary>
+      <div>
+        <p class="note">Any CSS, applied when the theme is on. Rules are written for you against <code>:root[data-theme="your-id"]</code> when they do not start with it. Pictures go in as assets and are used with <code>url(asset:name)</code>. No <code>@import</code> and no web addresses: Audiform refuses them.</p>
+        <textarea id="extraCss" spellcheck="false" placeholder=":root[data-theme=&quot;my-theme&quot;] .menubar { border-bottom: 1px solid var(--accent); }"></textarea>
+        <ul class="assets" id="assets"></ul>
+        <div class="pair"><button id="assetBtn" type="button">Add picture asset...</button></div>
+        <input id="assetFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml" multiple class="hidden" />
+      </div>
+    </details>
+    <details>
+      <summary>Views that draw themselves</summary>
+      <div>
+        <label class="row"><span>Blocky pixel look where a view can (the Phase Wheel)</span><input id="look-pixel" type="checkbox" /></label>
+        <label class="row"><span>Mark hand and arrow pointers so the style sheet can replace them</span><input id="look-markCursor" type="checkbox" /></label>
+        <label class="row"><span>Glass look (reserved)</span><input id="look-glass" type="checkbox" /></label>
+        <label class="row"><span>Marble look (reserved)</span><input id="look-marble" type="checkbox" /></label>
+      </div>
+    </details>
+    <div id="notice" class="note"></div>
+    <div id="problems" class="problems"></div>
+    <p class="note">Share your theme by sharing the file. The Audiform repository on GitHub has a Themes discussion where people post theirs with a screenshot.</p>
+  </aside>
+  <section class="view">
+    <div id="preview" data-theme="preview">
+      <div class="menubar"><span class="open">File</span><span>Edit</span><span>Multitrack</span><span>Clip</span><span>Effects</span><span>View</span><span>Window</span><span>Help</span></div>
+      <div class="toolbar"><span class="tab">Waveform</span><span class="tab on">Multitrack</span><span style="flex:1"></span><span class="tab">Mono</span><span class="tab">Stereo</span><span class="tab">Bus</span></div>
+      <div class="body">
+        <div class="files">
+          <div class="title">Files</div>
+          <div class="frow"><span>Episode 12</span><span class="num">41:20</span></div>
+          <div class="frow sel"><span>host.wav</span><span class="num">39:58</span></div>
+          <div class="frow"><span>guest.wav</span><span class="num">40:02</span></div>
+          <div class="frow"><span>intro.mp3</span><span class="num">0:21</span></div>
+          <div class="frow dim"><span>outro.mp3</span><span class="num">0:30</span></div>
+        </div>
+        <div class="editor">
+          <div class="ruler"><i style="left:0">0:00</i><i style="left:20%">0:30</i><i style="left:40%">1:00</i><i style="left:60%">1:30</i><i style="left:80%">2:00</i></div>
+          <div class="lanes" id="lanes"></div>
+          <div class="playhead"></div>
+          <div class="menu"><div>New Session...<span>Ctrl+N</span></div><div class="hot">Open...<span>Ctrl+O</span></div><div>Save<span>Ctrl+S</span></div><div class="dim">Export Chapters...</div></div>
+          <div class="dialog"><h3>Check Loudness</h3><div class="field"><span>Target</span><span class="box">-16 LUFS</span></div><div class="field"><span>Measured</span><span class="box">-14.2 LUFS</span></div><div class="field warn">True peak over -1 dBTP</div><div class="acts"><span>Cancel</span><span class="primary">Match</span></div></div>
+          <div class="hint">This is a mock of the window. Open your theme in Audiform to see every panel.</div>
+        </div>
+      </div>
+      <div class="transport"><b>&#9632;</b><b>&#9654;</b><b>&#10073;&#10073;</b><b class="rec">&#9679;</b><span class="time">0:51.420</span><span class="meter"><i></i></span><span>44.1 kHz</span></div>
+    </div>
+    <p class="note">The mock reads the same color names Audiform does, so what you see here is what the panels, menus and dialogs get. Views that draw themselves (waveforms, meters) follow the clip and accent colors.</p>
+  </section>
+</main>
+<script>
+/* Filled in by build.mjs from src/styles/tokens.css and the shipped themes. */
+const TOKENS = /*TOKENS*/[];
+const STARTERS = /*STARTERS*/[];
+const THEME_FORMAT = "audiform-theme";
+const THEME_VERSION = 1;
+const POINTER_KINDS = ["text", "ew", "ns", "nwse", "nesw", "move", "grab", "grabbing", "busy", "trim-left", "trim-right"];
+const POINTER_NAMES = { text: "Text and time selection", ew: "Left and right resize", ns: "Up and down resize", nwse: "Corner resize (down right)", nesw: "Corner resize (down left)", move: "Move", grab: "Hand (grab)", grabbing: "Hand (holding)", busy: "Busy", "trim-left": "Trim a clip's start", "trim-right": "Trim a clip's end" };
+const LIMITS = { id: 48, name: 80, description: 500, author: 100, css: 512 * 1024, assets: 200, assetBytes: 8 * 1024 * 1024, assetName: 64, hot: 128, file: 16 * 1024 * 1024 };
+const ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const DATA_RE = /^data:(image\/(png|jpeg|webp|gif|avif|svg\+xml)|font\/(woff2|woff|ttf|otf));base64,[A-Za-z0-9+/=]+$/;
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  values: {},          // token name -> value as text
+  assets: {},          // name -> data uri
+  pointers: {},        // kind -> { asset, hot: [x, y] }
+  bg: null,            // asset name of the background
+  font: null,          // asset name of the font
+  fontFamily: "",      // family name used for the font asset
+  bgSource: null,      // the chosen background picture (Image) so blur can be redrawn
+  bgInfo: null,        // { w, h } of the picture as chosen
+};
+
+function defaults() { const o = {}; for (const t of TOKENS) o[t.name] = t.value; return o; }
+
+function kindOf(t) {
+  if (/^#[0-9a-f]{6}$/i.test(t.value)) return "color";
+  if (/^-?\d+(\.\d+)?(px)?$/.test(t.value)) return "number";
+  return "text";
+}
+
+function buildGroups() {
+  const root = $("groups");
+  root.innerHTML = "";
+  const groups = new Map();
+  for (const t of TOKENS) {
+    if (!groups.has(t.group)) groups.set(t.group, []);
+    groups.get(t.group).push(t);
+  }
+  let first = true;
+  for (const [group, list] of groups) {
+    const d = document.createElement("details");
+    if (first) d.open = true;
+    first = false;
+    const s = document.createElement("summary");
+    s.textContent = group;
+    d.append(s);
+    const box = document.createElement("div");
+    for (const t of list) {
+      const row = document.createElement("div");
+      row.className = "row";
+      const label = document.createElement("label");
+      label.innerHTML = `<span>${t.label}</span><small>${t.note || ""}<code>--${t.name}</code></small>`;
+      row.append(label);
+      const kind = kindOf(t);
+      if (kind === "color") {
+        const pair = document.createElement("div");
+        pair.className = "pair";
+        const c = document.createElement("input");
+        c.type = "color";
+        c.id = "tok-" + t.name;
+        const h = document.createElement("input");
+        h.type = "text";
+        h.id = "hex-" + t.name;
+        h.maxLength = 7;
+        c.addEventListener("input", () => { h.value = c.value; set(t.name, c.value); });
+        h.addEventListener("change", () => { if (/^#[0-9a-f]{6}$/i.test(h.value)) { c.value = h.value.toLowerCase(); set(t.name, c.value); } else h.value = state.values[t.name]; });
+        pair.append(c, h);
+        row.append(pair);
+      } else if (kind === "number") {
+        const unit = t.value.endsWith("px") ? "px" : "";
+        const n = document.createElement("input");
+        n.type = "number";
+        n.id = "tok-" + t.name;
+        n.step = unit ? "1" : "0.05";
+        n.addEventListener("input", () => set(t.name, n.value === "" ? t.value : n.value + unit));
+        row.append(n);
+      } else {
+        const x = document.createElement("input");
+        x.type = "text";
+        x.id = "tok-" + t.name;
+        x.style.width = "170px";
+        x.addEventListener("change", () => set(t.name, x.value || t.value));
+        row.append(x);
+      }
+      box.append(row);
+    }
+    d.append(box);
+    root.append(d);
+  }
+}
+
+function showValues() {
+  for (const t of TOKENS) {
+    const v = state.values[t.name];
+    const el = $("tok-" + t.name);
+    if (!el) continue;
+    if (kindOf(t) === "color") {
+      const hex = /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : "#000000";
+      el.value = hex;
+      $("hex-" + t.name).value = v;
+    } else if (kindOf(t) === "number") {
+      el.value = String(parseFloat(v));
+    } else {
+      el.value = v;
+    }
+  }
+}
+
+function set(name, value) { state.values[name] = value; apply(); }
+
+/** The token block of the style sheet: every token, so the file stands on its own. */
+function tokenCss(id) {
+  const lines = TOKENS.map((t) => `  --${t.name}: ${state.values[t.name]};`);
+  return `:root[data-theme="${id}"] {\n${lines.join("\n")}\n}`;
+}
+
+function currentId() { return $("m-id").value.trim(); }
+
+/** Extra rules with the theme's selector put in front of rules that have none. */
+function scopedExtra(id) {
+  const raw = $("extraCss").value.trim();
+  if (!raw) return "";
+  const sel = `:root[data-theme="${id}"]`;
+  // Rules written for another id (a theme used as a starting point) follow this one.
+  return raw.replace(/:root\[data-theme=["'][^"']*["']\]/g, sel).replace(/(^|\})\s*([^{}@][^{}]*?)\s*\{/g, (m, before, selector) => {
+    const parts = selector.split(",").map((s) => s.trim()).map((s) => (s.startsWith(":root") || s.startsWith("html") ? s : `${sel} ${s}`));
+    return `${before}\n${parts.join(", ")} {`;
+  }).trim();
+}
+
+function assembleCss(id) {
+  const parts = [];
+  if (state.font) {
+    parts.push(`@font-face {\n  font-family: "${state.fontFamily}";\n  src: url(asset:${state.font});\n  font-display: block;\n}`);
+  }
+  parts.push(tokenCss(id));
+  if (state.bg) parts.push(backgroundCss(id));
+  const extra = scopedExtra(id);
+  if (extra) parts.push(extra);
+  return parts.join("\n\n") + "\n";
+}
+
+/** The body background and, when asked, see-through panels over it. */
+function backgroundCss(id) {
+  const fit = $("bgFit").value;
+  const pos = $("bgPos").value;
+  const place = fit === "cover" ? `${pos} / cover no-repeat fixed` : fit === "contain" ? `${pos} / contain no-repeat fixed` : fit === "stretch" ? `0 0 / 100% 100% no-repeat fixed` : `0 0 repeat fixed`;
+  const dim = +$("bgDim").value / 100;
+  const tint = dim > 0 ? `linear-gradient(rgba(0, 0, 0, ${dim}), rgba(0, 0, 0, ${dim})), ` : "";
+  const sel = `:root[data-theme="${id}"]`;
+  const out = [`${sel} body {\n  background: ${tint}url(asset:${state.bg}) ${place} var(--surface-0);\n}`];
+  const glass = +$("bgGlass").value / 100;
+  if (glass > 0) {
+    const a = (1 - glass).toFixed(2);
+    out.push(`/* See-through panels: start. The window picture shows through. */
+${sel} .dockview-theme-altaudio {
+  --dv-group-view-background-color: ${rgba(state.values["surface-1"], a)};
+  --dv-tabs-and-actions-container-background-color: ${rgba(state.values["surface-0"], a)};
+  --dv-activegroup-visiblepanel-tab-background-color: ${rgba(state.values["surface-1"], a)};
+  --dv-inactivegroup-visiblepanel-tab-background-color: ${rgba(state.values["surface-1"], a)};
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+}
+${sel} .dockview-theme-altaudio .dv-groupview {
+  background: ${rgba(state.values["surface-1"], a)};
+}
+${sel} :is(.menubar, .strip, footer.status, .editor .toolbar, .bar:has(> .transport)) {
+  background: ${rgba(state.values["surface-2"], a)};
+}
+${sel} :is(.menubar .dropdown, .context, .dialog, [role="dialog"]) {
+  background: ${rgba(state.values["menu-bg"], Math.min(1, +a + 0.15).toFixed(2))};
+}
+/* See-through panels: end. */`);
+  }
+  return out.join("\n\n");
+}
+
+function rgba(hex, a) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  return `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
+}
+
+function themeFile() {
+  const id = currentId();
+  const file = {
+    format: THEME_FORMAT,
+    version: THEME_VERSION,
+    id,
+    name: $("m-name").value.trim(),
+    base: $("m-base").value,
+  };
+  const desc = $("m-desc").value.trim();
+  if (desc) file.description = desc;
+  const author = $("m-author").value.trim();
+  if (author) file.author = author;
+  file.css = assembleCss(id);
+  const used = new Set();
+  for (const m of file.css.matchAll(/url\(\s*["']?asset:([^"')\s]*)["']?\s*\)/g)) used.add(m[1]);
+  for (const p of Object.values(state.pointers)) used.add(p.asset);
+  const assets = {};
+  for (const [name, uri] of Object.entries(state.assets)) if (used.has(name)) assets[name] = uri;
+  file.assets = assets;
+  if (Object.keys(state.pointers).length) file.pointers = structuredClone(state.pointers);
+  const look = {};
+  for (const flag of ["pixel", "markCursor", "glass", "marble"]) if ($("look-" + flag).checked) look[flag] = true;
+  if (Object.keys(look).length) file.canvasLook = look;
+  return file;
+}
+
+/** The checks Audiform makes on a theme file (src/themes/validate.ts), so a saved file is one it will take. */
+function problemsOf(file) {
+  const out = [];
+  if (!ID_RE.test(file.id)) out.push("The id must be lowercase letters, digits and single dashes, like sunset or my-theme.");
+  if (file.id === "dark") out.push("The id \"dark\" belongs to the built-in look.");
+  if (file.id.length > LIMITS.id) out.push(`The id is too long (${LIMITS.id} characters at most).`);
+  if (!file.name) out.push("The theme needs a name.");
+  if (file.name.length > LIMITS.name) out.push(`The name is too long (${LIMITS.name} characters at most).`);
+  if ((file.description || "").length > LIMITS.description) out.push("The description is too long.");
+  if ((file.author || "").length > LIMITS.author) out.push("The author is too long.");
+  const css = file.css;
+  if (css.length > LIMITS.css) out.push("The style sheet is too large (512 KB at most).");
+  if (/@import\b/i.test(css)) out.push("The style sheet uses @import. Themes cannot load other files.");
+  if (/(^|[^\w-])(-webkit-)?image-set\s*\(|(^|[^\w-])src\s*\(/i.test(css)) out.push("The style sheet uses image-set() or src(). Use url(asset:name).");
+  if (/<\/?style/i.test(css)) out.push("The style sheet contains a style tag.");
+  for (const m of css.matchAll(/url\(\s*([^)]*?)\s*\)/gi)) {
+    const target = (m[1] || "").replace(/^["']|["']$/g, "");
+    if (target.startsWith("asset:") || target.startsWith("#")) continue;
+    out.push(`The style sheet loads "${target.slice(0, 40)}". Themes may only use url(asset:name) and url(#name).`);
+    break;
+  }
+  for (const m of css.matchAll(/url\(\s*["']?asset:([^"')\s]*)["']?\s*\)/g)) {
+    if (!file.assets[m[1]]) out.push(`The style sheet uses asset "${m[1]}", which is not in the theme.`);
+  }
+  const names = Object.keys(file.assets);
+  if (names.length > LIMITS.assets) out.push(`Too many assets (${LIMITS.assets} at most).`);
+  let total = 0;
+  for (const [name, uri] of Object.entries(file.assets)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) || name.length > LIMITS.assetName) out.push(`Asset name "${name}" is not allowed (letters, digits, dots, dashes and underscores).`);
+    if (!DATA_RE.test(uri)) out.push(`Asset "${name}" is not a picture or font Audiform accepts.`);
+    const bytes = Math.floor((uri.length - uri.indexOf(",") - 1) * 3 / 4);
+    if (bytes > LIMITS.assetBytes) out.push(`Asset "${name}" is larger than 8 MB.`);
+    total += uri.length;
+  }
+  if (file.pointers) {
+    for (const [kind, p] of Object.entries(file.pointers)) {
+      if (!POINTER_KINDS.includes(kind)) out.push(`Unknown pointer kind "${kind}".`);
+      if (!file.assets[p.asset]) out.push(`Pointer "${kind}" uses asset "${p.asset}", which is not in the theme.`);
+      if (!Array.isArray(p.hot) || p.hot.length !== 2 || p.hot.some((n) => !Number.isInteger(n) || n < 0 || n > LIMITS.hot)) out.push(`Pointer "${kind}" needs a hot spot of two whole numbers from 0 to ${LIMITS.hot}.`);
+    }
+  }
+  if (total + css.length > LIMITS.file) out.push("The theme file is larger than 16 MB. Use smaller pictures.");
+  return out;
+}
+
+/** Shows the theme on the mock window. */
+function apply() {
+  const id = "preview";
+  let css = assembleCss(id).replace(/url\(\s*["']?asset:([^"')\s]*)["']?\s*\)/g, (all, name) => (state.assets[name] ? `url("${state.assets[name]}")` : all));
+  // The mock has no body of its own: the background rule lands on the window.
+  css = css.replace(/:root\[data-theme="preview"\] body\b/g, "#preview").replace(/:root\[data-theme="preview"\]/g, "#preview");
+  css = css.replace(/ fixed(;|\s|$)/g, "$1");
+  const glass = state.bg ? +$("bgGlass").value / 100 : 0;
+  if (glass > 0) {
+    const a = (1 - glass).toFixed(2);
+    css += `\n#preview .files, #preview .files .title, #preview .lanes { background: ${rgba(state.values["surface-1"], a)}; }
+#preview .menubar, #preview .toolbar, #preview .transport, #preview .ruler, #preview .files .title { background: ${rgba(state.values["surface-2"], a)}; }
+#preview .track .head { background: ${rgba(state.values["header-a"], a)} !important; }
+#preview .track .lane { background: ${rgba(state.values["lane-a"], Math.min(1, +a + 0.1).toFixed(2))} !important; }
+#preview .menu, #preview .dialog { background: ${rgba(state.values["menu-bg"], Math.min(1, +a + 0.15).toFixed(2))}; }`;
+  }
+  if ($("m-base").value === "light") css = "#preview { color-scheme: light; }\n" + css;
+  let style = document.getElementById("theme-style");
+  if (!style) { style = document.createElement("style"); style.id = "theme-style"; document.head.append(style); }
+  style.textContent = css;
+  drawLanes();
+  const probs = problemsOf(themeFile());
+  $("problems").textContent = probs.join("\n");
+  $("saveBtn").disabled = probs.length > 0;
+  $("copyBtn").disabled = probs.length > 0;
+}
+
+/** Three tracks with clips drawn the way Audiform draws them: a tinted body, a title bar, a waveform in the clip's color. */
+function drawLanes() {
+  const lanes = $("lanes");
+  const v = state.values;
+  const tracks = [
+    { name: "Host", clips: [[0.02, 0.36, v["clip-1"], "host_take1"], [0.4, 0.72, v["clip-1"], "host_take2"]], sel: true, on: ["S"] },
+    { name: "Guest", clips: [[0.1, 0.62, v["clip-2"], "guest"], [0.66, 0.98, v["clip-3"], "guest 2"]], on: ["M"] },
+    { name: "Music", clips: [[0, 0.2, v["clip-5"], "intro"], [0.3, 0.9, v["clip-4"], "bed"]], on: [], rec: true },
+  ];
+  if (lanes.children.length !== tracks.length) {
+    lanes.innerHTML = "";
+    for (const t of tracks) {
+      const row = document.createElement("div");
+      row.className = "track" + (t.sel ? " sel" : "");
+      row.innerHTML = `<div class="head"><span>${t.name}</span><span class="btns"><b class="${t.on.includes("M") ? "on" : ""}">M</b><b class="${t.on.includes("S") ? "on" : ""}">S</b><b class="rec">R</b><b>I</b></span><span class="db">-6.0 dB</span></div><div class="lane"><canvas></canvas></div>`;
+      lanes.append(row);
+    }
+  }
+  const alpha = parseFloat(v["clip-body-alpha"]) || 0.2;
+  const tone = parseFloat(v["clip-wave-tone"]) || 0;
+  const gloss = v["clip-gloss"] === "1";
+  tracks.forEach((t, i) => {
+    const c = lanes.children[i].querySelector("canvas");
+    const w = (c.width = Math.max(10, c.clientWidth * (window.devicePixelRatio || 1)));
+    const h = (c.height = Math.max(10, c.clientHeight * (window.devicePixelRatio || 1)));
+    const g = c.getContext("2d");
+    g.clearRect(0, 0, w, h);
+    const title = 14 * (window.devicePixelRatio || 1);
+    for (const [a, b, color, name] of t.clips) {
+      const x0 = a * w, x1 = b * w;
+      g.globalAlpha = alpha; g.fillStyle = color; g.fillRect(x0, 1, x1 - x0, h - 2);
+      g.globalAlpha = 1;
+      if (gloss) { const sh = g.createLinearGradient(0, 1, 0, h / 2); sh.addColorStop(0, "rgba(255,255,255,0.55)"); sh.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = sh; g.fillRect(x0, 1, x1 - x0, h / 2); }
+      g.fillStyle = color; g.fillRect(x0, 1, x1 - x0, title);
+      g.fillStyle = "#0e0e10"; g.font = `${11 * (window.devicePixelRatio || 1)}px ${v["font-ui"]}`; g.textBaseline = "middle"; g.fillText(name, x0 + 4, 1 + title / 2);
+      g.strokeStyle = color; g.lineWidth = 1; g.strokeRect(x0 + 0.5, 1.5, x1 - x0 - 1, h - 3);
+      // Waveform: the clip color pulled toward white (tone above 0) or black (below).
+      const mid = title + (h - title) / 2, amp = (h - title) / 2 - 2;
+      g.fillStyle = mix(color, tone >= 0 ? "#ffffff" : "#000000", Math.abs(tone));
+      let seed = Math.floor(x0 * 7 + i * 13);
+      for (let x = x0 + 2; x < x1 - 2; x += 2) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const r = ((seed >> 8) & 1023) / 1023;
+        const env = 0.25 + 0.75 * Math.abs(Math.sin((x - x0) / (x1 - x0) * Math.PI * 3)) * (0.4 + 0.6 * r);
+        g.fillRect(x, mid - amp * env, 1.5, amp * env * 2);
+      }
+    }
+  });
+}
+
+function mix(a, b, k) {
+  const p = (s) => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+  if (!/^#[0-9a-f]{6}$/i.test(a)) return a;
+  const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
+  const c = (x, y) => Math.round(x + (y - x) * k).toString(16).padStart(2, "0");
+  return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
+}
+
+/* Starting points. */
+function loadStarter(index) {
+  const s = STARTERS[index];
+  if (!s) return;
+  loadThemeObject(s.theme, s.theme.id === "dark");
+}
+
+/** Fills the page from a theme file: tokens out of its style sheet, the rest kept as the extra style sheet. */
+function loadThemeObject(file, isDefault) {
+  state.values = defaults();
+  state.assets = Object.assign({}, file.assets || {});
+  state.pointers = structuredClone(file.pointers || {});
+  state.bg = null; state.font = null; state.fontFamily = "";
+  $("m-name").value = isDefault ? "My Theme" : file.name || "";
+  $("m-id").value = isDefault ? "my-theme" : file.id || "";
+  $("m-author").value = isDefault ? "" : file.author || "";
+  $("m-desc").value = isDefault ? "" : file.description || "";
+  $("m-base").value = file.base === "light" ? "light" : "dark";
+  for (const flag of ["pixel", "markCursor", "glass", "marble"]) $("look-" + flag).checked = !!(file.canvasLook && file.canvasLook[flag]);
+  let css = file.css || "";
+  // Token values from the theme's own block(s).
+  const blockRe = new RegExp(`:root\\[data-theme=["']${escapeRe(file.id || "")}["']\\]\\s*\\{([^}]*)\\}`, "g");
+  let rest = css;
+  for (const m of css.matchAll(blockRe)) {
+    let leftover = "";
+    for (const line of m[1].split(";")) {
+      const mm = line.match(/^\s*--([a-z0-9-]+)\s*:\s*([\s\S]+?)\s*$/i);
+      if (mm && mm[1] in state.values) state.values[mm[1]] = mm[2].trim();
+      else if (line.trim()) leftover += line.trim() + ";\n";
+    }
+    rest = rest.replace(m[0], leftover ? `:root[data-theme="${file.id}"] {\n${leftover}}` : "");
+  }
+  // A font-face for an asset: the font.
+  const ff = rest.match(/@font-face\s*\{[^}]*font-family:\s*["']?([^;"']+)["']?[^}]*url\(asset:([^)"'\s]+)\)[^}]*\}/i);
+  if (ff && state.assets[ff[2]]) { state.font = ff[2]; state.fontFamily = ff[1].trim(); rest = rest.replace(ff[0], ""); }
+  // A body background for an asset: the background picture.
+  const bg = rest.match(/:root\[data-theme=["'][^"']+["']\]\s*body\s*\{[^}]*url\(asset:([^)"'\s]+)\)[^}]*\}/i);
+  $("bgDim").value = "0"; $("bgBlur").value = "0"; $("bgGlass").value = "0"; $("bgPos").value = "center"; $("bgBlur").disabled = true;
+  if (bg && state.assets[bg[1]]) {
+    state.bg = bg[1];
+    $("bgFit").value = /cover/.test(bg[0]) ? "cover" : /contain/.test(bg[0]) ? "contain" : /100% 100%/.test(bg[0]) ? "stretch" : "tile";
+    const pos = bg[0].match(/\)\s+(center|top|bottom|left|right)\s*\//);
+    if (pos) $("bgPos").value = pos[1];
+    const dim = bg[0].match(/rgba\(0, 0, 0, ([\d.]+)\)/);
+    if (dim) $("bgDim").value = String(Math.round(+dim[1] * 100));
+    rest = rest.replace(bg[0], "");
+    const glass = rest.match(/\/\* See-through panels: start[\s\S]*?\.dv-groupview \{\s*background: rgba\([^)]*, ([\d.]+)\)[\s\S]*?\/\* See-through panels: end\. \*\//);
+    if (glass) { $("bgGlass").value = String(Math.round((1 - +glass[1]) * 100)); rest = rest.replace(glass[0], ""); }
+    // The picture's size, for the note.
+    const img = new Image();
+    img.onload = () => { state.bgInfo = { w: img.naturalWidth, h: img.naturalHeight, sw: img.naturalWidth, sh: img.naturalHeight, resized: false }; showPictures(); };
+    img.src = state.assets[bg[1]];
+  }
+  $("extraCss").value = isDefault ? "" : rest.replace(/\n{3,}/g, "\n\n").trim();
+  showValues();
+  showAssets();
+  showPointers();
+  apply();
+}
+
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+/* Pictures. */
+const BG_MAX_SIDE = 2560;
+const ASSET_MAX_SIDE = 4096;
+const POINTER_SIZE = 16;
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not read ${file.name} as a picture.`)); };
+    img.src = url;
+  });
+}
+
+/** True when any sampled pixel is not fully opaque. */
+function hasAlpha(ctx, w, h) {
+  const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 4000)));
+  const data = ctx.getImageData(0, 0, w, h).data;
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) if (data[(y * w + x) * 4 + 3] < 250) return true;
+  return false;
+}
+
+/**
+ * Draws a picture at a bounded size and encodes it: JPEG when it has no
+ * transparency (small), PNG otherwise. Returns the data URI and the size.
+ */
+function encodePicture(img, { maxSide = ASSET_MAX_SIDE, blur = 0, width, height, pixelated = false } = {}) {
+  const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+  let w = width || sw, h = height || sh;
+  if (!width && Math.max(w, h) > maxSide) { const k = maxSide / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = !pixelated;
+  g.imageSmoothingQuality = "high";
+  if (blur > 0) {
+    // Blur bleeds at the edges: draw a little larger so the edges stay filled.
+    const pad = blur * 2;
+    g.filter = `blur(${blur}px)`;
+    g.drawImage(img, -pad, -pad, w + pad * 2, h + pad * 2);
+    g.filter = "none";
+  } else {
+    g.drawImage(img, 0, 0, w, h);
+  }
+  const alpha = hasAlpha(g, w, h);
+  const uri = alpha ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.86);
+  return { uri, w, h, alpha };
+}
+
+function ratioName(w, h) {
+  const r = w / h;
+  const known = [["16:9", 16 / 9], ["16:10", 1.6], ["21:9", 21 / 9], ["4:3", 4 / 3], ["3:2", 1.5], ["1:1", 1], ["9:16", 9 / 16], ["3:4", 0.75], ["2:3", 2 / 3]];
+  for (const [name, k] of known) if (Math.abs(r - k) < 0.03) return name;
+  return r > 1 ? `${r.toFixed(2)}:1` : `1:${(1 / r).toFixed(2)}`;
+}
+
+/** What the chosen picture will do in the window, in words. */
+function describeBackground() {
+  const info = state.bgInfo;
+  if (!info) return "";
+  const long = Math.max(info.w, info.h);
+  const fit = $("bgFit").value;
+  const bytes = state.bg && state.assets[state.bg] ? Math.round(state.assets[state.bg].length * 0.75 / 1024) : 0;
+  let s = `${info.w} by ${info.h} pixels (${ratioName(info.w, info.h)}), ${bytes} KB in the theme.`;
+  if (info.resized) s += ` Shrunk from ${info.sw} by ${info.sh}.`;
+  const wide = info.w / info.h > 1.75, tall = info.w / info.h < 1.3;
+  if (fit === "cover") s += wide ? " Wider than most windows: the left and right edges get cropped." : tall ? " Taller than most windows: the top and bottom get cropped. Fit inside or Tile keeps all of it." : " Close to a window's shape: little gets cropped.";
+  if (fit === "contain") s += " Bars of the window color fill the rest.";
+  if (fit === "stretch") s += " The picture is pulled to the window's shape, so things in it bend.";
+  if (long < 1024 && fit !== "tile") s += ` Small picture: it will be blown up and look soft. Tile keeps it sharp.`;
+  if (long >= 1024 && fit === "tile") s += " A big picture tiled repeats only on very wide windows.";
+  return s;
+}
+
+async function chooseBackground(file) {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const img = await loadImage(file);
+  const sw = img.naturalWidth, sh = img.naturalHeight;
+  if (state.bg) { delete state.assets[state.bg]; state.bg = null; }
+  if (ext === "svg") {
+    // Vector pictures scale to any size: keep the file as it is.
+    state.assets[assetName(file)] = await readAsDataUri(file).then((u) => u.replace(/^data:[^;]*;/, "data:image/svg+xml;"));
+    state.bg = Object.keys(state.assets).pop();
+    state.bgSource = null;
+    state.bgInfo = { w: sw, h: sh, sw, sh, resized: false };
+    $("bgBlur").value = "0"; $("bgBlur").disabled = true;
+  } else {
+    state.bgSource = img;
+    $("bgBlur").disabled = false;
+    redrawBackground(file.name);
+  }
+  showPictures();
+  apply();
+}
+
+/** Draws the background asset from the source picture with the current blur. */
+function redrawBackground(fileName) {
+  if (!state.bgSource) return;
+  const blur = +$("bgBlur").value;
+  const out = encodePicture(state.bgSource, { maxSide: BG_MAX_SIDE, blur });
+  const name = state.bg || assetName({ name: fileName || "background" });
+  state.assets[name] = out.uri;
+  state.bg = name;
+  const sw = state.bgSource.naturalWidth, sh = state.bgSource.naturalHeight;
+  state.bgInfo = { w: out.w, h: out.h, sw, sh, resized: out.w !== sw };
+}
+
+/** A pointer picture at Audiform's pointer size, with its hot spot scaled along. */
+async function choosePointer(file, hot) {
+  const img = await loadImage(file);
+  const sw = img.naturalWidth, sh = img.naturalHeight;
+  const out = encodePicture(img, { width: POINTER_SIZE, height: POINTER_SIZE, pixelated: sw < POINTER_SIZE });
+  const name = assetName(file);
+  state.assets[name] = out.uri.startsWith("data:image/png") ? out.uri : encodePicture(img, { width: POINTER_SIZE, height: POINTER_SIZE }).uri;
+  const scaled = [Math.min(POINTER_SIZE - 1, Math.round((hot[0] * POINTER_SIZE) / sw)), Math.min(POINTER_SIZE - 1, Math.round((hot[1] * POINTER_SIZE) / sh))];
+  showAssets();
+  return { asset: name, hot: sw === POINTER_SIZE && sh === POINTER_SIZE ? hot : scaled, from: sw === POINTER_SIZE && sh === POINTER_SIZE ? "" : `${sw} by ${sh}` };
+}
+
+/* Assets. */
+function readAsDataUri(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+function assetName(file) {
+  const base = file.name.replace(/\.[^.]+$/, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "") || "asset";
+  let name = base.slice(0, LIMITS.assetName), n = 2;
+  while (state.assets[name]) name = `${base.slice(0, LIMITS.assetName - 3)}-${n++}`;
+  return name;
+}
+async function addAsset(file) {
+  let uri = await readAsDataUri(file);
+  if (/^image\/(png|jpeg|webp|gif|avif)$/.test(file.type)) {
+    // Big pictures are drawn smaller so the theme file stays small. Animated GIFs lose their motion.
+    const img = await loadImage(file).catch(() => null);
+    if (img && Math.max(img.naturalWidth, img.naturalHeight) > ASSET_MAX_SIDE) uri = encodePicture(img, { maxSide: ASSET_MAX_SIDE }).uri;
+  }
+  // Fonts come in with odd media types: say which font they are from the name.
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (["woff2", "woff", "ttf", "otf"].includes(ext)) uri = uri.replace(/^data:[^;]*;/, `data:font/${ext};`);
+  if (ext === "svg") uri = uri.replace(/^data:[^;]*;/, "data:image/svg+xml;");
+  const name = assetName(file);
+  state.assets[name] = uri;
+  showAssets();
+  return name;
+}
+function showAssets() {
+  const ul = $("assets");
+  ul.innerHTML = "";
+  for (const name of Object.keys(state.assets)) {
+    const li = document.createElement("li");
+    const size = Math.round(state.assets[name].length * 0.75 / 1024);
+    li.innerHTML = `<code>url(asset:${name})</code><span class="note">${size} KB</span>`;
+    const del = document.createElement("button");
+    del.textContent = "Remove";
+    del.addEventListener("click", () => { delete state.assets[name]; if (state.bg === name) state.bg = null; if (state.font === name) state.font = null; for (const k of Object.keys(state.pointers)) if (state.pointers[k].asset === name) delete state.pointers[k]; showAssets(); showPointers(); showPictures(); apply(); });
+    li.append(del);
+    ul.append(li);
+  }
+  showPictures();
+}
+function showPictures() {
+  $("bgName").textContent = state.bg ? describeBackground() : "";
+  $("bgOptions").classList.toggle("hidden", !state.bg);
+  $("bgDimV").textContent = `${$("bgDim").value}%`;
+  $("bgBlurV").textContent = `${$("bgBlur").value} px`;
+  $("bgGlassV").textContent = `${$("bgGlass").value}%`;
+  $("fontName").textContent = state.font ? `${state.font} as "${state.fontFamily}"` : "";
+}
+function showPointers() {
+  const box = $("pointers");
+  box.innerHTML = "";
+  for (const kind of POINTER_KINDS) {
+    const p = state.pointers[kind];
+    const name = document.createElement("span");
+    name.textContent = POINTER_NAMES[kind];
+    const img = document.createElement("img");
+    img.alt = "";
+    if (p && state.assets[p.asset]) img.src = state.assets[p.asset];
+    const hot = document.createElement("span");
+    hot.className = "pair";
+    const hx = document.createElement("input"); hx.type = "number"; hx.min = 0; hx.max = POINTER_SIZE - 1; hx.style.width = "50px"; hx.title = "Hot spot x";
+    const hy = document.createElement("input"); hy.type = "number"; hy.min = 0; hy.max = POINTER_SIZE - 1; hy.style.width = "50px"; hy.title = "Hot spot y";
+    hx.value = p ? p.hot[0] : 8; hy.value = p ? p.hot[1] : 8;
+    const clamp = (n) => Math.min(POINTER_SIZE - 1, Math.max(0, Math.round(+n || 0)));
+    const upd = () => { if (state.pointers[kind]) { state.pointers[kind].hot = [clamp(hx.value), clamp(hy.value)]; apply(); } };
+    hx.addEventListener("input", upd); hy.addEventListener("input", upd);
+    hot.append(hx, hy);
+    const btns = document.createElement("span");
+    btns.className = "pair";
+    const pick = document.createElement("button"); pick.textContent = p ? "Change" : "Pick...";
+    const input = document.createElement("input"); input.type = "file"; input.accept = "image/png"; input.className = "hidden";
+    pick.addEventListener("click", () => input.click());
+    input.addEventListener("change", async () => {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      try {
+        const p = await choosePointer(f, [clamp(hx.value), clamp(hy.value)]);
+        state.pointers[kind] = { asset: p.asset, hot: p.hot };
+        $("notice").textContent = p.from ? `${POINTER_NAMES[kind]}: scaled from ${p.from} to 16 by 16, hot spot moved to ${p.hot.join(", ")}.` : "";
+      } catch (e) { $("problems").textContent = e instanceof Error ? e.message : String(e); }
+      showPointers(); apply();
+    });
+    btns.append(pick, input);
+    if (p) { const clear = document.createElement("button"); clear.textContent = "None"; clear.addEventListener("click", () => { delete state.pointers[kind]; showPointers(); apply(); }); btns.append(clear); }
+    box.append(name, img, hot, btns);
+  }
+}
+
+/* Saving and loading. */
+function fileText() { return JSON.stringify(themeFile(), null, 2) + "\n"; }
+function download() {
+  const t = themeFile();
+  const blob = new Blob([fileText()], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${t.id || "theme"}.audtheme`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function openThemeFile(file) {
+  try {
+    const obj = JSON.parse(await file.text());
+    if (!obj || obj.format !== THEME_FORMAT) throw new Error("This is not an Audiform theme file.");
+    loadThemeObject(obj, false);
+    $("starter").value = "";
+  } catch (e) {
+    $("problems").textContent = e instanceof Error ? e.message : String(e);
+  }
+}
+
+/* Wiring. */
+function init() {
+  buildGroups();
+  const sel = $("starter");
+  STARTERS.forEach((s, i) => { const o = document.createElement("option"); o.value = String(i); o.textContent = s.name; sel.append(o); });
+  const blank = document.createElement("option"); blank.value = ""; blank.textContent = "(opened file)"; blank.className = "hidden"; sel.append(blank);
+  sel.addEventListener("change", () => { if (sel.value !== "") loadStarter(+sel.value); });
+  for (const id of ["m-name", "m-author", "m-desc"]) $(id).addEventListener("input", apply);
+  $("m-id").addEventListener("input", apply);
+  $("m-base").addEventListener("change", apply);
+  $("extraCss").addEventListener("input", apply);
+  for (const flag of ["pixel", "markCursor", "glass", "marble"]) $("look-" + flag).addEventListener("change", apply);
+  $("openBtn").addEventListener("click", () => $("openFile").click());
+  $("openFile").addEventListener("change", () => { const f = $("openFile").files && $("openFile").files[0]; if (f) void openThemeFile(f); $("openFile").value = ""; });
+  $("saveBtn").addEventListener("click", download);
+  $("copyBtn").addEventListener("click", async () => { try { await navigator.clipboard.writeText(fileText()); $("copyBtn").textContent = "Copied"; setTimeout(() => ($("copyBtn").textContent = "Copy"), 1500); } catch { $("problems").textContent = "Could not copy. Save the file instead."; } });
+  $("bgBtn").addEventListener("click", () => $("bgFile").click());
+  $("bgFile").addEventListener("change", async () => {
+    const f = $("bgFile").files && $("bgFile").files[0];
+    $("bgFile").value = "";
+    if (!f) return;
+    try { await chooseBackground(f); } catch (e) { $("problems").textContent = e instanceof Error ? e.message : String(e); }
+  });
+  $("bgClear").addEventListener("click", () => { if (state.bg) delete state.assets[state.bg]; state.bg = null; state.bgSource = null; state.bgInfo = null; showAssets(); apply(); });
+  $("bgPos").addEventListener("change", apply);
+  for (const id of ["bgDim", "bgGlass"]) $(id).addEventListener("input", () => { showPictures(); apply(); });
+  $("bgFit").addEventListener("change", () => { showPictures(); apply(); });
+  let blurTimer = 0;
+  $("bgBlur").addEventListener("input", () => { showPictures(); clearTimeout(blurTimer); blurTimer = setTimeout(() => { redrawBackground(); showPictures(); apply(); }, 150); });
+  $("fontBtn").addEventListener("click", () => $("fontFile").click());
+  $("fontFile").addEventListener("change", async () => {
+    const f = $("fontFile").files && $("fontFile").files[0];
+    if (!f) return;
+    state.font = await addAsset(f);
+    state.fontFamily = f.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+    state.values["font-ui"] = `"${state.fontFamily}", "Segoe UI", system-ui, sans-serif`;
+    if ($("fontMono").checked) state.values["font-mono"] = `"${state.fontFamily}", ui-monospace, monospace`;
+    showValues(); showPictures(); apply();
+    $("fontFile").value = "";
+  });
+  $("fontClear").addEventListener("click", () => { state.font = null; state.fontFamily = ""; const d = defaults(); state.values["font-ui"] = d["font-ui"]; state.values["font-mono"] = d["font-mono"]; showValues(); showPictures(); apply(); });
+  $("fontMono").addEventListener("change", () => { if (!state.fontFamily) return; state.values["font-mono"] = $("fontMono").checked ? `"${state.fontFamily}", ui-monospace, monospace` : defaults()["font-mono"]; showValues(); apply(); });
+  $("assetBtn").addEventListener("click", () => $("assetFile").click());
+  $("assetFile").addEventListener("change", async () => { for (const f of $("assetFile").files || []) await addAsset(f); apply(); $("assetFile").value = ""; });
+  // Dropping a theme file anywhere opens it.
+  document.body.addEventListener("dragover", (e) => { e.preventDefault(); });
+  document.body.addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f && /\.audtheme$/i.test(f.name)) void openThemeFile(f); });
+  window.addEventListener("resize", drawLanes);
+  loadStarter(0);
+}
+init();
+</script>
+</body>
+</html>
