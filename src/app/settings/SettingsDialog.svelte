@@ -243,8 +243,7 @@
           <label class="row">Each wheel step zooms by <input type="number" min="5" max="100" step="5" bind:value={d.app.zoomStep} /> % a step</label>
           <fieldset>
             <legend>Wheel zoom centers on</legend>
-            <label><input type="radio" bind:group={d.app.wheelAnchor} value="mouse" /> The mouse pointer</label>
-            <label><input type="radio" bind:group={d.app.wheelAnchor} value="between" /> Between the pointer and the middle of the view (drifts less; Waveform editor only, the Multitrack zooms at the pointer)</label>
+            <label><input type="radio" bind:group={d.app.wheelAnchor} value="mouse" /> The mouse pointer (as over the time ruler)</label>
             <label><input type="radio" bind:group={d.app.wheelAnchor} value="playhead" /> The playhead</label>
           </fieldset>
           <fieldset>

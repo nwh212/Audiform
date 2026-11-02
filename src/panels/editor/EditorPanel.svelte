@@ -689,9 +689,9 @@
       if (q.steps !== 0) {
         const r = zoomRatios();
         // Over the lanes the zoom goes toward the pointer, as over the
-        // ruler, unless it is set to follow the playhead.
-        const exact = q.overRuler || settings.current.wheelAnchor !== "playhead";
-        const at = wheelAnchorX(q.x, lanesEl.clientWidth, xOf(playhead, v), exact);
+        // ruler, unless it is set to follow the playhead (the ruler always
+        // zooms at the pointer).
+        const at = wheelAnchorX(q.x, lanesEl.clientWidth, xOf(playhead, v), q.overRuler);
         v = zoomSteps(v, q.steps > 0 ? r.zoomOut : r.zoomIn, Math.abs(q.steps), at, maxSppFor(lanesWidth, contentEnd, rate));
       }
       setView({ spp: v.spp, scroll: v.scroll });

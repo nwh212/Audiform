@@ -11,7 +11,7 @@
 
 /** A fade curve, as the session stores it. */
 export type FadeShape = "linear" | "logarithmic" | "cosine" | "exponential" | "equal_power";
-export type WheelAnchor = "mouse" | "between" | "playhead";
+export type WheelAnchor = "mouse" | "playhead";
 
 export interface AppColors {
   /** Waveforms in the Waveform editor. Empty keeps the theme color. */
@@ -163,7 +163,7 @@ export const NO_COLORS: AppColors = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   zoomStep: 25,
-  wheelAnchor: "between",
+  wheelAnchor: "mouse",
   wheelZooms: true,
   fadeShape: "linear",
   linkCrossfades: true,
@@ -226,7 +226,8 @@ export function sanitizeSettings(raw: unknown): AppSettings {
   const yellow = num(o.meterYellowDb, -40, -1, d.meterYellowDb);
   return {
     zoomStep: Math.round(num(o.zoomStep, 5, 100, d.zoomStep)),
-    wheelAnchor: o.wheelAnchor === "playhead" || o.wheelAnchor === "between" || o.wheelAnchor === "mouse" ? o.wheelAnchor : d.wheelAnchor,
+    // "between" (zooming pulled toward the middle of the view) was dropped on 2026-11-02: it reads as the pointer.
+    wheelAnchor: o.wheelAnchor === "playhead" || o.wheelAnchor === "mouse" ? o.wheelAnchor : d.wheelAnchor,
     wheelZooms: bool(o.wheelZooms, d.wheelZooms),
     fadeShape:
       o.fadeShape === "cosine" ? "cosine" : "linear",
@@ -375,19 +376,18 @@ class SettingsStore {
 
 export const settings = new SettingsStore();
 
-/** The Ctrl+wheel zoom ratios for zooming in and out. */
 /**
  * Where a wheel zoom centers, in pixels across a view `width` wide: the
- * pointer, the playhead (when in view), or between the pointer and the
- * middle of the view (pulled 40% toward the middle, so zooming drifts
- * less). Over a ruler, `exact` keeps it on the pointer.
+ * pointer, or the playhead (kept in view) when chosen in Settings. Over a
+ * ruler, `exact` keeps it on the pointer whatever the setting. The same
+ * in both editors, over the ruler and over the tracks or the waveform.
  */
 export function wheelAnchorX(mouse: number, width: number, playheadX: number, exact = false): number {
-  const a = settings.current.wheelAnchor;
-  if (exact || a === "mouse") return mouse;
-  if (a === "playhead") return Math.max(0, Math.min(width, playheadX));
-  return mouse + (width / 2 - mouse) * 0.4;
+  if (exact || settings.current.wheelAnchor !== "playhead") return mouse;
+  return Math.max(0, Math.min(width, playheadX));
 }
+
+/** The Ctrl+wheel zoom ratios for zooming in and out. */
 
 export function zoomRatios(step = settings.current.zoomStep): {
   zoomIn: number;

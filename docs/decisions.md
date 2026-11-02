@@ -2350,3 +2350,8 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-02: The plain wheel zooms over the Multitrack lanes again
 - The project lead wants the mouse wheel over the session's tracks to zoom in time, as it does over the ruler. Since 2026-10-24 the wheel over the lanes scrolled the tracks and the "wheel zooms" setting applied to the Waveform editor only.
 - Now the "wheel zooms" setting (on by default) covers both editors: over the lanes the plain wheel zooms at the pointer. Off, the wheel over the lanes scrolls the tracks up and down as before. The ruler and Ctrl+wheel always zoom, the track headers and the track scrollbar still change track heights, Shift+wheel scrolls sideways, and the scrollbar drags the tracks up and down.
+
+## 2026-11-02: Wheel zoom works the same everywhere: at the pointer, as over the ruler
+- The lead wants the wheel over the tracks, the clips and the waveform to zoom exactly as it does over the time ruler. The ruler always zoomed at the pointer; the lanes and the Waveform editor followed the "between the pointer and the middle" setting, which pulled the zoom 40 percent toward the middle of the view and felt wrong.
+- That setting is gone. "Wheel zoom centers on" offers the pointer (the default now) or the playhead; a saved "between" reads as the pointer. Both editors use the one rule, and the ruler still zooms at the pointer whatever is chosen.
+- The four fixes made on 2026-11-02 and reverted for the 0.7.1 release (a saved session lists only the files its clips use; the wheel over the lanes zooms at the pointer; new files show in the Files list and removing a file closes it in the editor; the plain wheel zooms over the lanes) are back on main.
