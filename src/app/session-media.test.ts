@@ -3,10 +3,19 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { folderOf, insideAny, repointPlan, toCopy } from "./session-media";
+import { editedCopyPath, folderOf, insideAny, mediaDirOf, repointPlan, toCopy } from "./session-media";
 
 describe("session media", () => {
   const session = "C:\\Shows\\Ep 1\\Ep 1.altaudio";
+
+  it("names a copy of unsaved edits in the media folder, as WAV, never over a file", async () => {
+    const dir = mediaDirOf(session, "Audio");
+    expect(dir).toBe("C:\\Shows\\Ep 1\\Audio");
+    expect(await editedCopyPath("D:\\Takes\\vox.mp3", dir, async () => false)).toBe("C:\\Shows\\Ep 1\\Audio\\vox (edited).wav");
+    const taken = new Set(["C:\\Shows\\Ep 1\\Audio\\vox (edited).wav", "C:\\Shows\\Ep 1\\Audio\\vox (edited 2).wav"]);
+    expect(await editedCopyPath("D:\\Takes\\vox.mp3", dir, async (p) => taken.has(p))).toBe("C:\\Shows\\Ep 1\\Audio\\vox (edited 3).wav");
+    expect(await editedCopyPath("/home/a/take.flac", "/home/a/show/Audio", async () => false)).toBe("/home/a/show/Audio/take (edited).wav");
+  });
 
   it("finds the session folder and what is inside it", () => {
     expect(folderOf(session)).toBe("C:\\Shows\\Ep 1");

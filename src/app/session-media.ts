@@ -31,6 +31,27 @@ export function folderOf(sessionFile: string): string {
   return i > 0 ? sessionFile.slice(0, i) : "";
 }
 
+/** The session's media folder: `folder` beside the session file, written with the session's own slashes. */
+export function mediaDirOf(sessionFile: string, folder: string): string {
+  const sep = sessionFile.includes("\\") ? "\\" : "/";
+  return `${folderOf(sessionFile)}${sep}${folder}`;
+}
+
+/**
+ * The name for a file's unsaved Waveform edits copied into the session
+ * folder: "take (edited).wav", then "take (edited 2).wav" and so on while
+ * `taken` says a name is in use. Always WAV, so nothing is lost on the way.
+ */
+export async function editedCopyPath(original: string, dir: string, taken: (path: string) => Promise<boolean>): Promise<string> {
+  const name = original.slice(Math.max(original.lastIndexOf("/"), original.lastIndexOf("\\")) + 1);
+  const stem = name.replace(/\.[^.]+$/, "") || "audio";
+  const sep = dir.includes("\\") ? "\\" : "/";
+  for (let n = 1; ; n++) {
+    const path = `${dir}${sep}${stem} (edited${n > 1 ? ` ${n}` : ""}).wav`;
+    if (!(await taken(path))) return path;
+  }
+}
+
 /**
  * The files to copy into a session saved at `sessionFile`: everything
  * outside its folder, and, when `leave` lists library folders, nothing

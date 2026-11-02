@@ -87,7 +87,8 @@
   import { sharedCatalog, sharedRegistry } from "../stores/fx-catalog";
   import { newTrackNames } from "./track-names";
   import { CompoundCommand } from "../commands/compound";
-  import { repointPlan, toCopy } from "./session-media";
+  import { editedCopyPath, folderOf, insideAny, mediaDirOf, repointPlan, toCopy } from "./session-media";
+  import { DEFAULT_FORMAT } from "./output-format";
   import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
   import { waveChannels } from "../panels/editor/wave-channels";
@@ -139,6 +140,7 @@
     type EffectInfo,
     type Recoverable,
     previewStatus,
+    pathsExist,
     probeMedia,
     waveSetChannelsOff,
     waveLiveRender,
@@ -166,7 +168,7 @@
   import type { NewAudioSettings } from "./NewAudioFileDialog.svelte";
   import type { NewSessionSettings } from "./NewSessionDialog.svelte";
   import { liveCopies, samePath } from "../stores/wave";
-  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, parkedUnsavedPaths, newWaveFromClips, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
+  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, parkedUnsavedPaths, newWaveFromClips, saveWaveFile, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
   import { get, writable } from "svelte/store";
   import type { SessionRow } from "../panels/files/session-row";
   import { recordControl } from "../stores/record";
@@ -282,8 +284,17 @@
     // Audio never lands on a MIDI track: it gets a new track instead.
     const first = trackId && audio.some((t) => t.id === trackId) ? trackId : null;
     const known = new Set(doc.media.map((m) => m.id));
-    const addMedia = (it: (typeof items)[number]) => {
+    // A file with unsaved Waveform edits is heard edited (its live copy) until
+    // they are saved, so it is placed at its edited length, not the length on disk.
+    const infoOf = (it: (typeof items)[number]) => {
       const info = it!.info!;
+      const f = waveFile.current();
+      const d = wave.current;
+      if (!f || f.untitled || !d || !waveHistory.current.dirty || !samePath(f.path, it!.path)) return info;
+      return { ...info, length: Math.round((sessionEnd(d) * info.sampleRate) / Math.max(1, d.sample_rate)) };
+    };
+    const addMedia = (it: (typeof items)[number]) => {
+      const info = infoOf(it);
       if (known.has(it!.id)) return;
       known.add(it!.id);
       ops.push({ op: "add_media", media: { id: it!.id, path: it!.path, relative_path: null, sample_rate: info.sampleRate, channels: info.channels, length: info.length } });
@@ -297,7 +308,7 @@
       let target = first ?? "";
       items.forEach((it, k) => {
         addMedia(it);
-        const info = it!.info!;
+        const info = infoOf(it);
         const track = below[k]?.id ?? newTrack(it, true);
         if (k === 0) target = track;
         const clip = { id: uuid(), name: stem(it!.name), media_id: it!.id, start, source_in: 0, source_out: info.length, ...picked(it!.path, info.channels) };
@@ -311,7 +322,7 @@
     let pos = start;
     for (const it of items) {
       addMedia(it);
-      const info = it!.info!;
+      const info = infoOf(it);
       list.push({ id: uuid(), name: stem(it!.name), media_id: it!.id, start: pos, source_in: 0, source_out: info.length, ...picked(it!.path, info.channels) });
       pos += Math.round((info.length * doc.sample_rate) / info.sampleRate);
     }
@@ -809,6 +820,41 @@
     return new Set([...plan.pool.map((p) => p.path), ...plan.ops.flatMap((o) => (o.op === "set_media" ? [o.media.path] : []))]).size;
   }
 
+  /**
+   * Saving the session keeps the Waveform editor's unsaved edits to a file
+   * the session uses, so what the session plays is what reopens. A file in
+   * the session folder takes the edits (as the Waveform editor's Save). A
+   * file from elsewhere is copied, edits and all, into the session's media
+   * folder as a WAV; the session, the Files panel and the Waveform editor
+   * move to the copy as one undoable step, and the original is untouched.
+   */
+  async function keepWaveEdits(sessionFile: string) {
+    const f = waveFile.current();
+    const doc = session.current;
+    if (!f || f.untitled || !waveHistory.current.dirty || !doc) return;
+    const used = doc.media.filter((m) => samePath(m.path, f.path));
+    if (!used.length) return;
+    const name = (p: string) => p.slice(Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\")) + 1);
+    if (insideAny(f.path, [folderOf(sessionFile)], ignorePathCase)) {
+      await saveWaveFile(null);
+      peaks.invalidate(f.path);
+      exactSamples.forget(f.path);
+      await syncSessionMedia(f.path);
+      showNotice(`Saved your edits to ${name(f.path)}, which the session uses.`);
+      return;
+    }
+    const target = await editedCopyPath(f.path, mediaDirOf(sessionFile, settings.current.mediaFolder), async (p) => (await pathsExist([p]))[0] ?? false);
+    // Save As: the Waveform editor moves to the copy with the edits in it.
+    await saveWaveFile(target, null, DEFAULT_FORMAT);
+    const info = await probeMedia(target);
+    const label = "Keep Waveform Edits";
+    const ops: Op[] = used.map((m) => ({ op: "set_media", media: { ...m, path: target, relative_path: null, length: info.length, sample_rate: info.sampleRate, channels: info.channels } }));
+    const pool = mediaPool.current.items.filter((it) => samePath(it.path, f.path)).map((it) => ({ id: it.id, path: target }));
+    const parts = [session.command(label, { op: "batch", ops }), ...[mediaPool.repathCommand(pool, label)].filter((c) => c !== null)];
+    await sessionHistory.execute(new CompoundCommand(label, parts));
+    showNotice(`Your unsaved edits to ${name(f.path)} are saved in the session folder as ${name(target)}, and the session uses that now. The original file is unchanged.`);
+  }
+
   const KEY_RECENT = "sessions.recent";
   const KEY_EDITOR = "editor.settings";
 
@@ -881,6 +927,12 @@
     notice: (t) => showNotice(t),
     libraries: () => libraries.current.libs.map((l) => l.dir),
     beforeSave: async (target) => {
+      // First, so collecting below finds the edited copy already in the folder rather than copying the unedited original.
+      try {
+        await keepWaveEdits(target);
+      } catch (e) {
+        showError(e);
+      }
       const s = settings.current;
       if (!s.collectOnSave || s.copyMedia === "never") return;
       try {
@@ -1533,6 +1585,11 @@
       liveFor = null;
       liveCopies.update((m) => Object.fromEntries(Object.entries(m).filter(([k]) => !samePath(k, was))));
       if (isTauri()) void waveLiveClear(was).catch(showError);
+      // Edits dropped, or the file closed: the session hears the file on disk
+      // again, so its clips follow that file's length (saved edits already
+      // match). Not after Save As, which moves the session itself.
+      const now = waveFile.current();
+      if (isTauri() && (!now || samePath(now.path, was))) void syncSessionMedia(was);
     };
     const renderLive = async () => {
       if (rendering) {

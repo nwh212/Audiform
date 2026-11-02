@@ -728,6 +728,10 @@ pub async fn wave_save(
     let saved = target.clone();
     spawn_blocking(move || -> Result<(), String> {
         let dir = saved.parent().map(Path::to_path_buf).unwrap_or_default();
+        // A session saving the edits into its media folder may be the first to use it.
+        if !dir.as_os_str().is_empty() {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        }
         let stem = saved
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
