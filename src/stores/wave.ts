@@ -83,6 +83,16 @@ export function noteTakeHome(take: string, file: string): void {
   takeHomes.set(pathKey(take), file);
 }
 
+/** The takes recorded into the file at `home` (paths as kept, compare with `samePath`). */
+export function takesInto(home: string): string[] {
+  return [...takeHomes].filter(([, h]) => pathKey(h) === pathKey(home)).map(([t]) => t);
+}
+
+/** After Save As: the takes recorded into `from` now belong to the file at `to`. */
+export function moveTakeHomes(from: string, to: string): void {
+  for (const [t, h] of takeHomes) if (pathKey(h) === pathKey(from)) takeHomes.set(t, to);
+}
+
 /**
  * The file a take was recorded into, while that file has unsaved edits
  * (open now or set aside). Null when there is none, or it has no edits left.

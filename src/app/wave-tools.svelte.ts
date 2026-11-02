@@ -25,7 +25,8 @@ import { peaks, session, transport } from "../stores/open-session";
 import { type ClipDoc, type EffectChainDoc, type Op, sessionEnd } from "../stores/session";
 import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
-import { closeWaveFile, editedHomeOf, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+import { closeWaveFile, editedHomeOf, moveTakeHomes, openWaveFile, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+import { mediaPool } from "../stores/media";
 import type { ActionRegistry } from "./actions";
 import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
@@ -192,6 +193,23 @@ export function createWaveTools(deps: WaveToolsDeps) {
     actions.invalidate();
   }
 
+  /**
+   * After Save As, the Files panel lists the new file where the old one
+   * was. A new file never saved is not listed, so its recording's entry
+   * takes the new file instead (the take itself stays on disk). Nothing
+   * changes when neither is listed.
+   */
+  function listSavedAs(from: string, to: string, untitled: boolean) {
+    moveTakeHomes(from, to);
+    const items = mediaPool.current.items;
+    const takes = untitled ? takesInto(to) : [];
+    const it = items.find((x) => samePath(x.path, from)) ?? items.find((x) => takes.some((t) => samePath(t, x.path)));
+    if (!it || items.some((x) => samePath(x.path, to))) return;
+    mediaPool.repathCommand([{ id: it.id, path: to }], "Save Audio As")?.do();
+    // Its length and format are the new file's now.
+    mediaPool.retry(it.id);
+  }
+
   /** Saves the Waveform editor's file. Returns false if cancelled or failed. */
   async function saveWave(as: boolean): Promise<boolean> {
     const f = waveFile.current();
@@ -280,6 +298,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       const markerCount = wave.current?.markers.length ?? 0;
       await saveWaveFile(path, null, format, markers);
       const saved = waveFile.current()?.path ?? f.path;
+      if (path !== null && !samePath(saved, f.path)) listSavedAs(f.path, saved, f.untitled);
       // MP3, FLAC and M4A carry chapters inside the file (WAV keeps its markers as cue points).
       // Written before the peaks and the session read the file again, so they see the finished file.
       const saveDoc = wave.current;
