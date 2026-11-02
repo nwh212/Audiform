@@ -25,7 +25,7 @@ import { peaks, session, transport } from "../stores/open-session";
 import { type ClipDoc, type EffectChainDoc, type Op, sessionEnd } from "../stores/session";
 import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
-import { closeWaveFile, editedHomeOf, moveTakeHomes, openWaveFile, parkedIsUntitled, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+import { closeWaveFile, editedHomeOf, isUntitledFile, moveTakeHomes, openWaveFile, parkedIsUntitled, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import { mediaPool } from "../stores/media";
 import type { ActionRegistry } from "./actions";
 import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
@@ -163,6 +163,17 @@ export function createWaveTools(deps: WaveToolsDeps) {
     return true;
   }
 
+  /**
+   * Closes the Waveform editor's file (after any question about its
+   * edits). A new file never saved is gone then, so it leaves the Files list.
+   */
+  async function closeAudioFile(): Promise<void> {
+    const f = waveFile.current();
+    await closeWaveFile();
+    if (!f?.untitled) return;
+    mediaPool.forget(mediaPool.current.items.filter((i) => samePath(i.path, f.path)).map((i) => i.id));
+  }
+
   /** Opens a file in the Waveform editor and shows it. */
   async function openInWaveform(path: string) {
     // A take recorded into a file that still has unsaved edits opens that
@@ -207,7 +218,8 @@ export function createWaveTools(deps: WaveToolsDeps) {
    * to it, so later edits reach the session too.
    */
   async function editedForSession(path: string, dir: string | null): Promise<string> {
-    const home = editedHomeOf(path);
+    // A new file never saved stands for itself: its edits are not on disk yet.
+    const home = editedHomeOf(path) ?? (isUntitledFile(path) ? path : null);
     if (!home) return path;
     const open = waveFile.current();
     const untitled = open && samePath(open.path, home) ? open.untitled : parkedIsUntitled(home);
@@ -856,7 +868,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       ov(waveIsOpen, {
         id: "file.close",
         run: async () => {
-          if (await confirmWaveDiscard()) await closeWaveFile();
+          if (await confirmWaveDiscard()) await closeAudioFile();
         },
         label: () => "Close Audio File",
       }),
@@ -942,6 +954,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
     openInWaveform,
     saveWave,
     editedForSession,
+    closeAudioFile,
     waveAmplify,
     applyWaveChain,
     register: registerWaveActions,

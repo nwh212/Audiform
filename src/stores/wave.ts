@@ -89,6 +89,21 @@ export function parkedIsUntitled(path: string): boolean {
   return false;
 }
 
+/** Whether `path` is a new file never saved, open now or set aside. */
+export function isUntitledFile(path: string): boolean {
+  if (fileValue && pathKey(fileValue.path) === pathKey(path)) return fileValue.untitled;
+  return parkedIsUntitled(path);
+}
+
+/** Drops the set-aside file at `path` and its edits, if it is set aside. */
+export async function forgetParkedFile(path: string): Promise<void> {
+  for (const p of [...parked.keys()]) {
+    if (pathKey(p) !== pathKey(path)) continue;
+    parked.delete(p);
+    await waveForget(p);
+  }
+}
+
 /** The takes recorded into the file at `home` (paths as kept, compare with `samePath`). */
 export function takesInto(home: string): string[] {
   return [...takeHomes].filter(([, h]) => pathKey(h) === pathKey(home)).map(([t]) => t);

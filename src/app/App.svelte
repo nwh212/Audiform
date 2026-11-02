@@ -168,7 +168,7 @@
   import type { NewAudioSettings } from "./NewAudioFileDialog.svelte";
   import type { NewSessionSettings } from "./NewSessionDialog.svelte";
   import { liveCopies, samePath } from "../stores/wave";
-  import { closeWaveFile, forgetParked, newEmptyWaveFile, parkedUnsaved, parkedUnsavedPaths, newWaveFromClips, saveWaveFile, wave, waveFile, waveHistory, waveTransport } from "../stores/wave";
+  import { editedHomeOf, forgetParked, forgetParkedFile, takesInto, newEmptyWaveFile, parkedUnsaved, parkedUnsavedPaths, newWaveFromClips, saveWaveFile, wave, waveFile, waveHistory, waveTransport, type WaveFile } from "../stores/wave";
   import { get, writable } from "svelte/store";
   import type { SessionRow } from "../panels/files/session-row";
   import { recordControl } from "../stores/record";
@@ -1247,16 +1247,44 @@
   }
 
   /**
-   * Runs `remove`, then closes the Waveform editor's file if it was one of
-   * the removed files (asking first when it has unsaved edits).
+   * Runs `remove`, then closes in the Waveform editor every removed file
+   * no longer listed: the one open (asking first when it has unsaved
+   * edits) and any set aside. A take stands for the file it was recorded
+   * into once no other take of that file is listed. Closed new files never
+   * saved leave the list, since they are gone.
    */
   async function closeWaveIfRemoved(ids: readonly string[], remove: () => Promise<void>): Promise<void> {
-    const open = waveFile.current();
-    const target = open && !open.untitled ? open.path.toLowerCase() : null;
-    const hit = target !== null && ids.some((id) => mediaPool.get(id)?.path.toLowerCase() === target);
+    const removed = ids.map((id) => mediaPool.get(id)?.path).filter((p): p is string => !!p);
+    // Taken before removing: a take's home is known only while it has edits.
+    const homes = removed.map((p) => editedHomeOf(p));
     await remove();
-    const gone = hit && !mediaPool.current.items.some((i) => i.path.toLowerCase() === target);
-    if (gone && (await confirmWaveDiscard())) await closeWaveFile();
+    const listed = (p: string) => mediaPool.current.items.some((i) => samePath(i.path, p));
+    const close: string[] = [];
+    removed.forEach((p, k) => {
+      if (listed(p)) return;
+      close.push(p);
+      const home = homes[k];
+      if (home && !listed(home) && !takesInto(home).some(listed)) close.push(home);
+    });
+    if (!close.length) return;
+    const open = waveFile.current();
+    if (open && close.some((p) => samePath(p, open.path)) && (await confirmWaveDiscard())) await waveTools.closeAudioFile();
+    const aside = close.filter((p) => !open || !samePath(p, open.path));
+    const unsaved = aside.filter((p) => parkedUnsavedPaths().some((q) => samePath(q, p)));
+    let keep: string[] = [];
+    if (unsaved.length) {
+      const names = unsaved.map((p) => p.split(/[\\/]/).pop() ?? p).join(", ");
+      const v = await ask("Unsaved changes", `${names} ${unsaved.length === 1 ? "has" : "have"} edits not saved yet. Close ${unsaved.length === 1 ? "it" : "them"} and lose the edits?`, [
+        { label: "Keep Editing", value: "keep", primary: true },
+        { label: "Close and Discard Edits", value: "close" },
+      ]);
+      if (v !== "close") {
+        // Back in the list, edits and all.
+        keep = unsaved;
+        mediaPool.merge(keep.map((path) => ({ id: uuid(), path })));
+      }
+    }
+    for (const p of aside) if (!keep.includes(p)) await forgetParkedFile(p);
   }
 
   const actions = new ActionRegistry();
@@ -1646,7 +1674,15 @@
       if (liveFor || !f || f.untitled || !waveHistory.current.dirty) return;
       if ((session.current?.media ?? []).some((m) => samePath(m.path, f.path))) followLive();
     };
-    const stopLive = [waveHistory.subscribe(followLive), waveFile.subscribe(followLive), session.subscribe(followSession)];
+    // A new file is listed in Files from the start, so it can be found
+    // again after another file is opened.
+    const listUntitled = (f: WaveFile | null) => {
+      if (!f?.untitled || mediaPool.current.items.some((i) => samePath(i.path, f.path))) return;
+      const id = uuid();
+      mediaPool.merge([{ id, path: f.path }]);
+      mediaPool.setSelection([id]);
+    };
+    const stopLive = [waveHistory.subscribe(followLive), waveFile.subscribe(followLive), waveFile.subscribe(listUntitled), session.subscribe(followSession)];
     // Switched-off channels in the Waveform editor are silent in playback too.
     const stopChannels = waveChannels.subscribe((c) => {
       if (isTauri()) void waveSetChannelsOff(c.map((on) => !on)).catch(showError);
