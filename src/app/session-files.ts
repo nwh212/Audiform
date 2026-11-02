@@ -26,8 +26,7 @@ const MAX_RECENT = 10;
 
 export interface SessionFileBackend {
   create(options?: NewSessionOptions): Promise<SessionResult<SessionDoc>>;
-  /** Saves only the media the session's clips use, not the whole Files panel. */
-  save(path: string | null, libraries: string[]): Promise<SessionResult<SessionDoc>>;
+  save(path: string | null, media: MediaRefDoc[], libraries: string[]): Promise<SessionResult<SessionDoc>>;
   open(path: string): Promise<SessionResult<SessionDoc>>;
   autosave(media: MediaRefDoc[]): Promise<void>;
   clearAutosave(): Promise<void>;
@@ -47,7 +46,7 @@ export interface SessionFileBackend {
 }
 
 /** The paths of the files a session's clips play. */
-export function usedPaths(doc: SessionDoc): string[] {
+function usedPaths(doc: SessionDoc): string[] {
   const ids = new Set(doc.tracks.flatMap((t) => t.clips.map((c) => c.media_id)));
   return doc.media.filter((m) => ids.has(m.id)).map((m) => m.path);
 }
@@ -359,7 +358,7 @@ export class SessionFiles {
   private async saveTo(path: string | null): Promise<boolean> {
     const target = path ?? this.d.session.path;
     if (target && this.d.beforeSave) await this.d.beforeSave(target);
-    const r = await this.d.backend.save(path, this.d.libraries?.() ?? []);
+    const r = await this.d.backend.save(path, this.mediaRefs(), this.d.libraries?.() ?? []);
     this.d.session.set(r.session, r.path);
     await this.d.stack.markSaved();
     if (r.path) this.addRecent(r.path);

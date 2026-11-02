@@ -384,7 +384,7 @@ pub fn session_new(
                 target.display()
             ));
         }
-        session = file::save(&session, &target).map_err(|e| e.to_string())?;
+        session = file::save(&session, &target, &[]).map_err(|e| e.to_string())?;
         path = Some(target);
     }
     app.state::<crate::engine::Transport>().stop();
@@ -403,11 +403,12 @@ pub fn session_new(
 }
 
 /// Saves to `path`, or to the current path when `path` is None.
-/// Only media the session's clips use is saved (see `file::save`).
+/// `media` lists the Files panel, so files not yet on a track come back.
 #[tauri::command]
 pub async fn session_save(
     app: AppHandle,
     path: Option<PathBuf>,
+    media: Vec<MediaRef>,
     libraries: Option<Vec<PathBuf>>,
     backups: Option<u32>,
 ) -> Result<SessionWithPath, String> {
@@ -440,7 +441,7 @@ pub async fn session_save(
                 eprintln!("session backup skipped: {e}");
             }
         }
-        file::save(&session, &t2)
+        file::save(&session, &t2, &media)
     })
     .await
     .map_err(|e| e.to_string())?

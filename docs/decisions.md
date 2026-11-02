@@ -2320,7 +2320,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: Opening a take from Files offers the file it was recorded into
 - The lead recorded into a new file, edited it (channel copy, gain, crop), went to a session and came back, and about half the time every edit looked gone. A Waveform recording's take is listed in the Files panel on its own (so takes are never lost); the new file holding the edits is not listed at all. Coming back by the editor switch showed the edits; coming back by double-clicking the take in Files opened the raw recording, and the edited file was set aside out of sight, still unsaved.
 - Now each Waveform take remembers the file it went into. Opening that take (from Files, a drop or a clip) while that file has unsaved edits opens the edited file, back from being set aside with its edits and undo history intact. A first version asked each time; the lead chose no question (2026-11-01).
-- Still to consider: listing new, never-saved files in the Files panel, so they can be found without the take (done 2026-11-02).
+- Still to consider: listing new, never-saved files in the Files panel, so they can be found without the take.
 
 ## 2026-11-01: Save Audio As puts the new file in the Files list in place of the old one
 - The lead asked that after Save Audio As the Files panel show the newly named file where the old one was. A Waveform Save As did not touch the Files list.
@@ -2333,20 +2333,3 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: Save Audio As remembers its format settings
 - The lead asked that FLAC (and its compression level) stay picked the next time a file is saved. Save Audio As started from the file's own format with default settings each time; Export and Batch Convert already remembered theirs.
 - Now the window starts from the settings it last saved with (format, compression, bit depth, sample rate, channels, kept in prefs as `save-audio.format` and checked like the export settings), and from the file's own format only the first time. A file with more than two channels still starts on WAV, and its forced WAV is not remembered.
-
-## 2026-11-02: Wheel zoom over the Multitrack lanes centers on the pointer, as over the ruler
-- The lead found Ctrl+wheel zoom over the tracks drifting, while the same zoom over the time ruler felt right. The ruler always zooms at the pointer; the lanes followed the "between the pointer and the middle" setting, which pulls the zoom 40% toward the middle of the view.
-- Now the lanes zoom at the pointer too. Choosing the playhead in Settings > General still zooms at the playhead; "between" applies to the Waveform editor only, and its label says so.
-
-## 2026-11-02: A saved session lists only the files its clips use
-- The lead found sessions opening with files that were only open in the Files panel when the session was saved. The save added every file in the Files panel to the session's media list, so they came back on open.
-- Now a save keeps only media a clip uses (`file::save` drops the rest, and the Files list is no longer sent). Collect Media on save copies only those files too. Autosave still keeps the whole Files list, so recovery brings back what was open. Older sessions lose their unused entries the next time they are saved.
-
-## 2026-11-02: New files show in the Files list, and closing a file clears the Waveform editor
-- The lead found that File > New Audio File did not always add the file to the Files list (only a recording's take showed up), and that closing files from the Files panel could leave the waveform open.
-- New files never saved (New Audio File, Paste to New File, Mix Down to New File) are now listed as soon as they open, so they can be found again after switching files. Dragging one into a session saves it first, as a dragged take of it already did. Closing it without saving takes it out of the list, since its audio is gone.
-- Removing files from the list now closes, in the Waveform editor, every removed file that is no longer listed: the open one (asking first about unsaved edits), files set aside with their edits, new files never saved, and the file a removed take was recorded into once none of its takes are listed. Paths are compared the same way everywhere (slashes and case), which the old check did not do.
-
-## 2026-11-02: The plain wheel zooms over the Multitrack lanes again
-- The project lead wants the mouse wheel over the session's tracks to zoom in time, as it does over the ruler. Since 2026-10-24 the wheel over the lanes scrolled the tracks and the "wheel zooms" setting applied to the Waveform editor only.
-- Now the "wheel zooms" setting (on by default) covers both editors: over the lanes the plain wheel zooms at the pointer. Off, the wheel over the lanes scrolls the tracks up and down as before. The ruler and Ctrl+wheel always zoom, the track headers and the track scrollbar still change track heights, Shift+wheel scrolls sideways, and the scrollbar drags the tracks up and down.

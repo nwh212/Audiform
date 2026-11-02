@@ -41,8 +41,8 @@ function setup(opts: { choice?: Choice; pickSave?: string | null; recoverable?: 
   let savedPath: string | null = null;
   const backend: SessionFileBackend = {
     create: async () => (calls.push("create"), result(doc(), null)),
-    save: async (path, _libs) => {
-      calls.push(`save:${path}`);
+    save: async (path, media, _libs) => {
+      calls.push(`save:${path}:${media.length}`);
       savedPath = path ?? savedPath;
       return result(doc("Ep"), savedPath);
     },
@@ -141,11 +141,11 @@ describe("SessionFiles", () => {
     const { files, calls, session, stack, makeDirty, recent } = setup();
     await makeDirty();
     expect(await files.save()).toBe(true);
-    expect(calls).toEqual(["save:C:\\Shows\\New.altaudio"]);
+    expect(calls).toEqual(["save:C:\\Shows\\New.altaudio:0"]);
     expect(session.path).toBe("C:\\Shows\\New.altaudio");
     expect(stack.current.dirty).toBe(false);
     await files.save();
-    expect(calls[1]).toBe("save:null");
+    expect(calls[1]).toBe("save:null:0");
     expect(recent()).toEqual(["C:\\Shows\\New.altaudio"]);
   });
 

@@ -341,15 +341,6 @@ export class MediaPool {
     return removed;
   }
 
-  /**
-   * Takes files out with no undo step, for a file that is gone: a new file
-   * closed without being saved.
-   */
-  forget(ids: readonly string[]): void {
-    this.detach(ids);
-    for (const id of ids) this.known.delete(id);
-  }
-
   get size(): number {
     return this.order.length;
   }
