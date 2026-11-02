@@ -485,6 +485,11 @@ fn a_plugin_with_a_sidechain_input_hears_the_key() {
     let key: Vec<f32> = (0..frames * 2)
         .map(|i| if i % 2 == 0 { 0.25 } else { -0.5 })
         .collect();
+    // With no key routed, the sidechain input stays off and the plug-in keys from
+    // its own input (the test plug-in adds it once more). A silent key turned on
+    // here once kept a compressor from ever compressing.
+    let y = h.process(&[], &key).unwrap();
+    assert_eq!(y, key.iter().map(|v| v * 2.0).collect::<Vec<f32>>());
     let send = |h: &mut Host, key: Option<&[f32]>| -> Vec<f32> {
         if let Some(k) = key {
             let mut body = Vec::new();

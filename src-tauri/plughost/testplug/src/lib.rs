@@ -70,6 +70,8 @@ struct GainProcessor {
     gain: AtomicU64,
     /// The delay line: left and right, LATENCY frames each, and the write position.
     delay: std::sync::Mutex<(Vec<f32>, Vec<f32>, usize)>,
+    /// The host turned the sidechain input on.
+    keyed: std::sync::atomic::AtomicBool,
 }
 
 impl Class for GainProcessor {
@@ -83,6 +85,7 @@ impl GainProcessor {
         GainProcessor {
             gain: AtomicU64::new(1.0f64.to_bits()),
             delay: std::sync::Mutex::new((vec![0.0; LATENCY], vec![0.0; LATENCY], 0)),
+            keyed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -196,11 +199,17 @@ impl IComponentTrait for GainProcessor {
 
     unsafe fn activateBus(
         &self,
-        _media_type: MediaType,
-        _dir: BusDirection,
-        _index: i32,
-        _state: TBool,
+        media_type: MediaType,
+        dir: BusDirection,
+        index: i32,
+        state: TBool,
     ) -> tresult {
+        if media_type as MediaTypes == MediaTypes_::kAudio
+            && dir as BusDirections == BusDirections_::kInput
+            && index == 1
+        {
+            self.keyed.store(state != 0, Ordering::Relaxed);
+        }
         kResultOk
     }
 
@@ -369,7 +378,15 @@ impl IAudioProcessorTrait for GainProcessor {
         let output_l = slice::from_raw_parts_mut(output_channels[0], num_samples);
         let output_r = slice::from_raw_parts_mut(output_channels[1], num_samples);
 
-        // With a sidechain input, the key is added to the output as it is.
+        // With a sidechain input, the key is added to the output as it is. Like a
+        // compressor, it keys from its own input while the host leaves that input off.
+        if with_sidechain() && !self.keyed.load(Ordering::Relaxed) {
+            for i in 0..num_samples {
+                output_l[i] = gain * input_l[i] + input_l[i];
+                output_r[i] = gain * input_r[i] + input_r[i];
+            }
+            return kResultOk;
+        }
         if with_sidechain() {
             let key = slice::from_raw_parts(
                 input_buses[1].__field0.channelBuffers32,

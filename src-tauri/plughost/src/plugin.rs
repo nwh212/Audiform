@@ -107,6 +107,10 @@ pub struct Audio {
     tempo: Tempo,
     /// Control changes from the plug-in's window, for the next block.
     pub from_editor: Arc<Mutex<Vec<(u32, f64)>>>,
+    /// The extra inputs are on: a key has been arriving.
+    keyed: bool,
+    /// Frames since the last key, while keyed.
+    unkeyed: u64,
 }
 
 fn stream(data: Vec<u8>) -> ComWrapper<MemStream> {
@@ -281,6 +285,8 @@ impl Plugin {
                 events,
                 tempo: Tempo::default(),
                 from_editor: Arc::new(Mutex::new(Vec::new())),
+                keyed: false,
+                unkeyed: 0,
             };
             Ok((
                 Plugin {
@@ -391,8 +397,10 @@ fn split_state(data: &str) -> Option<(Vec<u8>, Vec<u8>)> {
 
 /// Asks for stereo on the main buses (or, with `main`, the plug-in's own
 /// layout or the one given), keeps the plug-in's own layout on any others
-/// (sidechain inputs and the like), and turns them all on, along with the
-/// first note input. Returns the channels of each input and output bus,
+/// (sidechain inputs and the like), and turns on the main input, every
+/// output and the first note input. Extra inputs stay off until a key is
+/// routed to them (see [`Audio::process`]): a compressor whose sidechain
+/// input is on listens to it, and a silent key meant it never compressed. Returns the channels of each input and output bus,
 /// whether there is a note input, and the main buses' speakers by name.
 #[allow(clippy::type_complexity)]
 unsafe fn setup_buses(
@@ -435,8 +443,8 @@ unsafe fn setup_buses(
         })
         .collect();
     processor.setBusArrangements(ins.as_mut_ptr(), nin, outs.as_mut_ptr(), nout);
-    for i in 0..nin {
-        component.activateBus(kAudio as i32, kInput as i32, i, 1);
+    if nin > 0 {
+        component.activateBus(kAudio as i32, kInput as i32, 0, 1);
     }
     for i in 0..nout {
         component.activateBus(kAudio as i32, kOutput as i32, i, 1);
@@ -593,6 +601,7 @@ impl Audio {
             self.time = position;
         }
         let ch = channels.max(1);
+        self.follow_key(key.is_some(), (io.len() / ch) as u64);
         let mut first = true;
         for (i, chunk) in io.chunks_mut(MAX_BLOCK * ch).enumerate() {
             let mut all: Vec<(u32, f64)> = if first { changes.to_vec() } else { Vec::new() };
@@ -610,6 +619,38 @@ impl Audio {
             // The key for these frames: stereo, so two samples a frame.
             let key = key.and_then(|k| k.get(from as usize * 2..to as usize * 2));
             self.block(&all, events, chunk, ch, key);
+        }
+    }
+
+    /// Turns the extra inputs on when a key starts arriving, and off again
+    /// after a second without one. Off, the plug-in listens to its own input,
+    /// as it does in hosts that route nothing there. A bus only changes
+    /// while the plug-in is switched off, so it restarts (and loses any tail).
+    fn follow_key(&mut self, has_key: bool, frames: u64) {
+        if self.ins.len() < 2 {
+            return;
+        }
+        let want = if has_key {
+            self.unkeyed = 0;
+            true
+        } else if self.keyed {
+            self.unkeyed += frames;
+            self.unkeyed < self.rate as u64
+        } else {
+            false
+        };
+        if want == self.keyed {
+            return;
+        }
+        self.keyed = want;
+        unsafe {
+            self.processor.setProcessing(0);
+            self.component.setActive(0);
+            for i in 1..self.ins.len() as i32 {
+                self.component.activateBus(kAudio as i32, kInput as i32, i, u8::from(want));
+            }
+            self.component.setActive(1);
+            self.processor.setProcessing(1);
         }
     }
 
