@@ -2319,7 +2319,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 ## 2026-11-01: Opening a take from Files offers the file it was recorded into
 - The lead recorded into a new file, edited it (channel copy, gain, crop), went to a session and came back, and about half the time every edit looked gone. A Waveform recording's take is listed in the Files panel on its own (so takes are never lost); the new file holding the edits is not listed at all. Coming back by the editor switch showed the edits; coming back by double-clicking the take in Files opened the raw recording, and the edited file was set aside out of sight, still unsaved.
-- Now each Waveform take remembers the file it went into. Opening that take (from Files, a drop or a clip) while that file has unsaved edits asks: open the edited file (the default; it comes back from being set aside, edits and undo history intact) or the recording on its own.
+- Now each Waveform take remembers the file it went into. Opening that take (from Files, a drop or a clip) while that file has unsaved edits opens the edited file, back from being set aside with its edits and undo history intact. A first version asked each time; the lead chose no question (2026-11-01).
 - Still to consider: listing new, never-saved files in the Files panel, so they can be found without the take.
 
 ## 2026-11-01: Save Audio As puts the new file in the Files list in place of the old one
