@@ -852,7 +852,7 @@ fn run(
     // Set when the driver asks for the stream to be started again.
     let reset = Arc::new(AtomicBool::new(false));
     let open = |producer: Producer<f32>| -> Result<cpal::Stream, String> {
-        let (c, s, r) = (config.clone(), shared.clone(), reset.clone());
+        let (c, s, r) = (config, shared.clone(), reset.clone());
         let stream = match format {
             SampleFormat::F32 => build::<f32>(&dev, c, producer, s, r),
             SampleFormat::I16 => build::<i16>(&dev, c, producer, s, r),
