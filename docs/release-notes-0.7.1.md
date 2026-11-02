@@ -1,0 +1,43 @@
+# Audiform 0.7.1
+
+A stability and speed update. Large sessions use far less memory and stay smooth while you zoom and scroll, sessions from the other editor sound the way they did there, and the Waveform editor no longer loses or hides your work.
+
+Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are experimental; if something is off there, please report it.
+
+## New
+
+- **Repeat Last Command** in the Waveform editor. Shift+R applies the last effect or plug-in again with exactly the same settings, to the selection or the whole file. Ctrl+R opens it again with those settings, to adjust before Apply. The Edit menu names it, for example Repeat Parametric EQ.
+- **Linear fades.** Effects > Fade In (Linear) and Fade Out (Linear), next to Invert and Reverse, fade the selection in a straight line, or the whole file when nothing is selected. The curved fades under Process are unchanged.
+- **FLAC compression levels.** Save Audio As, Export and Batch Convert offer Compression 0 to 8 for FLAC (5 by default). Every level is lossless; higher levels make smaller files and take longer to save.
+- **Save Audio As remembers your settings:** format, compression, bit depth, sample rate and channels carry over to the next save. Typing a name ending in .flac, .mp3 or .wav switches the format to match.
+- **Saving a session keeps unsaved Waveform edits.** If the session uses a file you edited and have not saved, saving the session saves those edits: into the file itself when it is already in the session folder, otherwise as "name (edited).wav" in the session's Audio folder, leaving the original untouched. The session, the Files list and the Waveform editor move to that copy as one undo step.
+- **Plug-ins from one maker share one process,** which saves a lot of memory on sessions with many plug-ins. If a maker's plug-ins misbehave together, untick them under Effects > Plug-in Manager > Run together.
+
+## Faster
+
+- **Much less memory in big sessions.** The effects list was kept once per track and bus; it is now kept once. On a 32-track session the editor view went from about 3.8 GB to about 0.7 GB.
+- **Smooth zoom and scroll.** The wheel zooms and scrolls once per screen refresh, lanes keep their pictures between frames, and waveforms draw in one pass.
+- **Moving the playhead** or the time selection redraws only the timeline, not every panel.
+- **No more plug-in restarts** while you move around a session: the pictures drawn at the playhead borrow playback's plug-ins instead of starting their own, and plug-ins started ahead of Play keep the rate playback uses.
+
+## Fixed
+
+- **Save Audio As never saved,** in any format, and showed "Cannot read properties of null (reading 'resolve')". It saves again, and the Files list shows the new file in place of the old one.
+- **Sessions from the other editor played about 18 dB too loud.** Compressors with a sidechain input heard silence on it and never compressed. A plug-in's sidechain input now stays off until a key is actually routed to it, so this is fixed for every plug-in that has one.
+- **Phase shifter from .sesx sessions:** it now turns the channel the session set (not both alike, which changed nothing you could hear), keeps every point of the curve (up to 16), and follows the drawn curve without overshooting.
+- **The Waveform editor froze** ("effect update depth" error) when playback or recording reached the end of the file with the whole file on screen, which every new recording did.
+- **ASIO recording at higher sample rates stopped after a few seconds** when the interface's driver asked for a restart. Recording now restarts the input and fills the gap with silence, so the take stays in time.
+- **Unsaved Waveform edits and sessions:** a session now hears your unsaved edits even when the file was added after you edited it, and a clip comes in at the edited length. Dragging a recording's take into a session brings the edited file (a new file is saved first, and a note says where). Opening the take from the Files panel opens the file with your edits instead of the raw recording.
+- **Spectral selections** no longer jump when you drag past the top or bottom of the view, or into the other channel.
+- An "each_key_duplicate" error in Help > About, and a session file listed twice in the Files panel.
+
+## Changed
+
+- Selection edges can be dragged, and a loop follows a new selection while it plays.
+- Live edits keep 5.1 clip channels in 3D Space sessions.
+
+## Known issues
+
+- On ASIO, very small buffers at 88.2 or 96 kHz can make some interfaces' drivers ask for restarts, which you hear as short gaps. Use a larger buffer, or the driver's own setting, at high sample rates. Playback does not restart on its own yet; stop and play again.
+- A new file you have never saved can go into a session only by dragging its recording from the Files panel (which saves it first).
+- Files you switched away from in the Waveform editor with unsaved edits are heard in a session as saved until you open them again.
