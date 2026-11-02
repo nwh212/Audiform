@@ -38,6 +38,14 @@ describe("output format", () => {
     expect(sanitizeFormat({ kind: "m4a", aacBitrate: 999 }).aacBitrate).toBe(128);
   });
 
+  it("keeps a FLAC compression level from 0 to 8", () => {
+    expect(DEFAULT_FORMAT.flacLevel).toBe(5);
+    expect(sanitizeFormat({ kind: "flac", flacLevel: 8 }).flacLevel).toBe(8);
+    expect(sanitizeFormat({ kind: "flac", flacLevel: 0 }).flacLevel).toBe(0);
+    expect(sanitizeFormat({ kind: "flac", flacLevel: 12 }).flacLevel).toBe(5);
+    expect(sanitizeFormat({ kind: "flac", flacLevel: 2.5 }).flacLevel).toBe(5);
+  });
+
   it("estimates sizes and reads formats from names", () => {
     expect(estimateBytes({ ...DEFAULT_FORMAT, kind: "mp3" }, 60, src)).toBe(1_440_000);
     expect(estimateBytes(DEFAULT_FORMAT, 1, src)).toBe(288_000);

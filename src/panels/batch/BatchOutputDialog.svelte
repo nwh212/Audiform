@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import { PLATFORM } from "../../lib/platform";
-  import { AAC_BITRATES, extensionOf, formatAvailable, FORMAT_KINDS, MP3_BITRATES, type OutputFormat } from "../../app/output-format";
+  import { AAC_BITRATES, extensionOf, FLAC_DEFAULT_LEVEL, FLAC_LEVELS, formatAvailable, FORMAT_KINDS, MP3_BITRATES, type OutputFormat } from "../../app/output-format";
   import { effectiveTemplate, expandTemplate, type BatchSettings, type TagFields } from "./batch";
   import SampleSettingsDialog from "./SampleSettingsDialog.svelte";
 
@@ -60,7 +60,7 @@
       : s.format.kind === "m4a"
         ? `AAC ${s.format.aacBitrate} kbps`
         : s.format.kind === "flac"
-          ? "FLAC, lossless"
+          ? `FLAC, lossless, compression ${s.format.flacLevel}`
           : "WAV, uncompressed",
   );
 
@@ -177,6 +177,10 @@
           {:else if s.format.kind === "m4a"}
             <select bind:value={s.format.aacBitrate} aria-label="Kbps">
               {#each AAC_BITRATES as b (b)}<option value={b}>{b} kbps{b === 128 ? " (spoken word)" : b === 192 ? " (music)" : ""}</option>{/each}
+            </select>
+          {:else if s.format.kind === "flac"}
+            <select bind:value={s.format.flacLevel} aria-label="Compression" title="Every level is lossless. Higher levels make smaller files and take longer to write.">
+              {#each FLAC_LEVELS as l (l)}<option value={l}>Compression {l}{l === 0 ? " (fastest)" : l === FLAC_DEFAULT_LEVEL ? " (default)" : l === 8 ? " (smallest)" : ""}</option>{/each}
             </select>
           {/if}
         </div>

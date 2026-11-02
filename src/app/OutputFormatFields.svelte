@@ -4,13 +4,13 @@
   This file is part of Audiform, based on Altered Audio Editor.
 
   The format controls shared by Export Mixdown and Batch Convert:
-  format, sample rate, channels, then bit depth for WAV and FLAC or the
-  bit rate for MP3. "Same as source" keeps what the audio already is.
+  format, sample rate, channels, then bit depth for WAV and FLAC (and the
+  compression level for FLAC) or the bit rate for MP3. "Same as source" keeps what the audio already is.
 -->
 <script lang="ts">
   import { PLATFORM } from "../lib/platform";
   import { formatRate } from "../panels/files/format";
-  import { AAC_BITRATES, depthsFor, formatAvailable, FORMAT_KINDS, MP3_BITRATES, MP3_MAX_RATE, OUTPUT_RATES, type FormatKind, type OutputFormat } from "./output-format";
+  import { AAC_BITRATES, depthsFor, FLAC_DEFAULT_LEVEL, FLAC_LEVELS, formatAvailable, FORMAT_KINDS, MP3_BITRATES, MP3_MAX_RATE, OUTPUT_RATES, type FormatKind, type OutputFormat } from "./output-format";
 
   interface Props {
     format: OutputFormat;
@@ -112,6 +112,16 @@
         {/each}
       </select>
     </label>
+    {#if format.kind === "flac"}
+      <label title="Every level is lossless. Higher levels make smaller files and take longer to save; they play back the same.">
+        <span>Compression</span>
+        <select bind:value={format.flacLevel}>
+          {#each FLAC_LEVELS as l (l)}
+            <option value={l}>{l}{l === 0 ? " (fastest)" : l === FLAC_DEFAULT_LEVEL ? " (default)" : l === 8 ? " (smallest)" : ""}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
   {/if}
 </div>
 {#if lossy}

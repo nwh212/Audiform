@@ -25,6 +25,8 @@ export interface OutputFormat {
   mp3Quality: number;
   /** AAC kbps: 96, 128, 160 or 192. */
   aacBitrate: number;
+  /** FLAC compression, 0 (fastest) to 8 (smallest). Every level is lossless. */
+  flacLevel: number;
   /** Dither when writing fewer bits. On by default. */
   dither: boolean;
   /** Stereo to mono: how much of each side goes in, 0 to 1. */
@@ -52,6 +54,9 @@ export const OUTPUT_RATES = [8_000, 11_025, 16_000, 22_050, 32_000, 44_100, 48_0
 export const MP3_BITRATES = [32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] as const;
 /** Highest rate an MP3 carries. */
 export const MP3_MAX_RATE = 48_000;
+/** FLAC compression levels. Higher is smaller and slower to save; playback costs the same. */
+export const FLAC_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+export const FLAC_DEFAULT_LEVEL = 5;
 
 export const DEFAULT_FORMAT: OutputFormat = {
   kind: "wav",
@@ -62,6 +67,7 @@ export const DEFAULT_FORMAT: OutputFormat = {
   mp3Bitrate: 192,
   mp3Quality: 2,
   aacBitrate: 128,
+  flacLevel: FLAC_DEFAULT_LEVEL,
   dither: true,
   mixLeft: 0.5,
   mixRight: 0.5,
@@ -106,6 +112,7 @@ export function sanitizeFormat(raw: unknown): OutputFormat {
     mp3Bitrate: typeof v.mp3Bitrate === "number" && (MP3_BITRATES as readonly number[]).includes(v.mp3Bitrate) ? v.mp3Bitrate : 192,
     mp3Quality: typeof v.mp3Quality === "number" ? Math.min(9, Math.max(0, Math.round(v.mp3Quality))) : 2,
     aacBitrate: typeof v.aacBitrate === "number" && (AAC_BITRATES as readonly number[]).includes(v.aacBitrate) ? v.aacBitrate : 128,
+    flacLevel: typeof v.flacLevel === "number" && (FLAC_LEVELS as readonly number[]).includes(v.flacLevel) ? v.flacLevel : FLAC_DEFAULT_LEVEL,
     dither: v.dither !== false,
     mixLeft: unit(v.mixLeft),
     mixRight: unit(v.mixRight),

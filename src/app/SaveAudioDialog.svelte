@@ -32,7 +32,8 @@
 
 <script lang="ts">
   import OutputFormatFields from "./OutputFormatFields.svelte";
-  import { describeFormat, estimateBytes, extensionOf } from "./output-format";
+  import { PLATFORM } from "../lib/platform";
+  import { describeFormat, estimateBytes, extensionOf, formatAvailable, kindOfPath } from "./output-format";
 
   interface Props {
     init: SaveAudioInit;
@@ -75,6 +76,13 @@
     onDone({ path: `${dir}${sep}${stem}.${ext}`, format: { ...format }, markers });
   }
 
+  /** A typed extension picks the format, so "Episode.flac" saves as FLAC, not as whatever the Format box held. */
+  function typed(value: string) {
+    const kind = value.includes(".") ? kindOfPath(value.trim()) : null;
+    if (!kind || kind === format.kind || multi || !formatAvailable(kind, PLATFORM)) return;
+    format = { ...format, kind };
+  }
+
   async function browse() {
     const f = await onBrowse(folder);
     if (f) folder = f;
@@ -101,7 +109,7 @@
       <label class="line">
         <span>File name</span>
         <span class="row">
-          <input type="text" spellcheck="false" bind:value={name} bind:this={input} />
+          <input type="text" spellcheck="false" bind:value={name} bind:this={input} oninput={(e) => typed(e.currentTarget.value)} />
           <span class="ext">.{ext}</span>
         </span>
       </label>

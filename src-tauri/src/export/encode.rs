@@ -87,6 +87,8 @@ pub struct OutputFormat {
     pub mp3_quality: u8,
     /// AAC bit rate in kbps: 96, 128, 160 or 192.
     pub aac_bitrate: u16,
+    /// FLAC compression, 0 (fastest) to 8 (smallest). Every level is lossless.
+    pub flac_level: u8,
     /// Dither when writing fewer bits than the audio has. On unless turned off.
     pub dither: bool,
     /// Going from stereo to mono: how much of the left and right goes in,
@@ -106,6 +108,7 @@ impl Default for OutputFormat {
             mp3_bitrate: 192,
             mp3_quality: 2,
             aac_bitrate: 128,
+            flac_level: FLAC_DEFAULT_LEVEL,
             dither: true,
             mix_left: 0.5,
             mix_right: 0.5,
@@ -133,6 +136,7 @@ pub struct Resolved {
     pub mp3_bitrate: u16,
     pub mp3_quality: u8,
     pub aac_bitrate: u16,
+    pub flac_level: u8,
     pub dither: bool,
     /// Left and right weights for a stereo-to-mono fold.
     pub mix: [f32; 2],
@@ -234,6 +238,7 @@ impl OutputFormat {
             mp3_bitrate: self.mp3_bitrate,
             mp3_quality: self.mp3_quality.min(9),
             aac_bitrate: super::aac::nearest_bitrate(self.aac_bitrate),
+            flac_level: self.flac_level.min(FLAC_MAX_LEVEL),
             dither: self.dither,
             mix: [
                 self.mix_left.clamp(0.0, 1.0),
@@ -430,6 +435,43 @@ struct FlacOut {
 }
 
 const FLAC_BLOCK: usize = 4_096;
+/// The level used when none is chosen.
+pub const FLAC_DEFAULT_LEVEL: u8 = 5;
+pub const FLAC_MAX_LEVEL: u8 = 8;
+
+/// Encoder settings for a compression level, 0 to 8. Low levels use only
+/// simple predictors; high levels search longer ones and every stereo
+/// pairing. All stay within the FLAC subset, so any player reads them.
+pub(crate) fn flac_config(level: u8) -> flacenc::config::Encoder {
+    let mut cfg = flacenc::config::Encoder::default();
+    let level = level.min(FLAC_MAX_LEVEL);
+    cfg.block_size = FLAC_BLOCK;
+    let stereo = &mut cfg.stereo_coding;
+    match level {
+        0 | 3 => {
+            stereo.use_leftside = false;
+            stereo.use_rightside = false;
+            stereo.use_midside = false;
+        }
+        1 | 4 => {
+            stereo.use_leftside = false;
+            stereo.use_rightside = false;
+        }
+        _ => {}
+    }
+    let sub = &mut cfg.subframe_coding;
+    sub.use_lpc = level >= 3;
+    sub.qlpc.lpc_order = match level {
+        0..=3 => 6,
+        4..=6 => 8,
+        _ => 12,
+    };
+    // The last level also weighs more ways of splitting each block when it picks a predictor.
+    if level == FLAC_MAX_LEVEL {
+        sub.fixed.order_sel = flacenc::config::OrderSel::ApproxEnt { partitions: 32 };
+    }
+    cfg
+}
 
 /// The most bytes a block needs when its samples are stored as they are: every
 /// channel one bit wider than the samples (a stereo side channel needs it), plus headers.
@@ -538,9 +580,7 @@ impl Writer {
             }
             FormatKind::Flac => {
                 use flacenc::error::Verify;
-                let mut cfg = flacenc::config::Encoder::default();
-                cfg.block_size = FLAC_BLOCK;
-                let cfg = cfg
+                let cfg = flac_config(fmt.flac_level)
                     .into_verified()
                     .map_err(|e| EncodeError::Settings(format!("{e:?}")))?;
                 // Raw storage, for a block the usual settings would make larger.
@@ -875,6 +915,36 @@ mod tests {
             .map(|(a, b)| (a - b).abs())
             .fold(0f32, f32::max);
         assert!(err < 1e-5, "max error {err}");
+    }
+
+    /// Every compression level is lossless, and the top level is no larger than the lowest.
+    #[test]
+    fn flac_levels_all_read_back_the_same() {
+        use flacenc::error::Verify;
+        let dir = tempfile::tempdir().unwrap();
+        let data = sine(48_000, 2, 1.3);
+        let mut sizes = Vec::new();
+        for level in 0..=FLAC_MAX_LEVEL {
+            assert!(flac_config(level).into_verified().is_ok(), "level {level}");
+            let p = dir.path().join(format!("l{level}.flac"));
+            let fmt = OutputFormat {
+                kind: FormatKind::Flac,
+                bit_depth: Some(24),
+                flac_level: level,
+                ..Default::default()
+            };
+            write(&p, fmt, 48_000, 2, &data);
+            let (_, _, back) = read_all(&p);
+            assert_eq!(back.len(), data.len(), "level {level}");
+            let err = data
+                .iter()
+                .zip(&back)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0f32, f32::max);
+            assert!(err < 1e-5, "level {level}: max error {err}");
+            sizes.push(std::fs::metadata(&p).unwrap().len());
+        }
+        assert!(sizes[8] <= sizes[0], "sizes by level: {sizes:?}");
     }
 
     /// Loud, noisy 24-bit audio once made the FLAC encoder write one frame of 100 MB.
