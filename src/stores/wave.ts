@@ -83,6 +83,12 @@ export function noteTakeHome(take: string, file: string): void {
   takeHomes.set(pathKey(take), file);
 }
 
+/** Whether the set-aside file at `path` is a new one never saved. */
+export function parkedIsUntitled(path: string): boolean {
+  for (const [p, v] of parked) if (pathKey(p) === pathKey(path)) return v.untitled;
+  return false;
+}
+
 /** The takes recorded into the file at `home` (paths as kept, compare with `samePath`). */
 export function takesInto(home: string): string[] {
   return [...takeHomes].filter(([, h]) => pathKey(h) === pathKey(home)).map(([t]) => t);

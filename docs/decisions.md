@@ -2325,3 +2325,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: Save Audio As puts the new file in the Files list in place of the old one
 - The lead asked that after Save Audio As the Files panel show the newly named file where the old one was. A Waveform Save As did not touch the Files list.
 - Now: the old file's entry points at the new file and is measured again. A new file never saved is not listed, so the entry of the recording made into it takes the saved file instead (the take stays on disk, and a session using it is not changed). When neither is listed, or the new file is listed already, the list is left alone. Not an undo step, like the save itself. The take-to-file links follow the new name.
+
+## 2026-11-01: Dragging a take into a session brings its edited file
+- The lead dragged a recording's take from Files into a session and got the full unedited take; opening the same entry showed the edits. The edits live in the file the take was recorded into, and a new file never saved has no audio on disk for a session to play.
+- Now a dragged take whose file has unsaved edits goes in as that file. A file saved before goes in as it is, and the session hears the edits through its live copy. A new file never saved is saved first as a WAV (in the session's media folder when the session is saved, else beside the take, a number added when the name is taken); the Waveform editor and the Files entry move to it, so later edits reach the session too, and a notice says where it went.

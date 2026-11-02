@@ -265,6 +265,18 @@
    */
   async function placeOps(paths: string[], trackId: string | null, at: number, place: { index?: number; name?: string; asTracks?: boolean } = {}): Promise<{ ops: Op[]; clips: { id: string }[]; target: string } | null> {
     if (!session.current || paths.length === 0) return null;
+    // A take whose file has unsaved Waveform edits goes in as that file, edits and all.
+    const dir = session.path ? mediaDirOf(session.path, settings.current.mediaFolder) : null;
+    const resolved: string[] = [];
+    for (const p of paths) {
+      try {
+        resolved.push(await waveTools.editedForSession(p, dir));
+      } catch (e) {
+        showError(e);
+        resolved.push(p);
+      }
+    }
+    paths = resolved;
     const imported = await mediaPool.importPaths(paths, sessionHistory);
     await mediaPool.whenIdle();
     const doc = session.current;

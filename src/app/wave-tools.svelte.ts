@@ -25,7 +25,7 @@ import { peaks, session, transport } from "../stores/open-session";
 import { type ClipDoc, type EffectChainDoc, type Op, sessionEnd } from "../stores/session";
 import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
-import { closeWaveFile, editedHomeOf, moveTakeHomes, openWaveFile, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+import { closeWaveFile, editedHomeOf, moveTakeHomes, openWaveFile, parkedIsUntitled, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import { mediaPool } from "../stores/media";
 import type { ActionRegistry } from "./actions";
 import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
@@ -194,6 +194,35 @@ export function createWaveTools(deps: WaveToolsDeps) {
     mediaPool.repathCommand([{ id: it.id, path: to }], "Save Audio As")?.do();
     // Its length and format are the new file's now.
     mediaPool.retry(it.id);
+  }
+
+  /**
+   * The file to put in a session for `path`, dragged from Files. A take
+   * recorded into a file with unsaved edits stands for that file: one
+   * saved before goes in as it is (the session hears the edits through its
+   * live copy); a new one never saved is saved first, as a WAV in `dir`
+   * (else beside the take), and the Waveform editor and the Files list move
+   * to it, so later edits reach the session too.
+   */
+  async function editedForSession(path: string, dir: string | null): Promise<string> {
+    const home = editedHomeOf(path);
+    if (!home) return path;
+    const open = waveFile.current();
+    const untitled = open && samePath(open.path, home) ? open.untitled : parkedIsUntitled(home);
+    if (!untitled) return home;
+    if (!open || !samePath(open.path, home)) await openWaveFile(home);
+    const stem = home.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Recording";
+    const folder = dir ?? path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
+    const sep = folder.includes("\\") ? "\\" : "/";
+    let target = `${folder}${sep}${stem}.wav`;
+    for (let n = 2; (await pathsExist([target]))[0]; n++) target = `${folder}${sep}${stem} ${n}.wav`;
+    await saveWaveFile(target, null, DEFAULT_FORMAT);
+    const saved = waveFile.current()?.path ?? target;
+    listSavedAs(home, saved, true);
+    peaks.invalidate(saved);
+    exactSamples.forget(saved);
+    showNotice(`${stem} had unsaved edits, so it was saved as ${saved.split(/[\\/]/).pop()} and that went into the session.`);
+    return saved;
   }
 
   /** Saves the Waveform editor's file. Returns false if cancelled or failed. */
@@ -904,6 +933,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
     confirmWaveDiscard,
     openInWaveform,
     saveWave,
+    editedForSession,
     waveAmplify,
     applyWaveChain,
     register: registerWaveActions,
