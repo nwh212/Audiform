@@ -37,19 +37,17 @@ pub fn is_session_path(p: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION) || e.eq_ignore_ascii_case(OLD_EXTENSION))
 }
 
-/// Saves `session` to `path`. `extra_media` adds files listed in the
-/// Files panel that no clip uses yet, so they come back on open.
-pub fn save(
-    session: &Session,
-    path: &Path,
-    extra_media: &[MediaRef],
-) -> Result<Session, DocumentError> {
+/// Saves `session` to `path`. Only the media a clip uses is kept: files
+/// that were open in the Files panel but are not in the session stay out,
+/// so they do not come back when the session opens.
+pub fn save(session: &Session, path: &Path) -> Result<Session, DocumentError> {
     let mut s = session.clone();
-    for m in extra_media {
-        if !s.media.iter().any(|x| x.id == m.id) {
-            s.media.push(m.clone());
-        }
-    }
+    let used: std::collections::HashSet<Id> = s
+        .tracks
+        .iter()
+        .flat_map(|t| t.clips.iter().map(|c| c.media_id))
+        .collect();
+    s.media.retain(|m| used.contains(&m.id));
     let base = path.parent().unwrap_or(Path::new(""));
     for m in &mut s.media {
         m.relative_path = relative_to(&m.path, base);
@@ -249,7 +247,37 @@ pub fn find_recoverable(dir: &Path) -> Vec<Recoverable> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::model::new_id;
+    use crate::session::model::{new_id, ChannelLayout, Clip, Fade, Track};
+
+    /// A track with one clip on `media`, so a save keeps it.
+    fn use_media(s: &mut Session, media: Id) {
+        let mut t = Track::new("Host", ChannelLayout::Mono);
+        t.clips.push(Clip {
+            id: new_id(),
+            name: "clip".into(),
+            media_id: media,
+            start: 0,
+            source_in: 0,
+            source_out: 48_000,
+            gain_db: 0.0,
+            muted: false,
+            locked: false,
+            color: None,
+            fade_in: Fade::default(),
+            fade_out: Fade::default(),
+            envelopes: Vec::new(),
+            effects: Default::default(),
+            group: None,
+            looped: None,
+            stretch: None,
+            audio_type: None,
+            channel_mix: None,
+            reversed: false,
+            inverted: false,
+            invert_channel: None,
+        });
+        s.tracks.push(t);
+    }
 
     fn media(id: Id, path: PathBuf) -> MediaRef {
         MediaRef {
@@ -274,8 +302,9 @@ mod tests {
         let mut s = Session::new("Ep 1", 48_000);
         let id = new_id();
         s.media.push(media(id, wav.clone()));
+        use_media(&mut s, id);
         let file = show.join("ep1.altaudio");
-        let saved = save(&s, &file, &[]).unwrap();
+        let saved = save(&s, &file).unwrap();
         assert_eq!(
             saved.media[0].relative_path.as_deref(),
             Some(Path::new("Raw/host.wav"))
@@ -298,20 +327,28 @@ mod tests {
         let mut s = Session::new("Ep 2", 48_000);
         let id = new_id();
         s.media.push(media(id, dir.path().join("gone.wav")));
+        use_media(&mut s, id);
         let file = dir.path().join("ep2.altaudio");
-        save(&s, &file, &[]).unwrap();
+        save(&s, &file).unwrap();
         assert_eq!(open(&file).unwrap().missing, vec![id]);
     }
 
     #[test]
-    fn extra_media_is_saved_once() {
+    fn save_leaves_out_media_no_clip_uses() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = Session::new("Ep 3", 48_000);
         let a = media(new_id(), dir.path().join("a.wav"));
-        s.media.push(a.clone());
         let b = media(new_id(), dir.path().join("b.wav"));
-        let saved = save(&s, &dir.path().join("x.altaudio"), &[a, b]).unwrap();
-        assert_eq!(saved.media.len(), 2);
+        s.media.push(a.clone());
+        s.media.push(b);
+        use_media(&mut s, a.id);
+        let file = dir.path().join("x.altaudio");
+        let saved = save(&s, &file).unwrap();
+        assert_eq!(
+            saved.media.iter().map(|m| m.id).collect::<Vec<_>>(),
+            vec![a.id]
+        );
+        assert_eq!(open(&file).unwrap().session.media.len(), 1);
     }
 
     #[test]

@@ -93,7 +93,7 @@
   import { exactSamples } from "../stores/exact-samples";
   import { waveChannels } from "../panels/editor/wave-channels";
   import { pathsIgnoreCase, PLATFORM } from "../lib/platform";
-  import { SessionFiles, displayName, planOpen, type Choice } from "./session-files";
+  import { SessionFiles, displayName, planOpen, usedPaths, type Choice } from "./session-files";
   import { RECENT_SLOTS } from "./menus/model";
   import {
     sessionAutosave,
@@ -148,7 +148,7 @@
   } from "./core";
   import { isTauri } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import type { ChannelMixDoc, EffectChainDoc, EffectTarget, MediaRefDoc, SessionDoc } from "../stores/session";
+  import type { ChannelMixDoc, EffectChainDoc, EffectTarget, SessionDoc } from "../stores/session";
   import PendingPanel from "../panels/PendingPanel.svelte";
   import VoiceChainPanel from "../panels/voice-chain/VoiceChainPanel.svelte";
   import { addSlot, addSlotFirstFree, chainOf, newSlot, type MenuPlugin } from "../panels/voice-chain/chain";
@@ -814,16 +814,17 @@
   });
 
   /**
-   * Copies the audio the session uses from outside its folder into it,
-   * and points the session and the Files panel at the copies as one
-   * undoable step. `everything` includes library files.
+   * Copies the audio the session's clips use from outside its folder into
+   * it, and points the session and the Files panel at the copies as one
+   * undoable step. Files only open in the Files panel are left where they
+   * are. `everything` includes library files.
    */
   async function collectMedia(sessionFile: string, everything: boolean): Promise<number> {
     const doc = session.current;
     if (!doc) return 0;
     const pool = mediaPool.current.items.map((it) => ({ id: it.id, path: it.path }));
     const leave = everything || !settings.current.leaveLibraryFiles ? [] : libraries.current.libs.map((l) => l.dir);
-    const list = toCopy([...doc.media.map((m) => m.path), ...pool.map((p) => p.path)], sessionFile, leave, ignorePathCase);
+    const list = toCopy(usedPaths(doc), sessionFile, leave, ignorePathCase);
     const moved = await copyIntoSession(list, sessionFile);
     const plan = repointPlan(doc.media, pool, moved, ignorePathCase);
     const label = "Collect Session Media";
@@ -876,7 +877,7 @@
     onOpened: (doc) => onSessionOpened?.(doc),
     backend: {
       create: (options) => sessionNew<SessionDoc>(options),
-      save: (path, media, libs) => sessionSave<SessionDoc, MediaRefDoc>(path, media, libs, settings.current.backups ? settings.current.backupCount : 0),
+      save: (path, libs) => sessionSave<SessionDoc>(path, libs, settings.current.backups ? settings.current.backupCount : 0),
       open: (path) => sessionOpen<SessionDoc>(path),
       autosave: (media) => sessionAutosave(media),
       clearAutosave: () => sessionClearAutosave(),

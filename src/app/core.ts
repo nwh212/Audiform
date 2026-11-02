@@ -485,8 +485,8 @@ export function sessionNew<T>(options: NewSessionOptions = {}): Promise<SessionR
 }
 
 /** Saves the session. `backups` older copies are kept in a Backups folder beside it (0 keeps none). */
-export function sessionSave<T, M>(path: string | null, media: M[], libraries: string[], backups = 0): Promise<SessionResult<T>> {
-  return invoke<SessionResult<T>>("session_save", { path, media, libraries, backups });
+export function sessionSave<T>(path: string | null, libraries: string[], backups = 0): Promise<SessionResult<T>> {
+  return invoke<SessionResult<T>>("session_save", { path, libraries, backups });
 }
 
 export function sessionOpen<T>(path: string): Promise<SessionResult<T>> {
