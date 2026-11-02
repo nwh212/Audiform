@@ -661,9 +661,10 @@
   }
 
   /**
-   * The mouse wheel. Over the ruler and the overview it zooms the
-   * timeline; over the lanes it scrolls the tracks up and down; over the
-   * headers it zooms the tracks (as the track scrollbar does). Alt + wheel makes the track under the pointer taller or shorter,
+   * The mouse wheel. Over the ruler, the overview and the lanes it zooms
+   * the timeline (over the lanes only with "wheel zooms" on in Settings,
+   * else it scrolls the tracks up and down); over the headers it zooms
+   * the tracks (as the track scrollbar does). Alt + wheel makes the track under the pointer taller or shorter,
    * Alt + Shift + wheel scales the waveforms, Ctrl + wheel zooms the
    * timeline, Shift + wheel (or a sideways wheel) scrolls along it.
    */
@@ -727,13 +728,13 @@
       e.preventDefault();
       const d = e.shiftKey ? e.deltaY : e.deltaX;
       queueWheel(0, d, Math.max(0, e.clientX - left), overRuler);
-    } else if (overRuler || e.ctrlKey) {
-      // Over the ruler (and the overview above it) the wheel zooms in time;
-      // Ctrl+wheel zooms anywhere.
+    } else if (overRuler || e.ctrlKey || settings.current.wheelZooms) {
+      // Over the ruler (and the overview above it) and the lanes the wheel
+      // zooms in time; Ctrl+wheel zooms anywhere.
       zoomTime();
     }
-    // Over the lanes and headers the wheel scrolls the tracks, which the
-    // scroller does by itself. The track scrollbar zooms them (onVbarWheel).
+    // With "wheel zooms" off the wheel over the lanes scrolls the tracks,
+    // which the scroller does by itself. The track scrollbar zooms them (onVbarWheel).
   }
 
   /**
