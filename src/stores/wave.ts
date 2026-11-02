@@ -69,6 +69,32 @@ function adopt(doc: WaveDocRaw<SessionDoc>): void {
  */
 const parked = new Map<string, { history: StashedHistory; dirty: boolean; format: string; bitDepth: number | null; untitled: boolean }>();
 
+/**
+ * Takes recorded in the Waveform editor, by the take's path, and the file
+ * each went into. The take is listed in the Files panel on its own, so
+ * opening it from there could hide the file holding the edits.
+ */
+const takeHomes = new Map<string, string>();
+
+const pathKey = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+
+/** Remembers that the take at `take` was recorded into the file at `file`. */
+export function noteTakeHome(take: string, file: string): void {
+  takeHomes.set(pathKey(take), file);
+}
+
+/**
+ * The file a take was recorded into, while that file has unsaved edits
+ * (open now or set aside). Null when there is none, or it has no edits left.
+ */
+export function editedHomeOf(take: string): string | null {
+  const home = takeHomes.get(pathKey(take));
+  if (!home || pathKey(home) === pathKey(take)) return null;
+  if (fileValue && pathKey(fileValue.path) === pathKey(home)) return waveHistory.current.dirty ? fileValue.path : null;
+  for (const [p, v] of parked) if (pathKey(p) === pathKey(home)) return v.dirty ? p : null;
+  return null;
+}
+
 /** Names of set-aside files with unsaved edits. */
 /** The paths of the files set aside with unsaved edits. */
 export function parkedUnsavedPaths(): string[] {

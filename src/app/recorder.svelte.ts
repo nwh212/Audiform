@@ -25,7 +25,7 @@ import { prefs } from "../stores/prefs";
 import { inputLevels, liveTakes, LiveWave, recording } from "../stores/record";
 import type { Op, SessionDoc, TrackDoc } from "../stores/session";
 import { settings } from "../stores/settings";
-import { wave, waveFile, waveTransport } from "../stores/wave";
+import { noteTakeHome, wave, waveFile, waveTransport } from "../stores/wave";
 
 /** What recording needs from the rest of the app. */
 export interface RecorderDeps {
@@ -371,8 +371,14 @@ export function createRecorder(deps: RecorderDeps) {
       if (t.mode === "wave") {
         const d = wave.current;
         if (!d) return;
-        const r = insertFile(d, t.at, media(usable[0]!), "Take", uuid);
-        if (r && (await waveEdit("Record", r.op))) waveSetSelection([t.at, t.at + r.length], t.at);
+        const m = media(usable[0]!);
+        const r = insertFile(d, t.at, m, "Take", uuid);
+        if (r && (await waveEdit("Record", r.op))) {
+          waveSetSelection([t.at, t.at + r.length], t.at);
+          // The take is listed in Files on its own; opening it from there offers this file, edits and all.
+          const home = waveFile.current();
+          if (home) noteTakeHome(m.path, home.path);
+        }
         return;
       }
       const ops: Op[] = [];

@@ -25,7 +25,7 @@ import { peaks, session, transport } from "../stores/open-session";
 import { type ClipDoc, type EffectChainDoc, type Op, sessionEnd } from "../stores/session";
 import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
-import { closeWaveFile, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
+import { closeWaveFile, editedHomeOf, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
 import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
@@ -162,6 +162,23 @@ export function createWaveTools(deps: WaveToolsDeps) {
 
   /** Opens a file in the Waveform editor and shows it. */
   async function openInWaveform(path: string) {
+    // A take recorded into a file that still has unsaved edits: opening the
+    // take alone would show the raw recording and hide those edits.
+    const home = editedHomeOf(path);
+    if (home) {
+      const nameOf = (p: string) => p.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? p;
+      const v = await ask(
+        "Open the edited file?",
+        `${nameOf(path)} was recorded into ${nameOf(home)}, which has unsaved edits. Open ${nameOf(home)} with your edits, or the recording on its own as it came in?`,
+        [
+          { label: `Open ${nameOf(home)}`, value: "home", primary: true },
+          { label: "Open the Recording", value: "take" },
+          { label: "Cancel", value: "cancel" },
+        ],
+      );
+      if (v === "cancel") return;
+      if (v === "home") path = home;
+    }
     // The file open now is set aside with its edits, not closed.
     await transport.stop();
     try {
