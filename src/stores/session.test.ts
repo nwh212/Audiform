@@ -141,6 +141,25 @@ describe("view changes", () => {
     }
   });
 
+  it("say nothing when the view is set to where it already is", async () => {
+    const { store } = setup();
+    await store.load();
+    const views = vi.fn();
+    store.subscribeView(views);
+    store.setView(zoomed());
+    expect(views).toHaveBeenCalledTimes(2);
+    // Following the playhead at the end of a file asks for the same scroll
+    // again and again; a listener that answers by setting it once more must
+    // not hear of it, or it runs without end.
+    let again = 0;
+    store.subscribeView(() => {
+      if (again++ < 5) store.setView(zoomed());
+    });
+    store.setView({ ...zoomed() });
+    expect(views).toHaveBeenCalledTimes(2);
+    expect(again).toBe(1);
+  });
+
   it("follow a loaded, undone or redone document", async () => {
     const { store, stack } = setup();
     await store.load();

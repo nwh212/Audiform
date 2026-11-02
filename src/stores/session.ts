@@ -838,6 +838,10 @@ export class SessionStore {
    */
   setView(view: ViewDoc): void {
     if (!this.doc) return;
+    // The same place again tells no one. Following the playhead at the end
+    // of a file asks to scroll where the view already is (it can go no
+    // further); telling the listeners ran the follow again, without end.
+    if (sameView(this.doc.view, view)) return;
     this.doc = { ...this.doc, view };
     this.notifyView(view);
     clearTimeout(this.viewTimer);
