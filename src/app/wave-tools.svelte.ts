@@ -15,7 +15,10 @@ import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloCh
 import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
 import { embedList } from "../panels/markers/chapters";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
-import { chainOf } from "../panels/voice-chain/chain";
+import { addSlot, chainOf } from "../panels/voice-chain/chain";
+import { effectWindowRequest, trialSlot } from "../panels/voice-chain/effect-window";
+import { sharedCatalog } from "../stores/fx-catalog";
+import { freshCopy, isPlugin, type LastApplied, repeatName } from "./repeat-last";
 import { editor } from "../stores/editor";
 import { exactSamples } from "../stores/exact-samples";
 import { peaks, session, transport } from "../stores/open-session";
@@ -24,7 +27,7 @@ import { settings } from "../stores/settings";
 import { type TransportStore } from "../stores/transport";
 import { closeWaveFile, openWaveFile, saveWaveFile, savesInPlace, spectralSelection, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import type { ActionRegistry } from "./actions";
-import { exportEmbedChapters, pathsExist, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
+import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
 import type { DockController } from "./docking/dock";
 import { DEFAULT_FORMAT, kindOfPath, type OutputFormat } from "./output-format";
 import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
@@ -244,7 +247,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
     const pending = chainOf(wave.current?.tracks[0]?.effects);
     if (pending.enabled && pending.slots.some((x) => x.enabled)) {
       try {
-        if (!(await applyWaveChain(pending, true))) return false;
+        if (!(await applyWaveChain(pending, true, false))) return false;
       } catch (e) {
         showError(e);
         return false;
@@ -338,8 +341,14 @@ export function createWaveTools(deps: WaveToolsDeps) {
     await waveEdit(`Amplify ${db > 0 ? "+" : ""}${db.toFixed(1)} dB`, amplifyRange(d, r[0], r[1], db, uuid), r);
   }
 
-  /** Writes the Waveform preview chain into the selection (or the whole file), then clears the preview. */
-  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false): Promise<boolean> {
+  /** The Audio FX last applied into a file, for Repeat Last Command (Shift+R, Ctrl+R). */
+  let lastApplied: LastApplied | null = null;
+
+  /**
+   * Writes the Waveform preview chain into the selection (or the whole file), then clears the preview.
+   * `remember` keeps it for Repeat Last Command; Save writing the pending preview does not count.
+   */
+  async function applyWaveChain(chain: EffectChainDoc, wholeFile = false, remember = true): Promise<boolean> {
     const d = wave.current;
     const r = wholeFile && d ? clampRange(d, 0, sessionEnd(d)) : waveAll();
     const t = d?.tracks[0];
@@ -382,12 +391,67 @@ export function createWaveTools(deps: WaveToolsDeps) {
       return false;
     }
     await waveEdit(label, replaceRange(wave.current ?? d, res.start, res.end, res.media, label, uuid), [res.start, res.end]);
+    if (remember) await rememberApplied(chain);
     // What was applied leaves the preview; anything else in it stays.
     const now = wave.current?.tracks[0]?.effects;
     const rest = (now?.slots ?? []).filter((x) => !chain.slots.some((y) => y.id === x.id));
     await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: rest.length ? { ...chainOf(now), slots: rest } : chainOf(null) });
     if (!wholeFile) showNotice(`${label}: done. Undo takes it back.`);
     return true;
+  }
+
+  /**
+   * Keeps what was just applied. A plug-in's settings live in its running
+   * plug-in until saved, so they are read now, while it still runs.
+   */
+  async function rememberApplied(chain: EffectChainDoc) {
+    const slots = await Promise.all(chain.slots.map(async (s) => (isPlugin(s) ? { ...s, plugin_state: (await pluginState(s.id).catch(() => null)) ?? s.plugin_state ?? null } : s)));
+    let catalog: { id: string; name: string }[] = [];
+    try {
+      catalog = await sharedCatalog();
+    } catch {
+      // Without the list the menu says "Effect"; the repeat still works.
+    }
+    const names = new Map(catalog.map((e) => [e.id, e.name] as const));
+    const kept = { ...chain, slots };
+    lastApplied = { chain: freshCopy(kept, uuid), name: repeatName(kept, names) };
+    actions.invalidate();
+  }
+
+  /**
+   * Repeat Last Command. Shift+R applies the last Audio FX again, set as it
+   * was, to the selection or the whole file. Ctrl+R (`dialog`) puts it back
+   * on the file with its window open, to adjust before Apply.
+   */
+  async function repeatLast(dialog: boolean) {
+    const last = lastApplied;
+    const t = wave.current?.tracks[0];
+    if (!last || !t) return;
+    const chain = freshCopy(last.chain, uuid);
+    if (!dialog) {
+      try {
+        await applyWaveChain(chain);
+      } catch (e) {
+        showError(e);
+      }
+      return;
+    }
+    let next: EffectChainDoc | null = chainOf(t.effects);
+    for (const s of chain.slots) next = next && addSlot(next, s);
+    if (!next) {
+      showNotice("The preview chain is full: it holds 16 effects. Close an effect window first.");
+      return;
+    }
+    await wave.apply({ op: "set_effects", target: { kind: "track", id: t.id }, chain: next });
+    const only = chain.slots.length === 1 ? chain.slots[0] : undefined;
+    if (only) {
+      trialSlot.set(only.id);
+      effectWindowRequest.set(only.id);
+      showNotice(`${last.name}: set as you last applied it. You hear it on the file while its window is open; Apply writes it in.`);
+    } else {
+      dock.show("voice-chain");
+      showNotice(`${last.name}: back in the preview, set as you last applied it. Apply in the Audio FX panel writes it in.`);
+    }
   }
 
   /** Spectral edit on the current spectral selection: turn it down by `db` (-120 removes it), or repair it. */
@@ -642,6 +706,20 @@ export function createWaveTools(deps: WaveToolsDeps) {
         },
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,
+      }),
+      ov(waveIsOpen, {
+        id: "edit.repeat-last",
+        run: () => repeatLast(false),
+        label: () => (lastApplied ? `Repeat ${lastApplied.name}` : null),
+        enabled: () => lastApplied !== null && exporting() === null,
+        reason: () => (lastApplied ? "Wait for the current job to finish." : "Apply an effect or plug-in to the file first."),
+      }),
+      ov(waveIsOpen, {
+        id: "edit.repeat-last-dialog",
+        run: () => repeatLast(true),
+        label: () => (lastApplied ? `Repeat ${lastApplied.name}...` : null),
+        enabled: () => lastApplied !== null && exporting() === null,
+        reason: () => (lastApplied ? "Wait for the current job to finish." : "Apply an effect or plug-in to the file first."),
       }),
       ov(waveIsOpen, {
         id: "fx.silence",

@@ -2278,3 +2278,13 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - The lead's curve had 13 points; Phase Curve held 8, so five were thinned away and the shape changed. Phase Curve now holds 16 points (`p9_freq` to `p16_phase`; older sessions keep what they have).
 - Imported curves now join their points with straight lines. A drawn curve that jumps from +180° to -180° made the smooth curve overshoot to 240° and beyond.
 - Tests: Left only cancels a centered tone at 180° in mono while Both channels does not; all 16 points count; the lead's 13-point settings come across whole, on the left channel.
+
+## 2026-11-01: Recording keeps going when an ASIO driver asks for a restart
+- The lead set the SSL interface to 88.2 kHz and could not record on ASIO. The log showed every take open at 88200 Hz and, two or three seconds in, the driver asking for a reset ("Stream reset was requested by the ASIO driver"). Audiform only logged the request. A driver that asks for a reset expects the program to stop the stream and start it again, and can stop sending sound until it does.
+- Now the recorder does that: its thread stops the input (and the monitor, which shares the ASIO driver), starts both again with the same settings, and fills the time they were down with silence so the take stays in time with the session. If the driver comes back at another sample rate, the take stops with a message saying so, instead of writing sound at the wrong speed.
+- Not yet done: playback answers the same request the same way. The lead's log shows it during playback at 48 kHz too; it is next if playback cuts out.
+
+## 2026-11-01: Repeat Last Command in the Waveform editor
+- The lead asked for Shift+R to apply the last effect or plug-in again with the same settings, and Ctrl+R to open it again. Both were on the Edit menu with their shortcuts but not built.
+- Every Apply of Audio FX into a file (the effect window's Apply or the panel's) is kept; Save writing the preview into the file is not. A plug-in's settings are read from the running plug-in at that moment, since they live there until saved. Shift+R applies a copy (new ids, so a plug-in starts from those settings) to the selection or the whole file, as one undo step. Ctrl+R puts the copy on the file with its window open (a whole chain goes back into the preview, with the Audio FX panel shown), to adjust before Apply. The menu names it: Repeat Parametric EQ.
+- Kept for the session only. Amplify, Normalize and the other one-shot commands are not repeated yet.

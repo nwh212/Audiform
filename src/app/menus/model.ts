@@ -183,9 +183,11 @@ export const MENUS: readonly Menu[] = [
         item("edit.select-to-end", "Playhead to End"),
       ]),
       item("edit.find", "Find..."),
-      item("edit.repeat-last", "Repeat Last Command", { pending: LATER }),
+      item("edit.repeat-last", "Repeat Last Command", {
+        pending: "Works in the Waveform editor, after an effect is applied.",
+      }),
       item("edit.repeat-last-dialog", "Repeat Last Command Dialog", {
-        pending: LATER,
+        pending: "Works in the Waveform editor, after an effect is applied.",
       }),
       sub("Markers", [
         item("edit.marker.cue", "Add Cue Marker"),
