@@ -787,13 +787,17 @@ fn vox_strip_params(text: &str) -> Option<(std::collections::BTreeMap<String, f6
 const PHASE_SHIFTER_ID: &str = "7354704a-d87c-11e0-b05b-763c4824019b";
 
 /// Phase Curve settings from that effect's saved settings (base64 of
-/// little-endian 32-bit floats). Read from the tester's sessions: the
-/// sample rate first; the low and high ends of the frequency axis at 6
-/// and 7, as shares of half the sample rate; the number of points at 10;
-/// then from 11 each point as two numbers from 0 to 1: where it sits
-/// along the axis (taken as a log scale) and its phase (0.5 is 0°, the
-/// ends ±180°). More points than Phase Curve holds are thinned evenly,
-/// keeping the first and last.
+/// little-endian 32-bit floats). Read from the tester's and the lead's
+/// sessions: the sample rate first; the channel it turns at 1 (0 left,
+/// 1 right: that effect turns one channel against the other, never both
+/// alike, which would leave them in step); the low and high ends of the
+/// frequency axis at 6 and 7, as shares of half the sample rate; the
+/// number of points at 10; then from 11 each point as two numbers from 0
+/// to 1: where it sits along the axis (taken as a log scale) and its
+/// phase (0.5 is 0°, the ends ±180°). The points are joined by straight
+/// lines: a smooth curve overshoots past ±180° where a drawn curve jumps
+/// from one end to the other. More points than Phase Curve holds are
+/// thinned evenly, keeping the first and last.
 fn phase_curve_params(text: &str) -> Option<std::collections::BTreeMap<String, f64>> {
     use crate::dsp::effects::phase_curve::{FREQ_KEYS, MAX_POINTS, PHASE_KEYS};
     let raw = altered_plughost::protocol::base64_decode(text)?;
@@ -827,6 +831,10 @@ fn phase_curve_params(text: &str) -> Option<std::collections::BTreeMap<String, f
     };
     let mut out = std::collections::BTreeMap::new();
     out.insert("points".to_string(), keep.len() as f64);
+    out.insert("spline".to_string(), 0.0);
+    // Phase Curve's Channel: 1 is Left only, 2 is Right only.
+    let right = f.get(1).is_some_and(|c| *c >= 0.5);
+    out.insert("channels".to_string(), if right { 2.0 } else { 1.0 });
     for (i, (hz, deg)) in keep.iter().enumerate() {
         out.insert(FREQ_KEYS[i].to_string(), (hz * 10.0).round() / 10.0);
         out.insert(PHASE_KEYS[i].to_string(), (deg * 10.0).round() / 10.0);
@@ -1805,7 +1813,21 @@ mod tests {
             p["p2_freq"]
         );
         assert!((p["p2_phase"] - 81.6).abs() < 0.2, "{}", p["p2_phase"]);
+        // That session turned the right channel, with straight lines between points.
+        assert_eq!((p["channels"], p["spline"]), (2.0, 0.0));
         assert!(phase_curve_params("bm90IGEgY2h1bms=").is_none());
+    }
+
+    /// The lead's session: 13 points, turning the left channel. Every point
+    /// comes across, including the pairs that jump from +180° to -180°.
+    #[test]
+    fn keeps_every_point_of_a_long_phase_curve() {
+        let p = phase_curve_params("AEQsRwAAAADEH349ED74PAAAAAAAAIA/uMVtOgAAgD8AAAAAAAAAAAAAUEG5xW06AACUPnxyOD4AAJQ+f7BxPgAAHj//lRc/AAAePypbHD8AAEk/VSAhPwAAvD6iJTM/AAC8PjqROj8AAIA/6Rg7PwAAAID9wUY/AACAP6xJRz8AAACAsltRPwAAIT8AAIA/AAAiPw==").unwrap();
+        assert_eq!(p["points"], 13.0);
+        assert_eq!(p["channels"], 1.0, "left only");
+        let phases: Vec<f64> = (1..=13).map(|i| p[&format!("p{i}_phase")]).collect();
+        assert_eq!(&phases[7..11], &[180.0, -180.0, 180.0, -180.0]);
+        assert_eq!(p["p13_freq"], 22_050.0);
     }
 
     #[test]

@@ -6,14 +6,14 @@
   Phase Curve on a graph: frequency across (logarithmic or linear,
   20 Hz to 20 kHz), the phase turn up and down (±180° or ±360°). Drag a
   point to move it; click the curve or empty space to add one (up to
-  eight); right-click or double-click a point to remove it (two always
+  sixteen); right-click or double-click a point to remove it (two always
   stay). Below: Spline Curves, Reset, and the scale, range, channel and
   FFT size. Every change is one undoable step.
 -->
 <script lang="ts">
   import type { EffectInfo, EffectParamInfo } from "../../app/core";
   import type { EffectSlotDoc } from "../../stores/session";
-  import { addPoint, curveAt, curvePoints, freqKey, phaseKey, rangeOf, removePoint } from "./phase-curve";
+  import { addPoint, curveAt, curvePoints, freqKey, MAX_POINTS, phaseKey, rangeOf, removePoint } from "./phase-curve";
   import { freqTicks, xOf } from "./graph";
   import { paramValue } from "./chain";
 
@@ -183,7 +183,7 @@
   </svg>
   {#if tip}<div class="tip" style:left="{tip.x}px" style:top="{tip.y}px">{tip.text}</div>{/if}
   <div class="row">
-    <p class="hint how">Click to add a point (up to 8), drag to move it, right-click to remove it.</p>
+    <p class="hint how">Click to add a point (up to {MAX_POINTS}), drag to move it, right-click to remove it.</p>
     <label class="check"><input type="checkbox" checked={spline} onchange={(e) => setCtl("spline", e.currentTarget.checked ? 1 : 0, "Spline Curves")} /> Spline Curves</label>
     <button type="button" class="reset" title="Reset: a flat curve at 0°" aria-label="Reset" onclick={reset}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>

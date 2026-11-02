@@ -2272,3 +2272,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - Now only the main input is turned on at load, as VST3 expects of a host that routes nothing to the extra inputs. When a key arrives the host turns them on (the plug-in is switched off and on around it, which VST3 requires, so a tail is lost then), and turns them off again after a second without one.
 - The test plug-in now keys from its own input while its sidechain input is off, like a compressor, and a host test checks that a plug-in with no key routed hears its own input.
 - Not compiled here; CI is the check. The lead's next mixdown of the same session is the real one.
+
+## 2026-11-01: Phase Curve from a .sesx turns one channel, keeps every point
+- The lead found an imported phase shifter's big turns barely showed on the Phase Wheel. The imported Phase Curve was set to Both channels: turning both sides by the same angle leaves them in step, so left against right did not change. The other editor's phase shifter turns one channel against the other. Its saved settings carry the channel at position 1 (0 left, 1 right, read from the lead's session and the tester's; not confirmed against that editor's window), which the importer now reads.
+- The lead's curve had 13 points; Phase Curve held 8, so five were thinned away and the shape changed. Phase Curve now holds 16 points (`p9_freq` to `p16_phase`; older sessions keep what they have).
+- Imported curves now join their points with straight lines. A drawn curve that jumps from +180° to -180° made the smooth curve overshoot to 240° and beyond.
+- Tests: Left only cancels a centered tone at 180° in mono while Both channels does not; all 16 points count; the lead's 13-point settings come across whole, on the left channel.

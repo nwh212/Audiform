@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 //! Phase Curve: turns the phase of each frequency by its own angle, set
-//! by a curve through up to eight points (frequency, angle). For
+//! by a curve through up to sixteen points (frequency, angle). For
 //! restoration: lining up a second mic that is out of phase only in some
 //! frequencies, or undoing the phase smear of a filter. The level of
 //! every frequency stays the same.
@@ -27,21 +27,40 @@ use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 
 use super::{choice, num, toggle, EffectInfo, ParamInfo, Params, Processor};
 
-/// Most points the curve takes.
-pub const MAX_POINTS: usize = 8;
+/// Most points the curve takes. Sixteen, so a curve drawn in the other
+/// editor (13 points in one of the lead's sessions) comes across whole.
+pub const MAX_POINTS: usize = 16;
 
 pub const FREQ_KEYS: [&str; MAX_POINTS] = [
     "p1_freq", "p2_freq", "p3_freq", "p4_freq", "p5_freq", "p6_freq", "p7_freq", "p8_freq",
+    "p9_freq", "p10_freq", "p11_freq", "p12_freq", "p13_freq", "p14_freq", "p15_freq", "p16_freq",
 ];
 pub const PHASE_KEYS: [&str; MAX_POINTS] = [
-    "p1_phase", "p2_phase", "p3_phase", "p4_phase", "p5_phase", "p6_phase", "p7_phase", "p8_phase",
+    "p1_phase",
+    "p2_phase",
+    "p3_phase",
+    "p4_phase",
+    "p5_phase",
+    "p6_phase",
+    "p7_phase",
+    "p8_phase",
+    "p9_phase",
+    "p10_phase",
+    "p11_phase",
+    "p12_phase",
+    "p13_phase",
+    "p14_phase",
+    "p15_phase",
+    "p16_phase",
 ];
 const GROUPS: [&str; MAX_POINTS] = [
     "Point 1", "Point 2", "Point 3", "Point 4", "Point 5", "Point 6", "Point 7", "Point 8",
+    "Point 9", "Point 10", "Point 11", "Point 12", "Point 13", "Point 14", "Point 15", "Point 16",
 ];
 /// Where unused points start, spread across the range.
 const SPREAD: [f64; MAX_POINTS] = [
-    20.0, 20_000.0, 100.0, 500.0, 1_000.0, 2_000.0, 5_000.0, 10_000.0,
+    20.0, 20_000.0, 100.0, 500.0, 1_000.0, 2_000.0, 5_000.0, 10_000.0, 50.0, 200.0, 300.0, 700.0,
+    1_500.0, 3_000.0, 7_000.0, 15_000.0,
 ];
 
 pub const FFT_SIZES: [usize; 7] = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
@@ -399,6 +418,53 @@ mod tests {
         }
         assert!((peak - 0.5).abs() < 0.02, "level kept: {peak}");
         assert!(err < 0.02, "a quarter turn: error {err}");
+    }
+
+    /// Left only turns one side against the other: at 180° the two sides of
+    /// a centered tone cancel in mono. Both channels alike leaves them in step.
+    #[test]
+    fn one_channel_turns_against_the_other() {
+        let rate = 48_000u32;
+        let mono_level = |channels: f64| {
+            let p = params(&[
+                ("points", 2.0),
+                ("range", 1.0),
+                ("p1_freq", 20.0),
+                ("p1_phase", 180.0),
+                ("p2_freq", 20_000.0),
+                ("p2_phase", 180.0),
+                ("channels", channels),
+                ("fft", 1.0),
+            ]);
+            let mut fx = PhaseCurve::new(&p, rate);
+            let hz = 700.0f32;
+            let mut buf: Vec<f32> = (0..48_000)
+                .flat_map(|i| {
+                    let v = (std::f32::consts::TAU * hz * i as f32 / rate as f32).sin() * 0.5;
+                    [v, v]
+                })
+                .collect();
+            fx.process(&mut buf);
+            let mut peak = 0f32;
+            for f in buf[40_000..].chunks(2) {
+                peak = peak.max((f[0] + f[1]).abs());
+            }
+            peak
+        };
+        assert!(mono_level(1.0) < 0.02, "left only: {}", mono_level(1.0));
+        assert!(mono_level(0.0) > 0.9, "both alike: {}", mono_level(0.0));
+    }
+
+    #[test]
+    fn sixteen_points_all_count() {
+        let mut list = vec![("points", 16.0)];
+        for (i, (f, a)) in FREQ_KEYS.iter().zip(PHASE_KEYS).enumerate() {
+            list.push((*f, 100.0 * (i + 1) as f64));
+            list.push((a, if i == 15 { 90.0 } else { 0.0 }));
+        }
+        let pts = points(&params(&list));
+        assert_eq!(pts.len(), 16);
+        assert_eq!(pts[15], (1_600.0, 90.0));
     }
 
     #[test]

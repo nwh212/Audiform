@@ -10,15 +10,15 @@
 import type { EffectSlotDoc } from "../../stores/session";
 
 export const PHASE_CURVE = "altaudio.phase_curve";
-export const MAX_POINTS = 8;
+export const MAX_POINTS = 16;
 export const freqKey = (i: number) => `p${i + 1}_freq`;
 export const phaseKey = (i: number) => `p${i + 1}_phase`;
 
 /** Default spots for each point, matching the core's. */
-const SPREAD = [20, 20_000, 100, 500, 1_000, 2_000, 5_000, 10_000];
+const SPREAD = [20, 20_000, 100, 500, 1_000, 2_000, 5_000, 10_000, 50, 200, 300, 700, 1_500, 3_000, 7_000, 15_000];
 
 export interface CurvePoint {
-  /** Which point (0 to 7): its controls are `p{index + 1}_freq` and `_phase`. */
+  /** Which point (0 to 15): its controls are `p{index + 1}_freq` and `_phase`. */
   index: number;
   hz: number;
   deg: number;
@@ -74,7 +74,7 @@ export function curveAt(pts: readonly CurvePoint[], spline: boolean, hz: number)
   return (2 * t3 - 3 * t2 + 1) * y1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * y2 + (t3 - t2) * m2;
 }
 
-/** The control changes that add a point (the next unused one) at `hz`, `deg`. Null when all eight are in use. */
+/** The control changes that add a point (the next unused one) at `hz`, `deg`. Null when all sixteen are in use. */
 export function addPoint(slot: EffectSlotDoc, hz: number, deg: number): Record<string, number> | null {
   const n = pointCount(slot);
   if (n >= MAX_POINTS) return null;

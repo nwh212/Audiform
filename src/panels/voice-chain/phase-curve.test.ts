@@ -32,7 +32,8 @@ describe("Phase Curve", () => {
 
   it("adds and removes points", () => {
     expect(addPoint(slot({ points: 2 }), 700, 45)).toEqual({ points: 3, p3_freq: 700, p3_phase: 45 });
-    expect(addPoint(slot({ points: 8 }), 700, 45)).toBeNull();
+    expect(addPoint(slot({ points: 8 }), 700, 45)).toEqual({ points: 9, p9_freq: 700, p9_phase: 45 });
+    expect(addPoint(slot({ points: 16 }), 700, 45)).toBeNull();
     // Removing point 1 of 3: point 3 takes its place.
     expect(removePoint(slot({ points: 3, p3_freq: 900, p3_phase: 10 }), 0)).toEqual({ points: 2, p1_freq: 900, p1_phase: 10 });
     expect(removePoint(slot({ points: 2 }), 0)).toBeNull();
