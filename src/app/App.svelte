@@ -2492,8 +2492,10 @@
       init={open.init}
       onBrowse={(from) => exportPickFolder(from || null, "Save Audio In")}
       onDone={(v) => {
+        // Taken before clearing: `open` follows `saveAudio`, so it is null after.
+        const r = saveAudio?.resolve;
         saveAudio = null;
-        open.resolve(v);
+        r?.(v);
       }}
     />
   {/await}
