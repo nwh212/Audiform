@@ -848,16 +848,24 @@ fn run(
     };
     let mut tap = LiveTap::new(&targets, channels);
     // Two seconds of headroom between the device and the disk.
-    let (producer, mut consumer) = RingBuffer::<f32>::new((rate as usize * channels * 2).max(8192));
-    let stream = match format {
-        SampleFormat::F32 => build::<f32>(&dev, config, producer, shared.clone()),
-        SampleFormat::I16 => build::<i16>(&dev, config, producer, shared.clone()),
-        SampleFormat::I32 => build::<i32>(&dev, config, producer, shared.clone()),
-        SampleFormat::U16 => build::<u16>(&dev, config, producer, shared.clone()),
-        other => Err(format!("Unsupported input sample format: {other}")),
+    let ring = (rate as usize * channels * 2).max(8192);
+    // Set when the driver asks for the stream to be started again.
+    let reset = Arc::new(AtomicBool::new(false));
+    let open = |producer: Producer<f32>| -> Result<cpal::Stream, String> {
+        let (c, s, r) = (config.clone(), shared.clone(), reset.clone());
+        let stream = match format {
+            SampleFormat::F32 => build::<f32>(&dev, c, producer, s, r),
+            SampleFormat::I16 => build::<i16>(&dev, c, producer, s, r),
+            SampleFormat::I32 => build::<i32>(&dev, c, producer, s, r),
+            SampleFormat::U16 => build::<u16>(&dev, c, producer, s, r),
+            other => Err(format!("Unsupported input sample format: {other}")),
+        }?;
+        stream.play().map_err(|e| e.to_string())?;
+        Ok(stream)
     };
-    let stream = match stream.and_then(|s| s.play().map(|_| s).map_err(|e| e.to_string())) {
-        Ok(s) => s,
+    let (producer, mut consumer) = RingBuffer::<f32>::new(ring);
+    let mut stream = match open(producer) {
+        Ok(s) => Some(s),
         Err(e) => return fail(format!("Could not open the input: {e}")),
     };
     if first {
@@ -960,6 +968,8 @@ fn run(
     let mut got = 0u64;
     let mut quiet = Vec::new();
     let mut result = Ok(0);
+    // When sound last came in, for the gap a restart leaves.
+    let mut heard = Instant::now();
     while !shared.stop.load(Ordering::SeqCst) {
         if let Some(rx) = &full_mix {
             match rx.try_recv() {
@@ -972,11 +982,75 @@ fn run(
             }
         }
         match drain(&mut consumer, &mut writer, &mut tap, &mut mix, &mut monitor) {
-            Ok(n) => got += n,
+            Ok(n) => {
+                got += n;
+                if n > 0 {
+                    heard = Instant::now();
+                }
+            }
             Err(e) => {
                 result = Err(e);
                 break;
             }
+        }
+        // The driver asked for a restart: stop the input (and the monitor, on
+        // the same ASIO driver), start them again, and fill the time they were
+        // down with silence so the take keeps time with the session.
+        if reset.swap(false, Ordering::SeqCst) {
+            drop(stream.take());
+            monitor = None;
+            match drain(&mut consumer, &mut writer, &mut tap, &mut mix, &mut monitor) {
+                Ok(n) => got += n,
+                Err(e) => {
+                    result = Err(e);
+                    break;
+                }
+            }
+            let now = if loopback {
+                dev.default_output_config()
+            } else {
+                dev.default_input_config()
+            };
+            let now = now.map(|c| crate::engine::host::sane_config(c).sample_rate());
+            if let Some(r) = now.ok().filter(|r| *r != rate) {
+                result = Err(format!(
+                    "The audio driver switched from {rate} Hz to {r} Hz while recording, so the take stopped there. Set the rate you want in the driver's own settings before recording."
+                ));
+                break;
+            }
+            let (p, c) = RingBuffer::<f32>::new(ring);
+            consumer = c;
+            match open(p) {
+                Ok(s) => stream = Some(s),
+                Err(e) => {
+                    result = Err(format!(
+                        "The audio input stopped and did not start again: {e}"
+                    ));
+                    break;
+                }
+            }
+            if mix.is_some() {
+                monitor = open_monitor(rate, input_name.as_deref()).ok();
+            }
+            crate::engine::host::log(
+                "record: the driver asked for a restart; the input started again",
+            );
+            let gap = (heard.elapsed().as_secs_f64() * f64::from(rate)) as u64;
+            if gap > 0 {
+                quiet.clear();
+                quiet.resize(gap as usize * channels, 0.0);
+                if let Some(w) = writer.as_mut() {
+                    if let Err(e) = w.push(&quiet) {
+                        result = Err(e);
+                        break;
+                    }
+                    if first {
+                        shared.frames.fetch_add(gap, Ordering::Relaxed);
+                    }
+                }
+                got += gap;
+            }
+            heard = Instant::now();
         }
         // Tracks armed or disarmed while recording.
         while let Ok(cmd) = commands.try_recv() {
@@ -1028,7 +1102,7 @@ fn run(
         }
         thread::sleep(Duration::from_millis(10));
     }
-    drop(stream);
+    drop(stream.take());
     if result.is_ok() {
         result = drain(&mut consumer, &mut writer, &mut tap, &mut mix, &mut monitor);
     }
@@ -1153,6 +1227,7 @@ fn build<T>(
     config: StreamConfig,
     mut producer: Producer<f32>,
     shared: Arc<Shared>,
+    reset: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, String>
 where
     T: SizedSample,
@@ -1176,7 +1251,14 @@ where
                     shared.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
                 });
             },
-            |e| crate::engine::host::log(&format!("record stream error: {e}")),
+            move |e| {
+                crate::engine::host::log(&format!("record stream error: {e}"));
+                // The driver wants the stream stopped and started again (an ASIO
+                // driver asks after its rate or clock changes); the take's thread does it.
+                if e.kind() == cpal::ErrorKind::StreamInvalidated {
+                    reset.store(true, Ordering::SeqCst);
+                }
+            },
             None,
         )
         .map_err(|e| e.to_string())
