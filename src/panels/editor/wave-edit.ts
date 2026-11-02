@@ -126,32 +126,38 @@ export function amplifyRange(doc: SessionDoc, a: number, b: number, db: number, 
   return onPieces(doc, a, b, newId, (c) => ({ id: c.id, gain_db: Math.max(-96, Math.min(24, c.gain_db + db)) }));
 }
 
-/** Gain in dB for a fade at `t` from 0 to 1: an equal-power curve, silent at 0. */
-export function fadeDb(t: number): number {
-  const g = Math.sin((Math.max(0, Math.min(1, t)) * Math.PI) / 2);
+/** How a fade rises: an equal-power curve, or a straight line in level. */
+export type FadeShape = "power" | "linear";
+
+/** Gain in dB for a fade at `t` from 0 to 1, silent at 0: equal-power by default, or linear. */
+export function fadeDb(t: number, shape: FadeShape = "power"): number {
+  const x = Math.max(0, Math.min(1, t));
+  const g = shape === "linear" ? x : Math.sin((x * Math.PI) / 2);
   return g <= 0 ? DB_MIN : Math.max(DB_MIN, 20 * Math.log10(g));
 }
 
-const FADE_POINTS = 24;
+/** Envelope points per piece. A linear fade gets more, since its level in dB bends hard near silence. */
+const FADE_POINTS: Record<FadeShape, number> = { power: 24, linear: 64 };
 
 /**
  * Fade In or Fade Out over the range: written into each piece's volume
  * envelope (on top of any envelope it already has), so a fade can cross
  * earlier edits.
  */
-export function fadeRange(doc: SessionDoc, a: number, b: number, dir: "in" | "out", newId: () => string): Op | null {
+export function fadeRange(doc: SessionDoc, a: number, b: number, dir: "in" | "out", newId: () => string, shape: FadeShape = "power"): Op | null {
   const media = mediaOf(doc);
   const span = b - a;
   if (span <= 0) return null;
+  const n = FADE_POINTS[shape];
   return onPieces(doc, a, b, newId, (c) => {
     const m = media.get(c.media_id);
     const len = clipLength(c, m, doc.sample_rate);
     const old = pointsOf(c, "volume");
     const pts: EnvelopePointDoc[] = [];
-    for (let i = 0; i <= FADE_POINTS; i++) {
-      const pos = Math.round((len * i) / FADE_POINTS);
+    for (let i = 0; i <= n; i++) {
+      const pos = Math.round((len * i) / n);
       const t = (c.start + pos - a) / span;
-      const f = fadeDb(dir === "in" ? t : 1 - t);
+      const f = fadeDb(dir === "in" ? t : 1 - t, shape);
       pts.push({ position: pos, value: Math.max(DB_MIN, levelAt(old, pos) + f), curve: "linear" });
     }
     return { id: c.id, volume: pts };

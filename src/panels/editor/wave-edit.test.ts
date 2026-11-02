@@ -164,6 +164,20 @@ describe("Waveform editor edits", () => {
     expect(pointsOf(clips[2]!, "volume")).toEqual([]);
   });
 
+  it("a linear fade rises in a straight line in level", () => {
+    expect(fadeDb(0.5, "linear")).toBeCloseTo(-6.02, 1);
+    expect(fadeDb(0.25, "linear")).toBeCloseTo(-12.04, 1);
+    expect(fadeDb(1, "linear")).toBeCloseTo(0);
+    expect(fadeDb(0, "linear")).toBe(-60);
+    // Fade Out over the whole file: full level at the start, silent at the end, -6 dB halfway.
+    const doc = apply(file(), fadeRange(file(), 0, 10_000, "out", id, "linear"));
+    const pts = pointsOf(doc.tracks[0]!.clips[0]!, "volume");
+    expect(pts[0]!.value).toBeCloseTo(0);
+    expect(pts[pts.length - 1]!.value).toBe(-60);
+    const mid = pts.find((p) => p.position === 5_000);
+    expect(mid?.value).toBeCloseTo(-6.02, 1);
+  });
+
   it("Copy and Paste insert the audio and push the rest right", () => {
     const board = copyRange(file(), 1_000, 3_000)!;
     expect(board.length).toBe(2_000);

@@ -181,6 +181,8 @@ describe("menu model", () => {
       "tool.spot",
       "fx.fade-in",
       "fx.fade-out",
+      "fx.fade-in-linear",
+      "fx.fade-out-linear",
       "edit.crop",
       "edit.paste-new",
       "file.new-audio",

@@ -581,7 +581,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       ...["fx.spectrum.reduce-12", "fx.spectrum.reduce-24", "fx.spectrum.remove", "fx.spectrum.repair"].map((id) =>
         actions.register({ id, run: () => {}, enabled: () => false, reason: () => NOT_WAVE }),
       ),
-      ...["edit.mix-paste", "edit.crop", "fx.invert", "fx.reverse", "fx.silence", "fx.fade-in", "fx.fade-out", "fx.amplify", "fx.normalize"].map((id) =>
+      ...["edit.mix-paste", "edit.crop", "fx.invert", "fx.reverse", "fx.silence", "fx.fade-in", "fx.fade-out", "fx.fade-in-linear", "fx.fade-out-linear", "fx.amplify", "fx.normalize"].map((id) =>
         actions.register({ id, run: () => {}, enabled: () => false, reason: () => NOT_WAVE }),
       ),
       ov(waveFocus, {
@@ -762,6 +762,18 @@ export function createWaveTools(deps: WaveToolsDeps) {
         },
       }),
       ov(waveIsOpen, { id: "fx.normalize", run: () => waveNormalize() }),
+      // Linear fades: the selection, or the whole file when nothing is selected.
+      ...(["in", "out"] as const).map((dir) =>
+        ov(waveIsOpen, {
+          id: `fx.fade-${dir}-linear`,
+          run: async () => {
+            const r = waveAll();
+            const label = dir === "in" ? "Fade In (Linear)" : "Fade Out (Linear)";
+            if (r) await waveEdit(label, fadeRange(wave.current!, r[0], r[1], dir, uuid, "linear"), r);
+          },
+          enabled: () => waveAll() !== null,
+        }),
+      ),
       ov(waveIsOpen, { id: "fx.invert", run: () => waveReverseOrInvert("invert") }),
       ov(waveIsOpen, { id: "fx.reverse", run: () => waveReverseOrInvert("reverse") }),
       ov(waveIsOpen, { id: "clip.stretch", run: () => waveStretchTo(), label: () => "Stretch Selection or File..." }),

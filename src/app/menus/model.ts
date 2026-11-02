@@ -383,6 +383,8 @@ export const MENUS: readonly Menu[] = [
       sep,
       item("fx.invert", "Invert"),
       item("fx.reverse", "Reverse"),
+      item("fx.fade-in-linear", "Fade In (Linear)"),
+      item("fx.fade-out-linear", "Fade Out (Linear)"),
       item("fx.silence", "Silence"),
       sub("Spectrum", [
         item("fx.spectrum.reduce-12", "Reduce Selected Area 12 dB"),
