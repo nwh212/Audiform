@@ -2293,3 +2293,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - The lead hit Svelte's effect_update_depth_exceeded, with the window stuck, recording into a new empty file and playing edited files in the Waveform editor. The log put each one 70 to 90 seconds into playback, in the Waveform editor.
 - Cause: while playing, the view follows the playhead by scrolling once it nears the right edge. At the end of a file the view cannot scroll further (always so when the whole file fits, as a new recording does), so the follow set the same view again; the store told every view listener anyway, the follow ran again, and so on without end. A recording runs past the end of its own short file at once, so it hit this right away.
 - Now `setView` with the view already shown returns without telling anyone or sending it to the core. A store test checks a listener that sets the same view again is not called back.
+
+## 2026-11-01: Linear Fade In and Fade Out beside Invert and Reverse
+- The lead asked for fades next to Invert and Reverse in the Effects menu that fade the selection in a straight line, or the whole file when nothing is selected. Fade In (Linear) and Fade Out (Linear) do that; each is one undo step, written into the volume envelope like the other fades. Level rises in a straight line, so halfway is -6 dB.
+- The equal-power Fade In and Fade Out under Effects > Process stay as they were (selection only, -3 dB halfway).
+
+## 2026-11-01: A spectral box drag stays in its band
+- The lead found the box selection in the spectrogram jumping when the pointer went past the view's edges. Above the top, the band index went to -1 and the position wrapped to the bottom of the band, so the box's top leapt to the lowest frequency; on a stereo file, dragging into the other channel's band read the position in that band instead.
+- Now a drag keeps the band it started in, and past its top or bottom it stops at that edge. Box, lasso and brush all use it.

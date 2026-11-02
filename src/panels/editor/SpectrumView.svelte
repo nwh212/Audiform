@@ -148,9 +148,12 @@
   // All of these are within one band (y from the band's top).
   const yOf = (hz: number) => (1 - viewFrac(hz, sv, nyquist)) * laneH;
   const yOfFrac = (f: number) => yOf(freqAt(f, nyquist));
+  /** Which band a y on the whole view is in; above or below the view counts as the nearest band. */
+  const laneAt = (y: number) => Math.max(0, Math.min(lanes - 1, Math.floor(y / laneH)));
   /** A y on the whole view, as a y within its band. */
-  const inLane = (y: number) => Math.max(0, Math.min(laneH, y - Math.min(lanes - 1, Math.floor(y / laneH)) * laneH));
-  const fracAtY = (y: number) => fracOf(viewFreq(1 - inLane(y) / laneH, sv, nyquist), nyquist);
+  const inLane = (y: number) => Math.max(0, Math.min(laneH, y - laneAt(y) * laneH));
+  /** A y on the whole view, as a frequency share within band `lane`: past its top or bottom it stops at the edge. */
+  const fracInLane = (y: number, lane: number) => fracOf(viewFreq(1 - Math.max(0, Math.min(laneH, y - lane * laneH)) / laneH, sv, nyquist), nyquist);
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
@@ -452,7 +455,11 @@
     e.preventDefault();
     const v = view;
     const sAt = (cx: number) => Math.max(0, Math.min(total, Math.round(sampleAt(cx - box.left, v))));
-    const fAt = (cy: number) => Math.max(0, Math.min(1, fracAtY(cy - box.top)));
+    // The whole drag stays in the band it started in: past the view's top or
+    // bottom, or into another channel's band, it stops at that band's edge
+    // instead of jumping to the far end.
+    const lane = laneAt(e.clientY - box.top);
+    const fAt = (cy: number) => Math.max(0, Math.min(1, fracInLane(cy - box.top, lane)));
     const s0 = sAt(e.clientX);
     const f0 = fAt(e.clientY);
     const add = e.shiftKey;
