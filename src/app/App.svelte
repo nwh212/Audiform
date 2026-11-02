@@ -1569,7 +1569,14 @@
       if (!isTauri() || !f || !dirty || !used) return;
       liveTimer = setTimeout(() => void renderLive(), 600);
     };
-    const stopLive = [waveHistory.subscribe(followLive), waveFile.subscribe(followLive)];
+    // The edits can come first: a file edited before any session used it, then
+    // dragged into one (or a session opened that has it), needs its copy then.
+    const followSession = () => {
+      const f = waveFile.current();
+      if (liveFor || !f || f.untitled || !waveHistory.current.dirty) return;
+      if ((session.current?.media ?? []).some((m) => samePath(m.path, f.path))) followLive();
+    };
+    const stopLive = [waveHistory.subscribe(followLive), waveFile.subscribe(followLive), session.subscribe(followSession)];
     // Switched-off channels in the Waveform editor are silent in playback too.
     const stopChannels = waveChannels.subscribe((c) => {
       if (isTauri()) void waveSetChannelsOff(c.map((on) => !on)).catch(showError);

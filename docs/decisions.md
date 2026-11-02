@@ -2301,3 +2301,8 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 ## 2026-11-01: A spectral box drag stays in its band
 - The lead found the box selection in the spectrogram jumping when the pointer went past the view's edges. Above the top, the band index went to -1 and the position wrapped to the bottom of the band, so the box's top leapt to the lowest frequency; on a stereo file, dragging into the other channel's band read the position in that band instead.
 - Now a drag keeps the band it started in, and past its top or bottom it stops at that edge. Box, lasso and brush all use it.
+
+## 2026-11-01: Unsaved Waveform edits reach a session that starts using the file later
+- The lead edited a file in the Waveform editor, then made a session and dragged the file in: the session played the file as saved, without the edits. The live copy (the unsaved edits rendered for the session to hear) was made only when the file was already in the session at the moment of an edit; a session that took the file in afterwards was never noticed, so no copy was made.
+- Now a session change also checks: if the Waveform editor's file has unsaved edits, has no live copy yet and the session now uses it, the copy is rendered. The edits themselves were never lost; they stayed unsaved in the Waveform editor.
+- Still so: a new file never saved anywhere (File > New Audio) has no live copy; save it first to use it in a session.
