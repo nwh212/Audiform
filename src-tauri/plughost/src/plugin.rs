@@ -400,8 +400,9 @@ fn split_state(data: &str) -> Option<(Vec<u8>, Vec<u8>)> {
 /// (sidechain inputs and the like), and turns on the main input, every
 /// output and the first note input. Extra inputs stay off until a key is
 /// routed to them (see [`Audio::process`]): a compressor whose sidechain
-/// input is on listens to it, and a silent key meant it never compressed. Returns the channels of each input and output bus,
-/// whether there is a note input, and the main buses' speakers by name.
+/// input is on listens to it, and a silent key meant it never compressed.
+/// Returns the channels of each input and output bus, whether there is a
+/// note input, and the main buses' speakers by name.
 #[allow(clippy::type_complexity)]
 unsafe fn setup_buses(
     component: &ComPtr<IComponent>,
@@ -647,7 +648,8 @@ impl Audio {
             self.processor.setProcessing(0);
             self.component.setActive(0);
             for i in 1..self.ins.len() as i32 {
-                self.component.activateBus(kAudio as i32, kInput as i32, i, u8::from(want));
+                self.component
+                    .activateBus(kAudio as i32, kInput as i32, i, u8::from(want));
             }
             self.component.setActive(1);
             self.processor.setProcessing(1);

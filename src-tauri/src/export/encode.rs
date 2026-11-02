@@ -925,7 +925,10 @@ mod tests {
         let data = sine(48_000, 2, 1.3);
         let mut sizes = Vec::new();
         for level in 0..=FLAC_MAX_LEVEL {
-            assert!(flac_config(level).into_verified().is_ok(), "level {level}");
+            assert!(
+                flac_config(level).into_verified().is_ok(),
+                "level {level}"
+            );
             let p = dir.path().join(format!("l{level}.flac"));
             let fmt = OutputFormat {
                 kind: FormatKind::Flac,
