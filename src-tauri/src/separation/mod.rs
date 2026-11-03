@@ -364,6 +364,58 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
+            id: "gilliaan-strings",
+            name: "Bowed strings (violins, violas, cellos, basses)",
+            category: "Instruments",
+            sdr: Some(4.69),
+            sdr_note: "strings, on a public strings test set; the best public strings model",
+            target_name: "Strings",
+            rest_name: "Without strings",
+            stems: &[("Strings", 4.69), ("Without strings", 0.0)],
+            author: "gilliaan",
+            page: "https://huggingface.co/gilliaan/Stem-Separation-Models",
+            url: "https://huggingface.co/gilliaan/Stem-Separation-Models/resolve/main/BowedStrings/BandSplitRoformer/gilliaan_bsroformer_bowedstrings_v2.ckpt",
+            sha256: "e49feede4125404930ea4dd2cd634b8a5850cc9e24dc0565a01ccac466a5bbff",
+            bytes: 303_413_749,
+            licence: "CC BY-NC-SA 4.0, as stated by the trainer: free for non-commercial use, with credit, shared alike.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 4
+                })
+            },
+        },
+        ModelEntry {
+            id: "karaoke-anvuew",
+            name: "Lead vocal (apart from backing vocals, GPL)",
+            category: "Vocals",
+            sdr: Some(10.22),
+            sdr_note: "lead vocal, on a public lead-and-backing test set; run it on a vocal stem to get the backing vocals as the rest",
+            target_name: "Lead vocal",
+            rest_name: "Backing vocals and instruments",
+            stems: &[],
+            author: "anvuew (trained on becruily's data)",
+            page: "https://huggingface.co/anvuew/karaoke_bs_roformer",
+            url: "https://huggingface.co/anvuew/karaoke_bs_roformer/resolve/main/karaoke_bs_roformer_anvuew.ckpt",
+            sha256: "206d04757cb5f75ca3b55f8a0a48f5c26aa2351d4ff3c7adbfc9affa30ea3ae4",
+            bytes: 204_486_925,
+            licence: "GPL-3.0, as stated by the trainer.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 640000, "num_overlap": 4
+                })
+            },
+        },
+        ModelEntry {
             id: "xlance-keys",
             name: "Piano and keys (single instrument)",
             category: "Instruments",

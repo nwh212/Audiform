@@ -10,14 +10,15 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 | Six stems at once (bass, drums, other, vocals, guitar, piano) | BS-RoFormer SW | Best public scores on every one of those stems. Its provenance is disputed and no licence is stated, which the list says. |
 | Bass, drums, guitar, piano and keys on their own | X-LANCE fine-tunes | MIT licence; the same family as the six-stem model. |
 | Guitar, trained for it | Mel-Band Roformer Guitar (chenCFD) | MIT licence, small (277 MB), a published score of 7.98 dB on the trainer's own test. |
-| Lead vocal apart from backing vocals | BS-RoFormer Karaoke (frazer and becruily) | Best public lead-vocal score (10.10 dB) among single models. No licence stated. Run the vocals model first, then this on the vocal stem, to get the backing vocals as the rest. |
+| Lead vocal apart from backing vocals | BS-RoFormer Karaoke (frazer and becruily), and anvuew's | The two best public lead-vocal scores (10.10 and 10.22 dB) among single models. The first has no licence stated; anvuew's is GPL-3.0. Run the vocals model first, then one of these on the vocal stem, to get the backing vocals as the rest. |
+| Bowed strings | BS-RoFormer Bowed Strings v2 (gilliaan) | The only public strings model, 4.69 dB on a public strings test. CC BY-NC-SA 4.0: free for non-commercial use, with credit, shared alike. |
 | Noise | Mel-Band Roformer Denoise, and the aggressive one | As before. |
 | Bleed between stems | Mel-Band Roformer Bleed Suppressor (unwa and 97chris) | Cleans what other stems left in an instrumental. No licence stated. |
 
 ## Looked at and left out, with the reason
 
 - **Drum kit into kick, snare, toms, hi-hat and cymbals.** The best public model (an MDX23C by aufr33 and jarredou, 438 MB) is of a kind the engine does not run, its original release is gone and only mirrors remain, and no licence was ever stated. The permissive one (a Hybrid Demucs by inagoy, MIT) is also a kind the engine does not run and scores well below it. The best kit splitters of all are online-only services.
-- **Bowed strings, synth lead, percussion.** The only public strings model (gilliaan, BS-RoFormer, 303 MB) is non-commercial (CC BY-NC-SA) and hosted where this build machine cannot reach, so it has no checksum yet; a candidate for the next pass. Synth and percussion models are re-uploads of unknown provenance or unverified links.
+- **Synth lead, percussion.** The public models are re-uploads of unknown provenance or unverified links.
 - **Everything at once (53 stems).** ZFTurbo's open 53-stem model (1.37 GB, MIT) wants a 16 GB graphics card and its per-stem quality is low. Useful as an instrument detector, not as a separator. Left out until the engine can run it in halves.
 - **Speech, music and effects (film mixes).** Bandit v2 (Apache code, share-alike weights) is a kind the engine does not run.
 - **Two doubled lead takes.** No public model is trained to pull one double from another. The nearest are a duet model (one re-upload, 630 MB, no licence, 7.9 dB on its own test) and a research model for duets and unisons (Conv-TasNet, CC BY 4.0) that needs its own runner. Neither is good enough to ship. Removing a double (keeping one dry lead) exists as a non-commercial model.
