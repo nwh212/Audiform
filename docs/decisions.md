@@ -2417,3 +2417,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** A shipped theme, `crt`, on dark tokens: scanlines and red, green and blue phosphor stripes over the window (multiplied, with a vignette and a slow flicker), text with a soft halation, bright elements (values, lit buttons, the accent) glowing onto the glass, a faint bloom across the picture. No pictures or pointers, so the file is small and it is a Theme Maker starting point too.
 
 **Why.** The lead asked for a CRT theme with the scanline look, halation and phosphor glow. Phosphor already does a green monochrome tube in a case; CRT is the color tube on its own.
+
+## 2026-11-03: Stem model survey and three more models
+
+**Decision.** The separation list gains a guitar model (chenCFD, Mel-Band RoFormer, MIT), a lead-versus-backing vocal model (frazer and becruily, BS-RoFormer, no licence stated) and a bleed suppressor (unwa and 97chris, Mel-Band RoFormer, no licence stated), all pinned by checksum from GitHub release hosting. `docs/stem-models.md` records the survey: what ships, what was left out and why, and every licence in one place.
+
+**Why.** The project lead asked for a cohesive look at the best stem models per instrument, drum kit splitters, band splitters, the model that separates doubled lead vocals and the one that separates choir parts. The survey found that the engine's two model families cover the best vocal, six-stem, guitar and lead-vocal models, while the drum kit, choir and film-mix models are other kinds (MDX23C, Demucs, SCNet, Bandit) the engine cannot run yet, and that no public model separates one doubled take from another. Several good models live only on a file host this build machine cannot reach, so they have no checksum and wait for the next pass.
+
+**How.** Checksums were taken by streaming each file from its GitHub release through a hash, never to disk. The model specs come from each trainer's own config (band layout, hop, chunk). The survey names third-party services and leaderboards, so it stays with the lead; the docs page names only trainers and licences.

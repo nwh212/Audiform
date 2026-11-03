@@ -292,6 +292,78 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
+            id: "chencfd-guitar",
+            name: "Guitar (trained for guitar)",
+            category: "Instruments",
+            sdr: Some(7.98),
+            sdr_note: "guitar, on the trainer's own test set (a public multitrack set), as given in the file's name",
+            target_name: "Guitar",
+            rest_name: "Without guitar",
+            stems: &[],
+            author: "chenCFD",
+            page: "https://github.com/chenCFD/Guitar_Source_Separation",
+            url: "https://github.com/chenCFD/Guitar_Source_Separation/releases/download/v1.0/model_mel_band_roformer_ep_314_sdr_7.9825.ckpt",
+            sha256: "1a81a87b46eed215c051579ac5cff3b139bfdfb9fa3bf4666df059ef87404d14",
+            bytes: 276_726_667,
+            licence: "MIT licence, as stated in the trainer's repository.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 131584, "num_overlap": 4
+                })
+            },
+        },
+        ModelEntry {
+            id: "karaoke-frazer-becruily",
+            name: "Lead vocal (apart from backing vocals)",
+            category: "Vocals",
+            sdr: Some(10.10),
+            sdr_note: "lead vocal, on a public lead-and-backing test set; run it on a vocal stem to get the backing vocals as the rest",
+            target_name: "Lead vocal",
+            rest_name: "Backing vocals and instruments",
+            stems: &[],
+            author: "frazer and becruily",
+            page: "https://huggingface.co/becruily/bs-roformer-karaoke",
+            url: "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/bs_roformer_karaoke_frazer_becruily.ckpt",
+            sha256: "eb90ee24c1154d83fbcfd27e96182f19e061557cc6e4746953125e08c29389f9",
+            bytes: 204_436_907,
+            licence: "Published freely by the trainers; no licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 882000, "num_overlap": 4
+                })
+            },
+        },
+        ModelEntry {
+            id: "bleed-suppressor",
+            name: "Bleed Suppressor (cleans an instrumental)",
+            category: "Denoise",
+            sdr: None,
+            sdr_note: "no public score; takes out what other stems left behind in an instrumental",
+            target_name: "Instrumental",
+            rest_name: "Bleed",
+            stems: &[],
+            author: "unwa and 97chris",
+            page: "https://github.com/nomadkaraoke/python-audio-separator",
+            url: "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/mel_band_roformer_bleed_suppressor_v1.ckpt",
+            sha256: "a9a9d10faa7f8997676a78e66d741d7acb9cc449334763f3c8f626d68ec6e575",
+            bytes: 913_102_724,
+            licence: "Published freely by the trainers; no licence is stated for the weights.",
+            spec: || {
+                json!({
+                    "arch": "mel", "num_bands": 60,
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 441, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 485100, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
             id: "xlance-keys",
             name: "Piano and keys (single instrument)",
             category: "Instruments",
