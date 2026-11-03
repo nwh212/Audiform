@@ -6,16 +6,20 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 
 | Need | Model in the list | Why this one |
 | --- | --- | --- |
-| Vocals and instrumental | BS PolarFormer, Mel-Band Roformer (Kim), Mel-Band Roformer Deux | Best public scores on the common 100-song test, permissive or freely published. |
+| Vocals and instrumental | BS PolarFormer, Mel-Band Roformer (Kim), Mel-Band Roformer Deux, BS-RoFormer (anvuew) | Best public scores on the common 100-song test, permissive or freely published. anvuew's is GPL-3.0 and scored 12.55 dB on the trainer's own test, which is not the same test. The list folds models that make the same split under one heading, so more of a kind can be offered. |
 | Six stems at once (bass, drums, other, vocals, guitar, piano) | BS-RoFormer SW | Best public scores on every one of those stems. Its provenance is disputed and no licence is stated, which the list says. |
 | Bass, drums, guitar, piano and keys on their own | X-LANCE fine-tunes | MIT licence; the same family as the six-stem model. |
 | Guitar, trained for it | Mel-Band Roformer Guitar (chenCFD) | MIT licence, small (277 MB), a published score of 7.98 dB on the trainer's own test. |
 | Lead vocal apart from backing vocals | BS-RoFormer Karaoke (frazer and becruily), and anvuew's | The two best public lead-vocal scores (10.10 and 10.22 dB) among single models. The first has no licence stated; anvuew's is GPL-3.0. Run the vocals model first, then one of these on the vocal stem, to get the backing vocals as the rest. |
 | Bowed strings | BS-RoFormer Bowed Strings v2 (gilliaan) | The only public strings model, 4.69 dB on a public strings test. CC BY-NC-SA 4.0: free for non-commercial use, with credit, shared alike. |
 | Noise | Mel-Band Roformer Denoise, and the aggressive one | As before. |
+| Reverb | Reverb Remover (anvuew) | Pulls the dry sound out of a reverberant recording, GPL-3.0, 22.5 dB on the trainer's own test. |
 | Bleed between stems | Mel-Band Roformer Bleed Suppressor (unwa and 97chris) | Cleans what other stems left in an instrumental. No licence stated. |
 
 ## Looked at and left out, with the reason
+
+- **Vocal and instrumental models with changed insides.** Several high-scoring vocal and instrumental models (pcunwa's HyperACE, Large-Inst and Revive series) change the network itself, not only its weights, so the engine cannot run them until it learns those changes. The small 46M-parameter four-stem models (HiDolen) need a different runner. becruily's separate vocals and instrumental models have no licence and no published score; Deux covers them.
+- **De-limiter.** becruily's model that undoes a brickwall limiter (CC BY-NC 4.0, 102 MB) gives one output, not a split; the list shows splits only. A candidate once the panel has a place for one-output clean-up models.
 
 - **Drum kit into kick, snare, toms, hi-hat and cymbals.** The best public model (an MDX23C by aufr33 and jarredou, 438 MB) is of a kind the engine does not run, its original release is gone and only mirrors remain, and no licence was ever stated. The permissive one (a Hybrid Demucs by inagoy, MIT) is also a kind the engine does not run and scores well below it. The best kit splitters of all are online-only services.
 - **Synth lead, percussion.** The public models are re-uploads of unknown provenance or unverified links.

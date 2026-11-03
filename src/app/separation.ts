@@ -17,6 +17,37 @@ export function byCategory(models: readonly SeparationModel[]): [string, Separat
   return [...groups].map(([c, list]) => [c, [...list].sort((a, b) => (b.sdr ?? -1) - (a.sdr ?? -1))]);
 }
 
+/**
+ * What a model splits the sound into, as the list groups it: "Vocals and
+ * instrumental", "Lead vocal and backing vocals and instruments", "Bass,
+ * drums, other, vocals, guitar, piano". Models that make the same split
+ * sit under one heading, best score first.
+ */
+export function splitOf(m: Pick<SeparationModel, "stems" | "targetName" | "restName">): string {
+  return m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`;
+}
+
+/** Models of one tab grouped by what they split, each group best score first, groups in the order of their best model. */
+export function bySplit(models: readonly SeparationModel[]): [string, SeparationModel[]][] {
+  const groups = new Map<string, SeparationModel[]>();
+  for (const m of models) {
+    const k = splitOf(m);
+    groups.set(k, [...(groups.get(k) ?? []), m]);
+  }
+  const sorted = [...groups].map(([k, list]): [string, SeparationModel[]] => [k, [...list].sort((a, b) => (b.sdr ?? -1) - (a.sdr ?? -1))]);
+  return sorted;
+}
+
+/** Settings key of the user's memo on a model: what it works best for. */
+export const MEMO_KEY = "separation.memos";
+
+export function memosOf(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) if (typeof v === "string" && v.trim()) out[k] = v;
+  return out;
+}
+
 /** "SDR 11.00 dB", or "SDR not published". A several-stem model lists each stem's score. */
 export function sdrText(m: Pick<SeparationModel, "sdr" | "stems">): string {
   if (m.stems.length > 0) return `SDR ${m.stems.map(([n, v]) => `${n.toLowerCase()} ${v.toFixed(1)}`).join(", ")} dB`;

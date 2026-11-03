@@ -3,17 +3,20 @@
   Copyright (c) The Audiform contributors.
   This file is part of Audiform, based on Altered Audio Editor.
 
-  The Audio Separation panel: the models to pick from, grouped by what
-  they separate, each with its published quality score (SDR), size and
-  whether it is downloaded; and Separate, for the file in the Waveform
-  editor, the selected clips or the selected files. A model is downloaded
-  the first time it is used (Audiform asks first) and kept for next time;
-  Remove deletes it. Separation runs on this computer.
+  The Audio Separation panel: the models to pick from, in tabs by kind
+  and under them folded groups by what they split (every vocals and
+  instrumental model under one heading, and so on), each with its
+  published quality score (SDR), size, whether it is downloaded, and a
+  memo the user writes about what it works best for; and Separate, for
+  the file in the Waveform editor, the selected clips or the selected
+  files. A model is downloaded the first time it is used (Audiform asks
+  first) and kept for next time; Remove deletes it. Separation runs on
+  this computer.
 -->
 <script lang="ts">
   import { untrack } from "svelte";
   import { sizeText } from "../../app/settings/pages";
-  import { byCategory, sdrText } from "../../app/separation";
+  import { bySplit, MEMO_KEY, memosOf, sdrText, splitOf } from "../../app/separation";
   import type { SeparationTools } from "../../app/separation-tools.svelte";
   import { editor } from "../../stores/editor";
   import { mediaPool } from "../../stores/media";
@@ -36,11 +39,31 @@
   // Vocal models, instrument models and denoisers each have a tab.
   const TABS = ["Vocals", "Instruments", "Denoise"] as const;
   let tab = $state<(typeof TABS)[number]>((prefs.raw("separation.tab") as (typeof TABS)[number] | null) ?? "Vocals");
-  const groups = $derived(status ? byCategory(status.models.filter((m) => m.category === tab)) : []);
+  const groups = $derived(status ? bySplit(status.models.filter((m) => m.category === tab)) : []);
   const model = $derived(status?.models.find((m) => m.id === picked && m.category === tab) ?? groups[0]?.[1][0] ?? null);
   function pick(id: string) {
     picked = id;
     prefs.set(KEY, id);
+  }
+
+  // Groups fold: the one holding the picked model starts open, the rest closed, and the choice is kept.
+  const OPEN = "separation.open";
+  let open = $state<Record<string, boolean>>((prefs.raw(OPEN) as Record<string, boolean> | null) ?? {});
+  const isOpen = (split: string, models: { id: string }[]) => open[split] ?? models.some((m) => m.id === model?.id) ?? false;
+  function toggle(split: string, models: { id: string }[]) {
+    open = { ...open, [split]: !isOpen(split, models) };
+    prefs.set(OPEN, open);
+  }
+
+  // Memos: a line or two per model on what it works best for, kept in the settings.
+  let memos = $state<Record<string, string>>(memosOf(prefs.raw(MEMO_KEY)));
+  let editing = $state<string | null>(null);
+  function setMemo(id: string, text: string) {
+    const next = { ...memos };
+    if (text.trim()) next[id] = text.trim();
+    else delete next[id];
+    memos = next;
+    prefs.set(MEMO_KEY, next);
   }
   function pickTab(t: (typeof TABS)[number]) {
     tab = t;
@@ -102,7 +125,13 @@
           <button type="button" role="tab" aria-selected={tab === t} class:on={tab === t} onclick={() => pickTab(t)}>{t}</button>
         {/each}
       </div>
-      {#each groups as [category, models] (category)}
+      {#each groups as [split, models] (split)}
+        <button type="button" class="fold" class:open={isOpen(split, models)} aria-expanded={isOpen(split, models)} onclick={() => toggle(split, models)}>
+          <span class="chev" aria-hidden="true"></span>
+          <span class="split">{split}</span>
+          <span class="count">{models.length}{models.some((m) => m.id === model?.id) ? ", one picked" : ""}</span>
+        </button>
+        {#if isOpen(split, models)}
         <ul>
           {#each models as m (m.id)}
             <li class:on={model?.id === m.id} title={`${m.name}\n${m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`}\n${sizeText(m.bytes)}\nBy ${m.author}. ${m.licence}\nScore: ${m.sdrNote}. Higher is better.\n${m.page}`}>
@@ -129,10 +158,26 @@
                 <span class="sdr">{sdrText(m)}</span>
                 <span>{sizeText(m.bytes)}</span>
                 {#if m.installed}<span class="ok">Downloaded</span>{/if}
+                <button type="button" class="link" onclick={(e) => { e.preventDefault(); editing = editing === m.id ? null : m.id; }}>{memos[m.id] ? "Edit memo" : "Add memo"}</button>
               </div>
+              {#if editing === m.id}
+                <!-- svelte-ignore a11y_autofocus -->
+                <textarea
+                  class="memo-edit"
+                  rows="2"
+                  autofocus
+                  placeholder="What this model works best for, in your experience"
+                  value={memos[m.id] ?? ""}
+                  onblur={(e) => { setMemo(m.id, e.currentTarget.value); editing = null; }}
+                  onkeydown={(e) => { if (e.key === "Escape") { editing = null; } if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.blur(); } }}
+                ></textarea>
+              {:else if memos[m.id]}
+                <p class="memo">{memos[m.id]}</p>
+              {/if}
             </li>
           {/each}
         </ul>
+        {/if}
       {/each}
       {#if !status.engineAvailable}
         <p class="note">Audio Separation is not available for this computer yet.</p>
@@ -179,6 +224,61 @@
     color: var(--text);
     font-weight: 600;
   }
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    width: 100%;
+    margin: var(--space-1) 0 2px;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .fold:hover {
+    background: var(--surface-3);
+  }
+  .fold .chev {
+    width: 0;
+    height: 0;
+    border: 4px solid transparent;
+    border-left: 6px solid var(--text-dim);
+    margin-left: 3px;
+    transition: transform 0.1s ease;
+  }
+  .fold.open .chev {
+    transform: rotate(90deg);
+  }
+  .fold .split {
+    flex: 1;
+    font-weight: 600;
+  }
+  .fold .count {
+    color: var(--text-faint);
+    font-size: 10px;
+  }
+  .memo {
+    margin: 3px 0 0 22px;
+    color: var(--text-dim);
+    font-style: italic;
+    white-space: pre-wrap;
+  }
+  .memo-edit {
+    display: block;
+    width: calc(100% - 22px);
+    margin: 3px 0 0 22px;
+    resize: vertical;
+    background: var(--surface-0);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    font: inherit;
+  }
+
   .panel {
     display: grid;
     grid-template-rows: 1fr auto;

@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { byCategory, sdrText, separatedTrack } from "./separation";
+import { byCategory, bySplit, memosOf, sdrText, separatedTrack, splitOf } from "./separation";
 import type { SeparationModel } from "./core";
 import type { TrackDoc } from "../stores/session";
 
@@ -34,6 +34,16 @@ describe("audio separation", () => {
     // Unscored models list after scored ones.
     const g2 = byCategory([{ ...model("n", "Instruments", 0), sdr: null }, model("s", "Instruments", 5)]);
     expect(g2[0]![1].map((m) => m.id)).toEqual(["s", "n"]);
+  });
+
+  it("groups models by what they split, best first", () => {
+    const six = { ...model("six", "Instruments", 11.3), stems: [["Bass", 14.6], ["Drums", 14.1]] as [string, number][] };
+    const g = bySplit([model("a", "Vocals", 10.98), six, model("b", "Vocals", 11.37), { ...model("k", "Vocals", 10.1), targetName: "Lead vocal", restName: "Backing" }]);
+    expect(g.map(([k]) => k)).toEqual(["Vocals and Instrumental", "Bass, Drums", "Lead vocal and Backing"]);
+    expect(g[0]![1].map((m) => m.id)).toEqual(["b", "a"]);
+    expect(splitOf(six)).toBe("Bass, Drums");
+    expect(memosOf({ a: "good on rock", b: "  ", c: 3 })).toEqual({ a: "good on rock" });
+    expect(memosOf(null)).toEqual({});
   });
 
   it("copies a track's settings onto a results track with new ids", () => {

@@ -416,6 +416,58 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
+            id: "bs-roformer-anvuew",
+            name: "BS-RoFormer (anvuew, GPL)",
+            category: "Vocals",
+            sdr: Some(12.55),
+            sdr_note: "vocals, on the trainer's own test set (not the Multisong set the others are scored on), as given in the file's name",
+            target_name: "Vocals",
+            rest_name: "Instrumental",
+            stems: &[],
+            author: "anvuew (trained on bascurtiz's data)",
+            page: "https://huggingface.co/anvuew/BS-RoFormer",
+            url: "https://huggingface.co/anvuew/BS-RoFormer/resolve/main/bs_roformer_ft1_anvuew_sdr_12.55.ckpt",
+            sha256: "60347271e8493fdff28ef558c3b2297afb869a1f4462594ed548038264bec395",
+            bytes: 204_493_312,
+            licence: "GPL-3.0, as stated by the trainer.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 960000, "num_overlap": 4
+                })
+            },
+        },
+        ModelEntry {
+            id: "dereverb-anvuew",
+            name: "Reverb Remover (dry sound from a reverberant one)",
+            category: "Denoise",
+            sdr: Some(22.51),
+            sdr_note: "dry sound, on the trainer's own test set, as given in the file's name",
+            target_name: "Dry",
+            rest_name: "Reverb",
+            stems: &[],
+            author: "anvuew",
+            page: "https://huggingface.co/anvuew/dereverb_bs_roformer",
+            url: "https://huggingface.co/anvuew/dereverb_bs_roformer/resolve/main/dereverb_bs_roformer_anvuew_sdr_22.5050.ckpt",
+            sha256: "b4dfa4c4aa251c0afc303e5d512d904a1c2255e51d8d0dbfbddb18d740563d42",
+            bytes: 204_496_717,
+            licence: "GPL-3.0, as stated by the trainer.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 448000, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
             id: "xlance-keys",
             name: "Piano and keys (single instrument)",
             category: "Instruments",
