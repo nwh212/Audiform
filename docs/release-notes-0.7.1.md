@@ -6,6 +6,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- Sixty-odd built-in effect presets: Parametric EQ shapes for acoustic strum, fat snare, kick, crunch guitar, vintage radio and a vocal lift; Band EQ curves; Precision Filter and Notch Filter starting points; compressor, limiter, gate and Opto Leveler settings for vocals, drums, bass and the mix bus; eight reverbs from a small room to a cathedral; chorus, flanger, phaser and double-track settings; Tube Preamp, Vox Strip and Stereo Width starting points. Each shows in the Effects Rack preset menu under its group and in the effect's own window under Built in.
+
 - Theme Maker: a web page (Settings > Appearance > Make a Theme, or docs/theme-maker/index.html) where you pick colors, fonts, a background picture and pointers on a mock of the Audiform window and save a .audtheme file to share. It lives outside the app, so Audiform stays small and offline.
 
 - **Repeat Last Command** in the Waveform editor. Shift+R applies the last effect or plug-in again with exactly the same settings, to the selection or the whole file. Ctrl+R opens it again with those settings, to adjust before Apply. The Edit menu names it, for example Repeat Parametric EQ.

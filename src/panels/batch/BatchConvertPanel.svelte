@@ -82,7 +82,7 @@
     .then((c) => (known = new Set(c.map((e) => e.id))))
     .catch(() => (known = null));
   const allPresets = $derived([...userPresets, ...BUILTIN_PRESETS]);
-  const GROUPS = ["Voice chains", "Processing", "Breath gates", "Repair", "EQ"];
+  const GROUPS = ["Voice chains", "Processing", "Breath gates", "Dynamics", "Repair", "EQ", "Reverb", "Delay", "Modulation", "Tone and stereo"];
   const BATCH_PRESETS = batchPresets(BUILTIN_PRESETS);
   let outputOpen = $state(false);
   const problems = $derived(conflicts(rows, dests, s.overwrite));

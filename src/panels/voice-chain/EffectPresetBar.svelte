@@ -16,6 +16,7 @@
   import type { Preferences } from "../../stores/preferences";
   import type { EffectSlotDoc } from "../../stores/session";
   import { deletePreset, KEY_EFFECT_PRESETS, presetChange, sanitizeEffectPresets, savePreset, type EffectPresets } from "./effect-presets";
+  import { addsOne, BUILTIN_PRESETS } from "./chain";
 
   interface Props {
     slot: EffectSlotDoc;
@@ -44,8 +45,10 @@
   });
 
   const names = $derived(plugin ? files.map((f) => f.name) : (mine[info.id] ?? []).map((p) => p.name));
-  const current = $derived(slot.preset && names.includes(slot.preset) ? slot.preset : "");
-  const canDelete = $derived(!!current && (!plugin || files.some((f) => f.name === current && f.own)));
+  /** Built-in rack presets that are just this one effect: they show here too. A saved preset of the same name wins. */
+  const builtin = $derived(plugin ? [] : BUILTIN_PRESETS.filter((p) => addsOne(p) && p.chain.slots[0]?.effect === info.id && !names.includes(p.name)));
+  const current = $derived(slot.preset && (names.includes(slot.preset) || builtin.some((p) => p.name === slot.preset)) ? slot.preset : "");
+  const canDelete = $derived(!!current && names.includes(current) && (!plugin || files.some((f) => f.name === current && f.own)));
   const defaults = $derived(Object.fromEntries(info.params.map((p) => [p.key, p.default])));
 
   async function choose(name: string) {
@@ -66,7 +69,12 @@
       return;
     }
     const p = (mine[info.id] ?? []).find((x) => x.name === name);
-    if (p) onChange(presetChange(p, defaults), `${info.name} Preset: ${p.name}`);
+    if (p) {
+      onChange(presetChange(p, defaults), `${info.name} Preset: ${p.name}`);
+      return;
+    }
+    const b = builtin.find((x) => x.name === name);
+    if (b) onChange(presetChange({ name: b.name, params: b.chain.slots[0]!.params }, defaults), `${info.name} Preset: ${b.name}`);
   }
 
   async function saveAs() {
@@ -118,8 +126,13 @@
       void choose(v);
     }}
   >
-    <option value="" disabled>{names.length ? "Presets…" : "No presets yet"}</option>
+    <option value="" disabled>{names.length || builtin.length ? "Presets…" : "No presets yet"}</option>
     {#if !plugin}<option value={"\u0000default"}>Default settings</option>{/if}
+    {#if builtin.length}
+      <optgroup label="Built in">
+        {#each builtin as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
+      </optgroup>
+    {/if}
     {#if names.length}
       <optgroup label={plugin ? "Preset files" : "Saved"}>
         {#each names as n (n)}<option value={n}>{n}</option>{/each}

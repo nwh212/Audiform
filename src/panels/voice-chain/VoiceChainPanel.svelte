@@ -752,7 +752,7 @@
               {#each userPresets as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
             </optgroup>
           {/if}
-          {#each ["Voice chains", "Breath gates", "Processing", "Delay", "Repair", "EQ"] as g (g)}
+          {#each ["Voice chains", "Breath gates", "Processing", "Dynamics", "EQ", "Reverb", "Delay", "Modulation", "Tone and stereo", "Repair"] as g (g)}
             <optgroup label={g === "Voice chains" ? "Voice chains (replace the chain)" : `${g} (add one effect)`}>
               {#each BUILTIN_PRESETS.filter((p) => p.group === g) as p (p.name)}<option value={p.name}>{p.name}</option>{/each}
             </optgroup>

@@ -59,6 +59,12 @@ const KNOWN = new Set([
   "altaudio.center_extractor",
   "altaudio.pitch_shift",
   "altaudio.phase_rotate",
+  "altaudio.opto_leveler",
+  "altaudio.tube_preamp",
+  "altaudio.vox_strip",
+  "altaudio.stereo_width",
+  "altaudio.reverb",
+  "altaudio.modulation",
 ]);
 
 const p = (over: Partial<EffectParamInfo>): EffectParamInfo => ({

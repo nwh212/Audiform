@@ -614,6 +614,318 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
   chainP("Subsonic Cut", "EQ", [
     fx("parametric_eq", { hp_on: 1, hp_freq: 25, hp_slope: 2 }),
   ]),
+  // Instrument and character EQs. Bands the preset does not use are off;
+  // Q is the band's width (lower is wider).
+  chainP("Acoustic Strum", "EQ", [
+    fx("parametric_eq", {
+      ls_freq: 40,
+      ls_gain: -6,
+      b1_on: 0,
+      b2_freq: 200,
+      b2_gain: -3,
+      b2_q: 1,
+      b3_on: 0,
+      b4_freq: 2000,
+      b4_gain: -2,
+      b4_q: 1,
+      b5_freq: 5000,
+      b5_gain: 2,
+      b5_q: 1,
+      hs_freq: 15000,
+      hs_gain: 2,
+    }),
+  ]),
+  chainP("Fat Snare", "EQ", [
+    fx("parametric_eq", {
+      ls_freq: 20,
+      ls_gain: -20,
+      b1_on: 0,
+      b2_freq: 271,
+      b2_gain: 8,
+      b2_q: 4,
+      b3_on: 0,
+      b4_freq: 5705,
+      b4_gain: -10,
+      b4_q: 1,
+      b5_on: 0,
+      hs_freq: 20000,
+      hs_gain: -10,
+    }),
+  ]),
+  chainP("Kick Drum", "EQ", [
+    fx("parametric_eq", {
+      ls_freq: 20,
+      ls_gain: -9,
+      b1_freq: 80,
+      b1_gain: 3,
+      b1_q: 2,
+      b2_freq: 120,
+      b2_gain: -3,
+      b2_q: 4,
+      b3_on: 0,
+      b4_freq: 2474,
+      b4_gain: 4,
+      b4_q: 2,
+      b5_on: 0,
+      hs_freq: 18000,
+      hs_gain: -20,
+    }),
+  ]),
+  chainP("Crunch Guitar", "EQ", [
+    fx("parametric_eq", {
+      ls_freq: 20,
+      ls_gain: -15,
+      b1_freq: 120,
+      b1_gain: -3,
+      b1_q: 1,
+      b2_freq: 454,
+      b2_gain: 4,
+      b2_q: 4,
+      b3_on: 0,
+      b4_freq: 2938,
+      b4_gain: -3,
+      b4_q: 1,
+      b5_on: 0,
+      hs_freq: 18000,
+      hs_gain: -15,
+    }),
+  ]),
+  chainP("Vintage Radio", "EQ", [
+    fx("parametric_eq", {
+      gain: -3,
+      ls_freq: 42,
+      ls_gain: -5,
+      b1_freq: 80,
+      b1_gain: -24, // as deep as a band goes; the source curve dips a little further
+      b1_q: 4,
+      b2_freq: 200,
+      b2_gain: -13,
+      b2_q: 4,
+      b3_freq: 672,
+      b3_gain: 11,
+      b3_q: 4,
+      b4_freq: 2032,
+      b4_gain: -12,
+      b4_q: 4,
+      b5_on: 0,
+      hs_freq: 14000,
+      hs_gain: -22,
+    }),
+  ]),
+  chainP("Vocal Lift", "EQ", [
+    fx("parametric_eq", {
+      hp_on: 1,
+      hp_freq: 80,
+      hp_slope: 1,
+      ls_freq: 110,
+      ls_gain: 6,
+      b1_on: 0,
+      b2_on: 0,
+      b3_freq: 291,
+      b3_gain: -3,
+      b3_q: 1.5,
+      b4_freq: 3200,
+      b4_gain: 0,
+      b4_q: 2,
+      b5_freq: 12800,
+      b5_gain: 0,
+      b5_q: 2,
+      hs_freq: 15064,
+      hs_gain: 10.1,
+    }),
+  ]),
+  chainP("Flat", "EQ", [
+    fx("parametric_eq", {
+      b1_on: 0,
+      b2_on: 0,
+      b3_on: 0,
+      b4_on: 0,
+      b5_on: 0,
+    }),
+  ]),
+  chainP("Smile Curve", "EQ", [
+    fx("band_eq_10", { g01: 4, g02: 3, g03: 1, g04: 0, g05: -1, g06: -1, g07: 0, g08: 1, g09: 3, g10: 4 }),
+  ]),
+  chainP("Bass Boost", "EQ", [
+    fx("band_eq_10", { g01: 5, g02: 4, g03: 2, g04: 1 }),
+  ]),
+  chainP("Treble Lift", "EQ", [
+    fx("band_eq_10", { g07: 1, g08: 2, g09: 3, g10: 4 }),
+  ]),
+  chainP("Mud Cut", "EQ", [
+    fx("band_eq_10", { g03: -3, g04: -3, g05: -1 }),
+  ]),
+  chainP("Low-Pass 8 kHz", "EQ", [
+    fx("precision_filter", { design: 0, mode: 0, order: 1, freq: 8000 }),
+  ]),
+  chainP("High-Pass 100 Hz", "EQ", [
+    fx("precision_filter", { design: 0, mode: 1, order: 1, freq: 100 }),
+  ]),
+  chainP("Band-Pass Voice", "EQ", [
+    fx("precision_filter", { design: 0, mode: 2, order: 1, freq: 200, freq2: 5000 }),
+  ]),
+  chainP("Steep Low-Pass 16 kHz", "EQ", [
+    fx("precision_filter", { design: 3, mode: 0, order: 3, freq: 16000, ripple: 0.3, stop: 80 }),
+  ]),
+  chainP("Notch 60 Hz and Harmonics", "EQ", [
+    fx("notch", {
+      n1_freq: 60,
+      n1_depth: -40,
+      n2_on: 1,
+      n2_freq: 120,
+      n2_depth: -30,
+      n3_on: 1,
+      n3_freq: 180,
+      n3_depth: -24,
+      n4_on: 1,
+      n4_freq: 240,
+      n4_depth: -18,
+      width: 40,
+    }),
+  ]),
+  chainP("Notch 50 Hz and Harmonics", "EQ", [
+    fx("notch", {
+      n1_freq: 50,
+      n1_depth: -40,
+      n2_on: 1,
+      n2_freq: 100,
+      n2_depth: -30,
+      n3_on: 1,
+      n3_freq: 150,
+      n3_depth: -24,
+      n4_on: 1,
+      n4_freq: 200,
+      n4_depth: -18,
+      width: 40,
+    }),
+  ]),
+  chainP("Whistle Cut", "EQ", [
+    fx("notch", { n1_freq: 3000, n1_depth: -36, width: 30 }),
+  ]),
+  // Dynamics. Attack and release in milliseconds, ratio as n:1.
+  chainP("Gentle Vocal Compressor", "Dynamics", [
+    fx("dynamics", { threshold: -18, ratio: 2.5, attack: 10, release: 120, knee: 8, makeup: 3 }),
+  ]),
+  chainP("Tight Vocal Compressor", "Dynamics", [
+    fx("dynamics", { threshold: -24, ratio: 4, attack: 5, release: 80, knee: 4, makeup: 6 }),
+  ]),
+  chainP("Drum Smash", "Dynamics", [
+    fx("dynamics", { threshold: -30, ratio: 10, attack: 1, release: 60, knee: 0, makeup: 8 }),
+  ]),
+  chainP("Bass Glue", "Dynamics", [
+    fx("dynamics", { threshold: -20, ratio: 4, attack: 30, release: 200, knee: 6, makeup: 4 }),
+  ]),
+  chainP("Acoustic Guitar Leveling", "Dynamics", [
+    fx("dynamics", { threshold: -22, ratio: 3, attack: 15, release: 250, knee: 10, makeup: 3 }),
+  ]),
+  chainP("Mix Bus Glue", "Dynamics", [
+    fx("dynamics", { threshold: -12, ratio: 1.5, attack: 30, release: 300, knee: 12, makeup: 1 }),
+  ]),
+  chainP("Limit to -1 dBTP", "Dynamics", [
+    fx("limiter", { detect: 1, ceiling: -1, input_boost: 0, lookahead: 5, release: 100 }),
+  ]),
+  chainP("Loud Podcast Master", "Dynamics", [
+    fx("limiter", { detect: 1, ceiling: -1, input_boost: 6, lookahead: 5, release: 150 }),
+  ]),
+  chainP("Transparent Safety Limiter", "Dynamics", [
+    fx("limiter", { detect: 1, ceiling: -0.3, input_boost: 0, lookahead: 10, release: 300 }),
+  ]),
+  chainP("Gate - Tight Drums", "Dynamics", [
+    fx("breath_gate", { threshold: -30, attack: 0.5, hold: 20, release: 60, range: -80 }),
+  ]),
+  chainP("Gate - Noisy Guitar Amp", "Dynamics", [
+    fx("breath_gate", { threshold: -45, attack: 1, hold: 100, release: 300, range: -60 }),
+  ]),
+  chainP("Opto - Smooth Vocal", "Dynamics", [
+    fx("opto_leveler", { peak: 45, gain: 50, mode: 0, emphasis: 0, tube: 30 }),
+  ]),
+  chainP("Opto - Bass", "Dynamics", [
+    fx("opto_leveler", { peak: 60, gain: 55, mode: 0, emphasis: 20, tube: 40 }),
+  ]),
+  chainP("Opto - Mix Bus Limit", "Dynamics", [
+    fx("opto_leveler", { peak: 30, gain: 40, mode: 1, emphasis: 0, tube: 15 }),
+  ]),
+  // Reverb. Decay in milliseconds, wet as a percentage of the dry level.
+  chainP("Small Room", "Reverb", [
+    fx("reverb", { kind: 0, size: 25, decay: 600, predelay: 5, early: 60, damping: 55, high_cut: 8000, wet: 18 }),
+  ]),
+  chainP("Vocal Plate", "Reverb", [
+    fx("reverb", { kind: 2, size: 55, decay: 1800, predelay: 30, early: 30, damping: 45, diffusion: 85, high_cut: 10000, low_cut: 150, wet: 22 }),
+  ]),
+  chainP("Concert Hall", "Reverb", [
+    fx("reverb", { kind: 1, size: 85, decay: 3200, predelay: 40, early: 35, damping: 50, diffusion: 75, high_cut: 7000, low_cut: 100, wet: 25 }),
+  ]),
+  chainP("Cathedral", "Reverb", [
+    fx("reverb", { kind: 1, size: 100, decay: 7000, predelay: 80, early: 20, damping: 60, diffusion: 80, modulation: 40, high_cut: 6000, low_cut: 120, wet: 30 }),
+  ]),
+  chainP("Guitar Spring", "Reverb", [
+    fx("reverb", { kind: 3, size: 40, decay: 2200, predelay: 0, early: 50, damping: 40, high_cut: 5000, low_cut: 200, wet: 28 }),
+  ]),
+  chainP("Tape Echo Chamber", "Reverb", [
+    fx("reverb", { kind: 4, size: 60, decay: 2500, predelay: 60, early: 40, damping: 65, modulation: 50, high_cut: 5500, low_cut: 150, wet: 25 }),
+  ]),
+  chainP("Drum Room", "Reverb", [
+    fx("reverb", { kind: 0, size: 45, decay: 900, predelay: 10, early: 70, damping: 35, diffusion: 60, high_cut: 9000, low_cut: 100, wet: 20 }),
+  ]),
+  chainP("Ambience Only", "Reverb", [
+    fx("reverb", { kind: 0, size: 15, decay: 300, predelay: 0, early: 90, damping: 60, high_cut: 7000, wet: 12 }),
+  ]),
+  // Modulation. Rate in hertz, depth and feedback as percentages.
+  chainP("Lush Chorus", "Modulation", [
+    fx("modulation", { kind: 0, rate: 0.5, depth: 55, voices: 4, chorus_delay: 20, width: 100, spread: 60, wet: 45 }),
+  ]),
+  chainP("Subtle Chorus", "Modulation", [
+    fx("modulation", { kind: 0, rate: 0.3, depth: 30, voices: 2, chorus_delay: 15, width: 80, wet: 30 }),
+  ]),
+  chainP("Jet Flanger", "Modulation", [
+    fx("modulation", { kind: 1, rate: 0.2, depth: 90, feedback: 70, flange_delay: 1, width: 100, wet: 50 }),
+  ]),
+  chainP("Soft Flanger", "Modulation", [
+    fx("modulation", { kind: 1, rate: 0.4, depth: 50, feedback: 25, flange_delay: 2.5, width: 90, wet: 40 }),
+  ]),
+  chainP("Slow Phaser", "Modulation", [
+    fx("modulation", { kind: 2, rate: 0.15, depth: 70, feedback: 30, stages: 2, center: 600, width: 100, wet: 50 }),
+  ]),
+  chainP("Fast Phaser", "Modulation", [
+    fx("modulation", { kind: 2, rate: 2.5, depth: 60, feedback: 40, stages: 1, center: 900, width: 100, wet: 50 }),
+  ]),
+  chainP("Vocal Double", "Modulation", [
+    fx("modulation", { kind: 3, adt_offset: 14, lfo_range: 1.2, lfo_rate: 0.4, lfo_shape: 2, src_pan: -35, adt_pan: 35, adt_level: -2, wet: 50 }),
+  ]),
+  chainP("Wide Guitar Double", "Modulation", [
+    fx("modulation", { kind: 3, adt_offset: 18, lfo_range: 2, lfo_rate: 0.3, lfo_shape: 1, src_pan: -80, adt_pan: 80, adt_level: 0, wet: 50 }),
+  ]),
+  // Tone and stereo.
+  chainP("Warm Tube Drive", "Tone and stereo", [
+    fx("tube_preamp", { input: 4, drive: 45, low: 1, high: -1, transformer: 1, output: -3 }),
+  ]),
+  chainP("Clean Tube Warmth", "Tone and stereo", [
+    fx("tube_preamp", { input: 0, drive: 20, low: 0, high: 0, transformer: 1, output: 0 }),
+  ]),
+  chainP("Crunchy Tube", "Tone and stereo", [
+    fx("tube_preamp", { input: 10, drive: 75, low: 2, high: 1, transformer: 1, output: -8 }),
+  ]),
+  chainP("Vox - Clean Podcast", "Tone and stereo", [
+    fx("vox_strip", { low_cut: 1, dyn_style: 1, comp: 35, deess: 30, tone_style: 0, low: 0, mid: 1, high: 1, air: 15 }),
+  ]),
+  chainP("Vox - Warm Radio", "Tone and stereo", [
+    fx("vox_strip", { low_cut: 1, dyn_style: 2, comp: 50, deess: 35, tone_style: 1, low: 2, mid: -1, high: 1, air: 10 }),
+  ]),
+  chainP("Vox - Modern Pop", "Tone and stereo", [
+    fx("vox_strip", { low_cut: 1, dyn_style: 0, comp: 60, deess: 40, tone_style: 2, low: -1, mid: 0, high: 2, air: 40, fx_on: 1, fx_style: 1, fx: 25 }),
+  ]),
+  chainP("Vox - Lo-Fi Radio", "Tone and stereo", [
+    fx("vox_strip", { low_cut: 1, dyn_style: 2, comp: 70, deess: 20, tone_style: 1, fx_on: 1, fx_style: 3, fx: 80 }),
+  ]),
+  chainP("Wider Stereo", "Tone and stereo", [
+    fx("stereo_width", { pan: 0, width: 150 }),
+  ]),
+  chainP("Narrow for Mono Safety", "Tone and stereo", [
+    fx("stereo_width", { pan: 0, width: 60 }),
+  ]),
+  chainP("Mono", "Tone and stereo", [
+    fx("stereo_width", { pan: 0, width: 0 }),
+  ]),
   chainP("Telephone - Receiver", "EQ", [
     fx("parametric_eq", {
       hp_on: 1,
