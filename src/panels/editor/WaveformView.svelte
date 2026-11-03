@@ -30,7 +30,7 @@
   import { laneWidths } from "../time-info/time-info";
   import { timeDisplayItems } from "./time-menu";
   import { levelAt, pointsOf } from "./envelope";
-  import { fit, formatIn, peakRange, pickLevel, rulerTicks, ticksFor, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
+  import { fit, formatIn, peakRange, rulerTicks, ticksFor, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
   import { mediaFrames, transportAuditionLevel } from "../../app/core";
   import { dragGain, gainText } from "./clip-gain";
   import TransportBar from "./TransportBar.svelte";
@@ -433,7 +433,7 @@
         }
         // Not read yet (or could not be): the finest peaks below, until it is.
       }
-      const level = pickLevel(entry.levels, framesPerPx);
+      const level = peaks.level(m.path, framesPerPx);
       if (!level) continue;
       const pch = entry.summary.channels;
       const region = clip.source_out - clip.source_in;

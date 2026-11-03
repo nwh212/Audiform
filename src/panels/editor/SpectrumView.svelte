@@ -68,6 +68,8 @@
   const laneH = $derived(height / lanes);
   let canvas = $state<HTMLCanvasElement | null>(null);
   let image = $state<{ data: Uint8Array; columns: number; rows: number; start: number; end: number } | null>(null);
+  /** The image colored through the palette, kept between repaints. */
+  let tinted: { image: NonNullable<typeof image>; lut: Uint8Array; canvas: HTMLCanvasElement } | null = null;
   let pitch = $state<{ hz: number[]; start: number; end: number } | null>(null);
   let note = $state<string | null>(null);
   let shapes = $state<readonly SpectralShape[] | null>(null);
@@ -333,18 +335,25 @@
     // The image, placed by sample so it lines up while a new one loads.
     if (image) {
       const { data, columns, rows } = image;
-      const off = new ImageData(columns, rows);
-      for (let i = 0; i < data.length; i++) {
-        const k = data[i]! * 3;
-        off.data[i * 4] = lut[k]!;
-        off.data[i * 4 + 1] = lut[k + 1]!;
-        off.data[i * 4 + 2] = lut[k + 2]!;
-        off.data[i * 4 + 3] = 255;
+      // Colored once per image and palette, not on every repaint (the
+      // playhead repaints this view often): the bitmap is kept until
+      // either changes.
+      if (!tinted || tinted.image !== image || tinted.lut !== lut) {
+        const off = new ImageData(columns, rows);
+        for (let i = 0; i < data.length; i++) {
+          const k = data[i]! * 3;
+          off.data[i * 4] = lut[k]!;
+          off.data[i * 4 + 1] = lut[k + 1]!;
+          off.data[i * 4 + 2] = lut[k + 2]!;
+          off.data[i * 4 + 3] = 255;
+        }
+        const c = tinted?.canvas ?? document.createElement("canvas");
+        c.width = columns;
+        c.height = rows;
+        c.getContext("2d")?.putImageData(off, 0, 0);
+        tinted = { image, lut, canvas: c };
       }
-      const tmp = document.createElement("canvas");
-      tmp.width = columns;
-      tmp.height = rows;
-      tmp.getContext("2d")?.putImageData(off, 0, 0);
+      const tmp = tinted.canvas;
       const x0 = xOf(image.start, view);
       const x1 = xOf(image.end, view);
       g.save();

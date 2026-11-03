@@ -19,6 +19,9 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Faster
 
+- Less memory for waveforms. The editor used to load every detail level of every file's waveform peaks as soon as a session opened; the finest level of an hour-long stereo file alone is about 20 MB, so a session of long files could hold hundreds of megabytes. Now only the coarse level loads with the file, finer levels load when you zoom in far enough to use them, and the least recently drawn fine levels are dropped past a 96 MB budget. A session of 24 forty-minute files went from 368 MB of peaks to 32 MB on open. About shows the peaks' share of the page's memory.
+- The spectral display colors its picture once per analysis, not on every repaint while the playhead moves.
+
 - **Much less memory in big sessions.** The effects list was kept once per track and bus; it is now kept once. On a 32-track session the editor view went from about 3.8 GB to about 0.7 GB.
 - **Smooth zoom and scroll.** The wheel zooms and scrolls once per screen refresh, lanes keep their pictures between frames, and waveforms draw in one pass.
 - **Moving the playhead** or the time selection redraws only the timeline, not every panel.

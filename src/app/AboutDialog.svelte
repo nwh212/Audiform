@@ -9,6 +9,7 @@
   import { onMount } from "svelte";
   import logo from "../assets/logo-dark.png";
   import { formatMb, memoryReport, type MemoryReport } from "./core";
+  import { peaks } from "../stores/open-session";
 
   interface Props {
     version: string | null;
@@ -27,13 +28,13 @@
   });
   const pluginsMb = $derived(memory ? memory.plugins.reduce((n, p) => n + p.memoryMb, 0) : 0);
   /** What the page itself holds: script memory and canvas pixels (the rest of the view is the browser's own). */
-  let page = $state<{ scriptMb: number; canvases: number; canvasMb: number } | null>(null);
+  let page = $state<{ scriptMb: number; canvases: number; canvasMb: number; peaksMb: number } | null>(null);
   function readPage() {
     const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
     let bytes = 0;
     const list = document.querySelectorAll("canvas");
     for (const c of list) bytes += c.width * c.height * 4;
-    page = { scriptMb: mem ? mem.usedJSHeapSize / 1048576 : 0, canvases: list.length, canvasMb: bytes / 1048576 };
+    page = { scriptMb: mem ? mem.usedJSHeapSize / 1048576 : 0, canvases: list.length, canvasMb: bytes / 1048576, peaksMb: peaks.held / 1048576 };
   }
   onMount(() => {
     readPage();
@@ -78,7 +79,7 @@
           Audiform {formatMb(memory.appMb)}, editor view {formatMb(memory.viewMb)}{memory.viewProcesses > 1 ? ` (${memory.viewProcesses} processes)` : ""}, plug-ins {formatMb(pluginsMb)}{memory.otherMb > 0 ? `, other ${formatMb(memory.otherMb)}` : ""}.
         </p>
         {#if page}
-          <p>Of the editor view, the page itself holds {formatMb(page.scriptMb)} of script memory and {formatMb(page.canvasMb)} in {page.canvases} canvases.</p>
+          <p>Of the editor view, the page itself holds {formatMb(page.scriptMb)} of script memory ({formatMb(page.peaksMb)} of it waveform peaks) and {formatMb(page.canvasMb)} in {page.canvases} canvases.</p>
         {/if}
         {#if memory.plugins.length > 0}
           <ul>

@@ -15,7 +15,7 @@
   import ClipColorDialog from "../../app/ClipColorDialog.svelte";
   import ChoiceDialog from "../../app/ChoiceDialog.svelte";
   import type { PeakStore } from "../../stores/peaks";
-  import { peakRange, pickLevel } from "../editor/timeline";
+  import { peakRange } from "../editor/timeline";
   import { binsOf, defaultColor, initials, missingStarterBins, STARTER_BINS } from "./bins";
   import {
     libraryCleanUp,
@@ -315,7 +315,7 @@
       if (e.status !== "ready" || !e.summary) return;
       const ch = e.summary.channels;
       const total = e.summary.length;
-      const level = pickLevel(e.levels, total / w);
+      const level = peaks.level(current, total / w);
       if (!level || total <= 0 || level.data.length === 0) {
         canvas.title = `No waveform data (${e.levels.length} levels, length ${total})`;
         return;

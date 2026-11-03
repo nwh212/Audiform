@@ -310,7 +310,7 @@
         // A stretched clip covers less (or more) of its file per pixel.
         const ratio = stretchOf(clip);
         const framesPerPx = (view.spp * srcRate) / sessionRate / ratio;
-        const level = pickLevel(entry.levels, framesPerPx);
+        const level = clip === liveClip ? pickLevel(entry.levels, framesPerPx) : peaks.level(m!.path, framesPerPx);
         if (!level || level.data.length === 0) {
           // Ready but nothing to draw: say so instead of leaving the clip blank.
           g.save();
