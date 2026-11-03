@@ -40,6 +40,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Changed
 
+- The colored drag strip on each track header is always at its full width with its grip dots showing. It used to be a thin line that widened only when pointed at.
+
 - Selection edges can be dragged, and a loop follows a new selection while it plays.
 - Live edits keep 5.1 clip channels in 3D Space sessions.
 

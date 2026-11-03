@@ -1061,9 +1061,9 @@
     opacity: 0.7;
   }
 
-  /* A slim bar in the track's color. Pointing at it widens it and shows
-     grip dots, so it reads as the place to drag the track from. The hit
-     area stays 10 px wide either way. */
+  /* A bar in the track's color with grip dots, always at its full width,
+     so it reads as the place to drag the track from without having to
+     find it with the pointer (it used to widen on hover). */
   .grab {
     position: absolute;
     top: 0;
@@ -1078,9 +1078,8 @@
     content: "";
     position: absolute;
     inset: 0 auto 0 0;
-    width: 4px;
+    width: 10px;
     background: var(--track-color, var(--border-strong));
-    transition: width 0.12s ease;
   }
 
   .grab::after {
@@ -1093,8 +1092,7 @@
     transform: translateY(-50%);
     background-image: radial-gradient(circle, rgba(0, 0, 0, 0.5) 1.1px, transparent 1.4px);
     background-size: 4px 5.5px;
-    opacity: 0;
-    transition: opacity 0.12s ease;
+    opacity: 0.8;
   }
 
   /* Pre-render marker on the handle: hollow while waiting, pulsing while
@@ -1123,11 +1121,6 @@
     to {
       opacity: 0.3;
     }
-  }
-
-  .grab:hover::before,
-  .grab:active::before {
-    width: 10px;
   }
 
   .grab:hover::after,

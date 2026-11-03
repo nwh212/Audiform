@@ -2379,3 +2379,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead's memory log showed the editor view at over 2 GB with the engine and app small. The peak cache was the largest page-side holder we could find: level 0 is 64-frame blocks for files up to an hour (32 for under ten minutes), so an hour-long stereo file is about 20 MB at level 0 and 27 MB over all levels, loaded for every file in a session whether or not it was ever drawn at that zoom. Measured on a 56-track session of 24 forty-minute files in a headless browser: 368 MB of peak data fetched on open before, 32 MB after. These buffers live outside the script heap, so the About dialog's script number never showed them; it now lists the peaks' share separately.
 
 **How.** The queue carries tasks (summary or one level); duplicate requests are folded; a level that fails to load leaves the coarser one drawing. Drawing with a coarser level than the zoom wants looks blocky for the moment until the finer one lands and the store emits a redraw. Tests cover the on-demand loading and the eviction order. The spectral display's palette pass is also cached per image and palette instead of being redone every repaint.
+
+## 2026-11-03: Track drag strips stay at full width
+
+**Decision.** The colored strip at the left of each track header (the drag handle, also the click target that selects the track) is drawn at its full 10 px width with its grip dots always visible. It no longer grows from 4 px on hover.
+
+**Why.** The project lead found the strips hiding and showing as the pointer moved distracting, and asked that they stop. A fixed strip is also easier to aim for. The hit area was already 10 px, so nothing changes in what the strip does.
