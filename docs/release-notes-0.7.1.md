@@ -6,6 +6,11 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- Automation writing. Each track's automation mode picker now offers Write, Latch and Touch beside Read and Off. While the session plays, moving the track's fader, pan, its spot in 3D Space or any effect setting (built-in or plug-in) records the move into the matching lane: Touch while the control is held, Latch from the first move until play stops, Write every lane from the moment play starts. A lane is made when the track has none for that control. The written stretch is thinned to the points that shape it, and a whole pass is one undo step. The picker turns red while a track is recording.
+- Automation lanes size like tracks: each lane starts at half its track's height and can be dragged between the same limits as a track.
+- CRT theme: a color tube monitor, with scanlines over red, green and blue phosphor stripes, bright things glowing onto the glass, darkened corners and a slow flicker.
+- Visualizer: two new looks, Tunnel (shapes flying at you, bending with the bass) and Electric (lightning arcing between drifting points, forking on the treble, striking on the beat). A Detail choice draws the soft looks (Lava Lamp, Plasma) finer, at more of the computer. The Radial look is gone. The control bar is grouped and tidier.
+
 - Sixty-odd built-in effect presets: Parametric EQ shapes for acoustic strum, fat snare, kick, crunch guitar, vintage radio and a vocal lift; Band EQ curves; Precision Filter and Notch Filter starting points; compressor, limiter, gate and Opto Leveler settings for vocals, drums, bass and the mix bus; eight reverbs from a small room to a cathedral; chorus, flanger, phaser and double-track settings; Tube Preamp, Vox Strip and Stereo Width starting points. Each shows in the Effects Rack preset menu under its group and in the effect's own window under Built in.
 
 - Theme Maker: a web page (Settings > Appearance > Make a Theme, or docs/theme-maker/index.html) where you pick colors, fonts, a background picture and pointers on a mock of the Audiform window and save a .audtheme file to share. It lives outside the app, so Audiform stays small and offline.
@@ -28,6 +33,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 - **No more plug-in restarts** while you move around a session: the pictures drawn at the playhead borrow playback's plug-ins instead of starting their own, and plug-ins started ahead of Play keep the rate playback uses.
 
 ## Fixed
+
+- Alt-dragging clips to copy them now shows both the originals, staying put, and the copies moving under the pointer.
 
 - **Save Audio As never saved,** in any format, and showed "Cannot read properties of null (reading 'resolve')". It saves again, and the Files list shows the new file in place of the old one.
 - **Sessions from the other editor played about 18 dB too loud.** Compressors with a sidechain input heard silence on it and never compressed. A plug-in's sidechain input now stays off until a key is actually routed to it, so this is fixed for every plug-in that has one.

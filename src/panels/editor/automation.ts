@@ -11,12 +11,15 @@
  */
 
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
-import { DEFAULT_SPACE_POS, type EffectChainDoc, type EnvelopeDoc, type EnvelopePointDoc, type SpaceParam, type SpacePosDoc } from "../../stores/session";
+import { DEFAULT_SPACE_POS, type AutomationMode, type EffectChainDoc, type EnvelopeDoc, type EnvelopePointDoc, type SpaceParam, type SpacePosDoc } from "../../stores/session";
 
-/** Height of one automation lane, in pixels. */
+/** Height of one automation lane, in pixels, when its owner's height is not known. */
 export const AUTO_H = 54;
-/** A lane's height: its own, or the standard one. */
-export const laneHeight = (lane: { height?: number }) => Math.max(24, Math.min(400, lane.height ?? AUTO_H));
+/** The least and most a lane can be, the same as a track. */
+export const LANE_MIN = 40;
+export const LANE_MAX = 600;
+/** A lane's height: its own, or half its owner's (a track or bus), so lanes resize and read like tracks. */
+export const laneHeight = (lane: { height?: number }, ownerHeight?: number) => Math.max(LANE_MIN, Math.min(LANE_MAX, lane.height ?? (ownerHeight ? Math.round(ownerHeight / 2) : AUTO_H)));
 
 export type AutoTarget = EnvelopeDoc["target"];
 
@@ -253,13 +256,30 @@ export function autoMove(points: readonly EnvelopePointDoc[], i: number, pos: nu
   return points.map((p, k) => (k === i ? { ...p, position: Math.round(Math.max(lo, Math.min(hi, pos))), value } : p));
 }
 
-/** The track's automation mode as its header shows it: Read while any lane plays, Off when every lane is off. */
-export function autoMode(owner: AutoOwner): "read" | "off" {
+/** What the header's mode picker shows: Off when every lane is off, else the owner's writing mode (Read, Write, Latch or Touch). */
+export type HeaderMode = AutomationMode | "off";
+
+/** The track's automation mode as its header shows it: Off when every lane is off, else its mode. */
+export function autoMode(owner: AutoOwner & { automation_mode?: AutomationMode }): HeaderMode {
   const envs = owner.envelopes ?? [];
-  return envs.length === 0 || envs.some((e) => e.enabled) ? "read" : "off";
+  if (envs.length > 0 && envs.every((e) => !e.enabled)) return "off";
+  return owner.automation_mode ?? "read";
 }
 
-/** Every lane on (Read) or off. */
-export function setMode(owner: AutoOwner, mode: "read" | "off"): EnvelopeDoc[] {
-  return (owner.envelopes ?? []).map((e) => ({ ...e, enabled: mode === "read" }));
+/** Every lane on (any reading or writing mode) or off. */
+export function setMode(owner: AutoOwner, mode: HeaderMode): EnvelopeDoc[] {
+  return (owner.envelopes ?? []).map((e) => ({ ...e, enabled: mode !== "off" }));
 }
+
+/** What a picked header mode means for the owner's `automation_mode`: Off keeps it, the rest set it. */
+export function modeChange(mode: HeaderMode): AutomationMode | null {
+  return mode === "off" ? null : mode;
+}
+
+export const MODE_TITLES: Record<HeaderMode, string> = {
+  off: "Off: no lane plays; the fader, pan and effects hold still.",
+  read: "Read: the lanes play. Moving a control while playing changes nothing in them.",
+  write: "Write: while playing, every lane records its control's value from the start, over whatever was there. Move a control to change what it records.",
+  latch: "Latch: while playing, a lane starts recording at the first move of its control and keeps the last value until play stops.",
+  touch: "Touch: while playing, a lane records only while its control is held, then plays again.",
+};

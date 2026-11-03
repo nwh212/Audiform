@@ -11,6 +11,8 @@ export interface Frame {
   h: number;
   a: Analysis;
   pal: Palette;
+  /** How fine the soft pictures are drawn: 1 standard, 2 twice as fine each way (four times the work), 0.5 coarser. */
+  detail: number;
 }
 
 export interface Visual {
@@ -33,6 +35,20 @@ export function fade(f: Frame, amount: number): void {
   f.ctx.fillRect(0, 0, f.w, f.h);
 }
 
+/** The Detail choices, as the panel lists them. */
+export const DETAILS: { value: number; label: string }[] = [
+  { value: 0.5, label: "Soft" },
+  { value: 1, label: "Standard" },
+  { value: 2, label: "Fine" },
+  { value: 3, label: "Finest" },
+];
+
+/** The field's size in cells for a drawing area, a cell size and a detail. */
+export function fieldSize(width: number, height: number, cell: number, detail = 1): [number, number] {
+  const size = Math.max(1, cell / Math.max(0.25, detail));
+  return [Math.max(8, Math.round(width / size)), Math.max(8, Math.round(height / size))];
+}
+
 /** A small canvas drawn pixel by pixel, then scaled up smoothly: cheap soft pictures. */
 export class Field {
   private canvas: HTMLCanvasElement | null = null;
@@ -41,9 +57,9 @@ export class Field {
   h = 0;
   data: Uint8ClampedArray = new Uint8ClampedArray(0);
 
-  fit(width: number, height: number, cell: number): void {
-    const w = Math.max(8, Math.round(width / cell));
-    const h = Math.max(8, Math.round(height / cell));
+  /** Sizes the field: one cell of `cell` screen pixels per field pixel at standard detail, smaller cells at finer detail. */
+  fit(width: number, height: number, cell: number, detail = 1): void {
+    const [w, h] = fieldSize(width, height, cell, detail);
     if (w === this.w && h === this.h && this.canvas) return;
     this.w = w;
     this.h = h;

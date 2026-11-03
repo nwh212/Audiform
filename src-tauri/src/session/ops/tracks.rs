@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{check_output, id_taken, track_index, Op, OpError};
 use crate::session::model::{
-    ChannelLayout, EffectSlot, Output, Session, SpacePos, Track, TrackKind, TrackRole,
+    AutomationMode, ChannelLayout, EffectSlot, Output, Session, SpacePos, Track, TrackKind,
+    TrackRole,
 };
 
 /// Track settings to change. Fields left out stay as they are.
@@ -48,6 +49,9 @@ pub struct TrackChanges {
     /// Shows or hides its automation lanes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_automation: Option<bool>,
+    /// How its lanes take moves while playing: Read, Write, Latch or Touch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automation_mode: Option<AutomationMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hidden: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -172,6 +176,9 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.show_automation {
                 old.show_automation = Some(std::mem::replace(&mut t.show_automation, v));
+            }
+            if let Some(v) = changes.automation_mode {
+                old.automation_mode = Some(std::mem::replace(&mut t.automation_mode, v));
             }
             if let Some(v) = changes.hidden {
                 old.hidden = Some(std::mem::replace(&mut t.hidden, v));

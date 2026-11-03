@@ -10,6 +10,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { drawGainHandle, gainBox } from "./clip-gain";
+  import { COPY_PREVIEW } from "./clip-edit";
   import { drawRerender, rerenderBox } from "./linked-clip";
   import { hiddenEdges } from "./lane-hit";
   import type { PeakEntry, PeakStore } from "../../stores/peaks";
@@ -216,7 +217,8 @@
       if (x1 < 0 || x0 > width) continue;
       const left = Math.max(0, x0);
       const right = Math.min(width, x1);
-      const selected = selectedClips.has(clip.id);
+      // A copy being Alt-dragged reads as chosen, like the clip it came from.
+      const selected = selectedClips.has(clip.id) || (clip.id.endsWith(COPY_PREVIEW) && selectedClips.has(clip.id.slice(0, -COPY_PREVIEW.length)));
       const color = clipColor(clip);
 
       // Body and title bar. The lane color goes down first, so a clip

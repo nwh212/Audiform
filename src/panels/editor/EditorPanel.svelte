@@ -45,7 +45,7 @@
   import TempoStrip from "./TempoStrip.svelte";
   import MetronomeRow from "./MetronomeRow.svelte";
   import AutoLane from "./AutoLane.svelte";
-  import { laneHeight, autoRange, autoRest, newLane, nextTarget, putLane, shownLanes, type AutoTarget } from "./automation";
+  import { laneHeight, LANE_MAX, LANE_MIN, autoRange, autoRest, newLane, nextTarget, putLane, shownLanes, type AutoTarget } from "./automation";
   import type { Readable } from "svelte/store";
   import type { WaveFile } from "../../stores/wave";
   import OverviewStrip from "./OverviewStrip.svelte";
@@ -817,7 +817,9 @@
       live = v;
     }),
   );
-  const shownTracks = $derived(doc && preview.length > 0 ? previewTracks(doc, preview) : null);
+  /** While Alt-dragging clips: the ones that stay put, their copies moving. */
+  let previewCopies = $state<Set<string> | null>(null);
+  const shownTracks = $derived(doc && preview.length > 0 ? previewTracks(doc, preview, previewCopies) : null);
 
   const zoneAt = (track: TrackDoc, x: number, y: number) => hitZone(geometry(), ed, track, x, y);
 
@@ -1276,8 +1278,9 @@
         changes = moveClips(d0, ids, dx, row - startRow + extra, targets, tol, true).changes;
         if (ed.autoCrossfade) changes = withCrossfades(d0, changes);
         changes = withLayers(d0, changes);
-        // Alt held: the drop makes copies and leaves the originals.
+        // Alt held: the drop makes copies and leaves the originals, and the drag shows both.
         stretchHint = ev.altKey ? (ids.length > 1 ? `Copy ${ids.length} clips` : "Copy") : null;
+        previewCopies = ev.altKey ? new Set(ids) : null;
       } else if (stretching) {
         const r = stretchDrag(clip, mediaMap.get(clip.media_id), rate, kind === "trim-left" ? "left" : "right", end, dx, targets, tol);
         changes = r.changes;
@@ -1315,6 +1318,7 @@
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
       preview = [];
+      previewCopies = null;
       stretchHint = null;
       if (kind === "gain" || kind === "fade-in" || kind === "fade-out") envTip = null;
       if (!moved || changes.length === 0) return;
@@ -1383,18 +1387,19 @@
   }
 
   // Automation lanes under a track.
-  const lanesHeight = (t: TrackDoc) => (t.show_automation && !t.collapsed ? shownLanes(t).reduce((h, l) => h + liveLaneH(l), 0) : 0);
+  const lanesHeight = (t: TrackDoc) => (t.show_automation && !t.collapsed ? shownLanes(t).reduce((h, l) => h + liveLaneH(l, t.height), 0) : 0);
   /** Lane heights while their edge is being dragged, shown at once. */
   let laneDrag = $state<{ id: string; height: number } | null>(null);
-  const liveLaneH = (l: { id: string; height?: number }) => (laneDrag && laneDrag.id === l.id ? laneDrag.height : laneHeight(l));
-  /** Dragging a lane's bottom edge sets its height (one undoable step). */
+  /** A lane's height now: half its track's unless set, like a track's own while being resized. */
+  const liveLaneH = (l: { id: string; height?: number }, ownerHeight?: number) => (laneDrag && laneDrag.id === l.id ? laneDrag.height : laneHeight(l, ownerHeight));
+  /** Dragging a lane's bottom edge sets its height (one undoable step), within a track's limits. */
   function resizeLane(e: PointerEvent, track: TrackDoc, lane: EnvelopeDoc) {
     if (e.button !== 0 || !lane.id) return;
     e.preventDefault();
     e.stopPropagation();
     const y0 = e.clientY;
-    const h0 = laneHeight(lane);
-    const move = (ev: PointerEvent) => (laneDrag = { id: lane.id, height: Math.max(24, Math.min(400, Math.round(h0 + ev.clientY - y0))) });
+    const h0 = laneHeight(lane, track.height);
+    const move = (ev: PointerEvent) => (laneDrag = { id: lane.id, height: Math.max(LANE_MIN, Math.min(LANE_MAX, Math.round(h0 + ev.clientY - y0))) });
     const up = () => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
@@ -1938,7 +1943,7 @@
         rest={autoRest(track, fxCatalog, lane.target)}
         {view}
         width={lanesWidth}
-        height={liveLaneH(lane)}
+        height={liveLaneH(lane, track.height)}
         color={trackColor(track.color, i)}
         {playhead}
         onPoints={(points, label) => setLanes(track, putLane(track, { ...lane, points }), label)}

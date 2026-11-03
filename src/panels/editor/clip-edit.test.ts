@@ -141,6 +141,13 @@ describe("previewTracks", () => {
     expect(t[0]!.clips.map((c) => [c.id, c.source_out])).toEqual([["b", 100]]);
     expect(t[1]!.clips.map((c) => [c.id, c.start])).toEqual([["a", 5]]);
   });
+
+  it("while Alt-dragging, keeps the originals and draws the copies where they will land", () => {
+    const doc = session([track("A", [clip("a", 0), clip("b", 50_000)]), track("B", [])]);
+    const t = previewTracks(doc, [{ id: "a", track_id: "B", start: 5 }, { id: "b", start: 60_000 }], new Set(["a", "b"]));
+    expect(t[0]!.clips.map((c) => [c.id, c.start])).toEqual([["a", 0], ["b", 50_000], ["b+copy", 60_000]]);
+    expect(t[1]!.clips.map((c) => [c.id, c.start])).toEqual([["a+copy", 5]]);
+  });
 });
 
 describe("rippleDeleteRange", () => {

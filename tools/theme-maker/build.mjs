@@ -22,7 +22,7 @@ const template = readFileSync(join(root, "tools/theme-maker/template.html"), "ut
 const tokensCss = readFileSync(join(root, "src/styles/tokens.css"), "utf8");
 
 /** Shipped themes small enough to carry inside the page (no big pictures). */
-const STARTER_IDS = ["grey95", "analog", "marigold", "mallpastel", "mallnight", "phosphor"];
+const STARTER_IDS = ["grey95", "analog", "marigold", "mallpastel", "mallnight", "phosphor", "crt"];
 
 /** Labels for tokens whose names do not read well on their own. */
 const LABELS = {

@@ -9,7 +9,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{bus_index, check_output, id_taken, EffectTarget, Op, OpError, TrackChanges};
-use crate::session::model::{Bus, ChannelLayout, EffectChain, Id, Output, Send, Session, SpacePos};
+use crate::session::model::{
+    AutomationMode, Bus, ChannelLayout, EffectChain, Id, Output, Send, Session, SpacePos,
+};
 
 /// Bus settings to change. Fields left out stay as they are.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -46,6 +48,9 @@ pub struct BusChanges {
     /// Makes it a 3D Bus, or a plain one again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub room: Option<bool>,
+    /// How its lanes take moves while playing: Read, Write, Latch or Touch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automation_mode: Option<AutomationMode>,
 }
 
 /// Applies a bus edit and returns its inverse.
@@ -123,6 +128,9 @@ pub(super) fn apply_one(s: &mut Session, op: &Op) -> Result<Op, OpError> {
             }
             if let Some(v) = changes.room {
                 old.room = Some(std::mem::replace(&mut b.room, v));
+            }
+            if let Some(v) = changes.automation_mode {
+                old.automation_mode = Some(std::mem::replace(&mut b.automation_mode, v));
             }
             if let Some(v) = changes.output {
                 old.output = Some(std::mem::replace(&mut b.output, v));

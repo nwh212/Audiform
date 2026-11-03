@@ -17,7 +17,7 @@ class Plasma implements Visual {
     const { a } = f;
     this.t += a.dt * (0.4 + a.level * 2.4);
     const fld = this.field;
-    fld.fit(f.w, f.h, 7);
+    fld.fit(f.w, f.h, 7, f.detail);
     const W = fld.w;
     const H = fld.h;
     const d = fld.data;

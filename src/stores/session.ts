@@ -110,6 +110,10 @@ export interface BusDoc {
   effects: EffectChainDoc;
   /** Shows below this many tracks in the Editor; missing shows it below the last. */
   position?: number | null;
+  /** Automation lanes. */
+  envelopes?: EnvelopeDoc[];
+  /** How its lanes take moves while playing. Missing is Read. */
+  automation_mode?: AutomationMode;
   /** Folded to mono after its Audio FX chain. Missing when off. */
   mono?: boolean;
   /** 3D Space sessions: where it sits in the room. */
@@ -255,6 +259,8 @@ export interface TrackDoc {
   collapsed?: boolean;
   /** Its automation lanes show under it. */
   show_automation?: boolean;
+  /** How its lanes take moves while playing. Missing is Read. */
+  automation_mode?: AutomationMode;
   /** Automation lanes: volume, pan and effect settings over the session's time. */
   envelopes?: EnvelopeDoc[];
   /** Hidden from the Editor and Mixer lists. Missing in files where it is off. */
@@ -497,6 +503,8 @@ export interface TrackChanges {
   collapsed?: boolean;
   /** Its automation lanes show under it. */
   show_automation?: boolean;
+  /** How its lanes take moves while playing. */
+  automation_mode?: AutomationMode;
   hidden?: boolean;
   monitor_input?: boolean;
   monitor_dry?: boolean;
@@ -528,7 +536,18 @@ export interface BusChanges {
   /** 3D Space sessions: where it sits in the room. */
   space?: SpacePosDoc | null;
   room?: boolean;
+  /** How its lanes take moves while playing. */
+  automation_mode?: AutomationMode;
 }
+
+/**
+ * How a track's or bus's automation lanes take moves of its controls
+ * while the session plays. Read plays the lanes as they are. Write
+ * records every lane from the moment play starts. Latch starts a lane
+ * at the first move of its control and holds the last value until play
+ * stops. Touch records only while a control is held.
+ */
+export type AutomationMode = "read" | "write" | "latch" | "touch";
 
 /** An edit the core understands. */
 export type Op =
@@ -809,10 +828,21 @@ export class SessionStore {
     return new OpCommand(this, op, label);
   }
 
+  /**
+   * Sees every edit before it runs and may replace it: automation
+   * writing turns a fader move while playing into lane points.
+   */
+  rewrite: ((op: Op, label: string) => { op: Op; label: string } | null) | null = null;
+
   edit(label: string, op: Op, runner: CommandRunner): Promise<void> {
+    const r = this.rewrite?.(op, label);
+    if (r) {
+      op = r.op;
+      label = r.label;
+    }
     noteStep(`edit ${label}`);
     const cmd = new OpCommand(this, op, label);
-    const key = mergeKey(op);
+    const key = mergeKey(op, label);
     if (key) this.newest.set(key, cmd);
     return runner.execute(cmd);
   }
@@ -864,8 +894,12 @@ export class SessionStore {
   }
 }
 
+/** The label of every edit automation writing makes: one pass is one undo step. */
+export const WRITE_LABEL = "Write Automation";
+
 /** Track settings a fader-style drag changes many times in a row. */
-function mergeKey(op: Op): string | null {
+function mergeKey(op: Op, label?: string): string | null {
+  if (label === WRITE_LABEL) return "write";
   if (op.op === "set_master_volume") return "master";
   // A clip's level handle dragged.
   if (op.op === "set_clips" && op.changes.length === 1) {
@@ -908,8 +942,8 @@ class OpCommand implements Command {
       this.op = next.op;
       return true;
     }
-    const key = mergeKey(this.op);
-    if (key === null || key !== mergeKey(next.op)) return false;
+    const key = mergeKey(this.op, this.label);
+    if (key === null || key !== mergeKey(next.op, next.label)) return false;
     this.op = next.op;
     return true;
   }
@@ -919,7 +953,7 @@ class OpCommand implements Command {
     // them. Once the drag is under way, an edit already replaced by a
     // newer one for the same setting is skipped (it merges into the same
     // undo step anyway), so the sound keeps up with the hand.
-    const key = mergeKey(this.op);
+    const key = mergeKey(this.op, this.label);
     if (key) {
       const sent = this.store.lastSent.get(key);
       const newer = this.store.newest.get(key);

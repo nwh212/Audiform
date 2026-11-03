@@ -532,6 +532,10 @@ pub struct Track {
     /// file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub show_automation: bool,
+    /// How its automation lanes take moves while playing (see
+    /// `AutomationMode`). Left out of the file when Read.
+    #[serde(default, skip_serializing_if = "AutomationMode::is_read")]
+    pub automation_mode: AutomationMode,
     /// Hidden from the Editor and Mixer lists. The track still plays and
     /// mixes. Left out of the file when off.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -609,6 +613,7 @@ impl Track {
             height: 96,
             collapsed: false,
             show_automation: false,
+            automation_mode: AutomationMode::Read,
             hidden: false,
             volume_db: 0.0,
             pan: 0.0,
@@ -661,6 +666,10 @@ pub struct Bus {
     pub sends: Vec<Send>,
     pub effects: EffectChain,
     pub envelopes: Vec<Envelope>,
+    /// How its automation lanes take moves while playing. Left out of the
+    /// file when Read.
+    #[serde(default, skip_serializing_if = "AutomationMode::is_read")]
+    pub automation_mode: AutomationMode,
     /// Where the bus shows among the tracks in the Editor: below this many
     /// tracks (0 is above the first). None, or more than there are
     /// tracks, shows it below the last track. Display only.
@@ -699,11 +708,34 @@ impl Bus {
             sends: Vec::new(),
             effects: EffectChain::default(),
             envelopes: Vec::new(),
+            automation_mode: AutomationMode::Read,
             position: None,
             mono: false,
             space: None,
             room: false,
         }
+    }
+}
+
+/// How a track's or bus's automation lanes take moves of its controls
+/// while the session plays. Read plays the lanes and leaves them as they
+/// are. Write records every lane's value from the moment play starts,
+/// over whatever was there. Latch starts recording a lane at the first
+/// move of its control and keeps the last value until play stops. Touch
+/// records only while a control is held, then the lane plays again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationMode {
+    #[default]
+    Read,
+    Write,
+    Latch,
+    Touch,
+}
+
+impl AutomationMode {
+    pub fn is_read(&self) -> bool {
+        *self == AutomationMode::Read
     }
 }
 

@@ -78,7 +78,7 @@ class Lava implements Visual {
       b.x = Math.max(0.12, Math.min(0.88, b.x));
     }
     const fld = this.field;
-    fld.fit(f.w, f.h, 6);
+    fld.fit(f.w, f.h, 6, f.detail);
     const W = fld.w;
     const H = fld.h;
     const aspect = f.w / f.h;

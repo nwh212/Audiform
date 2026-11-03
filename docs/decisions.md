@@ -2385,3 +2385,35 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** The colored strip at the left of each track header (the drag handle, also the click target that selects the track) is drawn at its full 10 px width with its grip dots always visible. It no longer grows from 4 px on hover.
 
 **Why.** The project lead found the strips hiding and showing as the pointer moved distracting, and asked that they stop. A fixed strip is also easier to aim for. The hit area was already 10 px, so nothing changes in what the strip does.
+
+## 2026-11-03: Alt-drag shows the copies and the originals
+
+**Decision.** While Alt is held during a clip move, the lanes draw the original clips where they are and the copies where they would land (drawn as chosen, like the clips they came from). `previewTracks` takes the set of clips being copied and keeps them, adding each copy under a marker id that the drop never sees.
+
+**Why.** The project lead: "when you alt grab a clip you should see the copy you just dragged and the original." Before, the drag moved the originals on screen and the copies only appeared on the drop.
+
+## 2026-11-03: Automation lanes size like tracks
+
+**Decision.** A lane with no height of its own is half its track's height; dragging its bottom edge keeps it between a track's limits, 40 to 600 pixels.
+
+**Why.** The lead asked that each lane resize like a track and start at half a track's height. The old fixed 54 pixels and 24 to 400 range felt like a different kind of thing.
+
+## 2026-11-03: Automation writing: Write, Latch and Touch
+
+**Decision.** Tracks and buses carry an `automation_mode` (Read, Write, Latch, Touch; Read is left out of the file). A writer in the interface (`src/stores/auto-write.ts`) sees every edit before it runs (`SessionStore.rewrite`). While the session plays, a move of a control on an owner in a writing mode comes back as the move plus the owner's lanes with new points, as one edit labelled Write Automation, and a whole pass merges into one undo step. Touch writes while the control is held (a move within the last 300 ms) and lets the lane play again after; Latch holds the last value on until play stops; Write records every lane the owner has from the moment play starts, with its control's value, and a move changes what is recorded. A lane is made for a control that has none. At the end of a pass the written stretch is thinned (furthest-point splitting, tolerance a four-hundredth of the lane's range). The header's mode picker offers the modes, turns red while a track records, and the lane's Read button turns on with any writing mode.
+
+**Why.** The lead asked for writing of "any node, including 3D Space, pan, volumes, effects". Capturing at the one place every edit passes through covers the fader, the pan, the spot in the room (each setting that changed becomes its own lane) and effect settings, built-in or plug-in, without each control knowing about automation. The engine already plays lanes as they change, so recording is a matter of writing points at the playhead, and no render-thread work was needed. The mode lives in the session file so a track set to Latch stays that way next time.
+
+**Limits.** The playhead position comes from the transport's polling, about thirty times a second, so points land at that resolution. Buses have the mode in the model but no lane heads in the Editor yet, so only tracks show the picker.
+
+## 2026-11-03: Visualizer: Detail, Tunnel, Electric, no Radial, a tidier bar
+
+**Decision.** The pictures get a `detail` (Soft, Standard, Fine, Finest) that scales the cell size of the soft looks drawn pixel by pixel (Lava Lamp, Plasma); Fine is four times the work of Standard, Finest nine. Two new looks: Tunnel (shapes coming out of a bending point, spinning with the treble, a flash on the beat) and Electric (lightning arcs between drifting points, forking, glowing, struck by the beat and the treble). Radial is removed. The control bar groups its settings in rounded wells with small quiet labels.
+
+**Why.** The lead found the lava lamp low in resolution and asked for an option to raise it, for the Radial look to go, and for looks in the spirit of classic media-player visualizations: flying shapes and electric arcs. Those two are our own drawings, not copies.
+
+## 2026-11-03: CRT theme
+
+**Decision.** A shipped theme, `crt`, on dark tokens: scanlines and red, green and blue phosphor stripes over the window (multiplied, with a vignette and a slow flicker), text with a soft halation, bright elements (values, lit buttons, the accent) glowing onto the glass, a faint bloom across the picture. No pictures or pointers, so the file is small and it is a Theme Maker starting point too.
+
+**Why.** The lead asked for a CRT theme with the scanline look, halation and phosphor glow. Phosphor already does a green monochrome tube in a case; CRT is the color tube on its own.

@@ -151,7 +151,7 @@ export class PeakStore {
       summary.levels.forEach((l, i) => {
         if (l.block > summary.levels[coarsest]!.block) coarsest = i;
       });
-      const levels = summary.levels.length ? [await this.fetch(path, coarsest, summary)] : [];
+      const levels = summary.levels.length ? [await this.readLevel(path, coarsest, summary)] : [];
       Object.assign(e, { status: "ready", progress: 1, summary, levels, error: null });
       this.bytes += levels.reduce((n, l) => n + l.data.byteLength, 0);
     } catch (err) {
@@ -164,7 +164,7 @@ export class PeakStore {
     const e = this.entries.get(path);
     if (!e || !e.summary || e.levels.some((l) => l.block === e.summary!.levels[index]?.block)) return;
     try {
-      const level = await this.fetch(path, index, e.summary);
+      const level = await this.readLevel(path, index, e.summary);
       if (this.entries.get(path) !== e) return;
       e.levels.push(level);
       this.bytes += level.data.byteLength;
@@ -176,7 +176,7 @@ export class PeakStore {
     }
   }
 
-  private async fetch(path: string, index: number, summary: PeakSummary): Promise<PeakLevel> {
+  private async readLevel(path: string, index: number, summary: PeakSummary): Promise<PeakLevel> {
     const buf = await this.backend.level(path, index);
     // Some webviews hand raw bytes back as an array or a typed view, not an ArrayBuffer.
     const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : ArrayBuffer.isView(buf) ? new Uint8Array((buf as ArrayBufferView).buffer, (buf as ArrayBufferView).byteOffset, (buf as ArrayBufferView).byteLength) : Uint8Array.from(buf as unknown as ArrayLike<number>);

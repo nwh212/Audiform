@@ -154,10 +154,24 @@
         "ambience"
       ]
     },
+    "AutomationMode": {
+      "description": "How a track's or bus's automation lanes take moves of its controls\nwhile the session plays. Read plays the lanes and leaves them as they\nare. Write records every lane's value from the moment play starts,\nover whatever was there. Latch starts recording a lane at the first\nmove of its control and keeps the last value until play stops. Touch\nrecords only while a control is held, then the lane plays again.",
+      "type": "string",
+      "enum": [
+        "read",
+        "write",
+        "latch",
+        "touch"
+      ]
+    },
     "Bus": {
       "description": "A bus track. Tracks and other buses output or send to it; it runs\nits own Voice Chain and fader on the sum, then outputs to the master\nor another bus. A bus has no clips and no inputs of its own.",
       "type": "object",
       "properties": {
+        "automation_mode": {
+          "description": "How its automation lanes take moves while playing. Left out of the\nfile when Read.",
+          "$ref": "#/$defs/AutomationMode"
+        },
         "channels": {
           "$ref": "#/$defs/ChannelLayout"
         },
@@ -1681,6 +1695,10 @@
       "description": "An audio track.",
       "type": "object",
       "properties": {
+        "automation_mode": {
+          "description": "How its automation lanes take moves while playing (see\n`AutomationMode`). Left out of the file when Read.",
+          "$ref": "#/$defs/AutomationMode"
+        },
         "channels": {
           "$ref": "#/$defs/ChannelLayout"
         },

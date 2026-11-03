@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { Analyser, BANDS, levelOf } from "./analysis";
 import { paletteFor } from "./palette";
 import { PRESETS, presetById } from "./presets";
+import { fieldSize } from "./presets/types";
 
 describe("visualizer analysis", () => {
   it("maps dB to 0..1", () => {
@@ -37,6 +38,14 @@ describe("visualizer looks", () => {
     expect(new Set(PRESETS.map((p) => p.id)).size).toBe(PRESETS.length);
     expect(presetById("nope").id).toBe(PRESETS[0]!.id);
     expect(PRESETS.some((p) => p.name === "Lava Lamp")).toBe(true);
+    expect(PRESETS.map((p) => p.id)).not.toContain("radial");
+    for (const name of ["Tunnel", "Electric"]) expect(PRESETS.some((p) => p.name === name)).toBe(true);
+  });
+
+  it("draws the soft looks finer at a higher detail", () => {
+    expect(fieldSize(600, 300, 6, 1)).toEqual([100, 50]);
+    expect(fieldSize(600, 300, 6, 2)).toEqual([200, 100]);
+    expect(fieldSize(600, 300, 6, 0.5)).toEqual([50, 25]);
   });
 
   it("gives every color scheme a color for any position", () => {

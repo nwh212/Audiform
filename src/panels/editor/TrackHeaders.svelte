@@ -28,7 +28,8 @@
   import { chainOf, setSlot, type MenuPlugin } from "../voice-chain/chain";
   import { effectWindowRequest } from "../voice-chain/effect-window";
   import { rowTarget } from "../voice-chain/slot-drag";
-  import { autoChoices, autoMode, dropLane, isOrphan, nextTarget, putLane, setMode, shownLanes, targetKey } from "./automation";
+  import { autoChoices, autoMode, dropLane, isOrphan, MODE_TITLES, modeChange, nextTarget, putLane, setMode, shownLanes, targetKey, type HeaderMode } from "./automation";
+  import { autoWriter } from "../../stores/open-session";
   import Dial from "./Dial.svelte";
   import { setAnchor } from "./insert-anchor";
   import { busHeight, formatDb, formatPan, HEADER_W, ROW_AUTO, ROW_INPUT, ROW_OUTPUT, ROW_SENDS, trackColor } from "./editor-layout";
@@ -39,6 +40,10 @@
 
   /** An installed instrument plug-in. */
   type Instrument = MenuPlugin & { hasWindow: boolean };
+
+  /** Tracks whose automation is being written right now (their mode picker lights up). */
+  let writingOwners = $state<string[]>([]);
+  $effect(() => autoWriter.subscribe((o) => (writingOwners = o)));
 
   /** Pre-render state per track, for the marker on each handle. */
   let prerenders = $state<Record<string, PrerenderState>>({});
@@ -76,7 +81,7 @@
     /** A track's height as drawn now (live while it is being resized). */
     shownHeight: (t: TrackDoc) => number;
     /** An automation lane's height as drawn now. */
-    liveLaneH: (l: { id: string; height?: number }) => number;
+    liveLaneH: (l: { id: string; height?: number }, ownerHeight?: number) => number;
     /** A track's meter: the input while armed, otherwise playback. */
     meterOf: (track: TrackDoc) => readonly [MeterLevel, MeterLevel] | null;
     setTrack: (track: TrackDoc, changes: TrackChanges, label: string) => void;
@@ -205,6 +210,16 @@
     if (!c || targetKey(c.target) === targetKey(lane.target)) return;
     const same = c.target.type === lane.target.type && c.target.type !== "effect_param";
     setLanes(track, putLane(track, { ...lane, target: c.target, points: same ? lane.points : [] }), `Automate ${c.label}`);
+  }
+
+  /** The header's mode picker: Off turns the lanes off; the others set how moves are taken while playing (and turn the lanes on). */
+  function pickMode(owner: TrackDoc | BusDoc, mode: HeaderMode) {
+    const isBus = !("clips" in owner);
+    const next = modeChange(mode);
+    const ops: Op[] = [{ op: "set_envelopes", owner: owner.id, envelopes: setMode(owner, mode) }];
+    if (next) ops.push(isBus ? { op: "set_bus", id: owner.id, changes: { automation_mode: next } } : { op: "set_track", id: owner.id, changes: { automation_mode: next } });
+    const label = mode === "off" ? "Automation Off" : `Automation ${mode[0]!.toUpperCase()}${mode.slice(1)}`;
+    void session.edit(label, { op: "batch", ops }, runner).catch(onError);
   }
 
   function setValue(track: TrackDoc, key: "volume_db" | "pan", value: number) {
@@ -445,15 +460,17 @@
         <div class="line">
           <select
             class="auto"
+            class:writing={writingOwners.includes(track.id)}
+            class:armed={autoMode(track) !== "read" && autoMode(track) !== "off"}
             value={autoMode(track)}
-            title="Automation mode. Read plays the track's automation lanes; Off plays none of them (the fader, pan and effects hold still). Write, Latch and Touch (recording moves while playing) are not built yet."
-            onchange={(e) => setLanes(track, setMode(track, e.currentTarget.value === "off" ? "off" : "read"), "Automation Mode")}
+            title={`Automation mode. ${MODE_TITLES[autoMode(track)]}`}
+            onchange={(e) => pickMode(track, e.currentTarget.value as HeaderMode)}
           >
             <option value="off" disabled={(track.envelopes?.length ?? 0) === 0}>Off</option>
             <option value="read">Read</option>
-            <option value="write" disabled>Write (not built yet)</option>
-            <option value="latch" disabled>Latch (not built yet)</option>
-            <option value="touch" disabled>Touch (not built yet)</option>
+            <option value="write">Write</option>
+            <option value="latch">Latch</option>
+            <option value="touch">Touch</option>
           </select>
           {@render lanesToggle(track)}
         </div>
@@ -475,7 +492,7 @@
       {#each lanes as lane, k (lane.id || "new")}
         {@const choices = autoChoices(track, fxCatalog, !!doc?.space)}
         {@const taken = (c: (typeof choices)[number]) => targetKey(c.target) !== targetKey(lane.target) && lanes.some((l) => targetKey(l.target) === targetKey(c.target))}
-        <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{liveLaneH(lane)}px">
+        <div class="header auto-head" class:alt={i % 2 === 1} style:--track-color={trackColor(track.color, i)} style:height="{liveLaneH(lane, track.height)}px">
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="lane-edge" title="Drag to make this lane taller or shorter" onpointerdown={(e) => resizeLane(e, track, lane)}></div>
           <div class="line">
@@ -1059,6 +1076,22 @@
   .auto:disabled {
     color: var(--text-dim);
     opacity: 0.7;
+  }
+
+  /* Write, Latch or Touch picked: ready to record moves; lit while it records. */
+  .auto.armed {
+    border-color: color-mix(in srgb, var(--danger) 60%, var(--border-strong));
+    color: var(--danger);
+  }
+  .auto.writing {
+    background: color-mix(in srgb, var(--danger) 35%, var(--surface-0));
+    color: var(--text);
+    animation: auto-writing 1s ease-in-out infinite alternate;
+  }
+  @keyframes auto-writing {
+    to {
+      background: color-mix(in srgb, var(--danger) 70%, var(--surface-0));
+    }
   }
 
   /* A bar in the track's color with grip dots, always at its full width,

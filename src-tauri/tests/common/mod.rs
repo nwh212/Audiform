@@ -135,6 +135,7 @@ pub fn track() -> Track {
         height: 120,
         collapsed: false,
         show_automation: false,
+        automation_mode: AutomationMode::Read,
         hidden: false,
         volume_db: -2.0,
         pan: -15.0,
@@ -185,6 +186,7 @@ pub fn bus() -> Bus {
         mono: false,
         space: None,
         room: false,
+        automation_mode: AutomationMode::Read,
     }
 }
 

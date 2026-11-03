@@ -450,8 +450,15 @@ export function trimToPlayhead(doc: SessionDoc, ids: Iterable<string>, at: numbe
   return out;
 }
 
-/** The session's tracks as they would look after `changes`, for drawing a drag in progress. */
-export function previewTracks(doc: SessionDoc, changes: readonly ClipChange[]): TrackDoc[] {
+/** The id a clip's moving copy is drawn under while Alt-dragging (see `previewTracks`). */
+export const COPY_PREVIEW = "+copy";
+
+/**
+ * The session's tracks as they would look after `changes`, for drawing a
+ * drag in progress. With `copying` (Alt held), the clips in `copies` stay
+ * where they are and a copy of each is drawn where it would land.
+ */
+export function previewTracks(doc: SessionDoc, changes: readonly ClipChange[], copies: ReadonlySet<string> | null = null): TrackDoc[] {
   if (changes.length === 0) return doc.tracks;
   const byId = new Map(changes.map((c) => [c.id, c]));
   const moved = new Map<string, ClipDoc[]>();
@@ -461,6 +468,15 @@ export function previewTracks(doc: SessionDoc, changes: readonly ClipChange[]): 
       const ch = byId.get(c.id);
       if (!ch) {
         clips.push(c);
+        continue;
+      }
+      // The original stays put; its copy goes on under its own id.
+      if (copies?.has(c.id)) {
+        clips.push(c);
+        const { id: _id, track_id, layer: _layer, ...rest } = ch;
+        const copy = { ...c, ...rest, id: c.id + COPY_PREVIEW } as ClipDoc;
+        if (track_id && track_id !== t.id) moved.set(track_id, [...(moved.get(track_id) ?? []), copy]);
+        else clips.push(copy);
         continue;
       }
       const { id: _id, track_id, volume, pan, unloop, unstretch, clear_audio_type, layer: _layer, ...rest } = ch;

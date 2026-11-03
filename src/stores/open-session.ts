@@ -18,6 +18,11 @@ import {
 import { PeakStore } from "./peaks";
 import { SessionStore, type Op, type SessionDoc, type ViewDoc } from "./session";
 import { TransportStore } from "./transport";
+import { AutoWriter } from "./auto-write";
+import { sessionHistory } from "./history";
+import { fxCatalog } from "./fx-catalog";
+import { autoRange, autoRest } from "../panels/editor/automation";
+import type { EffectInfo } from "../app/core";
 
 /** The open session, mirrored from the core. */
 export const session = new SessionStore({
@@ -43,3 +48,18 @@ export const transport: TransportStore = new TransportStore(
   { play: (from) => transportPlay(from, transport.holdAtEnd ? "normal" : editor.current().playMode), stop: transportStop, status: transportStatus, stopAtEnd: () => editor.current().playMode !== "loop", skipsSelection: () => editor.current().playMode === "skip", loops: () => editor.current().playMode === "loop" },
   session,
 );
+
+/**
+ * Automation writing for the open session: control moves while playing
+ * become lane points on tracks set to Write, Latch or Touch.
+ */
+let catalog: readonly EffectInfo[] = [];
+fxCatalog.subscribe((c) => (catalog = c));
+export const autoWriter = new AutoWriter({
+  session,
+  runner: () => sessionHistory,
+  rangeOf: (o, t) => autoRange(o, catalog, t),
+  restOf: (o, t) => autoRest(o, catalog, t),
+});
+session.rewrite = (op, label) => autoWriter.rewrite(op, label);
+transport.subscribe((s) => autoWriter.onTransport(s));
