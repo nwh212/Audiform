@@ -53,20 +53,6 @@
     <h1 id="about-title" class="visually-hidden">Audiform</h1>
     <p class="version">Version {version ?? "unknown"}{__BUILD_COMMIT__ ? ` (build ${__BUILD_COMMIT__})` : ""}</p>
     <p>A free, open-source multitrack audio editor for podcasts, voiceover, music and immersive mixes.</p>
-    <div class="credit">
-      <p class="credit-head">Built on Altered Audio Editor</p>
-      <p>
-        Audiform is a fork of Altered Audio Editor, created by Steve Phillips and The GeekCast Radio Network, LLC. Its editor,
-        sessions, effects, Voice Chain, podcast tools and the design of the whole app are their work; Audiform builds on that
-        foundation.
-      </p>
-      <p class="links">
-        <button type="button" class="link" onclick={() => void openLink(LINKS.original)}>Altered Audio Editor on GitHub</button>
-        <button type="button" class="link" onclick={() => void openLink(LINKS.website)}>The GCRN website</button>
-        <button type="button" class="link" onclick={() => void openLink(LINKS.book)}>Steve's book, Altered Audio: Podcasting Demystified</button>
-        {#if LINKS.support}<button type="button" class="link" onclick={() => LINKS.support && void openLink(LINKS.support)}>Support the original author</button>{/if}
-      </p>
-    </div>
     <p class="privacy">
       No account, no sign-in, no telemetry, no tracking. The app never contacts the internet on its own; it only opens a web
       page when you pick a link, checks for updates when you ask (or weekly, if you switch that on in Settings), and downloads
@@ -79,6 +65,13 @@
     </p>
     <p class="fine">
       Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor. Please report problems to Audiform (Help &gt; Report a Problem).
+    </p>
+    <p class="credit-fine">
+      Audiform is a fork of Altered Audio Editor by Steve Phillips and The GeekCast Radio Network, LLC, whose editor is the foundation it builds on.
+      <button type="button" class="link" onclick={() => void openLink(LINKS.original)}>Altered Audio Editor</button>
+      <button type="button" class="link" onclick={() => void openLink(LINKS.website)}>The GCRN</button>
+      <button type="button" class="link" onclick={() => void openLink(LINKS.book)}>Steve's book</button>
+      {#if LINKS.support}<button type="button" class="link" onclick={() => LINKS.support && void openLink(LINKS.support)}>Support him</button>{/if}
     </p>
     {#if memory?.known}
       <div class="memory">
@@ -179,24 +172,19 @@
     font-weight: 600;
   }
 
-  .credit {
-    margin: 10px 0;
-    padding: 6px 10px;
-    border-left: 2px solid var(--accent);
-    background: var(--surface-1);
+
+  /* Credit to the original project: present, and very quiet. */
+  .credit-fine {
+    margin: 6px 0 0;
+    color: var(--text-faint);
+    opacity: 0.45;
+    font-size: 8px;
+    line-height: 1.3;
   }
 
-  .credit p {
-    margin: 4px 0;
-  }
-
-  /* The original project's links: present, and very quiet. */
-  .links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 8px;
-    margin-top: 2px;
-    line-height: 1;
+  .credit-fine .link {
+    margin-left: 4px;
+    opacity: 1;
   }
 
   .link {

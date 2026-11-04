@@ -6,7 +6,7 @@ Audiform is a free, open-source audio editor, a fork of Altered Audio Editor by 
 
 **Fork rules (added for Audiform):**
 - The project lead is Broman (GitHub `nwh212`). Wherever this file says "project lead" or "maintainer", that is who decides for Audiform.
-- Give Altered Audio Editor and its authors full, generous credit (README, the About dialog, NOTICE.md). Keep every existing file's GCRN copyright line; new files name the Audiform contributors.
+- Credit Altered Audio Editor and its authors, kept low-key (project lead, 2026-11-04): a fine-print line at the foot of the README and the About dialog, NOTICE.md and CONTRIBUTORS.md. The copyright notices and licence lines stay at normal size; the GPL requires them. Keep every existing file's GCRN copyright line; new files name the Audiform contributors.
 - Never use the Altered Audio Editor name or logo as Audiform's own (see TRADEMARKS.md); only to say what Audiform is based on. Problem reports go to Audiform, not to the original project.
 - Audiform is its own project. File formats, ids and folder layout follow what Audiform needs. One feature per commit, decisions logged in `docs/decisions.md`.
 - Audiform keeps opening Altered Audio Editor's sessions (`.altaudio`, and its `.sesx` exports) and carrying over its settings for as long as that is feasible. When its format changes, add reading support for the new version where practical; when it no longer is, say so in `docs/decisions.md` and tell the project lead.

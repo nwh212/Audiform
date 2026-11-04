@@ -3,25 +3,10 @@
 </p>
 
 <p align="center">
-  A free, open-source multitrack audio workstation for making music, immersive 3D mixes and spoken audio.<br>
-  Built on <a href="https://github.com/geekcastradio/altered-audio-editor">Altered Audio Editor</a> by Steve Phillips and The GeekCast Radio Network.
+  A free, open-source multitrack audio workstation for making music, immersive 3D mixes and spoken audio.
 </p>
 
-> **Audiform is the experimental flavor of Altered Audio Editor.** It shares the same foundation but may head in its own direction. New ideas land here and change often, so expect rough edges. **If you want the steadier, more polished editor, use [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor).** It is likely to be the more stable of the two, especially for podcast work.
-
-## Built on Altered Audio Editor
-
-Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor), created by **Steve Phillips** and **The GeekCast Radio Network, LLC** ([thegcrn.com](https://thegcrn.com/)). The foundation of Audiform started with them: the two-editor design, the multitrack and Waveform editors, sessions and libraries, recording, the effect chain and its effects (Voice Chain there, Audio FX in Audiform), QuickPass, Batch Convert, Loudness Match, Music Fit, the podcast workflow, the privacy rules, and the care that went into all of it. Audiform exists because their work made a great foundation to build on.
-
-If Audiform is useful to you, please consider supporting the original project too:
-
-- Read Steve's book, [*Altered Audio: Podcasting Demystified*](https://www.barnesandnoble.com/w/altered-audio-steve-phillips/1147888459).
-- Support the original author at [paypal.me/scp21](https://paypal.me/scp21).
-- Follow Altered Audio Editor at [github.com/geekcastradio/altered-audio-editor](https://github.com/geekcastradio/altered-audio-editor).
-
-Audiform is a different flavor and is developed through a different pipeline - it moves faster, tries new angles and breaks things more often, while Altered Audio Editor stays the steadier choice. Everything in Audiform is offered back: Altered Audio Editor is welcome to take any of it (see [Contributing](#contributing)).
-
-**Please report Audiform problems here, in [Audiform's issues](https://github.com/nwh212/audiform/issues), not to the Altered Audio Editor project.**
+Please report problems in [Audiform's issues](https://github.com/nwh212/audiform/issues).
 
 > Status: in active development. Pre-release: keep backups of your recordings.
 
@@ -86,7 +71,7 @@ Audiform is young (version 0.x). Expect rough edges and keep backups of your rec
 - **Plug-ins:** plug-ins from one maker can share a process so they can talk to each other, plug-ins get the song position, optional real-time mixdown, Effects > Plug-ins lists what you scanned.
 - **Workflow:** several sessions open at once, clip level handles, side-by-side drops of many files, and many smaller fixes.
 
-## Also built in (from Altered Audio Editor)
+## Also built in
 
 - **Multitrack editing:** move, razor, slip and time-selection tools; trim, split, merge, loop and copy clips; fades and crossfades; clip volume and pan envelopes; markers; ripple delete.
 - **Waveform editor:** open any file on its own to cut, silence, amplify and fade it, try an Audio FX chain on it as a live preview and apply it to the selection or the whole file (undoable), then save it in place as WAV, FLAC or MP3, or as a new file.
@@ -118,17 +103,13 @@ Audiform is young (version 0.x). Expect rough edges and keep backups of your rec
 - Update checks are off unless you turn them on.
 - Your audio never leaves your computer.
 
-## Support the original project
-
-Audiform is free. If it helps you, please support the people it is built on: [paypal.me/scp21](https://paypal.me/scp21) supports Steve Phillips, the author of Altered Audio Editor, and his book is [*Altered Audio: Podcasting Demystified*](https://www.barnesandnoble.com/w/altered-audio-steve-phillips/1147888459).
-
 ## Contributing
 
 Bug fixes and features are welcome through pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Contributions are released under GPL v3.0 or later, the same license as the rest of Audiform, and contributors agree to the [contributor license agreement](CLA.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
 
-Thanks to Steve Phillips and The GeekCast Radio Network for Altered Audio Editor, and to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+Thanks to everyone listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 ## Build from source (Windows)
 
@@ -184,3 +165,5 @@ Copyright (c) The Audiform contributors (changes since October 2026).
 Licensed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
 Audiform is an independent project, not made or endorsed by the makers of Altered Audio Editor ([trademark notice](TRADEMARKS.md)).
+
+<sub>Audiform is a fork of [Altered Audio Editor](https://github.com/geekcastradio/altered-audio-editor) by Steve Phillips and The GeekCast Radio Network, LLC ([thegcrn.com](https://thegcrn.com/)), whose editor is the foundation it builds on. [Steve's book](https://www.barnesandnoble.com/w/altered-audio-steve-phillips/1147888459) · [support him](https://paypal.me/scp21).</sub>

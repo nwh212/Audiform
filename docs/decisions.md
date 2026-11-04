@@ -2465,3 +2465,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead wanted the weekly check as an option, and asked for the submenu to go. The 2026-10-14 plan named the Tauri updater with a signed `latest.json`; that needs signing keys and release changes only the lead can make, so this first step checks only and leaves installing to the release page. The credit to Altered Audio Editor stays in the About dialog, README and NOTICE.md, as the fork rules require; only its menu home changed.
 
 **How.** The request is a header-only curl call in `separation/download.rs`, the one file the privacy check lets reach the internet, to a host already on its list. `commands/updates.rs` compares versions; `src/app/updates.ts` holds the dialog and the weekly timing, with the last check time in the settings file. CLAUDE.md and PRIVACY.md are updated to match.
+
+## 2026-11-04: Credit to Altered Audio Editor kept, made low-key
+
+**Decision.** Mentions of Altered Audio Editor, Steve Phillips and The GCRN move to fine print: one line at the foot of the README and one at the foot of the About dialog (8 px, faint), each with the links to the original project, The GCRN, Steve's book and his support page. The README loses its "experimental flavor" callout, its Built on section and its Support section; the About dialog loses its credit box. The copyright lines, the licence statement and the independence notice stay at their normal size, and NOTICE.md and CONTRIBUTORS.md are unchanged.
+
+**Why.** The project lead's call. Neither the GPL nor the original project sets any rule on how visible a credit or a support link must be; the GPL only requires the copyright and licence notices to be shown, which they are.
