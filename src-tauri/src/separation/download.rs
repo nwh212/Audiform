@@ -3,7 +3,9 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 //! The one place Audiform reaches the internet: downloading the separation
-//! engine and separation models, only when the user clicks Download.
+//! engine and separation models, only when the user clicks Download, and
+//! asking Audiform's GitHub releases page for the newest version, only from
+//! Help > Check for Updates or the weekly check the user switched on.
 //!
 //! It uses the `curl` program that ships with Windows, macOS and Linux
 //! rather than an HTTP library, so the editor gains no network code of its
@@ -144,6 +146,52 @@ fn curl() -> std::path::PathBuf {
     }
 }
 
+/// Audiform's newest release page. GitHub answers it with a redirect to the
+/// newest release's tag, which is all the update check needs.
+pub const LATEST_RELEASE: &str = "https://github.com/nwh212/Audiform/releases/latest";
+
+/// The tag of Audiform's newest release (like "v0.7.1"). One request for the
+/// page's headers only; nothing about the user is sent.
+pub fn latest_release_tag() -> Result<String, String> {
+    let mut cmd = Command::new(curl());
+    cmd.args([
+        "--silent",
+        "--show-error",
+        "--head",
+        "--max-time",
+        "20",
+        "--proto",
+        "=https",
+        LATEST_RELEASE,
+    ])
+    .stdin(Stdio::null())
+    .stderr(Stdio::piped())
+    .stdout(Stdio::piped());
+    no_window(&mut cmd);
+    let out = cmd.output().map_err(|e| {
+        format!("Could not check for updates ({e}). Audiform uses the system's curl program.")
+    })?;
+    if !out.status.success() {
+        return Err(
+            "Could not reach GitHub to check for updates. Check the internet connection.".into(),
+        );
+    }
+    tag_from_headers(&String::from_utf8_lossy(&out.stdout))
+        .ok_or_else(|| "GitHub did not say which version is newest.".to_string())
+}
+
+/// The tag in a "location: .../releases/tag/<tag>" header.
+fn tag_from_headers(headers: &str) -> Option<String> {
+    headers.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        if !k.trim().eq_ignore_ascii_case("location") {
+            return None;
+        }
+        let tag = v.trim().rsplit_once("/releases/tag/")?.1.trim();
+        (!tag.is_empty()).then(|| tag.to_string())
+    })
+}
+
 #[cfg(windows)]
 fn no_window(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
@@ -157,6 +205,14 @@ fn no_window(_: &mut Command) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_newest_tag_from_the_redirect() {
+        let h = "HTTP/2 302\r\nserver: github.com\r\nLocation: https://github.com/nwh212/Audiform/releases/tag/v0.8.0\r\n\r\n";
+        assert_eq!(tag_from_headers(h).as_deref(), Some("v0.8.0"));
+        assert_eq!(tag_from_headers("HTTP/2 404\r\n\r\n"), None);
+        assert!(allowed(LATEST_RELEASE));
+    }
 
     #[test]
     fn only_listed_https_hosts_are_allowed() {

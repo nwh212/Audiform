@@ -38,6 +38,8 @@ export interface AppSettings {
   fadeShape: FadeShape;
   /** In a crossfade, bending one clip's fade bends the other's the opposite way, and they share a shape. */
   linkCrossfades: boolean;
+  /** Once a week, ask Audiform's GitHub releases page whether a newer version is out. Off by default. */
+  updateCheckWeekly: boolean;
   /** What the space bar does to a playing session. */
   colors: AppColors;
   /** System name of the output; null is the system default. */
@@ -167,6 +169,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wheelZooms: true,
   fadeShape: "linear",
   linkCrossfades: true,
+  updateCheckWeekly: false,
   colors: { ...NO_COLORS },
   output: null,
   outputPair: [0, 1],
@@ -232,6 +235,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
     fadeShape:
       o.fadeShape === "cosine" ? "cosine" : "linear",
     linkCrossfades: bool(o.linkCrossfades, d.linkCrossfades),
+    updateCheckWeekly: bool(o.updateCheckWeekly, d.updateCheckWeekly),
     colors: {
       wave: color(c.wave),
       playhead: color(c.playhead),

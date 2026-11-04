@@ -90,6 +90,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
+            commands::updates::update_check,
             commands::app::memory_report,
             commands::app::app_exit,
             commands::app::app_minimize,

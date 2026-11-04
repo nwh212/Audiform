@@ -12,6 +12,7 @@ import { fit } from "../panels/editor/timeline";
 import { editor } from "../stores/editor";
 import { session, transport } from "../stores/open-session";
 import { addonsOpenDir, minimizeWindow, openLink, type AddonInfo } from "./core";
+import { checkNow } from "./updates";
 import { LINKS } from "./links";
 import { ADDON_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
 import { zoomBy, contentEnd, jumpEdge, sessionView } from "./navigation";
@@ -55,10 +56,7 @@ export function createViewTools(deps: ViewToolsDeps) {
       actions.register({ id: "window.reset-layout", run: () => dock.resetToDefault() }),
       actions.register({ id: "window.minimize", run: () => minimizeWindow() }),
       actions.register({ id: "help.shortcuts", run: () => void (set_shortcutsOpen(true)) }),
-      actions.register({ id: "help.website", run: () => openLink(LINKS.website) }),
-      actions.register({ id: "help.book", run: () => openLink(LINKS.book) }),
-      actions.register({ id: "help.original", run: () => openLink(LINKS.original) }),
-      actions.register({ id: "help.update", run: () => openLink(LINKS.releases) }),
+      actions.register({ id: "help.update", run: () => void checkNow({ ask, showNotice, showError: (e) => showNotice(`Could not check for updates: ${e instanceof Error ? e.message : String(e)}`) }) }),
       actions.register({ id: "help.github", run: () => openLink(LINKS.github) }),
       actions.register({ id: "help.report", run: () => openReport() }),
       actions.register({ id: "help.about", run: () => void (set_aboutOpen(true)) }),
@@ -179,10 +177,6 @@ export function createViewTools(deps: ViewToolsDeps) {
         reason: () => "Drag across empty space in the Editor to select a time range.",
       }),
     ];
-    const pluginsUrl = LINKS.plugins;
-    if (pluginsUrl) offs.push(actions.register({ id: "help.plugins", run: () => openLink(pluginsUrl) }));
-    const supportUrl = LINKS.support;
-    if (supportUrl) offs.push(actions.register({ id: "help.support", run: () => openLink(supportUrl) }));
     const discordUrl = LINKS.discord;
     if (discordUrl) offs.push(actions.register({ id: "help.discord", run: () => openLink(discordUrl) }));
     for (const p of PANELS) {

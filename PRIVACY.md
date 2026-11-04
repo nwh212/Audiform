@@ -30,6 +30,10 @@ It only pulls the necessary model for demixing. Audio separation is handled loca
 
 The downloads use the `curl` program that comes with Windows, macOS and Linux, from one place in the code (`src-tauri/src/separation/download.rs`), only over HTTPS and only from `github.com` and `huggingface.co`. If you never use Audio Separation, nothing is ever downloaded.
 
+## Checking for updates
+
+Help > Check for Updates asks Audiform's releases page on GitHub (`github.com/nwh212/Audiform/releases/latest`) which version is newest. Only the page's headers are fetched; nothing about you or your computer is sent. Settings > General has a box to do this once a week, off until you tick it, and that check never runs while you play or record. If a newer version is out, Audiform says so; it never downloads or installs anything itself, and the download page opens in your browser only if you choose. The request goes through the same one place in the code as the separation downloads.
+
 ## Add-ons
 
 An add-on is a folder you put in the Add-ons folder yourself (Window > Add-ons > Open Add-ons Folder). Audiform never downloads, lists or looks for add-ons anywhere else. An add-on's page is shown in a window of its own, served from inside the app on its own `addon` scheme, under a policy that forbids it the network, forms and frames. Its tool program runs on your computer with its own folder as its working folder; what that program does is up to whoever wrote it, so only install add-ons from people you trust. See `docs/addons.md`.

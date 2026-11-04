@@ -72,6 +72,7 @@
   import { type MarkerDoc } from "../stores/session";
   import { propertiesOp, type SessionProperties } from "./session-properties";
   import { createRecorder, KEY_RECORD } from "./recorder.svelte";
+  import { checkQuietly, dueForCheck, LAST_CHECK_KEY } from "./updates";
   import { createClipTools } from "./clip-tools.svelte";
   import { contentEnd, playheadNow, sessionView } from "./navigation";
   import { createEditTools } from "./edit-tools.svelte";
@@ -2134,7 +2135,21 @@
     };
   });
 
+  // The weekly update check (Settings > General, off by default): a minute
+  // after opening, and later again while playing or recording, so it never
+  // interrupts either.
+  function weeklyUpdateCheck() {
+    if (!dueForCheck(settings.current.updateCheckWeekly, Number(prefs.raw(LAST_CHECK_KEY) ?? 0), Date.now())) return;
+    if (transport.current.playing || rec.active) {
+      setTimeout(weeklyUpdateCheck, 5 * 60_000);
+      return;
+    }
+    prefs.set(LAST_CHECK_KEY, Date.now());
+    void checkQuietly(showNotice);
+  }
+
   onMount(() => {
+    const updateTimer = setTimeout(weeklyUpdateCheck, 60_000);
     void prefs
       .load()
       .then(() => libraries.restore())
@@ -2146,6 +2161,7 @@
       .then((i) => (info = i))
       .catch((e: unknown) => (coreError = e instanceof Error ? e.message : String(e)));
     const offs = registerActions();
+    offs.push(() => clearTimeout(updateTimer));
     offs.push(...waveTools.register());
     offs.push(sessionHistory.subscribe(() => actions.invalidate()));
     offs.push(

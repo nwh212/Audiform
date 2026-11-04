@@ -1578,6 +1578,20 @@ export function onSeparationProgress(fn: (p: SeparationProgress) => void): Promi
   return listen<SeparationProgress>("separation-progress", (e) => fn(e.payload));
 }
 
+/** What Check for Updates found. */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  newer: boolean;
+  /** The newest release's page. */
+  page: string;
+}
+
+/** Asks Audiform's GitHub releases page for the newest version: one request, only when asked. */
+export function updateCheck(): Promise<UpdateInfo> {
+  return invoke<UpdateInfo>("update_check");
+}
+
 /** One installed add-on: a folder in the Add-ons folder with an `addon.json` manifest. */
 export interface AddonInfo {
   id: string;

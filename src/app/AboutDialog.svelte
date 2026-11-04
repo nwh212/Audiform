@@ -8,7 +8,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import logo from "../assets/logo-dark.png";
-  import { formatMb, memoryReport, type MemoryReport } from "./core";
+  import { formatMb, memoryReport, openLink, type MemoryReport } from "./core";
+  import { LINKS } from "./links";
   import { peaks } from "../stores/open-session";
 
   interface Props {
@@ -57,12 +58,19 @@
       <p>
         Audiform is a fork of Altered Audio Editor, created by Steve Phillips and The GeekCast Radio Network, LLC. Its editor,
         sessions, effects, Voice Chain, podcast tools and the design of the whole app are their work; Audiform builds on that
-        foundation. Their website, Steve's book and a way to support them are in Help &gt; Based on Altered Audio Editor.
+        foundation.
+      </p>
+      <p class="links">
+        <button type="button" class="link" onclick={() => void openLink(LINKS.original)}>Altered Audio Editor on GitHub</button>
+        <button type="button" class="link" onclick={() => void openLink(LINKS.website)}>The GCRN website</button>
+        <button type="button" class="link" onclick={() => void openLink(LINKS.book)}>Steve's book, Altered Audio: Podcasting Demystified</button>
+        {#if LINKS.support}<button type="button" class="link" onclick={() => LINKS.support && void openLink(LINKS.support)}>Support the original author</button>{/if}
       </p>
     </div>
     <p class="privacy">
       No account, no sign-in, no telemetry, no tracking. The app never contacts the internet on its own; it only opens a web
-      page when you pick a link in the Help menu. Your audio and sessions stay on your computer.
+      page when you pick a link, checks for updates when you ask (or weekly, if you switch that on in Settings), and downloads
+      separation models when you click Download. Your audio and sessions stay on your computer.
     </p>
     <p>Copyright (c) The GeekCast Radio Network, LLC (Altered Audio Editor).<br />Copyright (c) The Audiform contributors (changes since October 2026).</p>
     <p class="fine">
@@ -180,6 +188,27 @@
 
   .credit p {
     margin: 4px 0;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: var(--font-size-small);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .link:hover {
+    text-decoration: underline;
   }
 
   .credit-head {

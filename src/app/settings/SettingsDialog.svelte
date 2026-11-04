@@ -204,7 +204,7 @@
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
-    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades });
+    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades, updateCheckWeekly: def.updateCheckWeekly });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
@@ -253,6 +253,11 @@
             <label><input type="radio" bind:group={d.app.fadeShape} value="cosine" /> Curve (smooth at both ends)</label>
             <p class="hint">Drag a fade's handle up or down to bend it (skew, -100 to 100).</p>
             <label><input type="checkbox" bind:checked={d.app.linkCrossfades} /> Link crossfades: bending one clip's fade bends the other's the opposite way, with the same shape</label>
+          </fieldset>
+          <fieldset>
+            <legend>Updates</legend>
+            <label><input type="checkbox" bind:checked={d.app.updateCheckWeekly} /> Check for a new version once a week</label>
+            <p class="hint">Asks Audiform's releases page on GitHub which version is newest, nothing else, and never while you play or record. A newer version shows one line at the bottom of the window; nothing is downloaded until you choose to. Help &gt; Check for Updates asks at any time.</p>
           </fieldset>
           <p class="note">The Space bar plays, and stops when playing or recording.</p>
           <label class="off" title="Warnings with a 'don't ask again' box arrive with the first such warning."><input type="checkbox" disabled /> Show warnings I turned off again <span class="why">No warnings can be turned off yet.</span></label>

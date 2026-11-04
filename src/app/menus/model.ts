@@ -510,16 +510,6 @@ export const MENUS: readonly Menu[] = [
       item("help.github", "Audiform Source Code on GitHub"),
       item("help.discord", "Join the Community on Discord"),
       sep,
-      sub("Based on Altered Audio Editor", [
-        item("help.original", "Altered Audio Editor on GitHub"),
-        item("help.website", "The GCRN Website"),
-        item("help.plugins", "GCRN Plugins", {
-          pending: "The plugins page on thegcrn.com is not live yet.",
-        }),
-        item("help.book", "Book: Altered Audio, Podcasting Demystified (Steve Phillips)"),
-        item("help.support", "Support the Original Author..."),
-      ]),
-      sep,
       item("help.about", "About Audiform"),
     ],
   },
