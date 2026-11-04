@@ -74,6 +74,43 @@ pub fn open(
 #[cfg(windows)]
 pub use win::open;
 
+/// Whether a plug-in window should follow the display scale itself (DPI
+/// aware) rather than be stretched by Windows. At the usual steps (100%,
+/// 125%, 150% and so on) Windows stretches the window and every plug-in
+/// shows whole. At an in-between scale such as 115%, some plug-ins draw at
+/// their own size inside the stretched window and leave a black border, so
+/// there the window follows the scale and the plug-in is told it.
+/// `AUDIFORM_PLUGIN_DPI=aware` or `=stretch` overrides this, for testing.
+pub fn scale_aware(dpi: u32, override_: Option<&str>) -> bool {
+    match override_.map(str::trim) {
+        Some(v) if v.eq_ignore_ascii_case("aware") => return true,
+        Some(v) if v.eq_ignore_ascii_case("stretch") => return false,
+        _ => {}
+    }
+    let percent = (dpi * 100 + 48) / 96;
+    !percent.is_multiple_of(25)
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::scale_aware;
+
+    #[test]
+    fn usual_steps_are_stretched_and_in_between_ones_follow_the_scale() {
+        // 100%, 125%, 150%, 175%, 200% stay as they are.
+        for dpi in [96, 120, 144, 168, 192] {
+            assert!(!scale_aware(dpi, None), "{dpi}");
+        }
+        // 115% (custom scaling, 110 DPI), 110%, 135%.
+        for dpi in [110, 106, 130] {
+            assert!(scale_aware(dpi, None), "{dpi}");
+        }
+        assert!(scale_aware(120, Some("aware")));
+        assert!(!scale_aware(110, Some("Stretch")));
+        assert!(scale_aware(110, Some("nonsense")));
+    }
+}
+
 #[cfg(windows)]
 mod win {
     use std::ffi::c_void;
@@ -91,14 +128,15 @@ mod win {
     };
     use windows_sys::Win32::Graphics::Gdi::{
         Arc as ArcTo, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject,
-        DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MoveToEx,
-        SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_RIGHT, DT_SINGLELINE, DT_VCENTER,
-        NULL_BRUSH, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+        DrawTextW, EndPaint, FillRect, GetStockObject, InvalidateRect, LineTo, MonitorFromWindow,
+        MoveToEx, SelectObject, SetBkMode, SetTextColor, DT_LEFT, DT_RIGHT, DT_SINGLELINE,
+        DT_VCENTER, MONITOR_DEFAULTTONEAREST, NULL_BRUSH, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
     };
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::HiDpi::{
-        AdjustWindowRectExForDpi, GetDpiForWindow, SetThreadDpiAwarenessContext,
-        DPI_AWARENESS_CONTEXT_UNAWARE,
+        AdjustWindowRectExForDpi, GetDpiForMonitor, GetDpiForSystem, GetDpiForWindow,
+        SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        DPI_AWARENESS_CONTEXT_UNAWARE, MDT_EFFECTIVE_DPI,
     };
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT, VK_SPACE,
@@ -142,6 +180,33 @@ mod win {
 
     fn strip_for(dpi: u32) -> i32 {
         (STRIP * dpi as i32 + 48) / 96
+    }
+
+    /// The real scale of the monitor a window is on (96 is 100%). Asked
+    /// as a DPI-aware thread, so Windows does not answer 96 for everyone.
+    unsafe fn monitor_dpi(hwnd: HWND) -> u32 {
+        let before = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let dpi = if hwnd.is_null() {
+            GetDpiForSystem()
+        } else {
+            let (mut x, mut y) = (0u32, 0u32);
+            if GetDpiForMonitor(
+                MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                MDT_EFFECTIVE_DPI,
+                &mut x,
+                &mut y,
+            ) == 0
+                && x > 0
+            {
+                x
+            } else {
+                GetDpiForSystem()
+            }
+        };
+        if !before.is_null() {
+            SetThreadDpiAwarenessContext(before);
+        }
+        dpi.max(96)
     }
 
     /// Tells a plug-in the display scale, when it wants to know.
@@ -411,16 +476,27 @@ mod win {
             if resizable {
                 style |= WS_THICKFRAME;
             }
-            // Plug-in windows are not DPI aware, as in most DAWs: Windows draws
-            // them at the system scale and stretches them on a 125% screen,
-            // so a plug-in that does not scale itself still shows whole.
-            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
             let owner_hwnd: HWND = if owner == 0 {
                 ptr::null_mut()
             } else {
                 owner as usize as _
             };
-            let dpi = 96;
+            // At the usual scales (100%, 125%, 150% ...) plug-in windows are
+            // not DPI aware, as in most DAWs: Windows draws them at 96 DPI and
+            // stretches them, so a plug-in that does not scale itself still
+            // shows whole. At an in-between scale (115%) the window follows
+            // the scale instead and the plug-in is told it (see scale_aware).
+            let screen = monitor_dpi(owner_hwnd);
+            let aware =
+                super::scale_aware(screen, std::env::var("AUDIFORM_PLUGIN_DPI").ok().as_deref());
+            let dpi = if aware {
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+                tell_scale(&view, screen);
+                screen
+            } else {
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
+                96
+            };
             let strip = strip_for(dpi);
             let mut size: ViewRect = std::mem::zeroed();
             view.getSize(&mut size);

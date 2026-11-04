@@ -40,6 +40,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Fixed
 
+- Plug-in windows at in-between Windows display scales, such as 115%, now fill their window instead of drawing small in one corner with black around them. At the usual scales (100%, 125%, 150% and so on) nothing changes.
+
 - Audio Separation downloads use Windows' own curl by its full path, so a broken copy left on the PATH by other tools cannot stop them.
 
 - Alt-dragging clips to copy them now shows both the originals, staying put, and the copies moving under the pointer.

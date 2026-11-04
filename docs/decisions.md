@@ -2471,3 +2471,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Mentions of Altered Audio Editor, Steve Phillips and The GCRN move to fine print: one line at the foot of the README and one at the foot of the About dialog (8 px, faint), each with the links to the original project, The GCRN, Steve's book and his support page. The README loses its "experimental flavor" callout, its Built on section and its Support section; the About dialog loses its credit box. The copyright lines, the licence statement and the independence notice stay at their normal size, and NOTICE.md and CONTRIBUTORS.md are unchanged.
 
 **Why.** The project lead's call. Neither the GPL nor the original project sets any rule on how visible a credit or a support link must be; the GPL only requires the copyright and licence notices to be shown, which they are.
+
+## 2026-11-04: Plug-in windows at in-between display scales
+
+**Decision.** At the usual Windows scales (100%, 125%, 150%, 175%, 200% and on in steps of 25) plug-in windows stay as they have been since 2026-10-29: not DPI aware, stretched by Windows. At an in-between scale, such as 115% custom scaling, the window follows the display scale (per-monitor DPI aware), is sized in real pixels and the plug-in is told the scale through the VST3 content scale. `AUDIFORM_PLUGIN_DPI=aware` or `=stretch` forces one or the other, for testing.
+
+**Why.** A tester at 115% saw a Waves plug-in drawn at its own size in the bottom-left of a stretched window, with black filling the rest. The project lead's machine at 125% works with the stretch and must not change. Both are served by picking per scale.
+
+**How.** `scale_aware` in `plughost/src/editor.rs` (unit-tested), and the monitor's real scale read as a DPI-aware thread before the window is made.
