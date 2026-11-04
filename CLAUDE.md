@@ -291,9 +291,9 @@ These rules exist because reproducing the exact visual expression of a commercia
 ## Privacy (non-negotiable)
 
 Zero logins, zero telemetry, zero tracking. The app is fully usable offline without anyone doing anything.
-- No network requests of any kind from the app or the core: no update checks, analytics, crash reporting or license checks.
+- No network requests of any kind from the app or the core: no analytics, crash reporting or license checks, and no update check the user did not ask for or switch on (see Updates below).
 - No accounts or sign-in, ever.
-- The only web access is the Help menu opening pages in the user's browser when they pick a link, limited to the allow list in `src-tauri/src/commands/links.rs`.
+- Beyond the update check and separation downloads below, the only web access is opening pages in the user's browser when they pick a link (Help menu, About dialog), limited to the allow list in `src-tauri/src/commands/links.rs`.
 - A support link for Steve Phillips (the original author) and his book, Altered Audio: Podcasting Demystified, live in the About dialog only, beside the credit to Altered Audio Editor (the Help submenu was removed by the project lead on 2026-11-04). Never in the user's face, never a nag, never forced.
 - Updates (decided 2026-10-14, built 2026-11-04): Help > Check for Updates, plus an optional weekly check that is OFF by default (Settings > General). The check asks `github.com/nwh212/Audiform/releases/latest` for its redirect, which names the newest tag: one header request through the system curl, from `src-tauri/src/separation/download.rs` only; no login, no API calls, nothing about the user sent. A found update shows one line in the status bar from the weekly check, or a dialog when asked from Help; never during playback or recording; nothing is downloaded or installed by the app (the dialog opens the release page). A signed in-app installer through the Tauri updater remains possible later.
 - Any future feature that needs the network (for example Podcast Manager sync) must be off by default, clearly labeled, and never required. See `PRIVACY.md`.
