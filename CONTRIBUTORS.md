@@ -7,6 +7,7 @@ Everyone listed below released their work under GPL v3.0 or later.
 ## Audiform
 
 - **Broman** ([nwh212](https://github.com/nwh212) on GitHub), maintainer: 3D Space sessions, automation lanes, the metronome and tempo map, the Amp Model, and more.
+- **Claude** (Anthropic's AI assistant, through Claude Code), working with the maintainer: much of Audiform's code, tests and documentation, written at Broman's direction and reviewed and released by him under GPL v3.0 or later. Commits it helped with carry a `Co-Authored-By: Claude` line.
 
 ## Altered Audio Editor
 
