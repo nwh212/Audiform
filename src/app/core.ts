@@ -9,7 +9,7 @@
 
 import { listen } from "@tauri-apps/api/event";
 import type { OutputFormat } from "./output-format";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { EffectChainDoc, EffectSlotDoc, MediaRefDoc } from "../stores/session";
 import type { SpectralMask } from "../panels/editor/spectrum";
 
@@ -1574,6 +1574,67 @@ export function separationCancel(): Promise<void> {
 
 export function onSeparationProgress(fn: (p: SeparationProgress) => void): Promise<() => void> {
   return listen<SeparationProgress>("separation-progress", (e) => fn(e.payload));
+}
+
+/** One installed add-on: a folder in the Add-ons folder with an `addon.json` manifest. */
+export interface AddonInfo {
+  id: string;
+  name: string;
+  version: string;
+  /** The window title. */
+  title: string;
+  /** The page shown in the window, relative to the folder. */
+  entry: string;
+  description: string;
+  /** True when the manifest names a tool program to run. */
+  hasTool: boolean;
+  folder: string;
+}
+
+/** What an add-on's tool said and how it ended. */
+export interface AddonRunResult {
+  /** The exit code, or null when the tool was stopped by a signal. */
+  code: number | null;
+  /** The last output lines, oldest first. */
+  lines: string[];
+}
+
+export interface AddonOutput {
+  id: string;
+  line: string;
+  /** True for the tool's error channel. */
+  err: boolean;
+}
+
+export function addonsList(): Promise<AddonInfo[]> {
+  return invoke<AddonInfo[]>("addons_list");
+}
+
+export function addonsOpenDir(): Promise<void> {
+  return invoke<void>("addons_open_dir");
+}
+
+/** The address an add-on's page loads from inside its window. */
+export function addonPageUrl(id: string, entry: string): string {
+  return convertFileSrc("", "addon") + `${id}/${entry}`;
+}
+
+/** Runs the add-on's tool with `args` and `input` on its standard input; lines come through `onAddonOutput`. */
+export function addonRun(id: string, args: string[], input: string): Promise<AddonRunResult> {
+  return invoke<AddonRunResult>("addon_run", { id, args, input });
+}
+
+export function addonCancel(): Promise<void> {
+  return invoke<void>("addon_cancel");
+}
+
+/** Shows an Open dialog for an add-on: one file, or a folder. Null on cancel. */
+export function addonPick(folder: boolean, title: string): Promise<string | null> {
+  return invoke<string | null>("addon_pick", { folder, title });
+}
+
+export function onAddonOutput(fn: (p: AddonOutput) => void): Promise<() => void> {
+  return listen<AddonOutput>("addon-output", (e) => fn(e.payload));
 }
 
 /** Effects rack presets read from preset files, ready to keep as the user's own. */

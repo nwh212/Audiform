@@ -32,7 +32,7 @@ import { writable, type Readable } from "svelte/store";
 
 import {
   DEFAULT_LAYOUT,
-  PANELS,
+  isPanelId,
   panelDef,
   presetById,
   resolveHome,
@@ -664,10 +664,7 @@ export class DockController {
   }
 
   private syncOpen(): void {
-    const known = new Set<string>(PANELS.map((p) => p.id));
-    const ids = [...this.openIds()].filter((id): id is PanelId =>
-      known.has(id),
-    );
+    const ids = [...this.openIds()].filter(isPanelId);
     this.openStore.set(new Set(ids));
   }
 

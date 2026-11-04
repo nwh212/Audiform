@@ -82,7 +82,11 @@ for (const f of walk(join(root, "src-tauri", "src"), [".rs"])) {
 // Tauri config: the page may only load the app's own files.
 const conf = JSON.parse(readFileSync(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 const csp = conf?.app?.security?.csp ?? "";
-if (!/default-src 'self'/.test(csp) || /connect-src|https?:/.test(csp)) {
+// Add-on windows load from the app's own `addon` scheme (spelled
+// http://addon.localhost on Windows); it is served from inside the app,
+// never from the network, and is the only host-like name allowed here.
+const cspRest = csp.replace(/frame-src addon: http:\/\/addon\.localhost/, "");
+if (!/default-src 'self'/.test(cspRest) || /connect-src|https?:/.test(cspRest)) {
   problems.push("src-tauri/tauri.conf.json: the content security policy must stay default-src 'self' with no remote hosts");
 }
 

@@ -28,7 +28,22 @@ export type PanelId =
   | "visualizer"
   | "space"
   | "separation"
-  | "track-details";
+  | "track-details"
+  | AddonPanelId;
+
+/** An add-on's window: "addon:" and the add-on's id. */
+export type AddonPanelId = `addon:${string}`;
+
+const ADDON_PREFIX = "addon:";
+
+export function addonPanelId(addonId: string): AddonPanelId {
+  return `${ADDON_PREFIX}${addonId}`;
+}
+
+/** The add-on an add-on panel id names, or null for any other panel. */
+export function addonIdOf(panelId: string): string | null {
+  return panelId.startsWith(ADDON_PREFIX) ? panelId.slice(ADDON_PREFIX.length) : null;
+}
 
 export type Side = "left" | "right" | "above" | "below";
 
@@ -201,13 +216,29 @@ export const PANELS: readonly PanelDef[] = [
 
 const BY_ID = new Map(PANELS.map((p) => [p.id, p]));
 
+/** Add-on windows open beside Audio Separation, else to the right of the Editor. */
+const ADDON_HOME: Placement[] = [{ reference: "separation", direction: "within" }, { reference: "space", direction: "within" }, { reference: "editor", direction: "right" }, { edge: "right" }];
+
+/** The installed add-ons' windows; replaced whenever the list is read again. */
+const ADDON_PANELS = new Map<string, PanelDef>();
+
+export function setAddonPanels(addons: readonly { id: string; title: string }[]): void {
+  ADDON_PANELS.clear();
+  for (const a of addons) ADDON_PANELS.set(addonPanelId(a.id), { id: addonPanelId(a.id), title: a.title, inDefault: false, home: ADDON_HOME, pending: null });
+}
+
 export function panelDef(id: string): PanelDef | undefined {
-  return BY_ID.get(id as PanelId);
+  return BY_ID.get(id as PanelId) ?? ADDON_PANELS.get(id);
+}
+
+/** True for a built-in panel or an installed add-on's window. */
+export function isPanelId(id: string): id is PanelId {
+  return panelDef(id) !== undefined;
 }
 
 /** Picks the first home placement that is possible with the panels currently open. */
 export function resolveHome(id: PanelId, open: ReadonlySet<string>): Placement {
-  const def = BY_ID.get(id);
+  const def = panelDef(id);
   for (const place of def?.home ?? []) {
     if ("edge" in place) return place;
     if (place.reference !== id && open.has(place.reference)) return place;

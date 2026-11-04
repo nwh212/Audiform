@@ -18,15 +18,18 @@
     workspaceList,
     saveKeymapOverrides,
     workspacePut,
+    addonsList,
+    type AddonInfo,
     type AppInfo,
   } from "./core";
   import { sessionHistory } from "../stores/history";
   import { keymap } from "../stores/keymap";
   import { bindKeymap } from "../keymap/dispatch";
   import { DockController, type PanelContent, type WorkspaceState } from "./docking/dock";
-  import { panelDef, type PanelId } from "./docking/registry";
+  import { addonIdOf, panelDef, setAddonPanels, type PanelId } from "./docking/registry";
   import DockShell from "./docking/DockShell.svelte";
   import LazyPanel from "./docking/LazyPanel.svelte";
+  import AddonPanel from "../panels/addons/AddonPanel.svelte";
   import { ActionRegistry } from "./actions";
   import { EFFECT_FAMILIES, MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
@@ -1068,6 +1071,11 @@
   const loadMarkersPanel = () => import("../panels/markers/MarkersPanel.svelte");
 
   function content(id: PanelId): PanelContent {
+    const addonId = addonIdOf(id);
+    if (addonId !== null) {
+      const addon = addons.find((a) => a.id === addonId);
+      if (addon) return { component: asComponent(AddonPanel), props: { addon, source: separationTools.source, onImport: importPaths, onNotice: showNotice, onError: showError } };
+    }
     switch (id) {
       case "history":
         return {
@@ -1201,9 +1209,25 @@
     workspaces: { list: workspaceList, get: workspaceGet, put: workspacePut, remove: workspaceDelete },
     currentId: () => prefs.string(KEY_WORKSPACE, "default"),
     setCurrentId: (id) => prefs.set(KEY_WORKSPACE, id),
-    ready: () => prefs.load(),
+    // Settings and the add-on list first: a saved layout can hold an add-on's window.
+    ready: async () => {
+      await prefs.load();
+      await reloadAddons();
+    },
     onError: showError,
   });
+
+  // Installed add-ons (Window > Add-ons), each with a window of its own.
+  let addons = $state<AddonInfo[]>([]);
+  async function reloadAddons() {
+    try {
+      addons = await addonsList();
+    } catch (e) {
+      showError(e);
+      addons = [];
+    }
+    setAddonPanels(addons.map((a) => ({ id: a.id, title: a.title })));
+  }
 
   let aboutOpen = $state(false);
   let reportOpen = $state(false);
@@ -1755,6 +1779,8 @@
     set_wsState: (v) => (wsState = v),
     openPanels: () => openPanels,
     set_openPanels: (v) => (openPanels = v),
+    addons: () => addons,
+    reloadAddons,
   });
 
   // Effects menu (see effects-tools.svelte.ts).

@@ -305,6 +305,8 @@ describe("menu model", () => {
       "fx.capture-noise-print",
       "help.discord",
       "clip.separate-quick",
+      "window.addons-folder",
+      "window.addons-reload",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {
@@ -313,6 +315,7 @@ describe("menu model", () => {
           built.has(it.id) ||
           it.id.startsWith("window.panel.") ||
           it.id.startsWith("file.recent.") ||
+          it.id.startsWith("window.addon.") ||
           it.id.startsWith("window.workspace.")
         )
           continue;

@@ -70,6 +70,8 @@ const LATER = "Not built yet.";
 export const RECENT_SLOTS = 10;
 /** Menu slots for workspaces: the built-in ones plus the user's own. */
 export const WORKSPACE_SLOTS = 20;
+/** Window > Add-ons: the installed add-ons fill these slots when the app starts. */
+export const ADDON_SLOTS = 12;
 
 export const MENUS: readonly Menu[] = [
   {
@@ -483,6 +485,14 @@ export const MENUS: readonly Menu[] = [
       ]),
       sep,
       ...PANELS.map((p) => item(`window.panel.${p.id}`, p.title)),
+      sep,
+      sub("Add-ons", [
+        ...Array.from({ length: ADDON_SLOTS }, (_, i) => item(`window.addon.${i + 1}`, `Add-on ${i + 1}`, { placeholder: true })),
+        item("window.addon.none", "No add-ons installed", { pending: "Add-ons you put in the Add-ons folder appear here.", placeholder: true }),
+        sep,
+        item("window.addons-folder", "Open Add-ons Folder..."),
+        item("window.addons-reload", "Reload Add-ons"),
+      ]),
       sep,
       item("window.reset-layout", "Reset to Default Layout"),
       item("window.minimize", "Minimize"),

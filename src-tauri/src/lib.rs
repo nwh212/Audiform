@@ -46,6 +46,7 @@ pub fn run() {
         }))
         .manage(commands::app::LaunchPaths(std::sync::Mutex::new(launch)))
         .manage(commands::separation::SeparationCancel::default())
+        .manage(commands::addons::AddonCancel::default())
         .manage(engine::PreviewPlayer::default())
         .manage(engine::Transport::default())
         .manage(engine::Recorder::default())
@@ -80,6 +81,10 @@ pub fn run() {
             }
             Ok(())
         })
+        // Add-on windows load their pages from the Add-ons folder on this scheme.
+        .register_uri_scheme_protocol("addon", |ctx, request| {
+            commands::addons::serve(ctx.app_handle(), request)
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -98,6 +103,12 @@ pub fn run() {
             commands::themes::themes_open_dir,
             commands::themes::themes_list,
             commands::themes::themes_read,
+            commands::addons::addons_dir,
+            commands::addons::addons_open_dir,
+            commands::addons::addons_list,
+            commands::addons::addon_run,
+            commands::addons::addon_cancel,
+            commands::addons::addon_pick,
             commands::library::library_default_root,
             commands::library::library_create,
             commands::library::library_open,

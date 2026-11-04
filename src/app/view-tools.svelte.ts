@@ -11,14 +11,14 @@
 import { fit } from "../panels/editor/timeline";
 import { editor } from "../stores/editor";
 import { session, transport } from "../stores/open-session";
-import { minimizeWindow, openLink } from "./core";
+import { addonsOpenDir, minimizeWindow, openLink, type AddonInfo } from "./core";
 import { LINKS } from "./links";
-import { WORKSPACE_SLOTS } from "./menus/model";
+import { ADDON_SLOTS, WORKSPACE_SLOTS } from "./menus/model";
 import { zoomBy, contentEnd, jumpEdge, sessionView } from "./navigation";
 import type { ActionRegistry } from "./actions";
 import type { DockController, WorkspaceState } from "./docking/dock";
 import type { ChoiceButton } from "./ChoiceDialog.svelte";
-import { PANELS, type PanelId } from "./docking/registry";
+import { addonPanelId, PANELS, type PanelId } from "./docking/registry";
 
 /** What the View, Window and Help menus needs from the rest of the app. */
 export interface ViewToolsDeps {
@@ -39,10 +39,14 @@ export interface ViewToolsDeps {
   set_wsState: (v: WorkspaceState) => void;
   openPanels: () => ReadonlySet<PanelId>;
   set_openPanels: (v: ReadonlySet<PanelId>) => void;
+  /** The installed add-ons, for Window > Add-ons. */
+  addons: () => AddonInfo[];
+  /** Reads the Add-ons folder again. */
+  reloadAddons: () => Promise<void>;
 }
 
 export function createViewTools(deps: ViewToolsDeps) {
-  const { actions, dock, inWave, showNotice, promptText, ask, timeSel, shortcutsOpen, aboutOpen, wsState, openPanels, set_shortcutsOpen, set_aboutOpen, set_wsState, set_openPanels, openReport } = deps;
+  const { actions, dock, inWave, showNotice, promptText, ask, timeSel, shortcutsOpen, aboutOpen, wsState, openPanels, set_shortcutsOpen, set_aboutOpen, set_wsState, set_openPanels, openReport, addons, reloadAddons } = deps;
 
 
   /** Registers the menu actions. */
@@ -190,6 +194,36 @@ export function createViewTools(deps: ViewToolsDeps) {
         }),
       );
     }
+    // Window > Add-ons: one slot per installed add-on, the rest hidden.
+    for (let i = 0; i < ADDON_SLOTS; i++) {
+      const at = () => addons()[i];
+      offs.push(
+        actions.register({
+          id: `window.addon.${i + 1}`,
+          run: () => {
+            const a = at();
+            if (a) dock.toggle(addonPanelId(a.id));
+          },
+          visible: () => at() !== undefined,
+          label: () => at()?.title ?? null,
+          checked: () => {
+            const a = at();
+            return !!a && openPanels().has(addonPanelId(a.id));
+          },
+        }),
+      );
+    }
+    offs.push(
+      actions.register({
+        id: "window.addon.none",
+        run: () => {},
+        enabled: () => false,
+        visible: () => addons().length === 0,
+        reason: () => "Add-ons you put in the Add-ons folder appear here.",
+      }),
+      actions.register({ id: "window.addons-folder", run: () => addonsOpenDir() }),
+      actions.register({ id: "window.addons-reload", run: () => reloadAddons() }),
+    );
     return offs;
   }
 

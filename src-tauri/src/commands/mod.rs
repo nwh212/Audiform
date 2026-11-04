@@ -5,6 +5,7 @@
 //! Tauri command handlers. Keep these thin: parse input, call into the
 //! core modules, return plain data.
 
+pub mod addons;
 pub mod align;
 pub mod amp;
 pub mod app;
