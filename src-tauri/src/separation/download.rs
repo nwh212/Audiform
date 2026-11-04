@@ -125,12 +125,22 @@ pub fn verify(path: &Path, expected: &str) -> Result<(), String> {
     }
 }
 
-fn curl() -> &'static str {
-    // Windows 10 and later ship curl.exe in System32.
+fn curl() -> std::path::PathBuf {
+    // Windows 10 and later ship curl.exe in System32. It is named by its
+    // full path: a broken copy earlier on the PATH (some developer tools
+    // leave one behind) must not be picked up instead.
     if cfg!(windows) {
-        "curl.exe"
+        if let Some(root) = std::env::var_os("SystemRoot") {
+            let system = std::path::Path::new(&root)
+                .join("System32")
+                .join("curl.exe");
+            if system.is_file() {
+                return system;
+            }
+        }
+        "curl.exe".into()
     } else {
-        "curl"
+        "curl".into()
     }
 }
 

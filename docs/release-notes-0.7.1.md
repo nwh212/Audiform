@@ -38,6 +38,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Fixed
 
+- Audio Separation downloads use Windows' own curl by its full path, so a broken copy left on the PATH by other tools cannot stop them.
+
 - Alt-dragging clips to copy them now shows both the originals, staying put, and the copies moving under the pointer.
 
 - **Save Audio As never saved,** in any format, and showed "Cannot read properties of null (reading 'resolve')". It saves again, and the Files list shows the new file in place of the old one.
