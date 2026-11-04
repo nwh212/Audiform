@@ -1,6 +1,6 @@
 # Stem models: what Audio Separation offers and why
 
-Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src/separation/mod.rs` for the list, each with a pinned checksum). The engine runs the two band-split RoFormer families; models of other kinds cannot be added until the engine learns them. This page records the survey behind the list, so the next check (every major release, `docs/RELEASING.md` step 2) starts from here. Surveyed 2026-11-03.
+Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src/separation/mod.rs` for the list, each with a pinned checksum). The engine runs the two band-split RoFormer families; models of other kinds cannot be added until the engine learns them. This page records the survey behind the list, so the next check (every major release, `docs/RELEASING.md` step 2) starts from here. Surveyed 2026-11-03, extended 2026-11-04 (Mega 53, duet, more of gilliaan's models).
 
 ## What ships
 
@@ -12,6 +12,11 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 | Guitar, trained for it | Mel-Band Roformer Guitar (chenCFD) | MIT licence, small (277 MB), a published score of 7.98 dB on the trainer's own test. |
 | Lead vocal apart from backing vocals | BS-RoFormer Karaoke (frazer and becruily), and anvuew's | The two best public lead-vocal scores (10.10 and 10.22 dB) among single models. The first has no licence stated; anvuew's is GPL-3.0. Run the vocals model first, then one of these on the vocal stem, to get the backing vocals as the rest. |
 | Bowed strings | BS-RoFormer Bowed Strings v2 (gilliaan) | The only public strings model, 4.69 dB on a public strings test. CC BY-NC-SA 4.0: free for non-commercial use, with credit, shared alike. |
+| Everything at once (53 instruments) | Mega 53 (ZFTurbo) | The only public model that names 53 instruments, MIT-licensed training code. 1.37 GB and heavy: 53 results per run and a large graphics card. Best used to find what is in a mix. |
+| One instrument out of the 53, on its own | Mega 53 splits (noblebarkrr) | The same model cut into one 78 MB model per instrument, so you download and run only the one you need. Listed under one folded heading. |
+| Two singers apart | Duet (DryPaintMan) | Pulls two voices singing together apart. 7.93 dB on the trainer's test; no licence stated. |
+| Lead vocal, drums, effects off vocals, cleaner inverted vocals | gilliaan's karaoke, drums, de-effect (beta) and clean-invert models | CC BY-NC-SA 4.0. De-effect takes reverb and delay off a vocal; clean-invert tidies a vocal made by subtracting an instrumental from a mix. |
+| Center and wide (stereo field) | gilliaan's CenterWide, Mel-Band v3 and BS v3 beta | A learned split of what sits in the phantom center from what is panned off it, on its own Stereo tab. CC BY-NC-SA 4.0. |
 | Noise | Mel-Band Roformer Denoise, and the aggressive one | As before. |
 | Reverb | Reverb Remover (anvuew) | Pulls the dry sound out of a reverberant recording, GPL-3.0, 22.5 dB on the trainer's own test. |
 | Bleed between stems | Mel-Band Roformer Bleed Suppressor (unwa and 97chris) | Cleans what other stems left in an instrumental. No licence stated. |
@@ -23,7 +28,7 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 
 - **Drum kit into kick, snare, toms, hi-hat and cymbals.** The best public model (an MDX23C by aufr33 and jarredou, 438 MB) is of a kind the engine does not run, its original release is gone and only mirrors remain, and no licence was ever stated. The permissive one (a Hybrid Demucs by inagoy, MIT) is also a kind the engine does not run and scores well below it. The best kit splitters of all are online-only services.
 - **Synth lead, percussion.** The public models are re-uploads of unknown provenance or unverified links.
-- **Everything at once (53 stems).** ZFTurbo's open 53-stem model (1.37 GB, MIT) wants a 16 GB graphics card and its per-stem quality is low. Useful as an instrument detector, not as a separator. Left out until the engine can run it in halves.
+- **CenterWide on MDX23C and SCNet.** gilliaan's MDX23C CenterWide v2e is, by the trainer's account, the best of the CenterWide set (twice the training data, best score, least noise). It is an MDX23C network, which the engine does not run yet; the RoFormer versions ship meanwhile. The SCNet versions wait for the same reason.
 - **Speech, music and effects (film mixes).** Bandit v2 (Apache code, share-alike weights) is a kind the engine does not run.
 - **Two doubled lead takes.** No public model is trained to pull one double from another. The nearest are a duet model (one re-upload, 630 MB, no licence, 7.9 dB on its own test) and a research model for duets and unisons (Conv-TasNet, CC BY 4.0) that needs its own runner. Neither is good enough to ship. Removing a double (keeping one dry lead) exists as a non-commercial model.
 - **Soprano, alto, tenor and bass.** The good choir separator is online-only. The downloadable ones (rbustos89, SCNet, 42 MB) are undocumented and unlicensed, and of a kind the engine does not run.

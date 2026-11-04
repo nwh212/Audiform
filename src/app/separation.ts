@@ -23,7 +23,9 @@ export function byCategory(models: readonly SeparationModel[]): [string, Separat
  * drums, other, vocals, guitar, piano". Models that make the same split
  * sit under one heading, best score first.
  */
-export function splitOf(m: Pick<SeparationModel, "stems" | "targetName" | "restName">): string {
+export function splitOf(m: Pick<SeparationModel, "stems" | "targetName" | "restName"> & { group?: string }): string {
+  if (m.group) return m.group;
+  if (m.stems.length > 8) return `${m.stems.length} instruments at once`;
   return m.stems.length ? m.stems.map(([n]) => n).join(", ") : `${m.targetName} and ${m.restName}`;
 }
 
@@ -50,7 +52,9 @@ export function memosOf(raw: unknown): Record<string, string> {
 
 /** "SDR 11.00 dB", or "SDR not published". A several-stem model lists each stem's score. */
 export function sdrText(m: Pick<SeparationModel, "sdr" | "stems">): string {
-  if (m.stems.length > 0) return `SDR ${m.stems.map(([n, v]) => `${n.toLowerCase()} ${v.toFixed(1)}`).join(", ")} dB`;
+  // Stems with no published score (0) are left out.
+  const scored = m.stems.filter(([, v]) => v > 0);
+  if (scored.length > 0) return `SDR ${scored.map(([n, v]) => `${n.toLowerCase()} ${v.toFixed(1)}`).join(", ")} dB`;
   return m.sdr === null ? "SDR not published" : `SDR ${m.sdr.toFixed(2)} dB`;
 }
 

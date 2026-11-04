@@ -2449,3 +2449,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead records over a track that already holds audio and does not want to hear the old take under the new one. That is how a tape machine behaves on an armed track, and what a singer doing another pass expects.
 
 **How.** The record commands (start, add, remove, stop) note which track ids are recording and resync a running playback. `heard()` drops those tracks' clips. A unit test covers the heard copy; the session stays intact.
+
+## 2026-11-04: Mega 53, the duet model and more of gilliaan's models
+
+**Decision.** The separation list gains ZFTurbo's Mega 53 (all 53 instruments in one run), noblebarkrr's per-instrument cuts of it (one 78 MB model each, under one folded heading), DryPaintMan's duet model, and gilliaan's lead-vocal, drums, de-effect, clean-invert and two CenterWide models. A model can now name its own folded heading (`group`), so the 53 cuts sit together instead of making 53 headings. A Stereo tab holds the CenterWide models. Stems with no published score are no longer shown as "0.0".
+
+**Why.** The project lead asked for the Mega 53 model, the duet model and gilliaan's newer models, and pointed to noblebarkrr's collections as a source. The per-instrument cuts make Mega 53 practical on an ordinary graphics card. gilliaan's MDX23C CenterWide v2e, which the trainer rates best, is a network family the engine does not run, so the RoFormer CenterWide models ship until it does.
+
+**How.** Checksums come from the hosts' own records and were confirmed by streaming the two largest files. A Mega 53 cut ran end to end through the engine on this build machine's processor; the full 53-output model and the two-output models need the Windows engine (the Linux engine asset under engine-v0.2.0 is still the 0.1.0 build).

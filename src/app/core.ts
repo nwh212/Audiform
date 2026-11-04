@@ -1507,6 +1507,8 @@ export interface SeparationModel {
   name: string;
   /** The group it is listed under, such as "Vocals and instrumental". */
   category: string;
+  /** The folded heading it is listed under; empty to fold by what it splits. */
+  group: string;
   /** Published quality score of the separated target, in dB (higher is better). Null when none is published. */
   sdr: number | null;
   sdrNote: string;

@@ -11,6 +11,7 @@ const model = (id: string, category: string, sdr: number): SeparationModel => ({
   id,
   name: id,
   category,
+  group: "",
   sdr,
   sdrNote: "",
   stems: [],
@@ -44,6 +45,10 @@ describe("audio separation", () => {
     expect(splitOf(six)).toBe("Bass, Drums");
     expect(memosOf({ a: "good on rock", b: "  ", c: 3 })).toEqual({ a: "good on rock" });
     expect(memosOf(null)).toEqual({});
+    expect(splitOf({ ...model("m", "Instruments", 0), group: "Mega 53, one instrument at a time" })).toBe("Mega 53, one instrument at a time");
+    expect(splitOf({ ...model("m", "Instruments", 0), stems: Array.from({ length: 53 }, (_, i) => [`s${i}`, 0] as [string, number]) })).toBe("53 instruments at once");
+    expect(sdrText({ sdr: 4.69, stems: [["Strings", 4.69], ["Without strings", 0]] })).toBe("SDR strings 4.7 dB");
+    expect(sdrText({ sdr: null, stems: [["Center", 0], ["Wide", 0]] })).toBe("SDR not published");
   });
 
   it("copies a track's settings onto a results track with new ids", () => {
