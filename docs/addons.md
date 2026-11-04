@@ -122,5 +122,5 @@ print(f"{len(paths)} files", flush=True)
 
 - Up to 32 add-ons are listed, twelve of them in the Window menu.
 - A page or picture over 32 MB is not served; a manifest over 64 KB is ignored.
-- One tool run at a time across all add-ons.
+- One tool run at a time across all add-ons; a second `run` while one is going is answered with `failed`.
 - The last 200 output lines are kept for `done`; everything is streamed as `output` while it runs.

@@ -29,6 +29,19 @@ use tauri_plugin_dialog::DialogExt;
 #[derive(Default)]
 pub struct AddonCancel(pub Arc<AtomicBool>);
 
+/// True while a tool runs: one at a time, whatever the pages ask.
+#[derive(Default)]
+pub struct AddonBusy(pub Arc<AtomicBool>);
+
+/// Clears the busy flag when a run ends, however it ends.
+struct BusyGuard(Arc<AtomicBool>);
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Relaxed);
+    }
+}
+
 /// A page or picture in an add-on larger than this is not served.
 const MAX_SERVED_BYTES: u64 = 32 * 1024 * 1024;
 /// A manifest larger than this is ignored.
@@ -272,6 +285,7 @@ pub async fn addon_pick(
 pub async fn addon_run(
     app: AppHandle,
     cancel: State<'_, AddonCancel>,
+    busy: State<'_, AddonBusy>,
     id: String,
     args: Vec<String>,
     input: String,
@@ -285,11 +299,16 @@ pub async fn addon_run(
     if manifest.command.is_empty() {
         return Err(format!("{} has no tool to run.", info.name));
     }
+    if busy.0.swap(true, Ordering::AcqRel) {
+        return Err("An add-on tool is already running. Wait for it to finish or stop it.".into());
+    }
+    let guard = BusyGuard(busy.0.clone());
     // A stop asked for before this run does not apply to it.
     cancel.0.store(false, Ordering::Relaxed);
     let flag = cancel.0.clone();
     let folder = info.folder.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
         run_tool(&app, &folder, &id, &manifest.command, &args, &input, &flag)
     })
     .await

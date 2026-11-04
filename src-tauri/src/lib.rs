@@ -47,6 +47,7 @@ pub fn run() {
         .manage(commands::app::LaunchPaths(std::sync::Mutex::new(launch)))
         .manage(commands::separation::SeparationCancel::default())
         .manage(commands::addons::AddonCancel::default())
+        .manage(commands::addons::AddonBusy::default())
         .manage(engine::PreviewPlayer::default())
         .manage(engine::Transport::default())
         .manage(engine::Recorder::default())
