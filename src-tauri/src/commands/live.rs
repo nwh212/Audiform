@@ -14,7 +14,7 @@
 //! session each time it plays or exports.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
@@ -41,6 +41,49 @@ struct Copy {
 static LIVE: LazyLock<Mutex<HashMap<String, Copy>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 /// Numbers the copies, so a new render never overwrites one being played.
 static NEXT: AtomicU64 = AtomicU64::new(1);
+/// Tracks being recorded right now, by id. Their clips are not heard
+/// while the take runs: a track records over its audio, not along with it.
+static RECORDING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Notes which tracks are being recorded (the record commands keep this current).
+pub fn set_recording(ids: impl IntoIterator<Item = String>) {
+    if let Ok(mut r) = RECORDING.lock() {
+        r.clear();
+        r.extend(ids);
+    }
+}
+
+pub fn add_recording(id: &str) {
+    if let Ok(mut r) = RECORDING.lock() {
+        r.insert(id.to_string());
+    }
+}
+
+pub fn remove_recording(id: &str) {
+    if let Ok(mut r) = RECORDING.lock() {
+        r.remove(id);
+    }
+}
+
+/// The session without the clips of the tracks being recorded.
+fn recording_heard(s: &Session) -> Cow<'_, Session> {
+    let rec = RECORDING.lock().map(|r| r.clone()).unwrap_or_default();
+    if rec.is_empty()
+        || !s
+            .tracks
+            .iter()
+            .any(|t| rec.contains(&t.id.to_string()) && !t.clips.is_empty())
+    {
+        return Cow::Borrowed(s);
+    }
+    let mut out = s.clone();
+    for t in &mut out.tracks {
+        if rec.contains(&t.id.to_string()) {
+            t.clips.clear();
+        }
+    }
+    Cow::Owned(out)
+}
 
 /// The same file however its path is spelled (case does not matter on Windows).
 fn key(p: &Path) -> String {
@@ -56,9 +99,13 @@ fn key(p: &Path) -> String {
 /// edits replaced by their live copies, and pre-rendered tracks playing
 /// their renders (see `prerender`). Unchanged when neither applies.
 pub fn heard(s: &Session) -> Cow<'_, Session> {
-    match files_heard(s) {
+    let heard = match files_heard(s) {
         Cow::Borrowed(b) => super::prerender::heard(b),
         Cow::Owned(o) => Cow::Owned(super::prerender::heard(&o).into_owned()),
+    };
+    match heard {
+        Cow::Borrowed(b) => recording_heard(b),
+        Cow::Owned(o) => Cow::Owned(recording_heard(&o).into_owned()),
     }
 }
 
@@ -88,8 +135,9 @@ pub struct LiveCopy {
     pub length: u64,
 }
 
-/// Keeps the session's playback in step after a copy came or went.
-fn resync(
+/// Keeps the session's playback in step after a copy came or went, or
+/// a track started or stopped recording.
+pub fn resync(
     open: &State<'_, OpenSession>,
     transport: &State<'_, Transport>,
     playing: &State<'_, Playing>,
@@ -234,6 +282,46 @@ mod tests {
         assert_eq!(h.media[0].length, 800);
         assert_eq!(s.media[0].path, PathBuf::from("/music/take.wav"));
         LIVE.lock().unwrap().clear();
+        assert!(matches!(heard(&s), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn a_track_being_recorded_plays_none_of_its_clips() {
+        use crate::session::model::{ChannelLayout, Track};
+        use crate::session::ops::ClipSpec;
+        let mut s = Session::new("s", 48_000);
+        for name in ["a", "b"] {
+            let mut t = Track::new(name, ChannelLayout::Stereo);
+            t.clips.push(
+                ClipSpec {
+                    id: new_id(),
+                    name: "take".into(),
+                    media_id: new_id(),
+                    start: 0,
+                    source_in: 0,
+                    source_out: 1_000,
+                    channel_mix: None,
+                }
+                .build(),
+            );
+            s.tracks.push(t);
+        }
+        let a = s.tracks[0].id.to_string();
+        assert!(matches!(heard(&s), Cow::Borrowed(_)));
+        set_recording([a.clone()]);
+        let h = heard(&s);
+        assert!(h.tracks[0].clips.is_empty());
+        assert_eq!(h.tracks[1].clips.len(), 1);
+        assert_eq!(
+            s.tracks[0].clips.len(),
+            1,
+            "the session itself keeps its clips"
+        );
+        remove_recording(&a);
+        assert!(matches!(heard(&s), Cow::Borrowed(_)));
+        add_recording(&a);
+        assert!(heard(&s).tracks[0].clips.is_empty());
+        set_recording([]);
         assert!(matches!(heard(&s), Cow::Borrowed(_)));
     }
 }

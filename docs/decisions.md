@@ -2441,3 +2441,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead wants a voice-model tool (converting and training voice models) for a few trusted people without it being in any public build or in the repository. An add-on that adds a window to any build does that: the build stays small and free of that code, and the tool stays with the people who have it. The same mechanism covers any later window built outside the repository.
 
 **How.** `src-tauri/src/commands/addons.rs` lists manifests, serves files on the scheme (percent-decoded, confined to the add-on folder, under a content security policy header), runs the tool and relays its lines as `addon-output` events. `src/app/addons.ts` parses the page's messages and builds the selection; `AddonPanel.svelte` hosts the frame; panel ids `addon:<id>` are registered after the add-on list loads and before the layout restores, so a saved layout can hold an add-on's window. Window > Add-ons has twelve slots filled like Open Recent, plus Open Add-ons Folder and Reload Add-ons. The app's own policy allows `frame-src addon: http://addon.localhost` (the scheme's spelling on Windows), and `scripts/check-privacy.mjs` allows exactly that.
+
+## 2026-11-04: A recording track's clips are silent while it records
+
+**Decision.** While a track is being recorded, its own clips are not played. The clips return the moment the track's take ends: disarming it during the recording, or stopping. Other tracks play as before. The session is never changed by this; the engine plays a copy of the session with those tracks' clips left out, the same copy that already swaps in unsaved Waveform edits and pre-renders (`commands/live.rs`).
+
+**Why.** The project lead records over a track that already holds audio and does not want to hear the old take under the new one. That is how a tape machine behaves on an armed track, and what a singer doing another pass expects.
+
+**How.** The record commands (start, add, remove, stop) note which track ids are recording and resync a running playback. `heard()` drops those tracks' clips. A unit test covers the heard copy; the session stays intact.

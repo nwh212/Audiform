@@ -9,8 +9,10 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, State};
 
+use super::live;
 use super::session::OpenSession;
-use crate::engine::{PreviewPlayer, RecordStatus, RecordTarget, Recorder, Take};
+use super::wave::Playing;
+use crate::engine::{PreviewPlayer, RecordStatus, RecordTarget, Recorder, Take, Transport};
 
 fn take_dir(app: &AppHandle, open: &State<'_, OpenSession>) -> Result<PathBuf, String> {
     let saved = open.0.lock().map_err(|e| e.to_string())?.path.clone();
@@ -28,11 +30,22 @@ pub fn record_start(
     recorder: State<'_, Recorder>,
     preview: State<'_, PreviewPlayer>,
     open: State<'_, OpenSession>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
     targets: Vec<RecordTarget>,
 ) -> Result<PathBuf, String> {
     preview.stop();
     let dir = take_dir(&app, &open)?;
+    // A track records over its clips, not along with them: they go quiet
+    // for the take (the session itself is untouched).
+    let ids: Vec<String> = targets
+        .iter()
+        .filter(|t| t.key != "wave")
+        .map(|t| t.key.clone())
+        .collect();
     recorder.start(targets, Some(dir.clone()))?;
+    live::set_recording(ids);
+    live::resync(&open, &transport, &playing);
     Ok(dir)
 }
 
@@ -52,20 +65,48 @@ pub fn record_monitor(
 
 /// While recording, starts a take for a track armed just now.
 #[tauri::command]
-pub fn record_add(recorder: State<'_, Recorder>, target: RecordTarget) -> Result<(), String> {
-    recorder.add(target)
+pub fn record_add(
+    recorder: State<'_, Recorder>,
+    open: State<'_, OpenSession>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
+    target: RecordTarget,
+) -> Result<(), String> {
+    let key = target.key.clone();
+    recorder.add(target)?;
+    live::add_recording(&key);
+    live::resync(&open, &transport, &playing);
+    Ok(())
 }
 
-/// While recording, ends the take of a track disarmed just now.
+/// While recording, ends the take of a track disarmed just now. Its clips
+/// are heard again from here.
 #[tauri::command]
-pub fn record_remove(recorder: State<'_, Recorder>, key: String) -> Result<(), String> {
-    recorder.remove(&key)
+pub fn record_remove(
+    recorder: State<'_, Recorder>,
+    open: State<'_, OpenSession>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
+    key: String,
+) -> Result<(), String> {
+    recorder.remove(&key)?;
+    live::remove_recording(&key);
+    live::resync(&open, &transport, &playing);
+    Ok(())
 }
 
-/// Stops recording and returns the takes.
+/// Stops recording and returns the takes. Every track's clips are heard again.
 #[tauri::command]
-pub fn record_stop(recorder: State<'_, Recorder>) -> Result<Vec<Take>, String> {
-    recorder.stop()
+pub fn record_stop(
+    recorder: State<'_, Recorder>,
+    open: State<'_, OpenSession>,
+    transport: State<'_, Transport>,
+    playing: State<'_, Playing>,
+) -> Result<Vec<Take>, String> {
+    let takes = recorder.stop();
+    live::set_recording([]);
+    live::resync(&open, &transport, &playing);
+    takes
 }
 
 #[tauri::command]
