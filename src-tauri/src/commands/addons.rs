@@ -205,6 +205,26 @@ pub fn addons_open_dir(app: AppHandle) -> Result<(), String> {
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Opens a folder inside the add-on's own folder in the system file
+/// manager, making it first if needed. `rel` is relative to the add-on;
+/// nothing outside it can be opened.
+#[tauri::command]
+pub fn addon_open_folder(app: AppHandle, id: String, rel: String) -> Result<(), String> {
+    if !valid_id(&id) {
+        return Err("Not an add-on id.".into());
+    }
+    let dir = addons_path(&app)?.join(&id);
+    if !dir.is_dir() {
+        return Err(format!("No add-on called {id} is installed."));
+    }
+    let path = match rel.trim() {
+        "" | "." => dir,
+        r => dir.join(safe_relative(r).ok_or("Not a folder in the add-on.")?),
+    };
+    fs::create_dir_all(&path).map_err(|e| format!("Could not make the folder: {e}"))?;
+    tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+}
+
 /// The installed add-ons.
 #[tauri::command]
 pub fn addons_list(app: AppHandle) -> Result<Vec<AddonInfo>, String> {

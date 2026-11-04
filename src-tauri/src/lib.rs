@@ -109,6 +109,7 @@ pub fn run() {
             commands::addons::addon_run,
             commands::addons::addon_cancel,
             commands::addons::addon_pick,
+            commands::addons::addon_open_folder,
             commands::library::library_default_root,
             commands::library::library_create,
             commands::library::library_open,

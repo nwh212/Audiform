@@ -15,6 +15,7 @@ describe("add-on messages", () => {
     expect(parseAddonRequest({ type: "import", paths: ["C:\\out\\a.wav"] })).toMatchObject({ type: "import", paths: ["C:\\out\\a.wav"] });
     expect(parseAddonRequest({ type: "import", paths: [] })).toBeNull();
     expect(parseAddonRequest({ type: "pick", folder: true, title: "Model folder" })).toMatchObject({ folder: true, title: "Model folder" });
+    expect(parseAddonRequest({ type: "openFolder", path: "models" })).toEqual({ type: "openFolder", path: "models" });
     expect(parseAddonRequest({ type: "notice", text: "  done " })).toEqual({ type: "notice", text: "done" });
     expect(parseAddonRequest({ type: "notice", text: "" })).toBeNull();
     expect(parseAddonRequest({ type: "save", data: { a: 1 } })).toEqual({ type: "save", data: { a: 1 } });

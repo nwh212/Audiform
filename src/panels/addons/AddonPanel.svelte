@@ -8,13 +8,13 @@
   Audiform talk through messages: Audiform tells it what is selected and
   what the theme looks like; the page asks Audiform to run the add-on's
   tool, to bring result files into the Files panel, to open a file or
-  folder dialog, to show a notice or to keep its settings. While the tool
+  folder dialog, to open one of its own folders, to show a notice or to keep its settings. While the tool
   runs, a Stop button sits under the page, so a run can always be ended.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { addonSelection, parseAddonRequest, type AddonSelection } from "../../app/addons";
-  import { addonCancel, addonPageUrl, addonPick, addonRun, onAddonOutput, type AddonInfo } from "../../app/core";
+  import { addonCancel, addonOpenFolder, addonPageUrl, addonPick, addonRun, onAddonOutput, type AddonInfo } from "../../app/core";
   import type { SeparationSource } from "../../app/separation-tools.svelte";
   import { editor } from "../../stores/editor";
   import { mediaPool } from "../../stores/media";
@@ -116,6 +116,9 @@
         } catch (err) {
           post({ type: "picked", request: req.request, path: null, error: String(err) });
         }
+        break;
+      case "openFolder":
+        void addonOpenFolder(addon.id, req.path).catch(onError);
         break;
       case "notice":
         onNotice(req.text);

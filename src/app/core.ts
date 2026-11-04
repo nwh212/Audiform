@@ -1633,6 +1633,11 @@ export function addonPick(folder: boolean, title: string): Promise<string | null
   return invoke<string | null>("addon_pick", { folder, title });
 }
 
+/** Opens a folder inside the add-on's own folder (made first if needed) in the system file manager. */
+export function addonOpenFolder(id: string, rel: string): Promise<void> {
+  return invoke<void>("addon_open_folder", { id, rel });
+}
+
 export function onAddonOutput(fn: (p: AddonOutput) => void): Promise<() => void> {
   return listen<AddonOutput>("addon-output", (e) => fn(e.payload));
 }

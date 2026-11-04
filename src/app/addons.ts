@@ -39,6 +39,7 @@ export type AddonRequest =
   | { type: "cancel" }
   | { type: "import"; request: string; paths: string[] }
   | { type: "pick"; request: string; folder: boolean; title: string }
+  | { type: "openFolder"; path: string }
   | { type: "notice"; text: string }
   | { type: "save"; data: unknown };
 
@@ -83,6 +84,8 @@ export function parseAddonRequest(raw: unknown): AddonRequest | null {
       return isStrings(m.paths) && m.paths.length > 0 ? { type: "import", request: str("request", "import"), paths: m.paths } : null;
     case "pick":
       return { type: "pick", request: str("request", "pick"), folder: m.folder === true, title: str("title") };
+    case "openFolder":
+      return { type: "openFolder", path: str("path").trim() };
     case "notice":
       return str("text").trim() ? { type: "notice", text: str("text").trim().slice(0, 300) } : null;
     case "save":

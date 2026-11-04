@@ -57,6 +57,7 @@ The page talks to Audiform with `window.parent.postMessage(message, "*")` and he
 | `{ type: "cancel" }` | Stops the running tool. |
 | `{ type: "import", request, paths }` | Brings result files into the Files panel (and the Waveform editor's list). `request` is any id; it comes back in `imported`. |
 | `{ type: "pick", request, folder, title }` | Opens a file dialog (`folder: true` for a folder) with `title`; answers with `picked`. |
+| `{ type: "openFolder", path }` | Opens a folder inside the add-on's own folder (`"models"`, or `""` for the add-on folder itself) in the system file manager, making it first. Nothing outside the add-on can be opened. |
 | `{ type: "notice", text }` | Shows `text` in Audiform's notice line. |
 | `{ type: "save", data }` | Keeps `data` (any JSON) in Audiform's settings for this add-on; it comes back in `hello` next time. |
 
