@@ -388,6 +388,15 @@ fn separate_in(
     Ok(SeparationResult { outputs })
 }
 
+/// Adds what to do to engine messages that have a known cause.
+fn engine_hint(message: String) -> String {
+    if message.contains("works only with Audiform") {
+        format!("{message} The engine checks the name of the program that starts it: keep Audiform's program file named Audiform.exe (a renamed copy, such as Audiform-1a2b3c4.exe, is refused).")
+    } else {
+        message
+    }
+}
+
 fn run_engine(
     app: &AppHandle,
     engine: &Path,
@@ -480,7 +489,7 @@ fn run_engine(
                 outcome = Some(Err(if gpu {
                     format!("GPU: {message}")
                 } else {
-                    message
+                    engine_hint(message)
                 }));
                 finished_at = Some(std::time::Instant::now());
             }
