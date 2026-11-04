@@ -190,25 +190,29 @@
     margin: 4px 0;
   }
 
+  /* The original project's links: present, and very quiet. */
   .links {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px 12px;
+    gap: 0 8px;
+    margin-top: 2px;
+    line-height: 1;
   }
 
   .link {
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent);
+    color: var(--text-faint);
+    opacity: 0.45;
     font: inherit;
-    font-size: var(--font-size-small);
+    font-size: 8px;
     text-align: left;
     cursor: pointer;
   }
 
   .link:hover {
-    text-decoration: underline;
+    opacity: 0.8;
   }
 
   .credit-head {
