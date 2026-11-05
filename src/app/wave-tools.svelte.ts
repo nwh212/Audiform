@@ -752,7 +752,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
           const p = pasteAt(wave.current!, board, at, uuid);
           if (p && (await waveEdit("Paste", p.op))) waveSetSelection([at, at + p.length], at);
         },
-        enabled: () => board !== null,
+        enabled: () => waveBoard !== null,
         reason: () => "Copy or cut audio in the Waveform editor first.",
       }),
       ov(waveFocus, {
