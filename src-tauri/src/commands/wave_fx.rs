@@ -82,6 +82,28 @@ pub fn process_range_with(
     Some(out)
 }
 
+/// The chain's look-ahead once its plug-ins have settled. Some plug-ins
+/// report one delay at load and another once they have started
+/// processing, so a few blocks of silence go through a throwaway copy
+/// first, and the answer is read after they are done.
+fn settled_latency(chain: &EffectChain, rate: u32) -> Option<usize> {
+    let mut c = ChainProcessor::new(chain, rate)?;
+    if chain
+        .slots
+        .iter()
+        .any(|s| s.enabled && crate::plugins::is_plugin(&s.effect))
+    {
+        let mut silence = vec![0f32; 4096 * 2];
+        for _ in 0..4 {
+            silence.fill(0.0);
+            c.process(&mut silence);
+        }
+        // A plug-in tells the host about a changed delay on its own thread.
+        std::thread::sleep(std::time::Duration::from_millis(80));
+    }
+    Some(c.latency())
+}
+
 /// Renders `start..end` of the open file through `chain` into a new
 /// file in the app's cache folder, for the interface to swap in.
 #[tauri::command]
@@ -107,7 +129,7 @@ pub async fn wave_apply_chain(
         }
         let empty = || "The Audio FX chain is empty or bypassed, so there is nothing to apply.";
         // The same on every layout: the copies on a bed share their settings.
-        let latency = ChainProcessor::new(&chain, rate).ok_or(empty())?.latency();
+        let latency = settled_latency(&chain, rate).ok_or(empty())?;
         let warm = (f64::from(rate) * WARM_SECONDS) as usize;
         let from = start as i64 - warm as i64;
         let to = end as i64 + latency as i64;

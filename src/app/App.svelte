@@ -486,6 +486,7 @@
     onLatency: () => {
       // The plug-in's delay changed: start again where it is, so every track lines up.
       if (transport.current.playing) void transport.play(transport.current.position).catch(showError);
+      if (waveTransport.current.playing) void waveTransport.play(waveTransport.current.position).catch(showError);
     },
   });
 

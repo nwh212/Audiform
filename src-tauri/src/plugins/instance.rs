@@ -18,7 +18,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -95,7 +95,12 @@ struct Route {
     known: Arc<Mutex<HashMap<u32, Known>>>,
     /// Its window is open (set here when opened, cleared when it closes).
     window: Arc<AtomicBool>,
+    /// The look-ahead it last reported after loading ([`NO_REPORT`] until then).
+    latency: Arc<AtomicUsize>,
 }
+
+/// No look-ahead reported since loading: the load-time values stand.
+const NO_REPORT: usize = usize::MAX;
 
 impl Conn {
     fn spawn() -> Result<Arc<Conn>, String> {
@@ -154,7 +159,11 @@ impl Conn {
                                     e.window_closed = true;
                                     e.dirty = true;
                                 }
-                                Message::LatencyChanged { .. } => e.latency_changed = true,
+                                Message::LatencyChanged { latency } => {
+                                    // Kept, so playback lines up with the delay it has now.
+                                    r.latency.store(latency as usize, Ordering::SeqCst);
+                                    e.latency_changed = true;
+                                }
                                 Message::BypassPicked { bypassed } => e.bypass = Some(bypassed),
                                 Message::SpacePressed { record } => e.space = Some(record),
                                 reply => {
@@ -334,6 +343,9 @@ pub struct Host {
     /// Its window is open.
     window: Arc<AtomicBool>,
     pub latency: usize,
+    /// The look-ahead it reported after loading, when it changed its mind
+    /// ([`NO_REPORT`] when it has not): it then stands for both.
+    live_latency: Arc<AtomicUsize>,
     /// The delay with its sidechain input on (the same as `latency` for a
     /// plug-in with no sidechain). The plug-in host turns that input on
     /// when a key arrives, so a slot with a key routed uses this one.
@@ -396,6 +408,7 @@ impl Host {
         let (rtx, rrx) = mpsc::channel();
         let events = Arc::new(Mutex::new(Events::default()));
         let window = Arc::new(AtomicBool::new(false));
+        let live_latency = Arc::new(AtomicUsize::new(NO_REPORT));
         let known = Arc::new(Mutex::new(
             params
                 .iter()
@@ -410,6 +423,7 @@ impl Host {
                 events: events.clone(),
                 known: known.clone(),
                 window: window.clone(),
+                latency: live_latency.clone(),
             },
         );
         let mut host = Host {
@@ -423,6 +437,7 @@ impl Host {
             window,
             latency: 0,
             keyed_latency: 0,
+            live_latency,
             params: Vec::new(),
             has_editor: false,
             buf: Vec::new(),
@@ -475,6 +490,10 @@ impl Host {
 
     /// Its delay in a slot: with the sidechain on when a key is routed.
     pub fn latency_for(&self, keyed: bool) -> usize {
+        let live = self.live_latency.load(Ordering::SeqCst);
+        if live != NO_REPORT {
+            return live;
+        }
         if keyed {
             self.keyed_latency
         } else {

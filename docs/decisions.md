@@ -2543,3 +2543,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead asked for MIDI that is easier to draw, adjust and perform. Recorded takes need quantizing first of all, and step input is the quickest way to enter parts from a keyboard without playing in time.
 
 **How.** `quantize`, `legato` and `stepChords` in `panels/editor/midi.ts` (unit-tested); `step_listen` and `step_take` in `engine/midi_live.rs` (unit-tested), polled by the piano roll every 40 ms while Step Input is on.
+
+## 2026-11-05: Altered Audio Editor intake (0.7 to 0.17): plug-in delay that changes after loading
+
+**Decision.** A plug-in's look-ahead reported after loading is kept (`live_latency` on the host, written by the reader thread on LatencyChanged) and, once there is one, stands for both its plain and its keyed delay. Waveform editor playback re-aligns on such a change as the multitrack does, and Apply in the Waveform editor runs four blocks of silence through a throwaway copy, then waits 80 ms, before reading the chain's delay.
+
+**Why.** The first item of the intake from Altered Audio Editor 0.7 to 0.17 (surveyed 2026-11-05; the list is task 237): AAE's d6611fb. Audiform threw the reported value away, as AAE had, so plug-ins that settle on another delay played late. Adapted by hand: Audiform also has the keyed delay (2026-11-05).
