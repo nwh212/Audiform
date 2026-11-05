@@ -239,7 +239,7 @@
 
         {#if page === "General"}
           <label class="row" title="Off: the wheel scrolls the tracks or the file, and Ctrl+wheel zooms. Over the track headers the wheel always makes the tracks taller or shorter.">
-            <input type="checkbox" bind:checked={d.app.wheelZooms} /> The mouse wheel over the waveform and the tracks zooms in time (off: it scrolls the tracks up and down; the ruler always zooms)
+            <input type="checkbox" bind:checked={d.app.wheelZooms} /> The mouse wheel over the Waveform editor's waveform zooms in time (over a session's tracks it scrolls them up and down; Ctrl+wheel and the ruler always zoom)
           </label>
           <label class="row">Each wheel step zooms by <input type="number" min="5" max="100" step="5" bind:value={d.app.zoomStep} /> % a step</label>
           <fieldset>

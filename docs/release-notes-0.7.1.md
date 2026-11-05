@@ -59,6 +59,8 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Changed
 
+- The mouse wheel over a session's clips and track headers scrolls the tracks up and down again (Alt+wheel still resizes the track under the pointer, and the wheel over the track scrollbar resizes them all). Ctrl+wheel, or the wheel over the ruler, zooms in time; Shift+wheel scrolls sideways. The Settings box for wheel zoom now applies to the Waveform editor only.
+
 - The Help menu's Based on Altered Audio Editor submenu is gone. The credit, with links to the original project, The GCRN, Steve Phillips's book and a way to support him, is in Help > About Audiform.
 
 - Recording over a track's existing clips no longer plays them: while a track records, its clips are silent, and they are heard again the moment its take ends (disarming it while recording, or stopping). The other tracks play as before, and the session itself is untouched.

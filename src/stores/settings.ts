@@ -32,7 +32,7 @@ export interface AppSettings {
   /** How much one Ctrl+wheel step zooms, in percent. */
   zoomStep: number;
   wheelAnchor: WheelAnchor;
-  /** The plain mouse wheel over the timeline zooms. Off: it scrolls. Ctrl + wheel always zooms. */
+  /** The plain mouse wheel over the Waveform editor zooms. Off: it scrolls. Over a session's tracks it always scrolls; Ctrl + wheel always zooms. */
   wheelZooms: boolean;
   /** Shape a new fade starts with. */
   fadeShape: FadeShape;

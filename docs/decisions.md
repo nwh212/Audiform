@@ -2479,3 +2479,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** A tester at 115% saw a Waves plug-in drawn at its own size in the bottom-left of a stretched window, with black filling the rest. The project lead's machine at 125% works with the stretch and must not change. Both are served by picking per scale.
 
 **How.** `scale_aware` in `plughost/src/editor.rs` (unit-tested), and the monitor's real scale read as a DPI-aware thread before the window is made.
+
+## 2026-11-05: The wheel over a session's tracks scrolls them
+
+**Decision.** Over a session's clips and track headers the plain mouse wheel scrolls the tracks up and down. Ctrl+wheel anywhere, and the wheel over the ruler or overview, zoom in time; Shift+wheel scrolls sideways; Alt+wheel resizes the track under the pointer; the wheel over the track scrollbar resizes all tracks. The "wheel zooms" setting now covers the Waveform editor only.
+
+**Why.** The project lead: the wheel over clips and tracks is meant to scroll vertically, not zoom.

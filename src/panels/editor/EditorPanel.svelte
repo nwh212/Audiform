@@ -707,14 +707,12 @@
       queueWheel(e.deltaY > 0 ? 1 : -1, 0, Math.max(0, e.clientX - left), overRuler);
     };
     if (e.clientX < left && !overRuler) {
-      // Over the track headers the wheel zooms the tracks, as over the track
-      // scrollbar: every open track taller or shorter. Alt+wheel resizes only
-      // the one under the pointer. (Over a header's effect slots it scrolls.)
+      // Over the track headers the wheel scrolls the tracks up and down, as
+      // over the clips. Alt+wheel makes the track under the pointer taller or
+      // shorter; the track scrollbar's wheel resizes them all.
       if (e.altKey) {
         e.preventDefault();
         wheelResizeTracks(e);
-      } else if (!e.shiftKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
-        onVbarWheel(e);
       }
       return;
     } else if (e.altKey && e.shiftKey) {
@@ -728,13 +726,13 @@
       e.preventDefault();
       const d = e.shiftKey ? e.deltaY : e.deltaX;
       queueWheel(0, d, Math.max(0, e.clientX - left), overRuler);
-    } else if (overRuler || e.ctrlKey || settings.current.wheelZooms) {
-      // Over the ruler (and the overview above it) and the lanes the wheel
-      // zooms in time; Ctrl+wheel zooms anywhere.
+    } else if (overRuler || e.ctrlKey) {
+      // Over the ruler (and the overview above it) the wheel zooms in time;
+      // Ctrl+wheel zooms anywhere.
       zoomTime();
     }
-    // With "wheel zooms" off the wheel over the lanes scrolls the tracks,
-    // which the scroller does by itself. The track scrollbar zooms them (onVbarWheel).
+    // Over the clips and tracks the plain wheel scrolls the tracks up and
+    // down, which the scroller does by itself. The track scrollbar zooms them (onVbarWheel).
   }
 
   /**
