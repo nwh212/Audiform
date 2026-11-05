@@ -11,7 +11,7 @@
 <script lang="ts">
   import type { ContextItem } from "../../app/ContextMenu.svelte";
   import MonoIcon from "../../app/MonoIcon.svelte";
-  import { audioInputs, openSoundSettings, pluginOpenWindow, type AudioInput, type EffectInfo } from "../../app/core";
+  import { audioInputs, midiInputs, openSoundSettings, pluginOpenWindow, type AudioInput, type EffectInfo } from "../../app/core";
   import { keepLast } from "../../app/settings/device-cache";
   import { chainTarget } from "../../stores/chain-target";
   import { pluginsVersion } from "../../stores/plugins";
@@ -251,6 +251,33 @@
     return track.channels === "mono" ? "Default Mono Input" : "Default Stereo Input";
   }
 
+  /** A MIDI track's input as shown on its picker. */
+  function midiInputLabel(track: TrackDoc): string {
+    if (track.input === "none") return "No MIDI Input";
+    return track.input ?? "All MIDI Inputs";
+  }
+
+  /** MIDI input picker: every input, one of them, or none. */
+  async function openMidiInputMenu(e: MouseEvent, track: TrackDoc) {
+    e.stopPropagation();
+    const x = e.clientX;
+    const y = e.clientY;
+    const names = await midiInputs().catch(() => [] as string[]);
+    const pick = (value: string | null) => setTrack(track, { input: value }, "Track MIDI Input");
+    const items: ContextItem[] = [
+      { kind: "item", label: "All MIDI Inputs", checked: !track.input, run: () => pick(null) },
+      { kind: "sep" },
+      ...names.map((n): ContextItem => ({ kind: "item", label: n, checked: track.input === n, run: () => pick(n) })),
+      ...(names.length ? [] : [{ kind: "item", label: "No MIDI inputs found", disabled: true, reason: "Plug in a MIDI keyboard or controller, then open this menu again.", run: () => {} } as ContextItem]),
+      ...(track.input && track.input !== "none" && !names.includes(track.input)
+        ? [{ kind: "item", label: `${track.input} (not connected)`, checked: true, run: () => pick(track.input ?? null) } as ContextItem]
+        : []),
+      { kind: "sep" },
+      { kind: "item", label: "None", checked: track.input === "none", run: () => pick("none") },
+    ];
+    onMenu(x, y, items);
+  }
+
   /** Input picker: default, None, then Mono and Stereo submenus, each grouped by device. */
   async function openInputMenu(e: MouseEvent, track: TrackDoc) {
     e.stopPropagation();
@@ -340,7 +367,9 @@
         {/if}
         <button type="button" class="ms mute" class:on={track.muted} title="Mute" aria-pressed={track.muted} onclick={() => setTrack(track, { muted: !track.muted }, track.muted ? "Unmute Track" : "Mute Track")}>M</button>
         <button type="button" class="ms solo" class:on={track.solo} title="Solo. Ctrl+click to hear only this track." aria-pressed={track.solo} onclick={(e) => (e.ctrlKey || e.metaKey ? soloOnly(track.id) : setTrack(track, { solo: !track.solo }, track.solo ? "Unsolo Track" : "Solo Track"))}>S</button>
-        {#if !isMidi(track)}
+        {#if isMidi(track)}
+        <button type="button" class="ms rec" class:on={track.record_armed} title="Arm: play this track's instrument from its MIDI input (keyboard, pads), and Record records what is played as a MIDI clip" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
+        {:else}
         <button type="button" class="ms rec" class:on={track.record_armed} title="Arm for recording: Record records this track's input" aria-pressed={track.record_armed} onclick={() => setTrack(track, { record_armed: !track.record_armed }, "Arm Track")}>R</button>
         {@const mon = !track.monitor_input ? "off" : track.monitor_dry ? "dry" : "full"}
         <button
@@ -428,6 +457,15 @@
             >{inst ? `${inst.name}${inst.vendor ? ` (${inst.vendor})` : ""}` : track.instrument ? "Missing instrument" : instruments.length ? "No instrument" : "No instruments found"}</button>
             <button type="button" class="chev" aria-haspopup="menu" title="Change the instrument" aria-label="Change the instrument" onclick={(e) => openInstrumentMenu(e, track)}>▾</button>
           </div>
+        </div>
+      {/if}
+      {#if !track.collapsed && isMidi(track) && (headerView === "io" || (headerView === "mix" && shownHeight(track) >= ROW_INPUT))}
+        <div class="line">
+          <button type="button" class="pick" title="The MIDI input this track plays and records from when armed" onclick={(e) => void openMidiInputMenu(e, track)}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M5 4v5M8 4v5M11 4v5" stroke="currentColor" stroke-width="1.2" /></svg>
+            <span>{midiInputLabel(track)}</span>
+            <span class="chev" aria-hidden="true">&rsaquo;</span>
+          </button>
         </div>
       {/if}
       {#if !track.collapsed && (headerView === "io" || (headerView === "mix" && shownHeight(track) >= ROW_INPUT)) && !isMidi(track)}

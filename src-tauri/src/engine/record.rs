@@ -1116,7 +1116,7 @@ fn run(
 
 /// Opens the default output at the input's rate for monitoring. Returns
 /// the ring that feeds it (stereo frames) and the running stream.
-fn open_monitor(
+pub(crate) fn open_monitor(
     rate: u32,
     input_name: Option<&str>,
 ) -> Result<(Producer<f32>, cpal::Stream), String> {

@@ -2525,3 +2525,13 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead: grabbing the zoomed frequency list should drag up and down the frequencies. Until now the scale only zoomed (wheel and right-click).
 
 **How.** `panFreq` in `panels/editor/spectrum.ts` (in Hz on a mostly straight scale, by ratios on a pitch scale, as the zoom does), unit-tested; `SpectrumView.svelte` starts the drag on the scale.
+
+## 2026-11-05: MIDI input: play and record from keyboards and controllers
+
+**Decision.** Audiform reads MIDI inputs (the `midir` library, MIT). A MIDI track's input (`input` in the file, as audio tracks use it: empty for every input, a name for one, "none" for none) is picked from its header, and its R button arms it. An armed MIDI track plays its instrument live, through its own effects, fader and pan, on a copy of the instrument and effects of its own, rendered 128 frames at a time with about 256 frames waiting for the speakers, so it answers at once whether or not the session plays. While recording, each armed MIDI track keeps the notes played (times from the moment recording started) and they become one MIDI clip per track when recording stops, from the bar of the first note to the end of the bar of the last, placed with the same start the audio takes use. The sustain pedal (CC 64) holds notes, for live playing and in what is recorded; All Notes Off (CC 120 and 123) ends them.
+
+**Why.** The project lead: register MIDI inputs and let people record from MIDI instruments. Playback renders half a second ahead, so feeding keys into it would lag; the live copy is the same approach as input monitoring with plug-ins. Existing MIDI clips keep playing during a MIDI take (overdubbing is the usual way of building a part), unlike audio takes, which silence the track's clips.
+
+**Not yet.** Pitch bend, mod wheel and other controllers are not passed to the instrument (the plug-in host carries notes only), recorded takes are not quantized, and a recording latency offset is not applied to MIDI. Live playing opens the system output alongside playback; on ASIO that output is the same driver, as with input monitoring.
+
+**How.** `engine/midi_live.rs` (inputs, keys and pedal, live voices, takes; unit-tested, and played through the test synth plug-in in `tests/plugins.rs`), `commands/midi.rs`, `src/app/midi-take.ts` (takes to clips, unit-tested), the recorder and the track header.

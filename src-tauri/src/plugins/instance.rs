@@ -843,6 +843,11 @@ fn wide_of(slot: &EffectSlot) -> bool {
     slot.routing.as_ref().is_some_and(|r| r.wide)
 }
 
+/// A slot's saved control values, as the plug-in takes them.
+pub fn slot_params_of(slot: &EffectSlot) -> Vec<(u32, f64)> {
+    slot_params(slot)
+}
+
 fn slot_params(slot: &EffectSlot) -> Vec<(u32, f64)> {
     slot.params
         .iter()

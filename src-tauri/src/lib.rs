@@ -51,6 +51,7 @@ pub fn run() {
         .manage(engine::PreviewPlayer::default())
         .manage(engine::Transport::default())
         .manage(engine::Recorder::default())
+        .manage(engine::midi_live::MidiLive::default())
         .manage(commands::session::OpenSession::default())
         .manage(commands::export::ExportCancel::default())
         .manage(commands::batch::BatchCancel::default())
@@ -196,6 +197,11 @@ pub fn run() {
             commands::cache::cache_set_folder,
             commands::devices::open_sound_settings,
             commands::record::record_start,
+            commands::midi::midi_inputs,
+            commands::midi::midi_live_set,
+            commands::midi::midi_record_start,
+            commands::midi::midi_record_add,
+            commands::midi::midi_record_stop,
             commands::record::record_stop,
             commands::record::record_add,
             commands::plugins::plugin_show_bypassed,

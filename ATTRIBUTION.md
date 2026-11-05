@@ -68,6 +68,7 @@ Most dependencies are MIT or Apache-2.0 and are listed in `Cargo.lock` and `pack
 | `rayon` | MIT or Apache-2.0 | The engine's worker threads: a block's tracks and buses are spread over the cores. |
 | `cpal` | Apache-2.0 | Audio input and output. A patched copy lives in `src-tauri/vendor/cpal` (loads one ASIO driver by name instead of every installed one); see the note there. |
 | ASIO SDK 2.3 (Steinberg, via `cpal`'s `asio` feature, Windows release builds only) | GPL-3.0 (dual licensed by Steinberg; we use the GPLv3 option) | Talking to ASIO audio drivers. ASIO is a trademark of Steinberg Media Technologies GmbH. We do not use the ASIO logo. |
+| `midir` | MIT | MIDI input from keyboards, pads and controllers (ALSA on Linux, the system MIDI services on Windows and macOS). |
 | `zip` | MIT | Reading zip downloads of recordings. |
 | `image` | MIT or Apache-2.0 | Reading album art pictures, shrinking them and saving them as JPEG (Track Details). |
 | `sha2` | MIT or Apache-2.0 | Checking Audio Separation downloads. |

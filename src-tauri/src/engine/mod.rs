@@ -15,6 +15,7 @@ pub(crate) mod fx;
 pub mod graph;
 pub mod host;
 pub mod metronome;
+pub mod midi_live;
 pub mod output;
 pub mod plan;
 pub mod preview;

@@ -12,7 +12,8 @@
  * editor: the take goes into the file at the playhead.
  */
 
-import { recordAdd, recordMonitor, recordRemove, recordStart, recordStatus, recordStop, type RecordTarget } from "./core";
+import { midiLiveSet, midiRecordAdd, midiRecordStart, midiRecordStop, recordAdd, recordMonitor, recordRemove, recordStart, recordStatus, recordStop, type LiveMidiTrack, type MidiTake, type RecordTarget } from "./core";
+import { midiTakeClip } from "./midi-take";
 import { placeTake, punchStopAfter, recordPlan, sanitizeRecordOptions, type RecordOptions, type RecordPlan } from "./recording";
 import { isolate, LockedError } from "../panels/editor/clip-edit";
 import { insertFile } from "../panels/editor/wave-edit";
@@ -23,7 +24,8 @@ import { mediaPool } from "../stores/media";
 import { peaks, session, transport } from "../stores/open-session";
 import { prefs } from "../stores/prefs";
 import { inputLevels, liveTakes, LiveWave, recording } from "../stores/record";
-import type { Op, SessionDoc, TrackDoc } from "../stores/session";
+import { isMidi, type Op, type SessionDoc, type TrackDoc } from "../stores/session";
+import { DEFAULT_TEMPO } from "../stores/tempo";
 import { settings } from "../stores/settings";
 import { noteTakeHome, wave, waveFile, waveTransport } from "../stores/wave";
 
@@ -119,7 +121,9 @@ export function createRecorder(deps: RecorderDeps) {
           // Nothing armed is fine: the session plays and records nothing
           // until a track is armed. Each armed track gets its own take.
           const armed = doc.tracks.filter((t) => t.record_armed);
-          const targets: RecordTarget[] = armed.map(recordTarget);
+          // Armed MIDI tracks record what their MIDI input plays; the others record audio.
+          const targets: RecordTarget[] = armed.filter((t) => !isMidi(t)).map(recordTarget);
+          const midiIds = armed.filter(isMidi).map((t) => t.id);
           let plan = recordPlan(playheadNow(), timeSel(), recordOptions(), doc.sample_rate);
           // Playing and not punching in: keep playing and record from where
           // the playhead is when the inputs start, with no stop and restart.
@@ -127,6 +131,7 @@ export function createRecorder(deps: RecorderDeps) {
           if (live) {
             const before = playheadNow();
             await recordStart(targets);
+            await midiRecordStart(midiIds);
             plan = { ...plan, at: Math.round((before + playheadNow()) / 2) };
             // Playing in Loop or Skip: carry on straight from here instead,
             // so the take never jumps back to the start of the loop.
@@ -137,6 +142,7 @@ export function createRecorder(deps: RecorderDeps) {
           } else {
             await transport.stop();
             await recordStart(targets);
+            await midiRecordStart(midiIds);
           }
           const at = plan.at;
           recordingKeys = new Set(armed.map((t) => t.id));
@@ -236,11 +242,17 @@ export function createRecorder(deps: RecorderDeps) {
       for (const id of recordingKeys) {
         if (armed.has(id)) continue;
         recordingKeys.delete(id);
+        // A MIDI track disarmed keeps what it recorded until recording stops.
+        if (doc?.tracks.some((t) => t.id === id && isMidi(t))) continue;
         void recordRemove(id).catch(showError);
       }
       for (const t of doc?.tracks ?? []) {
         if (!armed.has(t.id) || recordingKeys.has(t.id)) continue;
         recordingKeys.add(t.id);
+        if (isMidi(t)) {
+          void midiRecordAdd(t.id).catch(showError);
+          continue;
+        }
         const begin = take.at + Math.round(recSeconds * (doc?.sample_rate ?? 48_000));
         liveTakes.update((lt) => {
           if (!lt) return lt;
@@ -267,11 +279,12 @@ export function createRecorder(deps: RecorderDeps) {
     let monitorTune = "";
     let monitorRetune: ReturnType<typeof setTimeout> | undefined;
     function syncMonitor(force = false) {
+      syncMidi(force);
       if (take) {
         syncRecordingTracks();
         return;
       }
-      const armed = (session.current?.tracks ?? []).filter((t) => t.record_armed);
+      const armed = (session.current?.tracks ?? []).filter((t) => t.record_armed && !isMidi(t));
       const key = armed.map((t) => `${t.id}:${t.input ?? ""}:${t.channels}:${t.monitor_input ? (t.monitor_dry ? 2 : 1) : 0}`).join("|");
       const tune = armed
         .filter((t) => t.monitor_input)
@@ -296,6 +309,33 @@ export function createRecorder(deps: RecorderDeps) {
       monitorRetune = setTimeout(open, 350);
     }
 
+    /**
+     * Armed MIDI tracks listen to their MIDI input and play their
+     * instrument live (and record while recording). Changes to an armed
+     * track's sound reach it after a moment's rest, so a dragged fader
+     * does not rebuild it on every step.
+     */
+    let midiKey = "";
+    let midiRetune: ReturnType<typeof setTimeout> | undefined;
+    function syncMidi(force = false) {
+      // A track set to no input plays and records nothing.
+      const listening: LiveMidiTrack[] = (session.current?.tracks ?? [])
+        .filter((t) => t.record_armed && isMidi(t) && t.input !== "none")
+        .map((t) => ({ trackId: t.id, input: t.input ?? null, instrument: t.instrument ?? null, chain: t.effects ?? null, gainDb: t.volume_db, pan: t.pan }));
+      const key = JSON.stringify(listening);
+      if (!force && key === midiKey) return;
+      const send = () => {
+        midiRetune = undefined;
+        midiKey = key;
+        void midiLiveSet(listening).catch((e) => showNotice(`MIDI input: ${e instanceof Error ? e.message : String(e)}`));
+      };
+      clearTimeout(midiRetune);
+      // Arming, disarming or a new input: at once. Anything else: after a rest.
+      const shape = (k: string) => JSON.stringify((JSON.parse(k || "[]") as LiveMidiTrack[]).map((t) => [t.trackId, t.input, t.instrument?.effect ?? null]));
+      if (force || shape(key) !== shape(midiKey)) send();
+      else midiRetune = setTimeout(send, 400);
+    }
+
     /** Stops recording and places the take. The live waveform stays until the finished clip is in, so nothing is redrawn in between. */
     async function finishRecord() {
       takePaths = [];
@@ -309,6 +349,22 @@ export function createRecorder(deps: RecorderDeps) {
     }
     let takePaths: string[] = [];
 
+    /** Each MIDI track's recorded notes as a new clip on it, from the bar the playing started in. */
+    function midiTakeOps(midiTakes: MidiTake[], plan: RecordPlan): Op[] {
+      const doc = session.current;
+      if (!doc) return [];
+      const ops: Op[] = [];
+      for (const k of midiTakes) {
+        const track = doc.tracks.find((x) => x.id === k.trackId);
+        if (!track) continue;
+        const clip = midiTakeClip(k.notes, plan.at, doc.sample_rate, doc.tempo ?? DEFAULT_TEMPO, plan.punch, uuid(), `${track.name} ${stamp()}`);
+        if (!clip) continue;
+        const clips = [...(track.midi_clips ?? []), clip].sort((a, b) => a.start - b.start);
+        ops.push({ op: "set_midi_clips", track_id: track.id, clips });
+      }
+      return ops;
+    }
+
     async function finishRecordInner() {
       const t = take;
       take = null;
@@ -318,6 +374,12 @@ export function createRecorder(deps: RecorderDeps) {
       stopInputPoll();
       metronomeRecording(false);
       recording.set({ active: false, seconds: 0, peak: 0 });
+      let midiTakes: MidiTake[] = [];
+      try {
+        midiTakes = await midiRecordStop();
+      } catch (e) {
+        showError(e);
+      }
       let takes;
       try {
         takes = await recordStop();
@@ -334,7 +396,12 @@ export function createRecorder(deps: RecorderDeps) {
       if (t.mode === "multitrack") await transport.stop();
       const usable = takes.filter((k) => k.length > 0);
       takePaths = usable.map((k) => k.path);
+      const midiOps = t.mode === "multitrack" ? midiTakeOps(midiTakes, t.plan ?? { at: t.at, punch: null }) : [];
       if (usable.length === 0) {
+        if (midiOps.length) {
+          await session.edit(midiOps.length === 1 ? "Record MIDI" : `Record MIDI on ${midiOps.length} Tracks`, { op: "batch", ops: midiOps }, sessionHistory).catch(showError);
+          return;
+        }
         showNotice("Nothing was recorded.");
         return;
       }
@@ -381,7 +448,7 @@ export function createRecorder(deps: RecorderDeps) {
         }
         return;
       }
-      const ops: Op[] = [];
+      const ops: Op[] = [...midiOps];
       const doc = session.current;
       const opts = recordOptions();
       const plan: RecordPlan = t.plan ?? { at: t.at, punch: null };
@@ -409,7 +476,8 @@ export function createRecorder(deps: RecorderDeps) {
         return;
       }
       try {
-        await session.edit(usable.length === 1 ? "Record" : `Record ${usable.length} Tracks`, { op: "batch", ops }, sessionHistory);
+        const n = usable.length + midiOps.length;
+        await session.edit(n === 1 ? "Record" : `Record ${n} Tracks`, { op: "batch", ops }, sessionHistory);
       } catch (e) {
         showError(e);
       }

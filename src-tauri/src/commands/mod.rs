@@ -24,6 +24,7 @@ pub mod linked;
 pub mod links;
 pub mod live;
 pub mod media;
+pub mod midi;
 pub mod musicfit;
 pub mod peaks;
 pub mod plugins;

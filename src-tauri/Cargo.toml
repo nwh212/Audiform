@@ -45,6 +45,7 @@ tauri-plugin-dialog = "2"
 cpal = "0.18.2"
 rubato = "5.0.1"
 rtrb = "0.4"
+midir = "0.11"
 audioadapter-buffers = "5.2"
 symphonia = { version = "0.6.1", default-features = false, features = ["opt-simd", "wav", "aiff", "pcm", "adpcm", "mp3", "flac", "isomp4", "aac", "alac", "ogg", "vorbis", "id3v2"] }
 hound = "3.5"

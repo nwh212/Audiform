@@ -1021,6 +1021,54 @@ export function recordStop(): Promise<Take[]> {
   return invoke<Take[]>("record_stop");
 }
 
+/** An armed MIDI track, for live playing and recording. */
+export interface LiveMidiTrack {
+  trackId: string;
+  /** The MIDI input it listens to; null for every input. */
+  input: string | null;
+  instrument: EffectSlotDoc | null;
+  chain: EffectChainDoc | null;
+  gainDb: number;
+  pan: number;
+}
+
+/** A note recorded from a MIDI input, its times in seconds from the start of recording. */
+export interface MidiTakeNote {
+  pitch: number;
+  channel: number;
+  /** 0 to 1. */
+  velocity: number;
+  start: number;
+  end: number;
+}
+
+export interface MidiTake {
+  trackId: string;
+  notes: MidiTakeNote[];
+}
+
+/** The MIDI inputs on this computer, by name. */
+export function midiInputs(): Promise<string[]> {
+  return invoke<string[]>("midi_inputs");
+}
+
+/** The armed MIDI tracks: each plays its instrument live from its input. An empty list closes the inputs. */
+export function midiLiveSet(tracks: LiveMidiTrack[]): Promise<void> {
+  return invoke("midi_live_set", { tracks });
+}
+
+export function midiRecordStart(tracks: string[]): Promise<void> {
+  return invoke("midi_record_start", { tracks });
+}
+
+export function midiRecordAdd(track: string): Promise<void> {
+  return invoke("midi_record_add", { track });
+}
+
+export function midiRecordStop(): Promise<MidiTake[]> {
+  return invoke<MidiTake[]>("midi_record_stop");
+}
+
 export function recordStatus(): Promise<RecordStatus> {
   return invoke<RecordStatus>("record_status");
 }

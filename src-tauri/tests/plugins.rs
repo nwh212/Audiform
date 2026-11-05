@@ -327,6 +327,46 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         (at(5_999), at(6_000), at(8_999), at(9_000)),
         (0.0, 0.25, 0.25, 0.0)
     );
+    // Played live from a MIDI input: the instrument sounds while the key
+    // is down, through the track's effects and at its fader, and stops
+    // when the key comes up (the sustain pedal holds it).
+    {
+        use audiform_lib::engine::midi_live::{render_live, LiveTrack};
+        let live = LiveTrack {
+            track_id: tid,
+            input: None,
+            instrument: s.tracks[0].instrument.clone(),
+            chain: Some(s.tracks[0].effects.clone()),
+            gain_db: 0.0,
+            pan: 0.0,
+        };
+        let y = render_live(
+            &live,
+            48_000,
+            &[(256, vec![0x90, 60, 127]), (2_048, vec![0x80, 60, 0])],
+            4_096,
+        )
+        .expect("the instrument starts live");
+        let level = |a: usize, b: usize| y[a * 2..b * 2].iter().fold(0f32, |m, v| m.max(v.abs()));
+        assert_eq!(level(0, 200), 0.0, "silent before the key");
+        assert!(level(400, 2_000) > 0.1, "sounds while the key is down");
+        assert_eq!(level(2_400, 4_096), 0.0, "stops when the key comes up");
+        let held = render_live(
+            &live,
+            48_000,
+            &[
+                (0, vec![0x90, 60, 127]),
+                (100, vec![0xb0, 64, 127]),
+                (512, vec![0x80, 60, 0]),
+            ],
+            2_048,
+        )
+        .unwrap();
+        assert!(
+            held[1_500 * 2..2_000 * 2].iter().any(|v| v.abs() > 0.1),
+            "the pedal holds it"
+        );
+    }
     // Playback of a session without buses runs each track on its own
     // (faders on the audio thread): the track's effects still apply.
     {
