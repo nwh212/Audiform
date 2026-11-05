@@ -654,3 +654,56 @@ fn a_level_change_in_a_3d_session_leaves_the_other_tracks_where_they_are() {
         "after the ramp the mix matches a fresh start: off by {worst}"
     );
 }
+
+#[test]
+fn a_surround_clips_track_effects_hear_every_channel_when_one_needs_them() {
+    use crate::session::model::{SlotRouting, Space, SpaceLayout};
+    let dir = tempfile::tempdir().unwrap();
+    // Six channels; only the front left has a click.
+    let path = dir.path().join("six.wav");
+    let spec = hound::WavSpec {
+        channels: 6,
+        sample_rate: RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..RATE as usize {
+        for c in 0..6 {
+            w.write_sample(if c == 0 && i == 1_000 { i16::MAX } else { 0 })
+                .unwrap();
+        }
+    }
+    w.finalize().unwrap();
+    let mut s = Session::new("t", RATE);
+    s.space = Some(Space {
+        layout: SpaceLayout::Surround51,
+        listen: Default::default(),
+    });
+    let t = track(&mut s, &path, 0, 0, 20_000);
+    s.media.last_mut().unwrap().channels = 6;
+    // A room reverb, and a plug-in in its own layout (not installed here,
+    // so it is skipped), which needs every channel at once.
+    let mut fx = chain("altaudio.reverb", &[("dry", 0.0), ("wet", 100.0)]);
+    let mut wide = chain("vst3:not-installed", &[]).slots.remove(0);
+    wide.routing = Some(SlotRouting {
+        wide: true,
+        ..Default::default()
+    });
+    fx.slots.push(wide);
+    s.tracks[t].effects = fx;
+    let e = crate::engine::speaker_feed::expanded(&s).into_owned();
+    let bed = render_bed(&e, 20_000);
+    let energy = |c: usize| {
+        bed.as_chunks::<6>()
+            .0
+            .iter()
+            .map(|f| f[c] * f[c])
+            .sum::<f32>()
+    };
+    // The reverb runs on the whole room, so the rear speakers ring too,
+    // not only the front left the click came from.
+    for c in [0, 4, 5] {
+        assert!(energy(c) > 1e-4, "speaker {c}: {}", energy(c));
+    }
+}

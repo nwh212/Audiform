@@ -2501,3 +2501,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead asked for the best of the SW-based models in noblebarkrr's collection. These are fine-tuned from the six-stem SW model, one instrument each, MIT-licensed, and use the same layout as the X-LANCE models already listed. None has a published score; the list says so.
 
 **How.** Four entries in `separation/mod.rs` with pinned checksums, using the same layout as the X-LANCE models already listed (their configs differ only in the instrument name).
+
+## 2026-11-05: Surround plug-ins hear every channel of a surround clip
+
+**Decision.** In a 3D Space session, when a clip that plays to the speakers has a plug-in set to its own layout in its Audio FX, or its track does, the clip's channel copies feed a hidden 3D Bus that runs those effects on the speaker bed. The track's bus holds its fader, mute, sends, effects and their automation; a clip with its own such plug-in gets a bus of its own, running the clip's effects and then a second instance of the track's. Tracks with no such plug-in play as before, each channel apart. Tracks that output to a bus are left as before too, since a 3D Bus can only go to the master.
+
+**Why.** The project lead found that multichannel plug-ins did nothing useful on multichannel clips. Each channel played from its own hidden mono track with its own copy of the effects, so a 5.1 plug-in heard one channel at a time.
+
+**How.** `engine/speaker_feed.rs` builds the hidden buses with ids made from the track's or clip's, so live effect changes and plug-in windows still find them (the track's bus keeps the track's slot ids). Tested by routing (`speaker_feed` tests) and by a render where a room reverb on the track now reaches the rear speakers from a front-left click (`graph/tests.rs`).

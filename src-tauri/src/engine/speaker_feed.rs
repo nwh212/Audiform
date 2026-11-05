@@ -15,14 +15,20 @@
 //!
 //! Clips of more than two channels do this by default in 3D Space
 //! sessions; a clip's Source Channels can turn it off (or on for any clip).
+//!
+//! A plug-in set to its own layout (5.1, 7.1.4) has to hear every channel
+//! at once, so when the clip's or its track's Audio FX hold one, the
+//! copies feed a hidden 3D Bus that runs those effects on the speakers
+//! instead, with the track's fader, mute and sends. A 3D Bus goes to the
+//! master, so this is done only for tracks that output to the master.
 
 use std::borrow::Cow;
 
 use crate::dsp::channels::labels;
 use crate::dsp::space::speakers;
 use crate::session::model::{
-    ChannelLayout, ChannelMix, ChannelSend, Clip, EnvelopeTarget, Session, SpaceLayout, SpacePos,
-    TrackKind,
+    Bus, ChannelLayout, ChannelMix, ChannelSend, Clip, EffectChain, Envelope, EnvelopeTarget, Id,
+    Output, Session, SpaceLayout, SpacePos, Track, TrackKind,
 };
 
 /// True when `clip` (of a file with `n` channels) plays each channel from its speaker.
@@ -69,6 +75,67 @@ fn target(layout: SpaceLayout, name: &str, k: usize) -> Option<Target> {
     (k < sp.len()).then_some(Target::Speaker(k))
 }
 
+/// True when a chain holds a working plug-in set to its own channel layout.
+fn needs_all_channels(chain: &EffectChain) -> bool {
+    chain.enabled
+        && chain
+            .slots
+            .iter()
+            .any(|s| s.enabled && s.routing.as_ref().is_some_and(|r| r.wide))
+}
+
+/// A stable id made from another, so live changes find the same copy.
+fn derived(id: Id, salt: u128) -> Id {
+    uuid::Uuid::from_u128(id.as_u128() ^ salt)
+}
+
+/// A track's automation lanes that belong on the bus in its place.
+fn bus_lanes(t: &Track) -> Vec<Envelope> {
+    t.envelopes
+        .iter()
+        .filter(|e| {
+            matches!(
+                e.target,
+                EnvelopeTarget::Volume | EnvelopeTarget::EffectParam { .. }
+            )
+        })
+        .cloned()
+        .collect()
+}
+
+/// The hidden 3D Bus that stands in for track `t`'s fader, sends and
+/// effects (`effects` and `lanes`, for its copies feeding it).
+fn stand_in(t: &Track, id: Id, effects: EffectChain, lanes: Vec<Envelope>) -> Bus {
+    let mut b = Bus::new(format!("{} (speakers)", t.name), ChannelLayout::Stereo);
+    b.id = id;
+    b.volume_db = t.volume_db;
+    b.muted = t.muted;
+    b.sends = t.sends.clone();
+    b.effects = effects;
+    b.envelopes = lanes;
+    b.automation_mode = t.automation_mode;
+    b.room = true;
+    b
+}
+
+/// A clip's effects followed by its track's, as one chain for a clip's own
+/// bus. The track's slots get their own ids there (a second instance), and
+/// the track's gains fold into the chain's output gain.
+fn clip_then_track(c: &Clip, t: &Track, salt: u128) -> (EffectChain, Vec<(Id, Id)>) {
+    let mut chain = c.effects.clone();
+    let mut map = Vec::new();
+    if t.effects.enabled {
+        for slot in &t.effects.slots {
+            let mut s = slot.clone();
+            s.id = derived(slot.id, salt);
+            map.push((slot.id, s.id));
+            chain.slots.push(s);
+        }
+        chain.output_gain_db += t.effects.input_gain_db + t.effects.output_gain_db;
+    }
+    (chain, map)
+}
+
 /// The session as it plays: unchanged unless it is a 3D Space session with
 /// clips that play to speakers.
 pub fn expanded(s: &Session) -> Cow<'_, Session> {
@@ -87,6 +154,7 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
     }
     let mut out = s.clone();
     let mut extra = Vec::new();
+    let mut buses: Vec<Bus> = Vec::new();
     for t in &mut out.tracks {
         if t.kind != TrackKind::Audio {
             continue;
@@ -98,10 +166,57 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
         if direct.is_empty() {
             continue;
         }
-        // One hidden copy per target, holding each clip's channel for it.
-        let mut groups: Vec<(Target, String, Vec<Clip>)> = Vec::new();
+        // A plug-in in its own layout needs every channel at once: a
+        // hidden 3D Bus runs it instead (only toward the master, where a
+        // 3D Bus goes).
+        let to_master = matches!(t.output, Output::Master);
+        let clip_wide = |c: &Clip| to_master && needs_all_channels(&c.effects);
+        let track_bus = (to_master
+            && (needs_all_channels(&t.effects) || direct.iter().any(clip_wide)))
+        .then(|| {
+            stand_in(
+                t,
+                derived(t.id, 0xb05_0000),
+                t.effects.clone(),
+                bus_lanes(t),
+            )
+        });
+        // One hidden copy per target and destination, holding each clip's
+        // channel for it.
+        let mut groups: Vec<(Target, String, Option<Id>, Vec<Clip>)> = Vec::new();
         for c in &direct {
             let n = channels(c);
+            let dest = if clip_wide(c) {
+                let salt = 0xc0b5_0000_0000_u128 ^ c.id.as_u128().rotate_left(17);
+                let (chain, map) = clip_then_track(c, t, salt);
+                // The clip's lanes run on the timeline there, from where the clip starts.
+                let mut lanes: Vec<Envelope> = c
+                    .envelopes
+                    .iter()
+                    .filter(|e| matches!(e.target, EnvelopeTarget::EffectParam { .. }))
+                    .cloned()
+                    .map(|mut e| {
+                        for p in &mut e.points {
+                            p.position += c.start;
+                        }
+                        e
+                    })
+                    .collect();
+                lanes.extend(bus_lanes(t).into_iter().map(|mut e| {
+                    if let EnvelopeTarget::EffectParam { slot_id, .. } = &mut e.target {
+                        if let Some((_, to)) = map.iter().find(|(from, _)| from == slot_id) {
+                            *slot_id = *to;
+                        }
+                    }
+                    e
+                }));
+                let b = stand_in(t, derived(c.id, 0xc0b5_0000), chain, lanes);
+                let id = b.id;
+                buses.push(b);
+                Some(id)
+            } else {
+                track_bus.as_ref().map(|b| b.id)
+            };
             for (k, name) in labels(n).iter().enumerate() {
                 let Some(to) = target(space.layout, name, k) else {
                     continue;
@@ -111,6 +226,12 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
                 // (level, channel mix), which find clips by id, reach every
                 // copy with its own channel and not the first copy's.
                 one.id = uuid::Uuid::from_u128(c.id.as_u128() ^ (0xc1a0_0000_u128 + k as u128 + 1));
+                if dest.is_some_and(|d| Some(d) != track_bus.as_ref().map(|b| b.id)) {
+                    // Its effects (and their lanes) run on its own bus.
+                    one.effects = EffectChain::default();
+                    one.envelopes
+                        .retain(|e| !matches!(e.target, EnvelopeTarget::EffectParam { .. }));
+                }
                 one.channel_mix = Some(ChannelMix {
                     sends: (0..n)
                         .map(|j| {
@@ -120,17 +241,31 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
                         .collect(),
                     to_speakers: false,
                 });
-                match groups.iter_mut().find(|g| g.0 == to) {
-                    Some(g) => g.2.push(one),
-                    None => groups.push((to, name.clone(), vec![one])),
+                match groups.iter_mut().find(|g| g.0 == to && g.2 == dest) {
+                    Some(g) => g.3.push(one),
+                    None => groups.push((to, name.clone(), dest, vec![one])),
                 }
             }
         }
-        for (i, (to, name, clips)) in groups.into_iter().enumerate() {
+        for (i, (to, name, dest, clips)) in groups.into_iter().enumerate() {
             let mut h = t.clone();
             // Stable, so live changes to the track reach its copies.
             h.id = uuid::Uuid::from_u128(t.id.as_u128() ^ (0x5eed_0000_u128 + i as u128 + 1));
             h.name = format!("{} {name}", t.name);
+            if let Some(bus_id) = dest {
+                // The bus has the fader, mute, sends and effects.
+                h.output = Output::Bus { bus_id };
+                h.volume_db = 0.0;
+                h.muted = false;
+                h.sends.clear();
+                h.effects = EffectChain::default();
+                h.envelopes.retain(|e| {
+                    !matches!(
+                        e.target,
+                        EnvelopeTarget::Volume | EnvelopeTarget::EffectParam { .. }
+                    )
+                });
+            }
             h.channels = ChannelLayout::Mono;
             h.mono = false;
             h.pan = 0.0;
@@ -161,8 +296,10 @@ pub fn expanded(s: &Session) -> Cow<'_, Session> {
             }
             extra.push(h);
         }
+        buses.extend(track_bus);
     }
     out.tracks.extend(extra);
+    out.buses.extend(buses);
     Cow::Owned(out)
 }
 
@@ -261,5 +398,101 @@ mod tests {
         let mixes: std::collections::HashSet<String> =
             live.iter().map(|(_, _, m)| format!("{m:?}")).collect();
         assert!(mixes.len() > 1, "each copy keeps its own channel");
+    }
+
+    fn slot(effect: &str) -> crate::session::model::EffectSlot {
+        crate::session::model::EffectSlot {
+            id: new_id(),
+            effect: effect.into(),
+            enabled: true,
+            params: Default::default(),
+            preset: None,
+            sidechain: None,
+            plugin_state: None,
+            data: None,
+            position: None,
+            routing: None,
+        }
+    }
+
+    fn wide_plugin() -> crate::session::model::EffectSlot {
+        let mut s = slot("vst3:0123");
+        s.routing = Some(crate::session::model::SlotRouting {
+            wide: true,
+            ..Default::default()
+        });
+        s
+    }
+
+    #[test]
+    fn a_surround_plugin_on_the_track_runs_on_a_hidden_3d_bus() {
+        let mut s = session(SpaceLayout::Surround51, 6, None);
+        s.tracks[0].volume_db = -6.0;
+        s.tracks[0].effects.slots.push(wide_plugin());
+        let e = expanded(&s);
+        assert_eq!(e.buses.len(), 1);
+        let b = &e.buses[0];
+        assert!(b.room, "a 3D Bus, so its effects hear every speaker");
+        assert_eq!(
+            b.effects, s.tracks[0].effects,
+            "the same slots, so its window still works"
+        );
+        assert_eq!(b.volume_db, -6.0, "the fader moves to the bus");
+        for t in &e.tracks[1..] {
+            assert_eq!(t.output, Output::Bus { bus_id: b.id });
+            assert!(t.effects.slots.is_empty());
+            assert_eq!(t.volume_db, 0.0);
+        }
+        // Stable from one call to the next, so live changes reach it.
+        assert_eq!(expanded(&s).buses[0].id, b.id);
+    }
+
+    #[test]
+    fn a_surround_plugin_on_the_clip_runs_on_its_own_bus_before_the_tracks() {
+        let mut s = session(SpaceLayout::Surround51, 6, None);
+        s.tracks[0].clips[0].effects.slots.push(wide_plugin());
+        let gain = slot("gain");
+        s.tracks[0].effects.slots.push(gain.clone());
+        let e = expanded(&s);
+        let clip_bus = e
+            .buses
+            .iter()
+            .find(|b| b.effects.slots.len() == 2)
+            .expect("the clip's bus");
+        assert_eq!(
+            clip_bus.effects.slots[0],
+            s.tracks[0].clips[0].effects.slots[0]
+        );
+        assert_eq!(clip_bus.effects.slots[1].effect, "gain");
+        assert_ne!(
+            clip_bus.effects.slots[1].id, gain.id,
+            "a second instance of the track's effect"
+        );
+        for t in &e.tracks[1..] {
+            assert_eq!(
+                t.output,
+                Output::Bus {
+                    bus_id: clip_bus.id
+                }
+            );
+            assert!(t.clips.iter().all(|c| c.effects.slots.is_empty()));
+        }
+    }
+
+    #[test]
+    fn stereo_plugins_and_tracks_to_a_bus_keep_the_copies() {
+        let mut s = session(SpaceLayout::Surround51, 6, None);
+        s.tracks[0].effects.slots.push(slot("gain"));
+        assert!(expanded(&s).buses.is_empty(), "nothing needs every channel");
+        let mut s = session(SpaceLayout::Surround51, 6, None);
+        s.tracks[0].effects.slots.push(wide_plugin());
+        let bus = Bus::new("Reverb", ChannelLayout::Stereo);
+        s.tracks[0].output = Output::Bus { bus_id: bus.id };
+        s.buses.push(bus);
+        assert_eq!(
+            expanded(&s).buses.len(),
+            1,
+            "a 3D Bus can only go to the master"
+        );
     }
 }
