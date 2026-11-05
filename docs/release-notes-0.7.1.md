@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- Spectral display: zoomed in on the frequencies, drag the frequency scale up or down to move through them, keeping the same zoom.
 - Check for Updates. Help > Check for Updates now asks Audiform's releases page which version is newest and, if it is newer than yours, offers to open its download page. Settings > General has a box to check once a week on its own (off unless you tick it); that check never runs while you play or record, and shows one line when there is something new. Nothing is downloaded or installed by the app.
 - Audio Separation: Mega 53, which names 53 instruments at once (heavy), and the same model cut into one small download per instrument, folded under one heading. A duet model that pulls two singers apart. gilliaan's lead-vocal, drums, de-effect (reverb and delay off a vocal) and clean-invert models, and two of gilliaan's center and wide models on a new Stereo tab, which split what sits in the middle of the mix from what is panned out.
 - Add-ons: a folder you put in the Add-ons folder (Window > Add-ons > Open Add-ons Folder) gives Audiform a new window, with a page of its own and, if it does work, a program Audiform runs on request and relays the output of. Add-on pages cannot reach the network or the rest of the app; they only talk to Audiform through a small set of messages. Audiform ships no add-ons and never downloads any. For people making one, the contract is in docs/addons.md.

@@ -127,6 +127,34 @@ export function zoomFreq(v: FreqView, hz: number, factor: number, nyquist: numbe
   return { ...v, lo: full ? (v.log >= 0.5 ? MIN_HZ : 0) : Math.max(0, nlo), hi: full ? null : nhi };
 }
 
+/**
+ * Moves a zoomed view up or down the frequencies without changing how
+ * much it shows: `d` is how far the pointer moved, as a share of the
+ * view's height (down is positive, which brings higher frequencies into
+ * view, as when dragging the scale itself). Stops at the bottom of the
+ * range and at the Nyquist frequency.
+ */
+export function panFreq(v: FreqView, d: number, nyquist: number): FreqView {
+  const [lo, hi] = viewRange(v, nyquist);
+  const floor = v.log >= 0.5 ? MIN_HZ : 0;
+  let nlo: number;
+  let nhi: number;
+  if (v.log >= 0.5) {
+    // Even in pitch: move by ratios.
+    const l0 = Math.max(lo, LOG_FLOOR);
+    let r = Math.pow(hi / l0, d);
+    r = Math.min(r, nyquist / hi);
+    r = Math.max(r, floor / l0);
+    nlo = l0 * r;
+    nhi = hi * r;
+  } else {
+    const shift = Math.min(nyquist - hi, Math.max(floor - lo, (hi - lo) * d));
+    nlo = lo + shift;
+    nhi = hi + shift;
+  }
+  return { ...v, lo: Math.max(0, nlo), hi: nhi >= nyquist - 1 ? null : nhi };
+}
+
 /** Scale marks for the view: well-spaced frequencies with labels. */
 export function freqTicks(v: FreqView, nyquist: number, height: number, minGap = 16): number[] {
   const [lo, hi] = viewRange(v, nyquist);

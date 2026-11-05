@@ -2517,3 +2517,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead copied one channel of a 7.1 file into a new stereo or mono file and got a broken result. The copy only remembered the channel's number: a paste into an empty file took the "over the audio" path and wrote nothing, and Paste to New File rendered all eight channels folded together.
 
 **How.** `oneChannelBoard` in `panels/editor/wave-edit.ts` (unit-tested), used by Paste and Mix Paste when the channel counts differ, and by Paste to New File. A mixdown test renders channel 5 of an eight-channel file to stereo and mono at its own level.
+
+## 2026-11-05: Drag the frequency scale to move through the frequencies
+
+**Decision.** With the spectral display zoomed in on the frequencies, dragging the frequency scale up or down moves the view through them at the same zoom, as if pulling the scale: drag down to bring higher frequencies into view. It stops at the bottom of the range and at the Nyquist frequency. The pointer shows a hand over the scale when there is somewhere to go.
+
+**Why.** The project lead: grabbing the zoomed frequency list should drag up and down the frequencies. Until now the scale only zoomed (wheel and right-click).
+
+**How.** `panFreq` in `panels/editor/spectrum.ts` (in Hz on a mostly straight scale, by ratios on a pitch scale, as the zoom does), unit-tested; `SpectrumView.svelte` starts the drag on the scale.

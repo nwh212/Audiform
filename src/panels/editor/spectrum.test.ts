@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { fracOf, freqAt, freqTicks, LOG_VIEW as FULL_VIEW, FULL_VIEW as OPEN_VIEW, MIN_HZ, MIN_SPAN, rasterize, shapesBounds, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq } from "./spectrum";
+import { fracOf, freqAt, freqTicks, LOG_VIEW as FULL_VIEW, FULL_VIEW as OPEN_VIEW, MIN_HZ, MIN_SPAN, panFreq, rasterize, shapesBounds, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq } from "./spectrum";
 
 describe("spectrum axis", () => {
   it("is log spaced and round-trips", () => {
@@ -106,5 +106,30 @@ describe("the view a file opens with", () => {
     expect(viewFrac(1_000, OPEN_VIEW, ny)).toBeGreaterThan(0.08);
     expect(viewFrac(1_000, OPEN_VIEW, ny)).toBeLessThan(0.16);
     expect(viewFrac(10_000, OPEN_VIEW, ny)).toBeGreaterThan(0.6);
+  });
+});
+
+describe("dragging the frequency scale", () => {
+  const nyq = 24_000;
+  it("moves a zoomed view without changing how much it shows", () => {
+    const lin = { ...OPEN_VIEW, log: 0, lo: 1_000, hi: 3_000 };
+    const up = panFreq(lin, 0.5, nyq);
+    expect([up.lo, up.hi]).toEqual([2_000, 4_000]);
+    const down = panFreq(lin, -0.25, nyq);
+    expect([down.lo, down.hi]).toEqual([500, 2_500]);
+    // In pitch: by ratios, an octave view moved by half its height.
+    const pitch = { ...FULL_VIEW, log: 1, lo: 1_000, hi: 2_000 };
+    const p = panFreq(pitch, 0.5, nyq);
+    expect(p.lo).toBeCloseTo(1_414.2, 0);
+    expect(p.hi!).toBeCloseTo(2_828.4, 0);
+  });
+  it("stops at the bottom and at the top of the range", () => {
+    const lin = { ...OPEN_VIEW, log: 0, lo: 1_000, hi: 3_000 };
+    expect([panFreq(lin, -5, nyq).lo, panFreq(lin, -5, nyq).hi]).toEqual([0, 2_000]);
+    const top = panFreq(lin, 50, nyq);
+    expect(top.hi).toBeNull();
+    expect(top.lo).toBe(nyq - 2_000);
+    const pitch = { ...FULL_VIEW, log: 1, lo: 100, hi: 400 };
+    expect(panFreq(pitch, -5, nyq).lo).toBeCloseTo(MIN_HZ, 6);
   });
 });

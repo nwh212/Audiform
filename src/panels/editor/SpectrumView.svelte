@@ -9,6 +9,7 @@
   painted spot straight away. The mouse wheel over the frequency scale
   zooms the frequencies around the pointer (never past what the sample
   rate holds); over the spectrum it zooms time, as over the waveform.
+  Zoomed in, drag the scale up or down to move through the frequencies.
   A file with more than one channel shows each channel in its own band,
   top to bottom like the waveform's; a selection drawn in one band
   shows in every band (spectral edits reach the channels switched on).
@@ -22,7 +23,7 @@
   import type { SessionDoc } from "../../stores/session";
   import { spectralSelection } from "../../stores/wave";
   import { sampleAt, xOf, type Viewport } from "./timeline";
-  import { freqAt, fracOf, freqTicks, FULL_VIEW, rowEdges, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq, type SpectralShape } from "./spectrum";
+  import { freqAt, fracOf, freqTicks, FULL_VIEW, panFreq, rowEdges, SPECTRUM_LUT, viewFrac, viewFreq, viewRange, zoomFreq, type SpectralShape } from "./spectrum";
   import { FFT_SIZES, spectrumView, type SpectrumViewState } from "../../stores/spectrum-view";
   import { noteName } from "./midi";
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
@@ -453,14 +454,34 @@
     untrack(paintHead);
   });
 
-  const cursor = $derived(tool === "time" ? "text" : tool === "brush" || tool === "spot" ? "none" : "crosshair");
+  let panning = $state(false);
+  const overScale = $derived(hover !== null && hover.x > width);
+  const cursor = $derived(
+    panning ? "grabbing" : overScale ? (zoomed ? "grab" : "default") : tool === "time" ? "text" : tool === "brush" || tool === "spot" ? "none" : "crosshair",
+  );
 
   function onPointer(e: PointerEvent) {
     if (e.button !== 0) return;
     const el = e.currentTarget as HTMLElement;
     const box = el.getBoundingClientRect();
     const x0 = e.clientX - box.left;
-    if (x0 > width) return;
+    if (x0 > width) {
+      // The scale, zoomed in: drag it up or down to move through the frequencies.
+      if (!zoomed) return;
+      e.preventDefault();
+      const start = sv;
+      const y0 = e.clientY;
+      const pan = (ev: PointerEvent) => setSv(panFreq(start, (ev.clientY - y0) / Math.max(1, laneH), nyquist));
+      const done = () => {
+        panning = false;
+        window.removeEventListener("pointermove", pan, true);
+        window.removeEventListener("pointerup", done, true);
+      };
+      panning = true;
+      window.addEventListener("pointermove", pan, true);
+      window.addEventListener("pointerup", done, true);
+      return;
+    }
     e.preventDefault();
     const v = view;
     const sAt = (cx: number) => Math.max(0, Math.min(total, Math.round(sampleAt(cx - box.left, v))));
