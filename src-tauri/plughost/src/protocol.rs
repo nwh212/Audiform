@@ -306,6 +306,9 @@ pub enum Request {
 pub enum Message {
     Loaded {
         latency: u32,
+        /// The delay with its sidechain input on, when it has one.
+        #[serde(default)]
+        keyed_latency: Option<u32>,
         params: Vec<ParamInfo>,
         has_editor: bool,
         #[serde(default)]

@@ -334,6 +334,10 @@ pub struct Host {
     /// Its window is open.
     window: Arc<AtomicBool>,
     pub latency: usize,
+    /// The delay with its sidechain input on (the same as `latency` for a
+    /// plug-in with no sidechain). The plug-in host turns that input on
+    /// when a key arrives, so a slot with a key routed uses this one.
+    pub keyed_latency: usize,
     pub params: Vec<ParamInfo>,
     pub has_editor: bool,
     buf: Vec<u8>,
@@ -418,6 +422,7 @@ impl Host {
             known,
             window,
             latency: 0,
+            keyed_latency: 0,
             params: Vec::new(),
             has_editor: false,
             buf: Vec::new(),
@@ -442,6 +447,7 @@ impl Host {
         match host.request(&load, LOAD_TIMEOUT) {
             Some(Message::Loaded {
                 latency,
+                keyed_latency,
                 params,
                 has_editor,
                 inputs,
@@ -453,6 +459,7 @@ impl Host {
                     super::note_sidechain(&found.info.cid);
                 }
                 host.latency = latency as usize;
+                host.keyed_latency = keyed_latency.unwrap_or(latency) as usize;
                 host.params = params;
                 host.has_editor = has_editor;
                 if wide {
@@ -463,6 +470,15 @@ impl Host {
             }
             Some(Message::Error { message }) => Err(message),
             _ => Err(format!("{} did not load.", found.info.name)),
+        }
+    }
+
+    /// Its delay in a slot: with the sidechain on when a key is routed.
+    pub fn latency_for(&self, keyed: bool) -> usize {
+        if keyed {
+            self.keyed_latency
+        } else {
+            self.latency
         }
     }
 
@@ -1036,7 +1052,7 @@ pub fn running(slot: Id) -> Option<Arc<Mutex<Host>>> {
 pub fn latency(slot: &EffectSlot) -> usize {
     if let Some(h) = running(slot.id) {
         if let Ok(h) = h.lock() {
-            return h.latency;
+            return h.latency_for(slot.sidechain.is_some());
         }
     }
     super::scanned_latency(&slot.effect)
@@ -1241,7 +1257,7 @@ pub fn processor(slot: &EffectSlot, rate: u32) -> Option<PluginProcessor> {
     let (latency, pending, ins, outs, width) = {
         let h = host.lock().ok()?;
         (
-            h.latency,
+            h.latency_for(slot.sidechain.is_some()),
             h.differing(&slot_params(slot)),
             h.inputs.clone(),
             h.outputs.clone(),
@@ -1359,9 +1375,9 @@ impl Instrument {
                         thread::sleep(Duration::from_millis(15));
                     }
                     h.reset();
-                    (h.latency, Vec::new())
+                    (h.latency_for(slot.sidechain.is_some()), Vec::new())
                 } else {
-                    (h.latency, pending)
+                    (h.latency_for(slot.sidechain.is_some()), pending)
                 }
             }
             None => (0, Vec::new()),

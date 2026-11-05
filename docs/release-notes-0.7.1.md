@@ -56,6 +56,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 - **Unsaved Waveform edits and sessions:** a session now hears your unsaved edits even when the file was added after you edited it, and a clip comes in at the edited length. Dragging a recording's take into a session brings the edited file (a new file is saved first, and a note says where). Opening the take from the Files panel opens the file with your edits instead of the raw recording.
 - **Spectral selections** no longer jump when you drag past the top or bottom of the view, or into the other channel.
 - An "each_key_duplicate" error in Help > About, and a session file listed twice in the Files panel.
+- **Vocal aligners keyed from another track line up again.** A plug-in such as VocAlign that reports a different delay once its sidechain input is on was lined up with its delay from before the key arrived, so the aligned track came out late. Audiform now measures both delays when it loads the plug-in and uses the keyed one for a slot with a key routed.
 
 ## Changed
 

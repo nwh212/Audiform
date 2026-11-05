@@ -2485,3 +2485,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Over a session's clips and track headers the plain mouse wheel scrolls the tracks up and down. Ctrl+wheel anywhere, and the wheel over the ruler or overview, zoom in time; Shift+wheel scrolls sideways; Alt+wheel resizes the track under the pointer; the wheel over the track scrollbar resizes all tracks. The "wheel zooms" setting now covers the Waveform editor only.
 
 **Why.** The project lead: the wheel over clips and tracks is meant to scroll vertically, not zoom.
+
+## 2026-11-05: A keyed plug-in is lined up with its keyed delay
+
+**Decision.** When a plug-in with a sidechain input loads, the plug-in host also turns that input on for a moment, reads the delay the plug-in reports then, and turns it off again. The app uses that delay for any slot with a sidechain key routed, and the plug-in's usual delay otherwise.
+
+**Why.** Since 2026-11-01 a sidechain input stays off until a key arrives (so a compressor with nothing routed keys from its own input). The delay was read while it was off. A vocal aligner reports a larger delay with its key input on, so with a key routed the graph held the other tracks back by too little and the aligned track played late. The project lead: VocAlign Pro used to line tracks up exactly through its sidechain and now there is a gap.
+
+**How.** `keyed_latency` in the host's Loaded message (optional, so an older host still works), kept on `Host` in `plugins/instance.rs`; `latency_for` picks it from the slot's `sidechain`.

@@ -380,6 +380,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                             id,
                             &Message::Loaded {
                                 latency: p.latency,
+                                keyed_latency: p.sidechain.then_some(p.keyed_latency),
                                 params: p.params.clone(),
                                 has_editor: p.controller.is_some(),
                                 instrument: p.instrument,

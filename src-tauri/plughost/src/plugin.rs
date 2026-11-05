@@ -77,6 +77,8 @@ pub struct Plugin {
     separate_controller: bool,
     pub edits: Arc<Mutex<Vec<Edit>>>,
     pub latency: u32,
+    /// The delay it reports with its sidechain input on.
+    pub keyed_latency: u32,
     pub params: Vec<ParamInfo>,
     /// Takes notes and has no audio input: it makes sound rather than
     /// processing it.
@@ -265,6 +267,28 @@ impl Plugin {
             component.setActive(1);
             processor.setProcessing(1);
             let latency = processor.getLatencySamples();
+            // The sidechain input stays off until a key arrives (see
+            // follow_key), and some plug-ins (vocal aligners) report a
+            // different delay with it on. Measure that too, so the app can
+            // line up a keyed slot from the first block.
+            let keyed_latency = if sidechain {
+                crate::stage("measuring its delay with the sidechain on");
+                let set = |on: bool| {
+                    processor.setProcessing(0);
+                    component.setActive(0);
+                    for i in 1..ins.len() as i32 {
+                        component.activateBus(kAudio as i32, kInput as i32, i, u8::from(on));
+                    }
+                    component.setActive(1);
+                    processor.setProcessing(1);
+                };
+                set(true);
+                let l = processor.getLatencySamples();
+                set(false);
+                l
+            } else {
+                latency
+            };
             crate::stage("reading its controls");
 
             let params = controller
@@ -295,6 +319,7 @@ impl Plugin {
                     separate_controller: separate,
                     edits,
                     latency,
+                    keyed_latency,
                     params,
                     instrument,
                     sidechain,
