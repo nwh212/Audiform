@@ -1,6 +1,6 @@
 # Stem models: what Audio Separation offers and why
 
-Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src/separation/mod.rs` for the list, each with a pinned checksum). The engine runs the two band-split RoFormer families; models of other kinds cannot be added until the engine learns them. This page records the survey behind the list, so the next check (every major release, `docs/RELEASING.md` step 2) starts from here. Surveyed 2026-11-03, extended 2026-11-04 (Mega 53, duet, more of gilliaan's models).
+Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src/separation/mod.rs` for the list, each with a pinned checksum). The engine runs the two band-split RoFormer families; models of other kinds cannot be added until the engine learns them. This page records the survey behind the list, so the next check (every major release, `docs/RELEASING.md` step 2) starts from here. Surveyed 2026-11-03, extended 2026-11-04 (Mega 53, duet, more of gilliaan's models) and 2026-11-05 (the rest of the X-LANCE fine-tunes).
 
 ## What ships
 
@@ -8,7 +8,7 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 | --- | --- | --- |
 | Vocals and instrumental | BS PolarFormer, Mel-Band Roformer (Kim), Mel-Band Roformer Deux, BS-RoFormer (anvuew) | Best public scores on the common 100-song test, permissive or freely published. anvuew's is GPL-3.0 and scored 12.55 dB on the trainer's own test, which is not the same test. The list folds models that make the same split under one heading, so more of a kind can be offered. |
 | Six stems at once (bass, drums, other, vocals, guitar, piano) | BS-RoFormer SW | Best public scores on every one of those stems. Its provenance is disputed and no licence is stated, which the list says. |
-| Bass, drums, guitar, piano and keys on their own | X-LANCE fine-tunes | MIT licence; the same family as the six-stem model. |
+| Bass, drums, guitar, keys, orchestra, percussion, synth and vocals on their own | X-LANCE fine-tunes | MIT licence; each fine-tuned from the six-stem SW model, so the best of the SW family for one instrument. Where X-LANCE made two versions (drums, orchestra, percussion, synth) the list has the second. No published scores. |
 | Guitar, trained for it | Mel-Band Roformer Guitar (chenCFD) | MIT licence, small (277 MB), a published score of 7.98 dB on the trainer's own test. |
 | Lead vocal apart from backing vocals | BS-RoFormer Karaoke (frazer and becruily), and anvuew's | The two best public lead-vocal scores (10.10 and 10.22 dB) among single models. The first has no licence stated; anvuew's is GPL-3.0. Run the vocals model first, then one of these on the vocal stem, to get the backing vocals as the rest. |
 | Bowed strings | BS-RoFormer Bowed Strings v2 (gilliaan) | The only public strings model, 4.69 dB on a public strings test. CC BY-NC-SA 4.0: free for non-commercial use, with credit, shared alike. |

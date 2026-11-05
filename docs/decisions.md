@@ -2493,3 +2493,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** Since 2026-11-01 a sidechain input stays off until a key arrives (so a compressor with nothing routed keys from its own input). The delay was read while it was off. A vocal aligner reports a larger delay with its key input on, so with a key routed the graph held the other tracks back by too little and the aligned track played late. The project lead: VocAlign Pro used to line tracks up exactly through its sidechain and now there is a gap.
 
 **How.** `keyed_latency` in the host's Loaded message (optional, so an older host still works), kept on `Host` in `plugins/instance.rs`; `latency_for` picks it from the slot's `sidechain`.
+
+## 2026-11-05: The rest of the SW family's single-instrument models
+
+**Decision.** Audio Separation lists X-LANCE's orchestra, percussion, synth and vocals fine-tunes beside its bass, drums, guitar and keys ones. Where X-LANCE made two versions (orchestra, percussion, synth, as with drums), the list has the second. Not added from the same folder: the plain and Logic copies of the six-stem model (the fixed one is listed) and beatloo's bass and drums (a smaller model of a different shape, with no score to say it is better).
+
+**Why.** The project lead asked for the best of the SW-based models in noblebarkrr's collection. These are fine-tuned from the six-stem SW model, one instrument each, MIT-licensed, and use the same layout as the X-LANCE models already listed. None has a published score; the list says so.
+
+**How.** Four entries in `separation/mod.rs` with pinned checksums, using the same layout as the X-LANCE models already listed (their configs differ only in the instrument name).
