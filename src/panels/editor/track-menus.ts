@@ -19,7 +19,7 @@ import { autoAt, autoName, autoRest, dropLane, nextTarget, putLane } from "./aut
 import { withGroups } from "./clip-edit";
 import { ROW_SENDS } from "./editor-layout";
 import type { MenuCtx } from "./lane-menus";
-import { duplicateClips, newClip, replaceClip } from "./midi";
+import { duplicateClips, newClip, quantize, replaceClip, sortNotes } from "./midi";
 
 /** A row whose color is being picked. */
 export type ColorTarget = { kind: "track" | "bus"; id: string; current: string | null };
@@ -199,6 +199,29 @@ export function midiClipItems(ctx: MenuCtx, track: TrackDoc, clip: MidiClipDoc |
         setMidiClips(track, d.clips, many ? "Duplicate Clips" : "Duplicate Clip");
         editor.selectClips(d.added, track.id);
       },
+    },
+    {
+      kind: "sub",
+      label: many ? `Quantize ${ids.size} Clips` : "Quantize",
+      disabled: !clips.some((c) => ids.has(c.id) && c.notes.length),
+      reason: "The clip has no notes.",
+      items: [
+        ["1/4 Note", 1],
+        ["1/8 Note", 0.5],
+        ["1/16 Note", 0.25],
+        ["1/32 Note", 0.125],
+        ["1/8 Triplet", 1 / 3],
+        ["1/16 Triplet", 1 / 6],
+      ].map(([label, grid]) => ({
+        kind: "item" as const,
+        label: label as string,
+        run: () =>
+          setMidiClips(
+            track,
+            clips.map((c) => (ids.has(c.id) ? { ...c, notes: sortNotes(quantize(c.notes, new Set(c.notes.map((_, i) => i)), grid as number)) } : c)),
+            many ? "Quantize Clips" : "Quantize Clip",
+          ),
+      })),
     },
     {
       kind: "item",

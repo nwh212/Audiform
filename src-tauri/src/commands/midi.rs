@@ -43,3 +43,17 @@ pub fn midi_record_add(live: tauri::State<'_, MidiLive>, track: Id) -> Result<()
 pub fn midi_record_stop(live: tauri::State<'_, MidiLive>) -> Result<Vec<MidiTake>, String> {
     live.record_stop()
 }
+
+/// Step input in the piano roll: listen to every MIDI input (or stop).
+#[tauri::command]
+pub async fn midi_step_listen(app: AppHandle, on: bool) -> Result<(), String> {
+    spawn_blocking(move || app.state::<MidiLive>().step_listen(on))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Keys pressed for step input since the last call.
+#[tauri::command]
+pub fn midi_step_take(live: tauri::State<'_, MidiLive>) -> Vec<midi_live::StepKey> {
+    live.step_take()
+}

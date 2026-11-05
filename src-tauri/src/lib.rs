@@ -202,6 +202,8 @@ pub fn run() {
             commands::midi::midi_record_start,
             commands::midi::midi_record_add,
             commands::midi::midi_record_stop,
+            commands::midi::midi_step_listen,
+            commands::midi::midi_step_take,
             commands::record::record_stop,
             commands::record::record_add,
             commands::plugins::plugin_show_bypassed,

@@ -301,3 +301,44 @@ export const CHANNEL_COLORS = [
   "", "#e8564a", "#f0913a", "#e8c53a", "#8fcf4a", "#3fbf7f", "#36b8c9", "#4a8fe8",
   "#7a6ae8", "#b55ce0", "#e05cb0", "#a8785a", "#8a9aa8", "#d4d46a", "#5ad4a8", "#f07a9a",
 ];
+
+/**
+ * Quantize: moves the notes at `indexes` toward the nearest `grid` step
+ * by `strength` (1 lands exactly on it, 0.5 halfway). With `ends`, the
+ * note ends move the same way (a note whose end would land on its start
+ * keeps a grid step); without, each keeps its length.
+ */
+export function quantize(notes: NoteDoc[], indexes: ReadonlySet<number>, grid: number, strength = 1, ends = false): NoteDoc[] {
+  if (grid <= 0) return notes;
+  const k = Math.min(1, Math.max(0, strength));
+  const toward = (b: number) => b + (snap(b, grid) - b) * k;
+  return notes.map((n, i) => {
+    if (!indexes.has(i)) return n;
+    const start = Math.max(0, toward(n.start));
+    // An end that lands on (or before) its start keeps one grid step.
+    const end = toward(n.start + n.length);
+    const length = !ends ? n.length : end - start > 1e-9 ? end - start : Math.max(MIN_NOTE, grid * k + n.length * (1 - k));
+    return { ...n, start, length };
+  });
+}
+
+/** Legato: each note at `indexes` runs on to the start of the next picked note that starts later (the last keeps its length). */
+export function legato(notes: NoteDoc[], indexes: ReadonlySet<number>): NoteDoc[] {
+  const starts = [...new Set(notes.filter((_, i) => indexes.has(i)).map((n) => n.start))].sort((a, b) => a - b);
+  return notes.map((n, i) => {
+    if (!indexes.has(i)) return n;
+    const next = starts.find((s) => s > n.start + 1e-9);
+    return next === undefined ? n : { ...n, length: Math.max(MIN_NOTE, next - n.start) };
+  });
+}
+
+/** Keys pressed for step input, grouped: keys pressed within `chordSecs` of the first of a group are one chord. */
+export function stepChords<K extends { at: number }>(keys: K[], chordSecs = 0.06): K[][] {
+  const out: K[][] = [];
+  for (const k of [...keys].sort((a, b) => a.at - b.at)) {
+    const last = out[out.length - 1];
+    if (last && k.at - last[0]!.at <= chordSecs) last.push(k);
+    else out.push([k]);
+  }
+  return out;
+}

@@ -269,6 +269,27 @@ struct Routes {
     list: Vec<Route>,
     /// When recording started.
     t0: Option<Instant>,
+    /// Step input (the piano roll's): keys pressed on any input, waiting
+    /// to be read, while it listens.
+    step: Option<StepTap>,
+}
+
+/// Keys pressed for step input, with when they were pressed.
+struct StepTap {
+    keys: Keys,
+    t0: Instant,
+    pressed: Vec<StepKey>,
+}
+
+/// A key pressed for step input.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct StepKey {
+    pub pitch: u8,
+    pub channel: u8,
+    /// 0 to 1.
+    pub velocity: f32,
+    /// Seconds since step input started listening, to tell chords from runs.
+    pub at: f64,
 }
 
 impl Routes {
@@ -276,6 +297,25 @@ impl Routes {
     fn message(&mut self, port: &str, msg: &[u8]) {
         let t = self.t0.map(|t0| t0.elapsed().as_secs_f64());
         let mut evs = Vec::new();
+        if let Some(st) = self.step.as_mut() {
+            st.keys.feed(msg, &mut evs);
+            let at = st.t0.elapsed().as_secs_f64();
+            for e in &evs {
+                if let KeyEvent::On {
+                    pitch,
+                    channel,
+                    velocity,
+                } = *e
+                {
+                    st.pressed.push(StepKey {
+                        pitch,
+                        channel,
+                        velocity,
+                        at,
+                    });
+                }
+            }
+        }
         for r in &mut self.list {
             if r.track.input.as_deref().is_some_and(|i| i != port) {
                 continue;
@@ -494,6 +534,10 @@ struct Inner {
     /// Open inputs, by name.
     conns: Vec<(String, midir::MidiInputConnection<()>)>,
     player: Option<Player>,
+    /// The armed tracks last set, for reopening inputs.
+    tracks: Vec<LiveTrack>,
+    /// Step input listens to every input.
+    step: bool,
 }
 
 /// MIDI input, live playing and MIDI recording. Kept in Tauri state.
@@ -509,6 +553,8 @@ impl Default for MidiLive {
             inner: Mutex::new(Inner {
                 conns: Vec::new(),
                 player: None,
+                tracks: Vec::new(),
+                step: false,
             }),
         }
     }
@@ -554,7 +600,8 @@ impl MidiLive {
                 .map(|x| (x.track.track_id, x.queue.clone()))
                 .collect()
         };
-        self.connect(&mut inner, &tracks);
+        inner.tracks = tracks.clone();
+        self.connect(&mut inner);
 
         // Live voices: only tracks with an instrument.
         let playing: Vec<&LiveTrack> = tracks.iter().filter(|t| t.sound().0.is_some()).collect();
@@ -600,9 +647,10 @@ impl MidiLive {
     }
 
     /// Opens the inputs the tracks listen to and closes the others.
-    fn connect(&self, inner: &mut Inner, tracks: &[LiveTrack]) {
+    fn connect(&self, inner: &mut Inner) {
         let all = inputs();
-        let wanted: Vec<String> = if tracks.iter().any(|t| t.input.is_none()) {
+        let tracks = &inner.tracks;
+        let wanted: Vec<String> = if inner.step || tracks.iter().any(|t| t.input.is_none()) {
             all
         } else {
             all.into_iter()
@@ -645,6 +693,32 @@ impl MidiLive {
                 Err(e) => crate::engine::host::log(&format!("MIDI input {name}: {e}")),
             }
         }
+    }
+
+    /// Step input: while on, keys pressed on any input are kept for
+    /// [`step_take`](Self::step_take), whether or not a track is armed.
+    pub fn step_listen(&self, on: bool) -> Result<(), String> {
+        let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
+        {
+            let mut r = self.routes.lock().map_err(|e| e.to_string())?;
+            r.step = on.then(|| StepTap {
+                keys: Keys::default(),
+                t0: Instant::now(),
+                pressed: Vec::new(),
+            });
+        }
+        inner.step = on;
+        self.connect(&mut inner);
+        Ok(())
+    }
+
+    /// The keys pressed for step input since the last call.
+    pub fn step_take(&self) -> Vec<StepKey> {
+        self.routes
+            .lock()
+            .ok()
+            .and_then(|mut r| r.step.as_mut().map(|s| std::mem::take(&mut s.pressed)))
+            .unwrap_or_default()
     }
 
     /// Starts recording on `tracks` (armed MIDI tracks set with [`set`]).
@@ -842,6 +916,29 @@ mod tests {
         );
         // Still held when recording stopped: it ends there.
         assert_eq!((notes[1].pitch, notes[1].end), (64, 2.0));
+    }
+
+    #[test]
+    fn step_input_keeps_keys_from_any_input() {
+        let mut r = Routes {
+            step: Some(StepTap {
+                keys: Keys::default(),
+                t0: Instant::now(),
+                pressed: Vec::new(),
+            }),
+            ..Routes::default()
+        };
+        r.message("Anything", &[0x90, 60, 127]);
+        r.message("Other", &[0x92, 64, 64]);
+        r.message("Other", &[0x82, 64, 0]);
+        let keys: Vec<(u8, u8)> = r
+            .step
+            .unwrap()
+            .pressed
+            .iter()
+            .map(|k| (k.pitch, k.channel))
+            .collect();
+        assert_eq!(keys, vec![(60, 0), (64, 2)], "key presses only");
     }
 
     #[test]

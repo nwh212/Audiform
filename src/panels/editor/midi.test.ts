@@ -195,3 +195,29 @@ describe("stretching a MIDI clip", () => {
     expect(out[1]).toBe(other);
   });
 });
+
+import { legato, quantize, stepChords } from "./midi";
+
+describe("quantize, legato and step input", () => {
+  const n = (start: number, length: number, pitch = 60) => ({ pitch, velocity: 100, start, length });
+  const all = (k: number) => new Set(Array.from({ length: k }, (_, i) => i));
+  it("quantizes starts to the grid, by a strength, ends too when asked", () => {
+    const notes = [n(0.1, 0.3), n(0.9, 0.2)];
+    expect(quantize(notes, all(2), 0.25).map((x) => x.start)).toEqual([0, 1]);
+    expect(quantize(notes, all(2), 0.25).map((x) => x.length)).toEqual([0.3, 0.2]);
+    const half = quantize(notes, all(2), 0.25, 0.5);
+    expect(half[0]!.start).toBeCloseTo(0.05);
+    const ends = quantize(notes, all(2), 0.25, 1, true);
+    expect(ends.map((x) => [x.start, x.length])).toEqual([[0, 0.5], [1, 0.25]]);
+    // Only the picked notes move.
+    expect(quantize(notes, new Set([1]), 0.25)[0]!.start).toBe(0.1);
+  });
+  it("runs each note on to the next one, chords together", () => {
+    const notes = [n(0, 0.1, 60), n(0, 0.1, 64), n(1, 0.1, 62), n(3, 0.5, 60)];
+    expect(legato(notes, all(4)).map((x) => x.length)).toEqual([1, 1, 2, 0.5]);
+  });
+  it("groups keys pressed together into chords", () => {
+    const keys = [{ at: 0 }, { at: 0.03 }, { at: 0.5 }, { at: 0.52 }, { at: 1.2 }];
+    expect(stepChords(keys).map((c) => c.length)).toEqual([2, 2, 1]);
+  });
+});

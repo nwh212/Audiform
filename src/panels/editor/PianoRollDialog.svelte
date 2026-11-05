@@ -28,7 +28,11 @@
   several parts; new notes go on the channel picked. Tools sets, scales
   or randomizes velocity and pan, and Humanize moves notes a little
   earlier or later at random; each acts on the picked notes, or every
-  note when none are picked.
+  note when none are picked. Tools also quantizes to the grid (with a
+  strength, ends too if asked), makes notes legato and transposes by a
+  semitone or an octave. Step Input adds each key or chord played on a
+  MIDI keyboard at the last spot clicked, as long as the last note drawn,
+  and moves on.
   Getting around: the mouse wheel scrolls up and down the keys, Shift
   and the wheel scrolls along time, Ctrl and the wheel zooms time around
   the pointer, Alt and the wheel makes the keys taller or shorter. Drag
@@ -45,10 +49,10 @@
 </script>
 <script lang="ts">
   import type { MidiClipDoc, NoteDoc, TempoDoc } from "../../stores/session";
-  import type { SeqNote } from "../../app/core";
+  import { midiStepListen, midiStepTake, type SeqNote } from "../../app/core";
   import { barAt, barBeats, segmentAtBeat } from "../../stores/tempo";
   import { tick } from "svelte";
-  import { beatsToSamples, CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
+  import { beatsToSamples, CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, legato, quantize, stepChords, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
     clip: MidiClipDoc;
@@ -155,7 +159,39 @@
   let toolsOpen = $state(false);
   /** The tool in hand: Draw adds notes, Select picks them, Erase removes them. */
   let pen = $state<"draw" | "select" | "erase">("draw");
-  let tool = $state({ velocity: 100, scale: 110, velRandom: 10, pan: 0, panRandom: 30, strayMs: 10 });
+  let tool = $state({ velocity: 100, scale: 110, velRandom: 10, pan: 0, panRandom: 30, strayMs: 10, strength: 100, ends: false });
+
+  // Step input: each key (or chord) played on a MIDI keyboard is added at
+  // the last spot clicked, as long as the last note drawn, and the spot
+  // moves on by that much.
+  let stepping = $state(false);
+  $effect(() => {
+    if (!stepping) return;
+    let alive = true;
+    void midiStepListen(true).catch(() => (stepping = false));
+    const poll = setInterval(async () => {
+      const keys = await midiStepTake().catch(() => []);
+      if (!alive || !keys.length) return;
+      let at = cursor ?? 0;
+      let notes = clip.notes;
+      const added: NoteDoc[] = [];
+      for (const chord of stepChords(keys)) {
+        for (const k of chord) {
+          const n: NoteDoc = { pitch: k.pitch, velocity: Math.max(1, Math.round(k.velocity * 127)), start: at, length: drawLength, ...(channel ? { channel } : {}) };
+          notes = addNote(notes, n);
+          added.push(notes.find((x) => x.start === at && x.pitch === k.pitch)!);
+        }
+        at += drawLength;
+      }
+      setNotes(notes, added.filter(Boolean));
+      cursor = at;
+    }, 40);
+    return () => {
+      alive = false;
+      clearInterval(poll);
+      void midiStepListen(false).catch(() => {});
+    };
+  });
   /** Applies a note edit to the picked notes, or every note when none are picked, keeping the pick. */
   function applyTool(edit: (notes: NoteDoc[], which: Set<number>) => NoteDoc[]) {
     const keep = [...picked].map((k) => clip.notes[k]!).filter(Boolean);
@@ -739,6 +775,14 @@
         />
       </label>
       <button type="button" class:on={toolsOpen} aria-expanded={toolsOpen} title="Set, scale or randomize velocity and pan, and Humanize timing. Acts on the picked notes, or every note when none are picked." onclick={() => (toolsOpen = !toolsOpen)}>Tools ▾</button>
+      <button
+        type="button"
+        class:on={stepping}
+        aria-pressed={stepping}
+        title={stepping
+          ? "Step input is on: play a key or chord on your MIDI keyboard to add it at the last spot clicked, as long as the last note drawn. Click to stop."
+          : "Step input: add notes by playing them on a MIDI keyboard, one step at a time, at the last spot clicked"}
+        onclick={() => (stepping = !stepping)}>Step Input</button>
       <label title="What the lane under the roll shows and sets">
         Lane
         <select bind:value={lane}>
@@ -794,6 +838,20 @@
           <button type="button" onclick={() => applyTool((n, w) => setPan(n, w, tool.pan / 100))}>Set</button>
           <label>Randomize ± <input type="number" min="1" max="100" bind:value={tool.panRandom} />%</label>
           <button type="button" title="Moves each note left or right by a random amount, up to this much. Instruments that take per-note pan follow it; others ignore it." onclick={() => applyTool((n, w) => randomizePan(n, w, tool.panRandom / 100))}>Randomize</button>
+        </span>
+        <span class="group">
+          <b>Quantize</b>
+          <label title="How far toward the grid: 100% lands exactly on it, less keeps some of the feel">Strength <input type="number" min="1" max="100" bind:value={tool.strength} />%</label>
+          <label title="Move the note ends to the grid too, not only the starts"><input type="checkbox" bind:checked={tool.ends} /> Ends</label>
+          <button type="button" disabled={!snapOn || grid <= 0} title={snapOn ? "Moves note starts to the grid set above (Grid)" : "Turn Snap on and pick a Grid to quantize to"} onclick={() => applyTool((n, w) => quantize(n, w, step, tool.strength / 100, tool.ends))}>Quantize</button>
+          <button type="button" title="Each note runs on to the start of the next one (chords together); the last keeps its length" onclick={() => applyTool((n, w) => legato(n, w))}>Legato</button>
+        </span>
+        <span class="group">
+          <b>Transpose</b>
+          <button type="button" title="Down an octave" onclick={() => applyTool((n, w) => moveNotes(n, w, 0, -12))}>−12</button>
+          <button type="button" title="Down a semitone" onclick={() => applyTool((n, w) => moveNotes(n, w, 0, -1))}>−1</button>
+          <button type="button" title="Up a semitone" onclick={() => applyTool((n, w) => moveNotes(n, w, 0, 1))}>+1</button>
+          <button type="button" title="Up an octave" onclick={() => applyTool((n, w) => moveNotes(n, w, 0, 12))}>+12</button>
         </span>
         <span class="group">
           <b>Humanize</b>

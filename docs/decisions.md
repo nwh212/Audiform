@@ -2535,3 +2535,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Not yet.** Pitch bend, mod wheel and other controllers are not passed to the instrument (the plug-in host carries notes only), recorded takes are not quantized, and a recording latency offset is not applied to MIDI. Live playing opens the system output alongside playback; on ASIO that output is the same driver, as with input monitoring.
 
 **How.** `engine/midi_live.rs` (inputs, keys and pedal, live voices, takes; unit-tested, and played through the test synth plug-in in `tests/plugins.rs`), `commands/midi.rs`, `src/app/midi-take.ts` (takes to clips, unit-tested), the recorder and the track header.
+
+## 2026-11-05: MIDI editing: quantize, legato, transpose, step input
+
+**Decision.** The piano roll's Tools panel gains Quantize (to the roll's grid, with a strength from 1 to 100% and an Ends box; a note whose end would land on its start keeps a grid step), Legato (each picked note runs to the next later start among the picked, chords together) and Transpose (minus and plus a semitone and an octave). Step Input listens to every MIDI input while on and adds each key or chord (keys within 60 ms of the first are one chord) at the last spot clicked, as long as the last note drawn, on the channel picked, then moves the spot on. A MIDI clip's right-click menu has Quantize to 1/4 down to 1/32 and two triplet grids, for whole clips. No new keyboard shortcuts: arrow-key nudging and a quantize key are left for the project lead to approve.
+
+**Why.** The project lead asked for MIDI that is easier to draw, adjust and perform. Recorded takes need quantizing first of all, and step input is the quickest way to enter parts from a keyboard without playing in time.
+
+**How.** `quantize`, `legato` and `stepChords` in `panels/editor/midi.ts` (unit-tested); `step_listen` and `step_take` in `engine/midi_live.rs` (unit-tested), polled by the piano roll every 40 ms while Step Input is on.

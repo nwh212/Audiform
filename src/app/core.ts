@@ -1065,6 +1065,24 @@ export function midiRecordAdd(track: string): Promise<void> {
   return invoke("midi_record_add", { track });
 }
 
+/** A key pressed for step input; `at` is seconds since listening started. */
+export interface StepKey {
+  pitch: number;
+  channel: number;
+  velocity: number;
+  at: number;
+}
+
+/** Step input: listen to every MIDI input (or stop). */
+export function midiStepListen(on: boolean): Promise<void> {
+  return invoke("midi_step_listen", { on });
+}
+
+/** Keys pressed for step input since the last call. */
+export function midiStepTake(): Promise<StepKey[]> {
+  return invoke<StepKey[]>("midi_step_take");
+}
+
 export function midiRecordStop(): Promise<MidiTake[]> {
   return invoke<MidiTake[]>("midi_record_stop");
 }
