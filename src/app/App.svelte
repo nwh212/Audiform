@@ -96,6 +96,7 @@
   import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
   import { waveChannels } from "../panels/editor/wave-channels";
+  import { oneChannelBoard } from "../panels/editor/wave-edit";
   import { pathsIgnoreCase, PLATFORM } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, usedPaths, type Choice } from "./session-files";
   import { RECENT_SLOTS } from "./menus/model";
@@ -1966,7 +1967,10 @@
     try {
       const waveBoard = waveTools.board;
       if (inWave() && waveBoard) {
-        await newWaveFromClips(waveBoard.rate, waveBoard.clips, waveBoard.media);
+        // One channel of the file copied: a mono file of just that channel.
+        const one = waveBoard.channel !== undefined;
+        const b = one ? oneChannelBoard(waveBoard) : waveBoard;
+        await newWaveFromClips(b.rate, b.clips, b.media, one);
       } else if (clipBoard && session.current) {
         const doc = session.current;
         const clips = clipBoard.items.map((i) => ({ ...i.clip, id: uuid() }));

@@ -178,11 +178,11 @@ export async function forgetParked(): Promise<void> {
 let untitledCount = 0;
 
 /** Paste to New File: a new untitled file made from clips placed from 0. */
-export async function newWaveFromClips(sampleRate: number, clips: ClipDoc[], media: MediaRefDoc[]): Promise<void> {
+export async function newWaveFromClips(sampleRate: number, clips: ClipDoc[], media: MediaRefDoc[], mono = false): Promise<void> {
   spectralSelection.set(null);
   await waveTransport.stop();
   await parkCurrent();
-  const channels = Math.min(2, Math.max(1, ...media.map((m) => m.channels)));
+  const channels = mono ? 1 : Math.min(2, Math.max(1, ...media.map((m) => m.channels)));
   untitledCount += 1;
   const doc = await waveNewFromClips<SessionDoc, ClipDoc, MediaRefDoc>(`Untitled ${untitledCount}`, sampleRate, channels, clips, media);
   adopt(doc);

@@ -686,3 +686,78 @@ fn every_format_passes_our_check_and_the_outside_tools() {
         }
     }
 }
+
+#[test]
+fn one_channel_of_a_surround_file_makes_a_stereo_or_mono_file() {
+    use crate::session::model::{ChannelMix, ChannelSend};
+    let dir = tempfile::tempdir().unwrap();
+    // Eight channels, each at its own level: channel k at (k + 1) / 10.
+    let src = dir.path().join("seven-one.wav");
+    let spec = hound::WavSpec {
+        channels: 8,
+        sample_rate: 48_000,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let mut w = hound::WavWriter::create(&src, spec).unwrap();
+    for _ in 0..4_800 {
+        for k in 0..8 {
+            w.write_sample((k as f32 + 1.0) / 10.0).unwrap();
+        }
+    }
+    w.finalize().unwrap();
+    // Paste to New File and a paste into a new file: one clip playing only
+    // channel 5 (Rs here) on both sides.
+    for (layout, channels) in [(ChannelLayout::Stereo, 2u16), (ChannelLayout::Mono, 1)] {
+        let mut s = Session::new("n", 48_000);
+        let m = MediaRef {
+            id: new_id(),
+            path: src.clone(),
+            relative_path: None,
+            sample_rate: 48_000,
+            channels: 8,
+            length: 4_800,
+            linked: None,
+        };
+        let mid = m.id;
+        s.media.push(m);
+        let mut t = Track::new("n", layout);
+        let mut c = ClipSpec {
+            id: new_id(),
+            name: "c".into(),
+            media_id: mid,
+            start: 0,
+            source_in: 0,
+            source_out: 4_800,
+            channel_mix: None,
+        }
+        .build();
+        c.channel_mix = Some(ChannelMix {
+            sends: (0..8)
+                .map(|j| {
+                    let g = if j == 5 { 1.0 } else { 0.0 };
+                    ChannelSend { left: g, right: g }
+                })
+                .collect(),
+            to_speakers: false,
+        });
+        t.clips.push(c);
+        s.tracks.push(t);
+        let out = dir.path().join(format!("one-{channels}.wav"));
+        let req = MixdownRequest {
+            clip_only: true,
+            channels: Some(channels),
+            bit_depth: Some(32),
+            ..Default::default()
+        };
+        mixdown(&s, &req, &out, &AtomicBool::new(false), |_, _| {}).unwrap();
+        let r = hound::WavReader::open(&out).unwrap();
+        assert_eq!(r.spec().channels, channels);
+        let x: Vec<f32> = r.into_samples::<f32>().map(Result::unwrap).collect();
+        let v = (x[1_000 * usize::from(channels)] * 1_000.0).round() / 1_000.0;
+        assert_eq!(
+            v, 0.6,
+            "{channels} channels: channel 5 alone, at its own level"
+        );
+    }
+}

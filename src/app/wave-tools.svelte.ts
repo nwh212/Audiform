@@ -12,7 +12,7 @@
 import { type ClipBoard } from "../panels/editor/clip-edit";
 import { rasterize } from "../panels/editor/spectrum";
 import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels } from "../panels/editor/wave-channels";
-import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
+import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, oneChannelBoard, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
 import { embedList } from "../panels/markers/chapters";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
 import { addSlot, chainOf } from "../panels/voice-chain/chain";
@@ -102,6 +102,16 @@ export function createWaveTools(deps: WaveToolsDeps) {
   };
   const NEED_WAVE_SEL = "Drag across the waveform to select audio first.";
   let waveBoard: WaveBoard | null = null;
+  /**
+   * The copy as it pastes into the open file: a one-channel copy from a
+   * file with another number of channels (a 7.1 channel into a stereo or
+   * mono file) becomes clips playing just that channel.
+   */
+  function boardFor(b: WaveBoard): WaveBoard {
+    const here = wave.current?.media[0]?.channels ?? 2;
+    const from = b.media[0]?.channels ?? here;
+    return b.channel !== undefined && from !== here ? oneChannelBoard(b) : b;
+  }
   /** Copy in the Waveform editor: with one channel on, the copy remembers which. */
   function copyOf(r: readonly [number, number]): WaveBoard | null {
     const b = copyRange(wave.current!, r[0], r[1]);
@@ -721,15 +731,16 @@ export function createWaveTools(deps: WaveToolsDeps) {
         id: "edit.paste",
         run: async () => {
           if (!waveBoard) return;
-          const take = pasteTake(get(waveChannels), waveBoard.channel);
-          if (take && (wave.current?.media[0]?.channels ?? 1) > 1) {
+          const board = boardFor(waveBoard);
+          const take = pasteTake(get(waveChannels), board.channel);
+          if (take && (wave.current?.media[0]?.channels ?? 1) > 1 && sessionEnd(wave.current!) > 0) {
             // Onto one channel (or a one-channel copy onto both): it goes over the audio from the selection or playhead, keeping the file's length.
             const d = wave.current!;
             const at = waveSel()?.[0] ?? wavePlayhead();
-            const len = Math.round(waveBoard.length * (d.sample_rate / waveBoard.rate));
+            const len = Math.round(board.length * (d.sample_rate / board.rate));
             const end = Math.min(sessionEnd(d), at + len);
             const quiet = silenceRange(d, at, end, uuid);
-            const p = mixPasteAt(d, waveBoard, at, 0, uuid);
+            const p = mixPasteAt(d, board, at, 0, uuid);
             if (!quiet || !p || end <= at) return;
             if (await waveEdit("Paste", { op: "batch", ops: [quiet, p.op] }, [at, end], take)) waveSetSelection([at, end], at);
             return;
@@ -738,10 +749,10 @@ export function createWaveTools(deps: WaveToolsDeps) {
           const r = waveSel();
           if (r) await waveEdit("Delete", deleteRange(wave.current!, r[0], r[1], uuid));
           const at = r ? r[0] : wavePlayhead();
-          const p = pasteAt(wave.current!, waveBoard, at, uuid);
+          const p = pasteAt(wave.current!, board, at, uuid);
           if (p && (await waveEdit("Paste", p.op))) waveSetSelection([at, at + p.length], at);
         },
-        enabled: () => waveBoard !== null,
+        enabled: () => board !== null,
         reason: () => "Copy or cut audio in the Waveform editor first.",
       }),
       ov(waveFocus, {
@@ -756,8 +767,9 @@ export function createWaveTools(deps: WaveToolsDeps) {
             return;
           }
           const at = waveSel()?.[0] ?? wavePlayhead();
-          const p = mixPasteAt(wave.current!, waveBoard, at, db, uuid);
-          const take = pasteTake(get(waveChannels), waveBoard.channel);
+          const board = boardFor(waveBoard);
+          const p = mixPasteAt(wave.current!, board, at, db, uuid);
+          const take = pasteTake(get(waveChannels), board.channel);
           if (p && take && (wave.current?.media[0]?.channels ?? 1) > 1) {
             // Mixed into one channel only: from the original channel plus the pasted one.
             const end = Math.min(sessionEnd(wave.current!), at + p.length);

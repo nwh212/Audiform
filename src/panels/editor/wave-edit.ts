@@ -9,7 +9,7 @@
  * Ranges are in samples at the file's rate.
  */
 
-import { clipLength, sessionEnd, type ClipChange, type ClipDoc, type EnvelopePointDoc, type MarkerChange, type MediaRefDoc, type Op, type SessionDoc } from "../../stores/session";
+import { clipLength, sessionEnd, type ChannelMixDoc, type ClipChange, type ClipDoc, type EnvelopePointDoc, type MarkerChange, type MediaRefDoc, type Op, type SessionDoc } from "../../stores/session";
 import { clipEnd, isolate, mediaOf, pieceOf, rippleDeleteRange } from "./clip-edit";
 import { DB_MIN, levelAt, pointsOf } from "./envelope";
 
@@ -172,6 +172,26 @@ export interface WaveBoard {
   media: MediaRefDoc[];
   /** Copied with only this channel on (0 left, 1 right): pasting uses that channel. */
   channel?: number;
+}
+
+/**
+ * A copy of one channel as clips that play only that channel, on both
+ * sides (a mono file folds them back to the one channel). For pasting
+ * into a file with another number of channels, or into a new file,
+ * where the channel's number alone means nothing.
+ */
+export function oneChannelBoard(board: WaveBoard): WaveBoard {
+  const k = board.channel;
+  if (k === undefined) return board;
+  const counts = new Map(board.media.map((m) => [m.id, Math.max(1, m.channels)]));
+  const clips = board.clips.map((c) => {
+    const n = counts.get(c.media_id) ?? 2;
+    const mix: ChannelMixDoc = {
+      sends: Array.from({ length: n }, (_, j) => (j === Math.min(k, n - 1) ? { left: 1, right: 1 } : { left: 0, right: 0 })),
+    };
+    return { ...c, channel_mix: mix };
+  });
+  return { rate: board.rate, length: board.length, clips, media: board.media };
 }
 
 /** Copy: the range as pieces starting at 0. */

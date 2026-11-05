@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { sessionEnd, type ClipDoc, type Op, type SessionDoc } from "../../stores/session";
 import { previewTracks } from "./clip-edit";
 import { pointsOf } from "./envelope";
-import { amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeDb, fadeRange, insertFile, mixPasteAt, pasteAt, replaceRange, silenceRange, stretchRange } from "./wave-edit";
+import { amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeDb, fadeRange, insertFile, mixPasteAt, oneChannelBoard, pasteAt, replaceRange, silenceRange, stretchRange } from "./wave-edit";
 
 const fade = () => ({ length: 0, shape: "linear" as const, curve: 0 });
 
@@ -260,5 +260,22 @@ describe("stretchRange", () => {
   it("makes room when the range gets longer", () => {
     const after = apply(file(), stretchRange(file(), 2_000, 5_000, media(4_000), "Stretch", id));
     expect(sessionEnd(after)).toBe(11_000);
+  });
+});
+
+describe("one channel of a multichannel copy", () => {
+  it("plays only that channel, on both sides, so any file can take it", () => {
+    const doc = file();
+    doc.media[0]!.channels = 8;
+    const board = { ...copyRange(doc, 0, 1_000)!, channel: 5 };
+    const one = oneChannelBoard(board);
+    expect(one.channel).toBeUndefined();
+    const sends = one.clips[0]!.channel_mix!.sends;
+    expect(sends).toHaveLength(8);
+    expect(sends[5]).toEqual({ left: 1, right: 1 });
+    expect(sends.filter((s) => s.left !== 0 || s.right !== 0)).toHaveLength(1);
+    // A copy of the whole file is left as it is.
+    const all = copyRange(doc, 0, 1_000)!;
+    expect(oneChannelBoard(all)).toBe(all);
   });
 });

@@ -2509,3 +2509,11 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Why.** The project lead found that multichannel plug-ins did nothing useful on multichannel clips. Each channel played from its own hidden mono track with its own copy of the effects, so a 5.1 plug-in heard one channel at a time.
 
 **How.** `engine/speaker_feed.rs` builds the hidden buses with ids made from the track's or clip's, so live effect changes and plug-in windows still find them (the track's bus keeps the track's slot ids). Tested by routing (`speaker_feed` tests) and by a render where a room reverb on the track now reaches the rear speakers from a front-left click (`graph/tests.rs`).
+
+## 2026-11-05: One copied channel pastes on its own into any file
+
+**Decision.** In the Waveform editor, a copy made with one channel on keeps working when pasted into a file with another number of channels: the copy becomes clips whose Source Channels play only that channel, on both sides (a mono file folds them to the one channel). Paste to New File with such a copy makes a mono file of that channel. Pastes into a file with the same number of channels keep the channel-for-channel behavior they had.
+
+**Why.** The project lead copied one channel of a 7.1 file into a new stereo or mono file and got a broken result. The copy only remembered the channel's number: a paste into an empty file took the "over the audio" path and wrote nothing, and Paste to New File rendered all eight channels folded together.
+
+**How.** `oneChannelBoard` in `panels/editor/wave-edit.ts` (unit-tested), used by Paste and Mix Paste when the channel counts differ, and by Paste to New File. A mixdown test renders channel 5 of an eight-channel file to stereo and mono at its own level.
