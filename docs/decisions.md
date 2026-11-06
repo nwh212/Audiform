@@ -2681,3 +2681,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** When a chain runs on more than two channels (a 5.1, 7.1 or 7.1.4 file in the Waveform editor, or a 3D Space track or bus) and a plug-in slot has no routing of its own, the plug-in is now asked for that speaker layout on its main buses (`instance::with_layout`, `arrangement_for`: Audiform's channel names to VST3 speaker bits). A plug-in that accepts it hears and writes every channel; one that refuses keeps the stereo it had, routed to L and R as before. "Plug-in uses its own channels" and hand-set routing still win. A plug-in window opening takes whichever layout is already running, so it never restarts a playing plug-in.
 
 **Why.** Reported in the test pass: a 7.1 plug-in on a 7.1 file passed only L and R. Plug-ins ran in stereo unless their routing had "own channels" switched on, which nobody would think to do.
+
+## 2026-11-06: Writing automation no longer restarts playback at every step
+
+**Decision.** The lanes being written are told to the engine (`transport_set_live`, from `AutoWriter.onLive`). While a lane is written it is left out of what plays: its control (fader, pan, spot, effect setting) is heard live, and the lane's growing points do not change the playback fingerprint, so they no longer restart playback. The set changes, and playback restarts once, when a pass begins and when a Touch pass lets go; Stop clears it. The written lanes go to the session at most five times a second (they draw on screen), and a held value adds no point per step (`holdOnce`).
+
+**Why.** Reported: "writing automations lag severely". Automation edits restart playback in place so they are heard, and the writer sent a lane edit every 50 ms, so playback restarted about 20 times a second while writing, with point lists growing all the while.

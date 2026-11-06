@@ -79,6 +79,24 @@ pub fn transport_stop(transport: State<'_, Transport>) -> Option<u64> {
     transport.stop()
 }
 
+/// The automation lanes being written right now, as (owner, lane id)
+/// pairs: they play from the live controls while written, so a move is
+/// heard at once and the lane's new points do not restart playback.
+#[tauri::command]
+pub fn transport_set_live(
+    transport: State<'_, Transport>,
+    open: State<'_, OpenSession>,
+    playing: State<'_, super::wave::Playing>,
+    lanes: Vec<(crate::session::model::Id, crate::session::model::Id)>,
+) -> Result<(), String> {
+    transport.set_live(lanes);
+    if playing.is(super::wave::PlayingDoc::Session) {
+        let s = open.0.lock().map_err(|e| e.to_string())?;
+        transport.sync(&super::live::heard(&s.session))?;
+    }
+    Ok(())
+}
+
 /// Mono check: hear everything folded to mono (listening only).
 #[tauri::command]
 pub fn transport_set_mono_check(on: bool) {

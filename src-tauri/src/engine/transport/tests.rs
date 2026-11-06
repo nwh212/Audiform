@@ -333,3 +333,25 @@ fn idle_status() {
     assert!(!t.status().playing);
     assert_eq!(t.stop(), None);
 }
+
+#[test]
+fn lanes_being_written_are_left_out_of_what_plays() {
+    use crate::session::model::{ChannelLayout, Envelope, EnvelopeTarget, Session, Track};
+    let lane = |target| Envelope {
+        id: crate::session::model::Id::new_v4(),
+        target,
+        enabled: true,
+        points: Vec::new(),
+        height: None,
+    };
+    let mut s = Session::new("s", 48_000);
+    let mut t = Track::new("t", ChannelLayout::Stereo);
+    let (vol, pan) = (lane(EnvelopeTarget::Volume), lane(EnvelopeTarget::Pan));
+    t.envelopes = vec![vol.clone(), pan.clone()];
+    let tid = t.id;
+    s.tracks.push(t);
+    assert!(super::without_live(&s, &[]).is_none());
+    let played = super::without_live(&s, &[(tid, vol.id)]).expect("a lane is live");
+    let ids: Vec<_> = played.tracks[0].envelopes.iter().map(|e| e.id).collect();
+    assert_eq!(ids, vec![pan.id]);
+}

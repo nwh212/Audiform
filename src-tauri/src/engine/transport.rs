@@ -432,6 +432,29 @@ pub struct TransportStatus {
 #[derive(Default)]
 pub struct Transport {
     current: Mutex<Option<Running>>,
+    /// Automation lanes being written right now (owner, lane), which play
+    /// from the live controls instead (see [`Transport::set_live`]).
+    live: Mutex<Vec<(Id, Id)>>,
+}
+
+/// `session` without the lanes in `live`: while a lane is written, its
+/// control is heard as it moves, and the lane's growing points do not
+/// restart playback at every step.
+fn without_live(session: &Session, live: &[(Id, Id)]) -> Option<Session> {
+    if live.is_empty() {
+        return None;
+    }
+    let mut s = session.clone();
+    let drop_live = |owner: Id, envs: &mut Vec<crate::session::model::Envelope>| {
+        envs.retain(|e| !live.contains(&(owner, e.id)));
+    };
+    for t in &mut s.tracks {
+        drop_live(t.id, &mut t.envelopes);
+    }
+    for b in &mut s.buses {
+        drop_live(b.id, &mut b.envelopes);
+    }
+    Some(s)
 }
 
 impl Transport {
@@ -469,6 +492,9 @@ impl Transport {
 
     /// Stops and returns the position reached, if it was playing.
     pub fn stop(&self) -> Option<u64> {
+        if let Ok(mut l) = self.live.lock() {
+            l.clear();
+        }
         let mut cur = self.current.lock().ok()?;
         let mut r = cur.take()?;
         let pos = r.position();
@@ -572,7 +598,18 @@ impl Transport {
         true
     }
 
+    /// Sets the automation lanes being written (owner, lane id). They play
+    /// from the live controls until the set changes; follow with `sync`.
+    pub fn set_live(&self, lanes: Vec<(Id, Id)>) {
+        if let Ok(mut l) = self.live.lock() {
+            *l = lanes;
+        }
+    }
+
     pub fn sync(&self, session: &Session) -> Result<(), String> {
+        let live = self.live.lock().map(|l| l.clone()).unwrap_or_default();
+        let stripped = without_live(session, &live);
+        let session = stripped.as_ref().unwrap_or(session);
         // As it plays: multichannel clips' channels on their speakers.
         let session = &*super::speaker_feed::expanded(session);
         let mut cur = self.current.lock().map_err(|e| e.to_string())?;

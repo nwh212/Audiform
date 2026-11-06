@@ -148,6 +148,7 @@ pub fn run() {
             commands::transport::transport_audition_clip,
             commands::transport::transport_status,
             commands::transport::transport_set_mono_check,
+            commands::transport::transport_set_live,
             commands::transport::transport_set_metronome,
             commands::amp::amp_pick,
             commands::amp::amp_load_model,

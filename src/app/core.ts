@@ -670,6 +670,11 @@ export function setMonoCheck(on: boolean): Promise<void> {
   return invoke<void>("transport_set_mono_check", { on });
 }
 
+/** The automation lanes being written, as [owner, lane id] pairs: they play from the live controls while written. */
+export function transportSetLive(lanes: [string, string][]): Promise<void> {
+  return invoke<void>("transport_set_live", { lanes });
+}
+
 export function transportStatus(): Promise<TransportStatus> {
   return invoke<TransportStatus>("transport_status");
 }

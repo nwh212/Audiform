@@ -34,6 +34,8 @@ import { autoAt, newLane, targetKey, type AutoTarget } from "../panels/editor/au
 export const TOUCH_RELEASE_MS = 300;
 /** How often held values are written on while playing. */
 const TICK_MS = 50;
+/** How often the written lanes go out to the session while playing (they draw on screen). */
+const SEND_MS = 200;
 
 /** A control's new value, as an edit sets it. */
 export interface Captured {
@@ -140,6 +142,20 @@ export function thinPoints(points: readonly EnvelopePointDoc[], from: number, to
   return [...points.filter((p) => p.position < from || p.position > to), ...thinned].sort((x, y) => x.position - y.position);
 }
 
+/**
+ * `points` with a held stretch kept as its two ends: when the point at
+ * `at` (the write head) and the two before it have the same value, the
+ * middle one goes. Writing a held value then adds no point per step, so a
+ * long hold stays two points. Points after `at` are left alone.
+ */
+export function holdOnce(points: EnvelopePointDoc[], at: number): EnvelopePointDoc[] {
+  const i = points.findIndex((p) => p.position === at);
+  if (i < 2) return points;
+  const [a, b, c] = [points[i - 2]!, points[i - 1]!, points[i]!];
+  if (a.value === b.value && b.value === c.value) return [...points.slice(0, i - 1), ...points.slice(i)];
+  return points;
+}
+
 /** One lane being written. */
 interface Pass {
   target: AutoTarget;
@@ -164,6 +180,12 @@ export interface WriterDeps {
   rangeOf: (owner: TrackDoc | BusDoc, target: AutoTarget) => { top: number; bottom: number };
   /** Where a lane with no points sits: the control's own value. */
   restOf: (owner: TrackDoc | BusDoc, target: AutoTarget) => number;
+  /**
+   * Hears the lanes being written, as [owner, lane id] pairs, whenever
+   * they change. Playback hears those lanes' controls live instead of
+   * the lanes, and does not restart as their points grow.
+   */
+  onLive?: (lanes: [string, string][]) => void;
   now?: () => number;
 }
 
@@ -175,6 +197,8 @@ export class AutoWriter {
   private readonly now: () => number;
   private readonly listeners = new Set<(owners: string[]) => void>();
   private told = "";
+  private toldLanes = "";
+  private sent = -Infinity;
 
   constructor(private readonly deps: WriterDeps) {
     this.now = deps.now ?? (() => Date.now());
@@ -200,7 +224,20 @@ export class AutoWriter {
     };
   }
 
+  /** The lanes being written, as [owner, lane id] pairs. */
+  get lanes(): [string, string][] {
+    const out: [string, string][] = [];
+    for (const [owner, mine] of this.passes) for (const pass of mine.values()) out.push([owner, pass.laneId]);
+    return out;
+  }
+
   private tell(): void {
+    const lanes = this.lanes;
+    const lk = lanes.map((l) => l.join(":")).join("|");
+    if (lk !== this.toldLanes) {
+      this.toldLanes = lk;
+      this.deps.onLive?.(lanes);
+    }
     const owners = this.owners;
     const key = owners.join("|");
     if (key === this.told) return;
@@ -271,7 +308,7 @@ export class AutoWriter {
       // Playback jumped back (a loop): the pass starts over from here.
       pass.from = to;
     }
-    pass.points = writeSpan(pass.points, pass.last, to, pass.value);
+    pass.points = holdOnce(writeSpan(pass.points, pass.last, to, pass.value), to);
     pass.last = to;
   }
 
@@ -349,7 +386,10 @@ export class AutoWriter {
         }
       }
     }
-    if (changed.length) this.emit(doc, changed);
+    if (changed.length && t - this.sent >= SEND_MS) {
+      this.sent = t;
+      this.emit(doc, this.owners);
+    }
     if (!this.writing && this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;

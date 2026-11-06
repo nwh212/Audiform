@@ -12,6 +12,7 @@ import {
   sessionGet,
   sessionSetView,
   transportPlay,
+  transportSetLive,
   transportStatus,
   transportStop,
 } from "../app/core";
@@ -60,6 +61,9 @@ export const autoWriter = new AutoWriter({
   runner: () => sessionHistory,
   rangeOf: (o, t) => autoRange(o, catalog, t),
   restOf: (o, t) => autoRest(o, catalog, t),
+  onLive: (lanes) => {
+    if (isTauri()) void transportSetLive(lanes).catch(console.error);
+  },
 });
 session.rewrite = (op, label) => autoWriter.rewrite(op, label);
 transport.subscribe((s) => autoWriter.onTransport(s));

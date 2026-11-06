@@ -3,7 +3,7 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { describe, expect, it } from "vitest";
-import { AutoWriter, capturedValues, thinPoints, TOUCH_RELEASE_MS, writeSpan } from "./auto-write";
+import { AutoWriter, capturedValues, holdOnce, thinPoints, TOUCH_RELEASE_MS, writeSpan } from "./auto-write";
 import { WRITE_LABEL, type AutomationMode, type EnvelopeDoc, type Op, type SessionDoc, type TrackDoc } from "./session";
 
 const track = (over: Partial<TrackDoc> = {}): TrackDoc => ({
@@ -174,5 +174,13 @@ describe("AutoWriter", () => {
     move(5_000, -12);
     expect(lane()).toBeDefined();
     expect(lane()!.points.map((p) => p.value)).toEqual([-12]);
+  });
+});
+
+describe("holdOnce", () => {
+  const p = (position: number, value: number) => ({ position, value, curve: "linear" as const });
+  it("keeps a held stretch as its two ends, leaving later points alone", () => {
+    expect(holdOnce([p(0, 1), p(10, -6), p(20, -6), p(30, -6), p(90, 0)], 30)).toEqual([p(0, 1), p(10, -6), p(30, -6), p(90, 0)]);
+    expect(holdOnce([p(0, 1), p(10, -6), p(20, -3)], 20)).toEqual([p(0, 1), p(10, -6), p(20, -3)]);
   });
 });
