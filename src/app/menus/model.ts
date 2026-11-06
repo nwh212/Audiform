@@ -156,7 +156,7 @@ export const MENUS: readonly Menu[] = [
       ]),
       sub("Ripple Delete", [
         item("edit.ripple.clips", "Selected Clips"),
-        item("edit.ripple.time-clips", "Time Selection in Selected Clips", { pending: LATER }),
+        item("edit.ripple.time-clips", "Time Selection in Selected Clips"),
         item("edit.ripple.time-track", "Time Selection in Selected Track"),
         item("edit.ripple.time-all", "Time Selection in All Tracks"),
         item("edit.ripple.gap", "Gap Between Clips"),
@@ -371,6 +371,8 @@ export const MENUS: readonly Menu[] = [
       sep,
       item("clip.to-track-above", "Copy to Track Above"),
       item("clip.to-track-below", "Copy to Track Below"),
+      item("clip.bring-front", "Bring Clip to Front"),
+      item("clip.send-back", "Send Clip to Back"),
       sep,
       item("clip.remove-music", "Remove Music...", { pending: P7 }),
       item("clip.reveal", "Show in Files Panel"),

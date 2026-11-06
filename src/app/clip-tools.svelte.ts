@@ -13,6 +13,7 @@ import { newTrackNames } from "./track-names";
 import { alignPair, ALIGN_MAX_MS, alignOps, describeAlign } from "../panels/editor/align";
 import { findClips, mediaOf, clipsAt, splitClips, fadeClip, trimToPlayhead, trimToRange, loopChanges, copyMoved } from "../panels/editor/clip-edit";
 import { unstretch } from "../panels/editor/stretch";
+import { stackChanges } from "../panels/editor/clip-order";
 import { splitChannelsOp, splittable } from "../panels/properties/split-channels";
 import { editor } from "../stores/editor";
 import { sessionHistory } from "../stores/history";
@@ -381,6 +382,20 @@ export function createClipTools(deps: ClipToolsDeps) {
           run: () => moveClipsToTrack(dir),
           enabled: () => clipsTrackMove(dir) !== null,
           reason: () => (editor.current().selectedClips.size === 0 ? "Select clips first." : dir < 0 ? "The clips are already on the top track, or one is locked." : "A selected clip is locked, or is on a MIDI track at the bottom."),
+        }),
+      ),
+      ...(["front", "back"] as const).map((move) =>
+        actions.register({
+          id: move === "front" ? "clip.bring-front" : "clip.send-back",
+          run: async () => {
+            const doc = session.current;
+            if (!doc) return;
+            const changes = stackChanges(doc, editor.current().selectedClips, move);
+            if (changes.length === 0) return showNotice(move === "front" ? "The selected clips are already in front, or locked." : "The selected clips are already at the back, or locked.");
+            await editClips(move === "front" ? "Bring Clip to Front" : "Send Clip to Back", changes);
+          },
+          enabled: () => editor.current().selectedClips.size > 0,
+          reason: () => "Select a clip first.",
         }),
       ),
       ...([-1, 1] as const).map((dir) =>

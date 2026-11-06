@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Bring Clip to Front** and **Send Clip to Back** (Clip menu and the clip right-click menu) choose which of two overlapping clips plays on top.
 - **Ripple delete in selected clips** (Edit > Ripple Delete > Time Selection in Selected Clips, Alt+Backspace) cuts the time selection out of the selected clips only and closes the gap after them.
 - **Five new effects** from Altered Audio Editor. **Expander / Gate** (Dynamics) turns quiet sound down gently or shuts it off. **Dynamics Curve** (Dynamics) draws the whole response as one curve on a graph, with 19 starting curves. **Multiband Compressor** (Dynamics) compresses low, middle and high bands on their own. **Stereo Expander** (Stereo) widens or narrows the picture while keeping the bass in the middle. **Distortion** (Amplitude) has soft clip, hard clip, tube and fold shapes with a tone control. Expander / Gate and Dynamics Curve can listen to another track as a sidechain.
 - **Waveform editor: Snap Selection to Zero Crossings and Paste with Crossfade** (Edit menu). The first moves both edges of the selection to the nearest spot within 20 ms where the sound crosses zero, so a cut there does not click. The second pastes and crossfades both joins over a length you choose, using the audio that ran on in its own file. Taken from Altered Audio Editor.

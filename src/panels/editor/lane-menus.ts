@@ -225,6 +225,8 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
       act("Separate Stems (quick model)", "clip.separate-quick"),
       act("Group Clips", "clip.group"),
       act("Ungroup Clips", "clip.ungroup"),
+      act("Bring Clip to Front", "clip.bring-front"),
+      act("Send Clip to Back", "clip.send-back"),
       {
         kind: "sub",
         label: "Audio Type",

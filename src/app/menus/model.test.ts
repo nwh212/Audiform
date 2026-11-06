@@ -305,6 +305,9 @@ describe("menu model", () => {
       "window.addons-reload",
       "edit.paste-crossfade",
       "edit.snap-zero",
+      "edit.ripple.time-clips",
+      "clip.bring-front",
+      "clip.send-back",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

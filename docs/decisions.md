@@ -2591,3 +2591,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Ripple Delete > Time Selection in Selected Clips (Alt+Backspace, the chord approved on 2026-10-23 and held until now) is built. It removes the time selection from the selected clips only and closes the gap on their tracks: clips that are not selected are never cut, and a locked clip that is not selected does not block the edit, but later clips on those tracks still move left. `rippleDeleteRange` gains an optional set of clips to limit the cut.
 
 **Why.** From the intake list (AAE, with its tests).
+
+## 2026-11-06: Altered Audio Editor intake: Bring Clip to Front and Send Clip to Back
+
+**Decision.** Clip > Bring Clip to Front and Clip > Send Clip to Back, also on the clip right-click menu, set where overlapping clips stack on their track. They use the clip `layer` change Audiform already had, so the session needs no new data. Locked clips stay where they are; with nothing to move, a notice says so. No shortcut.
+
+**Why.** From the intake list (AAE `clip-order.ts`, taken with its tests).
