@@ -2663,3 +2663,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Every output stream (playback, the Files panel preview, input monitoring and the live MIDI player) now writes silence for a few device buffers before it closes (`host::Hush`, `host::QuietStream`). The live MIDI player keeps at least two device buffers plus one block queued (`ahead_for`), instead of a fixed 256 frames.
 
 **Why.** Reported: after Stop, the audio "drags and glitches and keeps playing without progressing", and live MIDI was "extremely stuttery, even with 512 on ASIO". An ASIO driver keeps running while any stream is open on it (an armed MIDI track's live player, input monitoring), and it replays whatever a closed stream last left in its buffers. Closing on silence leaves silence to replay. The live player held 256 to 384 frames while a 512-frame ASIO buffer asks for 512 each callback, so it ran dry on every buffer.
+
+## 2026-11-06: Fixes from the 0.7.2 test pass
+
+- The lane pointer follows a tool change at once (R, V, T, Y): the last hover is kept and checked again when the tool changes. Before, the Razor pointer appeared only after the mouse moved.
+- The plain wheel over the session's clips and track headers scrolls the tracks itself (lines and pages turned into pixels) instead of leaving it to the browser, which in the app did nothing.
+- Help > Check for Updates says "Checking for updates..." at once and shows its answer in a dialog (newest version, newer version with its page, or why it could not check). The answer was only a brief status-bar line before, which read as nothing happening.

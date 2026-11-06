@@ -58,6 +58,9 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Fixed
 
+- The Razor pointer shows as soon as you press R, without moving the mouse.
+- The mouse wheel over the session's tracks scrolls them up and down again.
+- Help > Check for Updates shows its answer in a window.
 - **Stop no longer leaves audio stuttering on** with ASIO while a MIDI track is armed or an input is monitored.
 - **Live MIDI playing no longer stutters** at larger ASIO buffer sizes.
 - Audio Separation refused to run from the test build's portable copy ("This engine works only with Audiform"), because that copy was renamed with its build number and the engine checks the program's name. The portable copy is now Audiform.exe in a folder named for the build, as in releases, and the message says what to do if a renamed copy is used.
