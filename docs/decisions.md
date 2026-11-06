@@ -2567,3 +2567,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** AAE's Plosive Tamer (`dsp/effects/plosive.rs`, id `altaudio.plosive`) comes in unchanged with its tests: a low band under the Corner frequency is followed against the voice's body (500 Hz to 3 kHz), and when it rises more than Trigger dB above it a low shelf cuts by the excess, up to Most reduction, re-aimed every 32 frames. Its three presets join the built-in Dynamics presets as Plosives - Close Mic, Firm / Standard Mic / Light Touch.
 
 **Why.** From the intake list (AAE 8f4ccc0). A high-pass filter thins every word; this acts only on pops.
+
+## 2026-11-06: Altered Audio Editor intake: audiobook delivery check
+
+**Decision.** Check Loudness gains "Audiobook, ACX (RMS, peak, noise floor)": average level -23 to -18 dBFS, sample peak -3 dBFS or lower, noise floor -60 dBFS or lower, each graded pass, close (within 1 dB) or fix, with digital silence failing the check. Advice comes in order of importance, and a Raise or Lower Master button appears when that gain (aimed at -20.5 dBFS) keeps peaks within -3 dBFS. The loudness report gains `noise_floor` (the quietest half second that is not digital silence, in 50 ms windows) and `silent_seconds`.
+
+**Why.** From the intake list (AAE 8f4ccc0, `delivery.ts` taken with its tests). Audiform's RMS (added the same day for Loudness Match) is used instead of AAE's optional one. The advice for digital silence names copying room tone over it, since Fill with Room Tone was left out by the project lead. The figures follow the published ACX requirements; the dialog says a pass is a good sign, not a guarantee.

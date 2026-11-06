@@ -21,6 +21,10 @@ export interface LoudnessReport {
   samplePeak: number;
   /** Average (RMS) level of both channels together, dBFS. */
   rms: number;
+  /** Quietest half second that is not digital silence, dBFS RMS (the room tone); null when there is none. */
+  noiseFloor?: number | null;
+  /** Seconds of digital silence. */
+  silentSeconds?: number;
   seconds: number;
   cancelled: boolean;
 }

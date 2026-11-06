@@ -5,10 +5,12 @@
 
   File > Check Loudness: measures the mix (or the time selection) and
   shows pass or fail against a publishing target, with one-click master
-  gain when that alone would reach the target safely.
+  gain when that alone would reach the target safely. The audiobook
+  check judges average level, peak and noise floor instead.
 -->
 <script lang="ts">
-  import { BROADCAST_REGIONS, evaluate, regionById, targetById, targetsFor, type Grade, type LoudnessReport } from "./loudness";
+  import { acxCheck } from "./delivery";
+  import { BROADCAST_REGIONS, DEFAULT_TARGET, evaluate, regionById, targetById, targetsFor, type Grade, type LoudnessReport } from "./loudness";
 
   interface Props {
     report: LoudnessReport | null;
@@ -29,9 +31,13 @@
 
   const { report, progress, targetId, region, onRegion, scope, onTarget, onMeasure, onCancel, onApplyGain, onClose }: Props = $props();
 
-  const target = $derived(targetById(targetId, region));
+  /** The audiobook check has its own rules (average level, peak and noise floor), not a loudness target. */
+  const ACX_ID = "acx";
+  const acxOn = $derived(targetId === ACX_ID);
+  const target = $derived(targetById(acxOn ? DEFAULT_TARGET : targetId, region));
   const targets = $derived(targetsFor(region));
-  const verdict = $derived(report && !report.cancelled ? evaluate(report, target) : null);
+  const verdict = $derived(report && !report.cancelled && !acxOn ? evaluate(report, target) : null);
+  const acx = $derived(report && !report.cancelled && acxOn ? acxCheck(report) : null);
   const n = (v: number | null | undefined, unit: string) => (v === null || v === undefined || !Number.isFinite(v) ? "-" : `${v.toFixed(1)} ${unit}`);
   const label: Record<Grade, string> = { pass: "Pass", close: "Close", fail: "Fix" };
   const time = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -49,9 +55,10 @@
         {#each targets as t (t.id)}
           <option value={t.id}>{t.name}</option>
         {/each}
+        <option value={ACX_ID}>Audiobook, ACX (RMS, peak, noise floor)</option>
       </select>
     </label>
-    {#if target.id === "broadcast"}
+    {#if !acxOn && target.id === "broadcast"}
       <label class="target">
         <span>Region</span>
         <select value={region} onchange={(e) => onRegion(e.currentTarget.value)} disabled={progress !== null}>
@@ -62,11 +69,30 @@
       </label>
       <p class="scope">Broadcasters can set their own rules. Check the delivery spec you were given; {regionById(region).standard} is the usual starting point.</p>
     {/if}
-    <p class="scope">Measuring: {scope}. True peaks should stay at or below {target.peak} dBTP.</p>
+    {#if acxOn}
+      <p class="scope">Measuring: {scope}. Narration is judged on average level, peak and room tone, not LUFS. Measure the whole finished file, with room tone at the start and end.</p>
+    {:else}
+      <p class="scope">Measuring: {scope}. True peaks should stay at or below {target.peak} dBTP.</p>
+    {/if}
 
     {#if progress !== null}
       <div class="bar"><div style:width="{Math.round(progress * 100)}%"></div></div>
       <p class="scope">Measuring the mix... {Math.round(progress * 100)}%</p>
+    {:else if acx && report}
+      <div class="cards three">
+        {#each acx.rules as rule (rule.id)}
+          <div class="card {rule.grade}">
+            <span class="k">{rule.name}</span>
+            <span class="v">{n(rule.value, "dB")}</span>
+            <span class="s">{rule.limit}</span>
+            <span class="badge">{label[rule.grade]}</span>
+          </div>
+        {/each}
+      </div>
+      {#each acx.advice as line (line)}
+        <p class="advice">{line}</p>
+      {/each}
+      <p class="scope">Length {time(report.seconds)}. A pass here is a good sign, not a guarantee: the audiobook service also listens.</p>
     {:else if verdict && report}
       <div class="cards">
         <div class="card {verdict.loudness}">
@@ -101,6 +127,11 @@
       {#if progress !== null}
         <button type="button" onclick={onCancel}>Cancel</button>
       {:else}
+        {#if acx && acx.gainToTarget !== null && acx.gainIsSafe && acx.rules[0]?.grade !== "pass"}
+          <button type="button" onclick={() => onApplyGain(acx.gainToTarget ?? 0)}>
+            {acx.gainToTarget > 0 ? "Raise" : "Lower"} Master {Math.abs(acx.gainToTarget).toFixed(1)} dB
+          </button>
+        {/if}
         {#if verdict && verdict.loudness !== "pass" && verdict.gainIsSafe}
           <button type="button" onclick={() => onApplyGain(verdict.gainToTarget)}>
             {verdict.gainToTarget > 0 ? "Raise" : "Lower"} Master {Math.abs(verdict.gainToTarget).toFixed(1)} dB
@@ -179,6 +210,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+  }
+
+  .cards.three {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 
   .card {
