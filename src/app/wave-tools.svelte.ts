@@ -14,12 +14,13 @@ import { rasterize } from "../panels/editor/spectrum";
 import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels } from "../panels/editor/wave-channels";
 import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, crossfadeSeams, deleteRange, fadeRange, mixPasteAt, oneChannelBoard, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
 import { embedList } from "../panels/markers/chapters";
-import { newMarker, nextMarkerName } from "../panels/markers/markers";
+import { deleteLabel, newMarker, nextMarkerName, pickedMarkers } from "../panels/markers/markers";
 import { addSlot, chainOf } from "../panels/voice-chain/chain";
 import { effectWindowRequest, trialSlot } from "../panels/voice-chain/effect-window";
 import { sharedCatalog } from "../stores/fx-catalog";
 import { freshCopy, isPlugin, type LastApplied, repeatName } from "./repeat-last";
 import { editor } from "../stores/editor";
+import { sessionHistory } from "../stores/history";
 import { exactSamples } from "../stores/exact-samples";
 import { peaks, session, transport } from "../stores/open-session";
 import { type ClipDoc, type EffectChainDoc, type Op, sessionEnd } from "../stores/session";
@@ -90,6 +91,12 @@ export function createWaveTools(deps: WaveToolsDeps) {
   const { actions, dock, showError, showNotice, ask, promptText, uuid, inWave, currentArea, selectedClipDocs, clipBoard, exporting, setExporting, recording, finishRecord, spaceToggle, syncSessionMedia, askNewAudio, pasteToNewFile, pickSaveAudio } = deps;
 
   const waveIsOpen = () => inWave() && waveFile.current() !== null;
+  /** The document whose markers the Markers panel shows: the open audio file in front, else the session. */
+  const markerDoc = () => (waveIsOpen() ? wave.current : session.current);
+  async function markerEdit(label: string, op: Op): Promise<void> {
+    if (waveIsOpen()) await waveEdit(label, op);
+    else await session.edit(label, op, sessionHistory);
+  }
   const waveFocus = () => waveIsOpen() && currentArea() !== "files" && currentArea() !== "libraries";
   const waveSel = (): [number, number] | null => {
     const d = wave.current;
@@ -933,6 +940,52 @@ export function createWaveTools(deps: WaveToolsDeps) {
           if (await confirmWaveDiscard()) await closeAudioFile();
         },
         label: () => "Close Audio File",
+      }),
+      // Markers the Markers panel has picked: Rename and Delete act on the Waveform editor's file when it is in front, else the session.
+      actions.register({
+        id: "edit.marker.rename",
+        run: async () => {
+          const doc = markerDoc();
+          if (!doc) return;
+          const picked = pickedMarkers(doc.markers, editor.current().selectedMarkers);
+          const m = picked.length === 1 ? picked[0]! : null;
+          if (!m) return;
+          const name = (await promptText("Rename Marker", "Marker name", m.name))?.trim();
+          if (!name || name === m.name) return;
+          await markerEdit("Rename Marker", { op: "set_markers", changes: [{ id: m.id, name }] });
+        },
+        enabled: () => {
+          const doc = markerDoc();
+          return !!doc && pickedMarkers(doc.markers, editor.current().selectedMarkers).length === 1;
+        },
+        reason: () => "Pick one marker in the Markers panel first.",
+      }),
+      actions.register({
+        id: "edit.marker.delete",
+        run: async () => {
+          const doc = markerDoc();
+          if (!doc) return;
+          const ids = pickedMarkers(doc.markers, editor.current().selectedMarkers).map((m) => m.id);
+          if (ids.length === 0) return;
+          await markerEdit(deleteLabel(ids.length), { op: "remove_markers", ids });
+          editor.selectMarkers([]);
+        },
+        enabled: () => {
+          const doc = markerDoc();
+          return !!doc && pickedMarkers(doc.markers, editor.current().selectedMarkers).length > 0;
+        },
+        reason: () => "Pick one or more markers in the Markers panel first.",
+      }),
+      actions.register({
+        id: "edit.marker.delete-all",
+        run: async () => {
+          const doc = markerDoc();
+          if (!doc || doc.markers.length === 0) return;
+          await markerEdit("Delete All Markers", { op: "remove_markers", ids: doc.markers.map((m) => m.id) });
+          editor.selectMarkers([]);
+        },
+        enabled: () => (markerDoc()?.markers.length ?? 0) > 0,
+        reason: () => "There are no markers.",
       }),
       ov(waveIsOpen, {
         id: "edit.marker.cue",

@@ -310,6 +310,9 @@ describe("menu model", () => {
       "clip.send-back",
       "multitrack.vis.only-bus",
       "edit.silence-time-clips",
+      "edit.marker.rename",
+      "edit.marker.delete",
+      "edit.marker.delete-all",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

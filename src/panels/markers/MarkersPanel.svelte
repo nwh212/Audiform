@@ -17,7 +17,7 @@
   import type { MarkerChange, MarkerDoc, MarkerKind, SessionDoc, SessionStore, ViewDoc } from "../../stores/session";
   import type { TransportStore } from "../../stores/transport";
   import { formatIn } from "../editor/timeline";
-  import { KIND_LABELS, markerCss } from "./markers";
+  import { KIND_LABELS, markerCss, markersBetween } from "./markers";
   import { chapterUrl, isChapterUrl, titleTips } from "./chapters";
 
   interface Props {
@@ -96,12 +96,42 @@
     const v = value.trim();
     if (v && v !== m.name) edit("Rename Marker", m, { name: v });
   }
+
+  /** How many of the picked markers are still in the list. */
+  const pickedCount = $derived(doc ? doc.markers.filter((m) => ed.selectedMarkers.has(m.id)).length : 0);
+  /** The row a Shift+click run starts from. */
+  let anchor: string | null = null;
+
+  /**
+   * A click on a row. Plain click picks that marker and jumps there; Ctrl (or Cmd) adds or removes it
+   * from the pick; Shift picks every marker from the last plain click to this one.
+   */
+  function pick(e: MouseEvent, m: MarkerDoc) {
+    if (!doc) return;
+    if (e.ctrlKey || e.metaKey) {
+      const next = new Set(ed.selectedMarkers);
+      if (next.has(m.id)) next.delete(m.id);
+      else next.add(m.id);
+      anchor = m.id;
+      editor.selectMarkers(next);
+      return;
+    }
+    if (e.shiftKey && anchor) {
+      editor.selectMarkers(markersBetween(doc.markers, anchor, m.id));
+      return;
+    }
+    anchor = m.id;
+    editor.selectMarkers([m.id]);
+    void tp.seek(m.position);
+  }
 </script>
 
 <section class="markers" aria-label="Markers">
   <div class="toolbar">
     <button type="button" onclick={() => void actions.run("edit.marker.cue")}>+ Cue</button>
     <button type="button" disabled={!timeSel} title="Needs a time selection" onclick={() => void actions.run("edit.marker.range")}>+ Range</button>
+    <button type="button" disabled={pickedCount === 0} title="Delete the picked markers. Click a row to pick one; Ctrl+click adds, Shift+click picks a run." onclick={() => void actions.run("edit.marker.delete")}>Delete</button>
+    <button type="button" disabled={!doc || doc.markers.length === 0} title="Delete every marker. Undo brings them back." onclick={() => void actions.run("edit.marker.delete-all")}>Delete All</button>
   </div>
   {#if !doc || doc.markers.length === 0}
     <p class="empty">No markers yet. Add one at the playhead with Edit &gt; Markers, or right-click the ruler.</p>
@@ -117,7 +147,7 @@
       </div>
       {#each doc.markers as m (m.id)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="row" role="row" tabindex="-1" onclick={() => void tp.seek(m.position)}>
+        <div class="row" class:picked={ed.selectedMarkers.has(m.id)} role="row" tabindex="-1" onclick={(e) => pick(e, m)}>
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
           <label class="swatch" title={m.color ? "Change color (right-click to go back to the type's color)" : "Pick a color for this marker"} style:background={markerCss(m)} onclick={(e) => e.stopPropagation()} oncontextmenu={(e) => { e.preventDefault(); if (m.color) edit("Marker Color", m, { color: "" }); }}>
             <input type="color" value={m.color ?? "#c8b040"} aria-label="Marker color" onchange={(e) => edit("Marker Color", m, { color: e.currentTarget.value })} />
@@ -284,6 +314,11 @@
 
   .row:hover:not(.head) {
     background: var(--surface-2);
+  }
+
+  .row.picked,
+  .row.picked:hover:not(.head) {
+    background: var(--accent-dim);
   }
 
   .head {

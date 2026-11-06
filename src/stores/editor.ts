@@ -25,6 +25,8 @@ export interface SnapSettings {
 export interface EditorState {
   selectedTrack: string | null;
   selectedClips: ReadonlySet<string>;
+  /** Markers picked in the Markers panel, by id. Independent of the clip selection. */
+  selectedMarkers: ReadonlySet<string>;
   timeFormat: TimeFormat;
   /** Width of the lanes in pixels, for zoom commands. */
   width: number;
@@ -80,6 +82,7 @@ export type EditorTool = "move" | "razor" | "slip" | "time";
 const initial: EditorState = {
   selectedTrack: null,
   selectedClips: new Set(),
+  selectedMarkers: new Set(),
   timeFormat: "time",
   width: 800,
   snap: { on: true, clips: true, playhead: true, markers: true, ruler: true },
@@ -106,6 +109,7 @@ export const editor: Readable<EditorState> & {
   current(): EditorState;
   selectTrack(id: string | null): void;
   selectClips(ids: Iterable<string>, track?: string | null): void;
+  selectMarkers(ids: Iterable<string>): void;
   setTimeFormat(f: TimeFormat): void;
   setWidth(w: number): void;
   setSnap(patch: Partial<SnapSettings>): void;
@@ -128,6 +132,7 @@ export const editor: Readable<EditorState> & {
   subscribe: state.subscribe,
   current: () => value,
   selectTrack: (id) => state.update((s) => ({ ...s, selectedTrack: id, selectedClips: new Set() })),
+  selectMarkers: (ids) => state.update((s) => ({ ...s, selectedMarkers: new Set(ids) })),
   selectClips: (ids, track) =>
     state.update((s) => ({ ...s, selectedClips: new Set(ids), selectedTrack: track === undefined ? s.selectedTrack : track })),
   setTimeFormat: (f) => state.update((s) => ({ ...s, timeFormat: f })),

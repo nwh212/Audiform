@@ -203,6 +203,10 @@ export const MENUS: readonly Menu[] = [
         item("edit.marker.chapter", "Add Chapter Marker"),
         item("edit.marker.ad-slot", "Add Ad Slot..."),
         item("edit.marker.social", "Add Social Clip"),
+        sep,
+        item("edit.marker.rename", "Rename Selected Marker..."),
+        item("edit.marker.delete", "Delete Selected Markers"),
+        item("edit.marker.delete-all", "Delete All Markers"),
       ]),
       sub("Snapping", [
         item("edit.snap.on", "Snap On"),

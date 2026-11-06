@@ -2609,3 +2609,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Silence Time Selection in Selected Clips (also on the lane right-click menu) dips each selected clip's volume envelope to the floor across the time selection, with 5 ms ramps on each side so there is no click. The audio is not touched: the dip is ordinary envelope points that can be dragged, reshaped or removed, and it is one undoable step. Locked clips are left alone. No shortcut.
 
 **Why.** From the intake list (AAE `silence-span.ts`, taken with its tests). Non-destructive fits the multitrack rule that source audio is never changed outside the Waveform editor.
+
+## 2026-11-06: Altered Audio Editor intake: picking and deleting markers
+
+**Decision.** The Markers panel picks rows: a click picks one marker and jumps there, Ctrl+click adds or removes one, Shift+click picks a run. The panel gains Delete and Delete All buttons, and Edit > Markers gains Rename Selected Marker, Delete Selected Markers and Delete All Markers. They act on the open audio file when the Waveform editor is in front, else on the session, and each is one undoable step. The pick lives in the editor store (`selectedMarkers`), apart from the clip selection. No shortcuts.
+
+**Why.** From the intake list (AAE, taken with its tests). Audiform's panel keeps its own Range button rule (it follows the time selection of whichever editor is in front).
