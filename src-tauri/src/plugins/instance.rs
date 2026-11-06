@@ -477,7 +477,18 @@ impl Host {
                 host.keyed_latency = keyed_latency.unwrap_or(latency) as usize;
                 host.params = params;
                 host.has_editor = has_editor;
-                if main.is_some() {
+                if let Some(asked) = main {
+                    crate::engine::host::log(&format!(
+                        "plug-in layout: \"{}\" asked for {}, took {} in and {} out",
+                        found.info.name,
+                        if asked == 0 {
+                            "its own".to_string()
+                        } else {
+                            format!("{} speakers", asked.count_ones())
+                        },
+                        inputs.join(" "),
+                        outputs.join(" "),
+                    ));
                     host.inputs = inputs;
                     host.outputs = outputs;
                 }

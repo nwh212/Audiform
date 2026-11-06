@@ -44,6 +44,9 @@ pub fn by_name(name: &str, own: &[String], chain: &[String]) -> Option<usize> {
         "Rss" => &["Rs"],
         "Lrs" => &["Ls"],
         "Rrs" => &["Rs"],
+        // A 7.1 "cinema" plug-in's center fronts stand in for the sides.
+        "Lc" => &["Lss", "Lrs"],
+        "Rc" => &["Rss", "Rrs"],
         "Ltf" | "Ltr" => &["Ltm"],
         "Rtf" | "Rtr" => &["Rtm"],
         "Ltm" => &["Ltf"],

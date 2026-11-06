@@ -445,6 +445,17 @@ unsafe fn setup_buses(
         processor.getBusArrangement(dir, i, &mut a);
         a
     };
+    // The plug-in's own main layout, before anything is asked of it.
+    let own_in = if nin > 0 {
+        current(kInput as i32, 0)
+    } else {
+        0
+    };
+    let own_out = if nout > 0 {
+        current(kOutput as i32, 0)
+    } else {
+        0
+    };
     let first = |dir: i32| match main {
         None => SpeakerArr::kStereo,
         Some(0) => current(dir, 0),
@@ -469,6 +480,38 @@ unsafe fn setup_buses(
         })
         .collect();
     processor.setBusArrangements(ins.as_mut_ptr(), nin, outs.as_mut_ptr(), nout);
+    // A surround layout it refused: try the others with as many speakers
+    // (7.1 comes as "music", with side surrounds, and as "cinema", with
+    // center fronts), then its own layout when that has as many. Else it
+    // stays as it settled (usually stereo), and the host routes L and R.
+    if let Some(want) = main.filter(|&a| a != 0) {
+        let main_out = |c: &dyn Fn(i32, i32) -> SpeakerArrangement| {
+            if nout > 0 {
+                c(kOutput as i32, 0)
+            } else {
+                c(kInput as i32, 0)
+            }
+        };
+        if main_out(&current) != want {
+            let n = want.count_ones();
+            let mut tries: Vec<SpeakerArrangement> = alternates(n);
+            if own_out.count_ones() == n || own_in.count_ones() == n {
+                tries.push(if own_out != 0 { own_out } else { own_in });
+            }
+            for a in tries.into_iter().filter(|&a| a != want) {
+                if nin > 0 {
+                    ins[0] = a;
+                }
+                if nout > 0 {
+                    outs[0] = a;
+                }
+                processor.setBusArrangements(ins.as_mut_ptr(), nin, outs.as_mut_ptr(), nout);
+                if main_out(&current) == a {
+                    break;
+                }
+            }
+        }
+    }
     if nin > 0 {
         component.activateBus(kAudio as i32, kInput as i32, 0, 1);
     }
@@ -494,6 +537,30 @@ unsafe fn setup_buses(
             Vec::new()
         },
     )
+}
+
+/// Other common VST3 layouts with `n` speakers, to offer a plug-in that
+/// refused the one asked for.
+fn alternates(n: u32) -> Vec<SpeakerArrangement> {
+    // Bits: L R C LFE Ls Rs Lc Rc Cs Sl Sr Tc Tfl Tfc Tfr Trl Trc Trr.
+    let bits = |b: &[u32]| b.iter().fold(0u64, |m, &k| m | (1u64 << k));
+    match n {
+        6 => vec![bits(&[0, 1, 2, 3, 4, 5]), bits(&[0, 1, 2, 3, 9, 10])],
+        7 => vec![bits(&[0, 1, 2, 3, 4, 5, 8]), bits(&[0, 1, 2, 3, 9, 10, 8])],
+        8 => vec![
+            bits(&[0, 1, 2, 3, 4, 5, 9, 10]),
+            bits(&[0, 1, 2, 3, 4, 5, 6, 7]),
+        ],
+        10 => vec![
+            bits(&[0, 1, 2, 3, 4, 5, 12, 14, 15, 17]),
+            bits(&[0, 1, 2, 3, 9, 10, 12, 14, 15, 17]),
+        ],
+        12 => vec![
+            bits(&[0, 1, 2, 3, 4, 5, 9, 10, 12, 14, 15, 17]),
+            bits(&[0, 1, 2, 3, 4, 5, 6, 7, 12, 14, 15, 17]),
+        ],
+        _ => Vec::new(),
+    }
 }
 
 /// The speakers of a VST3 arrangement by name, in channel order, named as

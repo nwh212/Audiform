@@ -2692,3 +2692,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 - The Razor pointer still waited for a mouse move: the window's browser engine repaints the pointer only when something under the mouse changes. A tool change now also lays a transparent layer over the lanes for two frames, which makes it look the pointer up again at once.
 - The plain wheel over the track headers zooms the tracks vertically again, every open track taller or shorter evenly, as the track scrollbar's wheel does (the project lead). Over the clips it still scrolls the tracks; Alt+wheel over a header still resizes just that track.
+
+## 2026-11-06: Surround plug-ins: other layouts tried before stereo
+
+**Decision.** When a plug-in refuses the surround layout asked for, the plug-in host now tries the other common layouts with as many speakers (7.1 "music" with side surrounds and 7.1 "cinema" with center fronts; 5.1, 6.1, 7.1.2 and 7.1.4 variants), then the plug-in's own layout when it has as many speakers, before it settles for stereo. A cinema plug-in's Lc and Rc stand in for the file's side pair, so no channel is dropped. The log says what each plug-in took ("plug-in layout: ... took L R C LFE Ls Rs Lss Rss in and ... out").
+
+**Why.** The second test pass still heard only L and R through a 7.1 plug-in. One likely cause is a plug-in that offers 7.1 in another arrangement than the one asked for. Not tried with a real surround plug-in here (the test plug-in is stereo). Separately, Waveform editor playback folds a surround file to stereo before the rack, so a plug-in there hears L and R sums while playing; Apply runs it on every channel.
