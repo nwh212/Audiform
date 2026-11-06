@@ -2675,3 +2675,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** In the Waveform editor, holding a channel's button (L, R, C, LFE and so on) for about half a second switches every other channel off; holding it again switches them all back on (`soloChannel`, already used by Up and Down on stereo files). A plain click still switches just that channel.
 
 **Why.** Asked in the test pass: on a multichannel file, picking one channel took a click on every other one.
+
+## 2026-11-06: Plug-ins on surround chains are asked for the surround layout
+
+**Decision.** When a chain runs on more than two channels (a 5.1, 7.1 or 7.1.4 file in the Waveform editor, or a 3D Space track or bus) and a plug-in slot has no routing of its own, the plug-in is now asked for that speaker layout on its main buses (`instance::with_layout`, `arrangement_for`: Audiform's channel names to VST3 speaker bits). A plug-in that accepts it hears and writes every channel; one that refuses keeps the stereo it had, routed to L and R as before. "Plug-in uses its own channels" and hand-set routing still win. A plug-in window opening takes whichever layout is already running, so it never restarts a playing plug-in.
+
+**Why.** Reported in the test pass: a 7.1 plug-in on a 7.1 file passed only L and R. Plug-ins ran in stereo unless their routing had "own channels" switched on, which nobody would think to do.

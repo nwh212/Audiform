@@ -650,13 +650,16 @@ impl ChainProcessor {
             return None;
         }
         let ch = names.len().max(1);
+        // Plug-ins on a surround chain are asked for its speaker layout.
+        let layout = crate::plugins::instance::arrangement_for(names);
         let mut routes = Vec::new();
         let mut stages: Vec<Box<dyn Processor>> = Vec::new();
         let mut slots = Vec::new();
         let mut keys = Vec::new();
         let mut before = 0;
         for s in chain.slots.iter().take(MAX_SLOTS).filter(|s| s.enabled) {
-            if let (Some(p), Some(i)) = (build_for(s, rate, names), info(&s.effect)) {
+            let built = crate::plugins::instance::with_layout(layout, || build_for(s, rate, names));
+            if let (Some(p), Some(i)) = (built, info(&s.effect)) {
                 keys.push(s.sidechain.map(|id| (id, Delay::new(before))));
                 let (ins, outs) = p.channels();
                 let map = routing::resolve(s.routing.as_ref(), &ins, &outs, names);

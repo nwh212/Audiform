@@ -400,7 +400,7 @@ impl Host {
         rate: u32,
         state: Option<String>,
         params: Vec<(u32, f64)>,
-        wide: bool,
+        main: Option<u64>,
     ) -> Result<Host, String> {
         let conn = conn_for(&found.info.vendor, rate)?;
         let id = conn.next_id.fetch_add(1, Ordering::SeqCst);
@@ -457,7 +457,7 @@ impl Host {
             rate: f64::from(rate),
             state,
             params,
-            main: wide.then_some(0),
+            main,
         };
         match host.request(&load, LOAD_TIMEOUT) {
             Some(Message::Loaded {
@@ -477,7 +477,7 @@ impl Host {
                 host.keyed_latency = keyed_latency.unwrap_or(latency) as usize;
                 host.params = params;
                 host.has_editor = has_editor;
-                if wide {
+                if main.is_some() {
                     host.inputs = inputs;
                     host.outputs = outputs;
                 }
@@ -802,7 +802,8 @@ pub fn block_position() -> i64 {
 struct Pooled {
     effect: String,
     rate: u32,
-    wide: bool,
+    /// The main buses' layout asked for (see [`main_of`]).
+    main: Option<u64>,
     host: Arc<Mutex<Host>>,
 }
 
@@ -862,6 +863,88 @@ fn wide_of(slot: &EffectSlot) -> bool {
     slot.routing.as_ref().is_some_and(|r| r.wide)
 }
 
+thread_local! {
+    /// The speaker layout of the chain being built, when it has more than
+    /// two channels (see [`with_layout`]).
+    static LAYOUT: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+/// Builds with plug-ins asked for `layout` (a VST3 speaker arrangement) on
+/// their main buses: a chain running on a surround file or speaker bed.
+/// A plug-in that takes it hears and writes every channel; one that
+/// refuses stays stereo. Slots with their own routing are left as set.
+pub fn with_layout<T>(layout: Option<u64>, f: impl FnOnce() -> T) -> T {
+    let was = LAYOUT.with(|c| c.replace(layout));
+    let out = f();
+    LAYOUT.with(|c| c.set(was));
+    out
+}
+
+/// The VST3 speaker arrangement for channels named as Audiform names them
+/// (`dsp::channels::labels`): one speaker bit per channel. None for stereo
+/// or less, or for channels without a known speaker (numbered ones).
+pub fn arrangement_for(names: &[String]) -> Option<u64> {
+    if names.len() <= 2 {
+        return None;
+    }
+    let mut mask = 0u64;
+    for n in names {
+        let bit = match n.as_str() {
+            "L" => 0,
+            "R" => 1,
+            "C" => 2,
+            "LFE" => 3,
+            "Ls" | "Lrs" => 4,
+            "Rs" | "Rrs" => 5,
+            "Lc" => 6,
+            "Rc" => 7,
+            "Cs" => 8,
+            "Lss" => 9,
+            "Rss" => 10,
+            "Tc" => 11,
+            "Ltf" => 12,
+            "Ctf" => 13,
+            "Rtf" => 14,
+            "Ltr" => 15,
+            "Ctr" => 16,
+            "Rtr" => 17,
+            _ => return None,
+        };
+        if mask & (1 << bit) != 0 {
+            return None;
+        }
+        mask |= 1 << bit;
+    }
+    Some(mask)
+}
+
+/// The main buses' layout to ask a slot's plug-in for: its own when the
+/// user switched that on, the chain's surround layout when the slot has
+/// no routing of its own, else stereo (None).
+fn main_of(slot: &EffectSlot) -> Option<u64> {
+    if wide_of(slot) {
+        return Some(0);
+    }
+    let routed = slot
+        .routing
+        .as_ref()
+        .is_some_and(|r| !r.inputs.is_empty() || !r.outputs.is_empty());
+    if routed {
+        None
+    } else {
+        LAYOUT.with(Cell::get)
+    }
+}
+
+/// True when a pooled host suits `slot` at `rate`. A caller with no
+/// layout of its own in mind (a plug-in window opening) takes whatever
+/// layout is running, so it never restarts a playing plug-in.
+fn fits(e: &Pooled, slot: &EffectSlot, rate: u32) -> bool {
+    e.effect == slot.effect
+        && e.rate == rate
+        && (e.main == main_of(slot) || (LAYOUT.with(Cell::get).is_none() && !wide_of(slot)))
+}
+
 /// A slot's saved control values, as the plug-in takes them.
 pub fn slot_params_of(slot: &EffectSlot) -> Vec<(u32, f64)> {
     slot_params(slot)
@@ -895,16 +978,24 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         loop {
             if let Ok(p) = pool().lock() {
                 if let Some(e) = p.get(&slot.id) {
-                    if e.effect == slot.effect && e.rate == rate && e.wide == wide_of(slot) {
+                    if fits(e, slot, rate) {
                         return Some(e.host.clone());
                     }
                     crate::engine::host::log(&format!(
                         "plug-in restart: \"{}\" ran at {} Hz{}, wanted at {} Hz{}",
                         found.info.name,
                         e.rate,
-                        if e.wide { " (own layout)" } else { "" },
+                        if e.main.is_some() {
+                            " (wide layout)"
+                        } else {
+                            ""
+                        },
                         rate,
-                        if wide_of(slot) { " (own layout)" } else { "" },
+                        if main_of(slot).is_some() {
+                            " (wide layout)"
+                        } else {
+                            ""
+                        },
                     ));
                 }
             }
@@ -923,7 +1014,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
         rate,
         slot.plugin_state.clone(),
         slot_params(slot),
-        wide_of(slot),
+        main_of(slot),
     );
     crate::engine::host::log(&format!(
         "plug-in start: \"{}\" {} in {:.0} ms{}",
@@ -957,7 +1048,7 @@ pub fn host_for(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
                 Pooled {
                     effect: slot.effect.clone(),
                     rate,
-                    wide: wide_of(slot),
+                    main: main_of(slot),
                     host: host.clone(),
                 },
             );
@@ -976,7 +1067,7 @@ fn borrowable(slot: &EffectSlot, rate: u32) -> Option<Arc<Mutex<Host>>> {
     let e = p.get(&slot.id)?;
     (e.effect == slot.effect
         && e.rate == rate
-        && e.wide == wide_of(slot)
+        && e.main == main_of(slot)
         && Arc::strong_count(&e.host) == 1)
         .then(|| e.host.clone())
 }
@@ -1023,10 +1114,11 @@ pub fn start_all(slots: Vec<EffectSlot>, rate: u32) {
     let todo: Vec<EffectSlot> = slots
         .into_iter()
         .filter(|s| {
-            pool().lock().ok().and_then(|p| {
-                p.get(&s.id)
-                    .map(|e| e.effect == s.effect && e.rate == rate && e.wide == wide_of(s))
-            }) != Some(true)
+            pool()
+                .lock()
+                .ok()
+                .and_then(|p| p.get(&s.id).map(|e| fits(e, s, rate)))
+                != Some(true)
         })
         .collect();
     if todo.is_empty() {
@@ -1601,5 +1693,32 @@ impl Drop for Audition {
         if let Ok(mut h) = self.host.lock() {
             h.process(&[], &off, &mut buf);
         }
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::arrangement_for;
+
+    fn names(n: usize) -> Vec<String> {
+        crate::dsp::channels::labels(n)
+    }
+
+    #[test]
+    fn surround_names_map_to_speaker_bits() {
+        // 5.1: L R C LFE Ls Rs.
+        assert_eq!(arrangement_for(&names(6)), Some(0b11_1111));
+        // 7.1: rears on Ls/Rs, sides on Lss/Rss (VST3's 7.1 music layout).
+        assert_eq!(arrangement_for(&names(8)), Some(0b110_0011_1111));
+        // 7.1.4 adds four heights.
+        let m = arrangement_for(&names(12)).expect("7.1.4");
+        assert_eq!(m.count_ones(), 12);
+        assert!(m & (1 << 12) != 0 && m & (1 << 17) != 0);
+    }
+
+    #[test]
+    fn stereo_and_unknown_layouts_ask_for_nothing() {
+        assert_eq!(arrangement_for(&names(2)), None);
+        assert_eq!(arrangement_for(&names(9)), None);
     }
 }
