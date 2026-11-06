@@ -63,6 +63,7 @@ export function emptyLaneItems(ctx: MenuCtx): ContextItem[] {
       act("Time Selection in All Tracks", "edit.ripple.time-all"),
       act("Gap Between Clips", "edit.ripple.gap"),
     ]),
+    act("Silence Time Selection in Selected Clips", "edit.silence-time-clips"),
     sub("Select", [
       act("Select All", "edit.select-all"),
       act("Deselect All", "edit.deselect"),

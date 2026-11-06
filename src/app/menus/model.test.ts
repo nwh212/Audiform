@@ -309,6 +309,7 @@ describe("menu model", () => {
       "clip.bring-front",
       "clip.send-back",
       "multitrack.vis.only-bus",
+      "edit.silence-time-clips",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

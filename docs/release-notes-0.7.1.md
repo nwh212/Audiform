@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Silence Time Selection in Selected Clips** (Edit menu and the lane right-click menu) mutes part of a clip with a volume dip you can still reshape or remove, leaving the audio untouched.
 - **Show Only Bus Tracks** (Multitrack > Track Visibility) hides the other tracks so the buses are all you see.
 - **Bring Clip to Front** and **Send Clip to Back** (Clip menu and the clip right-click menu) choose which of two overlapping clips plays on top.
 - **Ripple delete in selected clips** (Edit > Ripple Delete > Time Selection in Selected Clips, Alt+Backspace) cuts the time selection out of the selected clips only and closes the gap after them.

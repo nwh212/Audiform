@@ -10,6 +10,7 @@
 
 import { copyClips, pasteClips, rippleDeleteClips, rippleDeleteRange, gapAt } from "../panels/editor/clip-edit";
 import { deleteClipsOps, allMidiClipIds } from "../panels/editor/midi";
+import { silenceChanges } from "../panels/editor/silence-span";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
 import { editor } from "../stores/editor";
 import { sessionHistory } from "../stores/history";
@@ -461,6 +462,19 @@ export function createEditTools(deps: EditToolsDeps) {
           if (!r || !doc || picked.size === 0) return;
           const tracks = doc.tracks.filter((t) => t.clips.some((c) => picked.has(c.id))).map((t) => t.id);
           return guarded("Ripple Delete in Selected Clips", () => rippleDeleteRange(doc, tracks, r.start, r.end, uuid, picked), "Nothing to delete in that range.");
+        },
+        enabled: () => timeSel() !== null && editor.current().selectedClips.size > 0,
+        reason: () => (timeSel() ? "Select clips first." : "Drag across empty space in the Editor to select a time range."),
+      }),
+      actions.register({
+        id: "edit.silence-time-clips",
+        run: async () => {
+          const doc = session.current;
+          const r = timeSel();
+          if (!doc || !r) return;
+          const changes = silenceChanges(doc, editor.current().selectedClips, r.start, r.end);
+          if (changes.length === 0) return showNotice("The time selection does not reach any selected clip that is not locked.");
+          await session.edit(changes.length === 1 ? "Silence Time Selection" : `Silence Time Selection in ${changes.length} Clips`, { op: "set_clips", changes }, sessionHistory);
         },
         enabled: () => timeSel() !== null && editor.current().selectedClips.size > 0,
         reason: () => (timeSel() ? "Select clips first." : "Drag across empty space in the Editor to select a time range."),

@@ -161,6 +161,7 @@ export const MENUS: readonly Menu[] = [
         item("edit.ripple.time-all", "Time Selection in All Tracks"),
         item("edit.ripple.gap", "Gap Between Clips"),
       ]),
+      item("edit.silence-time-clips", "Silence Time Selection in Selected Clips"),
       sep,
       sub("Select", [
         item("edit.select-all", "Select All"),

@@ -2603,3 +2603,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Multitrack > Track Visibility > Show Only Bus Tracks hides every audio and MIDI track in one undoable step, leaving the bus tracks and the master. Show All Tracks brings them back. It is greyed out without a bus track.
 
 **Why.** From the intake list (AAE, the same one-line action).
+
+## 2026-11-06: Altered Audio Editor intake: Silence Time Selection in Selected Clips
+
+**Decision.** Edit > Silence Time Selection in Selected Clips (also on the lane right-click menu) dips each selected clip's volume envelope to the floor across the time selection, with 5 ms ramps on each side so there is no click. The audio is not touched: the dip is ordinary envelope points that can be dragged, reshaped or removed, and it is one undoable step. Locked clips are left alone. No shortcut.
+
+**Why.** From the intake list (AAE `silence-span.ts`, taken with its tests). Non-destructive fits the multitrack rule that source audio is never changed outside the Waveform editor.
