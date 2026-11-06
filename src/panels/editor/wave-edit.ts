@@ -10,7 +10,7 @@
  */
 
 import { clipLength, sessionEnd, type ChannelMixDoc, type ClipChange, type ClipDoc, type EnvelopePointDoc, type MarkerChange, type MediaRefDoc, type Op, type SessionDoc } from "../../stores/session";
-import { clipEnd, isolate, mediaOf, pieceOf, rippleDeleteRange } from "./clip-edit";
+import { clipEnd, isolate, mediaOf, pieceOf, rippleDeleteRange, withCrossfades } from "./clip-edit";
 import { DB_MIN, levelAt, pointsOf } from "./envelope";
 
 const trackIds = (doc: SessionDoc) => doc.tracks.map((t) => t.id);
@@ -192,6 +192,37 @@ export function oneChannelBoard(board: WaveBoard): WaveBoard {
     return { ...c, channel_mix: mix };
   });
   return { rate: board.rate, length: board.length, clips, media: board.media };
+}
+
+/**
+ * Crossfades the joins at `seams`: where one piece ends and the next
+ * begins at the same frame, the first piece runs on past the join by
+ * `length` frames (the audio that followed it in its own file) and the
+ * two fade across that overlap. A join where the first piece has no audio
+ * left, or that is not a plain join, is skipped. From Altered Audio Editor.
+ */
+export function crossfadeSeams(doc: SessionDoc, seams: readonly number[], length: number): { op: Op; joins: number } | null {
+  const media = mediaOf(doc);
+  const rate = doc.sample_rate;
+  const changes: ClipChange[] = [];
+  const taken = new Set<string>();
+  for (const t of doc.tracks) {
+    for (const seam of seams) {
+      const left = t.clips.find((c) => !c.looped && !c.stretch && !taken.has(c.id) && clipEnd(c, media, rate) === seam);
+      const right = t.clips.find((c) => c.start === seam && c.id !== left?.id);
+      const m = left && media.get(left.media_id);
+      if (!left || !right || !m) continue;
+      // The overlap is no longer than half of either piece, nor than the audio left.
+      const sr = m.sample_rate || rate;
+      const half = Math.floor(Math.min(left.source_out - left.source_in, ((clipEnd(right, media, rate) - right.start) * sr) / rate) / 2);
+      const extra = Math.min(Math.round((length * sr) / rate), half, m.length - left.source_out);
+      if (extra < 1) continue;
+      taken.add(left.id);
+      changes.push({ id: left.id, source_out: left.source_out + extra });
+    }
+  }
+  if (changes.length === 0) return null;
+  return { op: { op: "set_clips", changes: withCrossfades(doc, changes) }, joins: changes.length };
 }
 
 /** Copy: the range as pieces starting at 0. */

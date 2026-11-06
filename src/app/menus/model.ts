@@ -139,8 +139,10 @@ export const MENUS: readonly Menu[] = [
       item("edit.paste", "Paste"),
       item("edit.paste-new", "Paste to New File"),
       item("edit.mix-paste", "Mix Paste..."),
+      item("edit.paste-crossfade", "Paste with Crossfade..."),
       item("edit.delete", "Delete"),
       item("edit.crop", "Crop"),
+      item("edit.snap-zero", "Snap Selection to Zero Crossings"),
       sub("Tool", [
         item("tool.move", "Move"),
         item("tool.razor", "Razor"),

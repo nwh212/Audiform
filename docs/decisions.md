@@ -2573,3 +2573,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Check Loudness gains "Audiobook, ACX (RMS, peak, noise floor)": average level -23 to -18 dBFS, sample peak -3 dBFS or lower, noise floor -60 dBFS or lower, each graded pass, close (within 1 dB) or fix, with digital silence failing the check. Advice comes in order of importance, and a Raise or Lower Master button appears when that gain (aimed at -20.5 dBFS) keeps peaks within -3 dBFS. The loudness report gains `noise_floor` (the quietest half second that is not digital silence, in 50 ms windows) and `silent_seconds`.
 
 **Why.** From the intake list (AAE 8f4ccc0, `delivery.ts` taken with its tests). Audiform's RMS (added the same day for Loudness Match) is used instead of AAE's optional one. The advice for digital silence names copying room tone over it, since Fill with Room Tone was left out by the project lead. The figures follow the published ACX requirements; the dialog says a pass is a good sign, not a guarantee.
+
+## 2026-11-06: Altered Audio Editor intake: zero crossings and Paste with Crossfade
+
+**Decision.** Edit > Snap Selection to Zero Crossings (Waveform editor) moves each selection edge to the nearest zero crossing within 20 ms, the channels averaged (`dsp/zero.rs`, `wave_zero_crossings`). Edit > Paste with Crossfade pastes, then lets the piece before each join run on into its own file by the length asked (1 to 500 ms, at most half of either piece) and crossfades the overlap (`crossfadeSeams` in `wave-edit.ts`); undo takes the crossfade and the paste back in two steps. A copy of one channel pastes as such (the 2026-11-05 rule), and Paste with Crossfade refuses only when some channels are switched off. The always-on zero-crossing snap from AAE 0.13 is not taken yet.
+
+**Why.** From the intake list (AAE c900d03).

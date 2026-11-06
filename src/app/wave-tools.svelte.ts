@@ -12,7 +12,7 @@
 import { type ClipBoard } from "../panels/editor/clip-edit";
 import { rasterize } from "../panels/editor/spectrum";
 import { type ChannelTake, channelLabel, editTake, oneChannel, pasteTake, soloChannel, someOff, waveChannels } from "../panels/editor/wave-channels";
-import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, deleteRange, fadeRange, mixPasteAt, oneChannelBoard, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
+import { type WaveBoard, amplifyRange, clampRange, copyRange, cropTo, crossfadeSeams, deleteRange, fadeRange, mixPasteAt, oneChannelBoard, pasteAt, replaceRange, silenceRange, stretchRange } from "../panels/editor/wave-edit";
 import { embedList } from "../panels/markers/chapters";
 import { newMarker, nextMarkerName } from "../panels/markers/markers";
 import { addSlot, chainOf } from "../panels/voice-chain/chain";
@@ -28,7 +28,7 @@ import { type TransportStore } from "../stores/transport";
 import { closeWaveFile, editedHomeOf, isUntitledFile, moveTakeHomes, openWaveFile, parkedIsUntitled, samePath, saveWaveFile, savesInPlace, spectralSelection, takesInto, wave, waveFile, waveHistory, waveTransport, waveZoom } from "../stores/wave";
 import { mediaPool } from "../stores/media";
 import type { ActionRegistry } from "./actions";
-import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch } from "./core";
+import { exportEmbedChapters, pathsExist, pluginState, waveApplyChain, waveChannelEdit, wavePeak, waveReverseInvert, waveSpectralEdit, waveStretch, waveZeroCrossings } from "./core";
 import type { DockController } from "./docking/dock";
 import { DEFAULT_FORMAT, kindOfPath, type OutputFormat, sanitizeFormat } from "./output-format";
 import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
@@ -662,7 +662,7 @@ export function createWaveTools(deps: WaveToolsDeps) {
       ...["fx.spectrum.reduce-12", "fx.spectrum.reduce-24", "fx.spectrum.remove", "fx.spectrum.repair"].map((id) =>
         actions.register({ id, run: () => {}, enabled: () => false, reason: () => NOT_WAVE }),
       ),
-      ...["edit.mix-paste", "edit.crop", "fx.invert", "fx.reverse", "fx.silence", "fx.fade-in", "fx.fade-out", "fx.fade-in-linear", "fx.fade-out-linear", "fx.amplify", "fx.normalize"].map((id) =>
+      ...["edit.mix-paste", "edit.paste-crossfade", "edit.snap-zero", "edit.crop", "fx.invert", "fx.reverse", "fx.silence", "fx.fade-in", "fx.fade-out", "fx.fade-in-linear", "fx.fade-out-linear", "fx.amplify", "fx.normalize"].map((id) =>
         actions.register({ id, run: () => {}, enabled: () => false, reason: () => NOT_WAVE }),
       ),
       ov(waveFocus, {
@@ -754,6 +754,56 @@ export function createWaveTools(deps: WaveToolsDeps) {
         },
         enabled: () => waveBoard !== null,
         reason: () => "Copy or cut audio in the Waveform editor first.",
+      }),
+      ov(waveFocus, {
+        id: "edit.paste-crossfade",
+        run: async () => {
+          if (!waveBoard) return;
+          const d0 = wave.current;
+          if (!d0) return;
+          const v = await promptText("Paste with Crossfade", "Crossfade length (ms, 1 to 500)", "10");
+          if (v === null) return;
+          const ms = Number(v);
+          if (!Number.isFinite(ms) || ms < 1 || ms > 500) return showNotice("Enter a length between 1 and 500 milliseconds.");
+          const board = boardFor(waveBoard);
+          if (pasteTake(get(waveChannels), board.channel) && (d0.media[0]?.channels ?? 1) > 1 && sessionEnd(d0) > 0) {
+            return showNotice("Paste with Crossfade works on all channels at once. Switch every channel on first.");
+          }
+          // Pasting over a selection replaces it, as Paste does.
+          const r = waveSel();
+          if (r) await waveEdit("Delete", deleteRange(wave.current!, r[0], r[1], uuid));
+          const at = r ? r[0] : wavePlayhead();
+          const p = pasteAt(wave.current!, board, at, uuid);
+          if (!p || !(await waveEdit("Paste", p.op))) return;
+          const x = crossfadeSeams(wave.current!, [at, at + p.length], Math.round((ms / 1000) * wave.current!.sample_rate));
+          if (x) await waveEdit("Crossfade", x.op);
+          waveSetSelection([at, at + p.length], at);
+          showNotice(x ? `Pasted with a ${ms} ms crossfade at ${x.joins === 1 ? "one join" : "both joins"}. Undo takes it back in two steps: the crossfade, then the paste.` : "Pasted. There was no audio left to run on at the joins, so no crossfade was made.");
+        },
+        enabled: () => waveBoard !== null,
+        reason: () => "Copy or cut audio in the Waveform editor first.",
+      }),
+      ov(waveFocus, {
+        id: "edit.snap-zero",
+        run: async () => {
+          const r = waveSel();
+          const d = wave.current;
+          if (!r || !d) return;
+          try {
+            // Up to 20 ms either way, for the nearest place the sound crosses zero.
+            const [a, b] = await waveZeroCrossings([r[0], r[1]], Math.round(d.sample_rate * 0.02));
+            if (a === undefined || b === undefined) return;
+            if (b <= a) return showNotice("Both edges would land on the same spot, so the selection was left as it was.");
+            if (a === r[0] && b === r[1]) return showNotice("Both edges were already at zero crossings, or none is within 20 ms.");
+            waveSetSelection([a, b]);
+            const ms = (n: number) => Math.round((Math.abs(n) / d.sample_rate) * 10000) / 10;
+            showNotice(`Selection edges moved ${ms(a - r[0])} ms and ${ms(b - r[1])} ms to the nearest zero crossings.`);
+          } catch (e) {
+            showError(e);
+          }
+        },
+        enabled: () => waveSel() !== null,
+        reason: () => NEED_WAVE_SEL,
       }),
       ov(waveFocus, {
         id: "edit.mix-paste",

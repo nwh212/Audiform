@@ -584,6 +584,56 @@ pub async fn wave_new_from_clips(
     Ok(doc_of(w.as_ref().expect("just set")))
 }
 
+/// Moves each frame to the nearest zero crossing of the edited file within
+/// `reach` frames either way (the left and right channels averaged), so a
+/// cut made there does not click. A frame with no crossing nearby stays.
+#[tauri::command]
+pub async fn wave_zero_crossings(
+    wave: State<'_, OpenWave>,
+    frames: Vec<u64>,
+    reach: u64,
+) -> Result<Vec<u64>, String> {
+    let session = {
+        let w = wave.0.lock().map_err(|e| e.to_string())?;
+        w.as_ref()
+            .ok_or("No file is open in the Waveform editor.")?
+            .session
+            .clone()
+    };
+    let reach = reach.clamp(1, 48_000);
+    spawn_blocking(move || {
+        let mut out = Vec::with_capacity(frames.len());
+        for frame in frames {
+            let from = frame.saturating_sub(reach);
+            let req = MixdownRequest {
+                range: Some((from, frame + reach)),
+                clip_only: true,
+                ..Default::default()
+            };
+            let mut mono: Vec<f32> = Vec::new();
+            mixdown::render_mix(
+                &session,
+                &req,
+                &AtomicBool::new(false),
+                |_, _| {},
+                |block| {
+                    mono.extend(block.as_chunks::<2>().0.iter().map(|f| (f[0] + f[1]) * 0.5));
+                    Ok(())
+                },
+            )
+            .map_err(|e| e.to_string())?;
+            let at = (frame - from) as usize;
+            out.push(
+                crate::dsp::zero::nearest_zero_crossing(&mono, at, reach as usize)
+                    .map_or(frame, |i| from + i as u64),
+            );
+        }
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Highest absolute sample of the edited file between `from` and `to`
 /// (whole file when None), with clip settings applied. Used by Normalize.
 #[tauri::command]

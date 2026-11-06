@@ -303,6 +303,8 @@ describe("menu model", () => {
       "clip.separate-quick",
       "window.addons-folder",
       "window.addons-reload",
+      "edit.paste-crossfade",
+      "edit.snap-zero",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

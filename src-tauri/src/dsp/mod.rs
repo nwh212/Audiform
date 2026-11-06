@@ -19,3 +19,4 @@ pub mod space;
 pub mod spectral;
 pub mod stft;
 pub mod stretch;
+pub mod zero;

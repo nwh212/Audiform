@@ -938,6 +938,11 @@ export function waveStretch(start: number, end: number, frames: number): Promise
   return invoke<SpectralResult>("wave_stretch", { start, end, frames });
 }
 
+/** Moves each frame of the Waveform editor's file to the nearest zero crossing within `reach` frames. */
+export function waveZeroCrossings(frames: number[], reach: number): Promise<number[]> {
+  return invoke<number[]>("wave_zero_crossings", { frames, reach });
+}
+
 export function waveApplyChain(chain: import("../stores/session").EffectChainDoc, start: number, end: number): Promise<SpectralResult> {
   return invoke<SpectralResult>("wave_apply_chain", { chain, start, end });
 }

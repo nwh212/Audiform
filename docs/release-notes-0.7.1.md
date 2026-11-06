@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Waveform editor: Snap Selection to Zero Crossings and Paste with Crossfade** (Edit menu). The first moves both edges of the selection to the nearest spot within 20 ms where the sound crosses zero, so a cut there does not click. The second pastes and crossfades both joins over a length you choose, using the audio that ran on in its own file. Taken from Altered Audio Editor.
 - **Audiobook delivery check.** File > Check Loudness has an Audiobook (ACX) choice that judges what narration is judged on: average level (RMS) between -23 and -18 dBFS, peaks at -3 dBFS or lower, and a noise floor (the room tone between lines) at -60 dBFS or lower. It flags digital silence, says what to fix first, and offers the master gain that brings the level into range when peaks leave room. Taken from Altered Audio Editor.
 - **Plosive Tamer** (Effects > Dynamics) pulls down the low thump of P and B sounds only while it happens, comparing the low end with the body of the voice so loud vowels and deep voices pass untouched. Presets for a close mic, a standard mic and a light touch. Taken from Altered Audio Editor.
 - **Loudness Match by level.** Besides a loudness target, Loudness Match can bring each clip or track to a level by its peak, its true peak or its average (RMS), with the level of your choice (remembered for each). A Tolerance box leaves alone anything already that close. It is also on the clip right-click menu. Taken from Altered Audio Editor.
