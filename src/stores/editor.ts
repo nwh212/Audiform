@@ -33,6 +33,8 @@ export interface EditorState {
   snap: SnapSettings;
   /** Overlapping clips on a track crossfade when moved or trimmed into each other. */
   autoCrossfade: boolean;
+  /** Waveform editor selections move to the nearest zero crossings when a drag ends. */
+  snapZero: boolean;
   /** Clip volume envelopes are shown and editable. */
   showVolume: boolean;
   /** Clip pan envelopes are shown and editable. */
@@ -87,6 +89,7 @@ const initial: EditorState = {
   width: 800,
   snap: { on: true, clips: true, playhead: true, markers: true, ruler: true },
   autoCrossfade: true,
+  snapZero: false,
   showVolume: false,
   showPan: false,
   showFx: false,
@@ -114,6 +117,7 @@ export const editor: Readable<EditorState> & {
   setWidth(w: number): void;
   setSnap(patch: Partial<SnapSettings>): void;
   setAutoCrossfade(on: boolean): void;
+  setSnapZero(on: boolean): void;
   setShowVolume(on: boolean): void;
   setShowPan(on: boolean): void;
   setShowFx(on: boolean): void;
@@ -137,6 +141,7 @@ export const editor: Readable<EditorState> & {
     state.update((s) => ({ ...s, selectedClips: new Set(ids), selectedTrack: track === undefined ? s.selectedTrack : track })),
   setTimeFormat: (f) => state.update((s) => ({ ...s, timeFormat: f })),
   setAutoCrossfade: (on) => state.update((s) => ({ ...s, autoCrossfade: on })),
+  setSnapZero: (on) => state.update((s) => ({ ...s, snapZero: on })),
   setShowVolume: (on) => state.update((s) => ({ ...s, showVolume: on })),
   setShowPan: (on) => state.update((s) => ({ ...s, showPan: on })),
   setShowFx: (on) => state.update((s) => ({ ...s, showFx: on })),
@@ -160,6 +165,7 @@ export const editor: Readable<EditorState> & {
 export interface EditorSettings {
   snap: SnapSettings;
   autoCrossfade: boolean;
+  snapZero: boolean;
   timeFormat: TimeFormat;
   showVolume: boolean;
   showPan: boolean;
@@ -172,7 +178,7 @@ export interface EditorSettings {
 }
 
 export function settingsOf(s: EditorState): EditorSettings {
-  return { snap: s.snap, autoCrossfade: s.autoCrossfade, timeFormat: s.timeFormat, showVolume: s.showVolume, showPan: s.showPan, playMode: s.playMode, followPlayhead: s.followPlayhead, showSpectrum: s.showSpectrum, showPitch: s.showPitch, brushSize: s.brushSize, stretchHandles: s.stretchHandles };
+  return { snap: s.snap, autoCrossfade: s.autoCrossfade, snapZero: s.snapZero, timeFormat: s.timeFormat, showVolume: s.showVolume, showPan: s.showPan, playMode: s.playMode, followPlayhead: s.followPlayhead, showSpectrum: s.showSpectrum, showPitch: s.showPitch, brushSize: s.brushSize, stretchHandles: s.stretchHandles };
 }
 
 /** Reads saved settings, keeping defaults for anything missing or the wrong type. */
@@ -189,6 +195,7 @@ export function parseSettings(raw: unknown, base: EditorSettings = settingsOf(in
       ruler: bool(snapRaw.ruler, base.snap.ruler),
     },
     autoCrossfade: bool(o.autoCrossfade, base.autoCrossfade),
+    snapZero: bool(o.snapZero, base.snapZero),
     showVolume: bool(o.showVolume, base.showVolume),
     showPan: bool(o.showPan, base.showPan),
     followPlayhead: bool(o.followPlayhead, base.followPlayhead),

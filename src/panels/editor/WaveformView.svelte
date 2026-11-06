@@ -31,7 +31,7 @@
   import { timeDisplayItems } from "./time-menu";
   import { levelAt, pointsOf } from "./envelope";
   import { fit, formatIn, peakRange, rulerTicks, ticksFor, sampleAt, SAMPLE_SPP, xOf, zoomAround, type Viewport } from "./timeline";
-  import { mediaFrames, transportAuditionLevel } from "../../app/core";
+  import { mediaFrames, transportAuditionLevel, waveZeroCrossings } from "../../app/core";
   import { dragGain, gainText } from "./clip-gain";
   import TransportBar from "./TransportBar.svelte";
   import SpectrumView from "./SpectrumView.svelte";
@@ -137,6 +137,21 @@
   const channels = $derived(Math.max(1, Math.min(64, doc?.media[0]?.channels ?? 1)));
   const chNames = $derived(channelLabels(channels));
   const clips = $derived((doc?.tracks[0]?.clips ?? []).slice().sort((a, b) => a.start - b.start));
+
+  /** Moves a just-dragged selection to the nearest zero crossings (up to 20 ms away), quietly. */
+  async function snapToZero(start: number, end: number) {
+    let a = start;
+    let b = end;
+    try {
+      const r = await waveZeroCrossings([start, end], Math.round(rate * 0.02));
+      if (r[0] !== undefined && r[1] !== undefined && r[1] > r[0]) [a, b] = [r[0], r[1]];
+    } catch {
+      // Keep the selection where it was dragged.
+    }
+    // The selection may have changed while the lookup ran; only move it if it is still this one.
+    const now = wave.current?.view.selection;
+    if (now && now.start === start && now.end === end) setView({ selection: { start: a, end: b }, ...(tp?.playing ? {} : { playhead: a }) });
+  }
 
   function setView(v: Partial<{ spp: number; scroll: number; playhead: number; selection: { start: number; end: number } | null }>, auto = false) {
     const cur = wave.current?.view;
@@ -645,7 +660,8 @@
       if (dragged) {
         move(ev);
         const sel = wave.current?.view.selection;
-        if (sel && !tp?.playing) setView({ playhead: sel.start });
+        if (sel && editor.current().snapZero) void snapToZero(sel.start, sel.end);
+        else if (sel && !tp?.playing) setView({ playhead: sel.start });
         return;
       }
       // A click moves the playhead and clears the selection.

@@ -812,6 +812,11 @@ export function createWaveTools(deps: WaveToolsDeps) {
         enabled: () => waveSel() !== null,
         reason: () => NEED_WAVE_SEL,
       }),
+      actions.register({
+        id: "edit.snap-zero-mode",
+        run: () => editor.setSnapZero(!editor.current().snapZero),
+        checked: () => editor.current().snapZero,
+      }),
       ov(waveFocus, {
         id: "edit.mix-paste",
         run: async () => {

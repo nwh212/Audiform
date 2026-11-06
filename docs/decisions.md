@@ -2627,3 +2627,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Link Media... on the Files panel's right-click menu points one file at a new location: the user picks the file, and the Files panel entry and every session media entry that used the old path move to the new one in a single undoable step, then the file is read again. When the selected clips share one file that could not be read, the clip right-click menu offers Link Media... at the top, which picks that file and runs the same action. A path already in the Files panel is refused.
 
 **Why.** From the intake list (AAE). A moved or renamed recording no longer means rebuilding its clips.
+
+## 2026-11-06: Altered Audio Editor intake: always snap selections to zero crossings
+
+**Decision.** Edit > Snap Selections to Zero Crossings (Always) is a toggle, off by default and remembered between runs with the other editor settings. While it is on, every selection dragged in the Waveform editor moves its edges to the nearest zero crossings (within 20 ms) as the drag ends, quietly; the one-off Snap Selection to Zero Crossings command still reports what it moved. No shortcut.
+
+**Why.** From the intake list (AAE 0.13). Finishes the zero-crossing work from earlier today.

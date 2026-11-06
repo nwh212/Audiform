@@ -20,6 +20,15 @@ describe("editor settings", () => {
     expect(s.snap.clips).toBe(false);
     expect(s.autoCrossfade).toBe(false);
   });
+
+  it("keeps the always-snap-to-zero choice, off by default", () => {
+    expect(parseSettings({}).snapZero).toBe(false);
+    expect(parseSettings({ snapZero: "yes" }).snapZero).toBe(false);
+    restoreSettings({ snapZero: true });
+    expect(settingsOf(editor.current()).snapZero).toBe(true);
+    editor.setSnapZero(false);
+    expect(editor.current().snapZero).toBe(false);
+  });
 });
 
 describe("play mode", () => {

@@ -143,6 +143,7 @@ export const MENUS: readonly Menu[] = [
       item("edit.delete", "Delete"),
       item("edit.crop", "Crop"),
       item("edit.snap-zero", "Snap Selection to Zero Crossings"),
+      item("edit.snap-zero-mode", "Snap Selections to Zero Crossings (Always)"),
       sub("Tool", [
         item("tool.move", "Move"),
         item("tool.razor", "Razor"),

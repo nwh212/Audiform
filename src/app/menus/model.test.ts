@@ -314,6 +314,7 @@ describe("menu model", () => {
       "edit.marker.delete",
       "edit.marker.delete-all",
       "edit.marker.retake",
+      "edit.snap-zero-mode",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {
