@@ -6,7 +6,9 @@
   A tall slider for an effect's main setting, with its number box under
   it. Drag the handle (or anywhere on the track) up or down (Ctrl for
   fine steps, Shift for coarse), turn the mouse wheel over it, or
-  double-click for the default.
+  double-click for the default. With `scale`, a ruler of those values
+  runs beside the track, and the fill starts from 0 when the range spans
+  it (a gain that cuts and boosts fills up or down from 0).
 -->
 <script lang="ts">
   import type { EffectParamInfo } from "../../app/core";
@@ -20,11 +22,16 @@
     height?: number;
     oninput: (v: number) => void;
     oncommit: (v: number) => void;
+    /** Values to label on a ruler beside the track. */
+    scale?: readonly number[];
   }
 
-  const { param, value, height = 150, oninput, oncommit }: Props = $props();
+  const { param, value, height = 150, oninput, oncommit, scale }: Props = $props();
 
   const t = $derived(Math.min(1, Math.max(0, toSlider(param, value))));
+  /** Where the fill starts: 0 when a ruler is shown and the range spans it, else the bottom. */
+  const base = $derived(scale && param.min < 0 && param.max > 0 ? Math.min(1, Math.max(0, toSlider(param, 0))) : 0);
+  const ruler = $derived((scale ?? []).map((v) => ({ v, at: Math.min(1, Math.max(0, toSlider(param, v))) })));
   let track = $state<HTMLDivElement | null>(null);
   let drag: { y: number; start: number; last: number } | null = null;
 
@@ -106,8 +113,15 @@
       oncommit(fromSlider(param, t + d));
     }}
   >
-    <div class="fill" style:height="{t * 100}%"></div>
-    {#each [0.25, 0.5, 0.75] as m (m)}<div class="mark" style:bottom="{m * 100}%"></div>{/each}
+    <div class="fill" style:bottom="{Math.min(t, base) * 100}%" style:height="{Math.abs(t - base) * 100}%"></div>
+    {#if scale}
+      {#each ruler as r (r.v)}
+        <div class="tick" style:bottom="{r.at * 100}%"></div>
+        <span class="rlab" style:bottom="{r.at * 100}%">{r.v}</span>
+      {/each}
+    {:else}
+      {#each [0.25, 0.5, 0.75] as m (m)}<div class="mark" style:bottom="{m * 100}%"></div>{/each}
+    {/if}
     <div class="thumb" style:bottom="calc({t * 100}% - 6px)"></div>
   </div>
   <ValueField {param} {value} {oninput} {oncommit} />
@@ -152,6 +166,24 @@
     width: 4px;
     height: 1px;
     background: var(--border-strong);
+    pointer-events: none;
+  }
+  .tick {
+    position: absolute;
+    left: -7px;
+    width: 5px;
+    height: 1px;
+    background: var(--text-faint);
+    pointer-events: none;
+  }
+  .rlab {
+    position: absolute;
+    right: calc(100% + 11px);
+    transform: translateY(50%);
+    color: var(--text-faint);
+    font-size: 9px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
     pointer-events: none;
   }
   .thumb {

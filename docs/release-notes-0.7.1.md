@@ -82,6 +82,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Changed
 
+- **Parametric EQ window**: a finer dB scale with a tick per dB, a dB ruler on the Gain slider (filling up or down from 0 dB), no more width handles beside the nodes (use the mouse wheel or Alt+drag on a node, or the Q row), and switched-off high-pass and low-pass filters no longer sit on the graph.
 - The mouse wheel over a session's clips and track headers scrolls the tracks up and down again (Alt+wheel still resizes the track under the pointer, and the wheel over the track scrollbar resizes them all). Ctrl+wheel, or the wheel over the ruler, zooms in time; Shift+wheel scrolls sideways. The Settings box for wheel zoom now applies to the Waveform editor only.
 
 - The Help menu's Based on Altered Audio Editor submenu is gone. The credit, with links to the original project, The GCRN, Steve Phillips's book and a way to support him, is in Help > About Audiform.

@@ -2639,3 +2639,14 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Set Current Clipboard picks one of five clipboards (Clipboard 1 to 5, a check mark on the current one). Copy, Cut and Paste in both editors use the current one, so a few pieces can be held at once; switching keeps what the others hold. The clipboards live for the app session, as the single one did, and are not the system clipboard. No shortcuts (AAE has none either).
 
 **Why.** From the intake list (AAE, same behavior).
+
+## 2026-11-06: Parametric EQ graph: clearer scale, plainer nodes
+
+**Decision.** Asked to make the Parametric EQ window "more like" another editor's. Reframed as functional fixes to what read badly, without copying that window's look:
+- The gain axis on the right gets a tick for every dB (every 4 dB at the 96 dB range) and plain labels, with its "dB" heading at the top instead of colliding with the 20k label.
+- The overall Gain slider gets a dB ruler (+40 to -80) beside it, and its fill now runs up or down from 0 dB instead of from -80, so cut and boost read at a glance.
+- The two width handles beside each band node, and the dashed line between them, are gone. Width is changed by the mouse wheel over a node (as before), by Alt+drag up and down on a node (new), or in the Q row.
+- The high-pass and low-pass nodes are drawn only while they are switched on, so switched-off filters no longer sit on top of the shelf nodes at the graph's ends. Their Band buttons switch them on.
+- The slope boxes use a smaller font so "24 dB" fits.
+
+**Why.** The lead found the scale hard to read and the handles out of place. Checked at 100% and 125% display scaling.

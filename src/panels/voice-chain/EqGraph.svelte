@@ -5,11 +5,11 @@
 
   The Parametric EQ on a graph: its response curve over the sound
   itself. Each band is a node to drag, left and right for frequency, up
-  and down for gain (the high-pass and low-pass move sideways only). A
-  band's width (Q) shows as two handles either side of its node; drag
-  one, or turn the mouse wheel over the node, to make the band narrower
-  or wider. Double-click the high-pass or low-pass node to switch it on
-  or off. Behind the curve, the spectrum of what is playing (or, when
+  and down for gain (the high-pass and low-pass move sideways only).
+  Turn the mouse wheel over a node, or Alt+drag it up and down, to make
+  the band narrower or wider. The high-pass and low-pass show on the graph
+  only while they are on; their Band buttons switch them, and
+  double-clicking a node switches it off. Behind the curve, the spectrum of what is playing (or, when
   stopped, of the audio at the playhead). The slider on the left is the
   overall gain. Below the graph, a column per band: frequency, gain (or
   slope for the high-pass and low-pass), width as Q or in octaves, and
@@ -21,7 +21,7 @@
   import type { EffectSlotDoc } from "../../stores/session";
   import { paramValue } from "./chain";
   import { freqAt, freqTicks, xOf } from "./graph";
-  import { eqNodes, formatHz, nodeOn, octavesOf, qFromEdge, qOf, widthEdges, type EqNode } from "./eq-graph";
+  import { eqNodes, formatHz, nodeOn, octavesOf, qOf, type EqNode } from "./eq-graph";
   import ValueField from "./ValueField.svelte";
   import VSlider from "./VSlider.svelte";
 
@@ -42,7 +42,7 @@
 
   let w = $state(460);
   const H = 250;
-  const PAD = { l: 6, r: 34, t: 10, b: 18 };
+  const PAD = { l: 6, r: 34, t: 20, b: 18 };
   const plotW = $derived(Math.max(60, w - PAD.l - PAD.r));
   const plotH = H - PAD.t - PAD.b;
   // Range: 30 dB (plus and minus 15) or 96 dB (plus and minus 48), and Q or width in octaves.
@@ -151,7 +151,7 @@
       const f = paramValue(slot, n.freq);
       const g = n.gain ? paramValue(slot, n.gain) : 0;
       const q = n.q ? paramValue(slot, n.q) : null;
-      return { n, f, g, q, on: nodeOn(slot, n), x: X(f), y: Y(g), edges: q !== null ? widthEdges(f, q) : null };
+      return { n, f, g, q, on: nodeOn(slot, n), x: X(f), y: Y(g) };
     }),
   );
 
@@ -170,33 +170,30 @@
     active = n.name;
     const el = e.currentTarget as SVGElement;
     el.setPointerCapture(e.pointerId);
+    // Alt+drag: up narrows the band, down widens it, the node stays put.
+    if (e.altKey && n.q) {
+      const qp = n.q;
+      const y0 = e.clientY;
+      const q0 = paramValue(slot, qp);
+      const atQ = (ev: PointerEvent, done: boolean) =>
+        onParams([[qp, clampP(qp, Math.round(q0 * Math.pow(2, (y0 - ev.clientY) / 40) * 100) / 100)]], `${n.name} Width`, done);
+      const moveQ = (ev: PointerEvent) => atQ(ev, false);
+      const upQ = (ev: PointerEvent) => {
+        el.removeEventListener("pointermove", moveQ);
+        el.removeEventListener("pointerup", upQ);
+        atQ(ev, true);
+        active = null;
+      };
+      el.addEventListener("pointermove", moveQ);
+      el.addEventListener("pointerup", upQ);
+      return;
+    }
     const at = (ev: PointerEvent, done: boolean) => {
       const p = local(ev);
       const changes: [EffectParamInfo, number][] = [[n.freq, clampP(n.freq, hzAt(p.x))]];
       if (n.gain) changes.push([n.gain, clampP(n.gain, Math.round(dbAt(p.y) * 10) / 10)]);
       onParams(changes, `${n.name} Point`, done);
     };
-    const move = (ev: PointerEvent) => at(ev, false);
-    const up = (ev: PointerEvent) => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-      at(ev, true);
-      active = null;
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
-  }
-
-  /** A width handle: the band's Q from how far the handle sits from its center. */
-  function dragWidth(e: PointerEvent, n: EqNode, f: number) {
-    if (e.button !== 0 || !svg || !n.q) return;
-    e.preventDefault();
-    e.stopPropagation();
-    active = n.name;
-    const q = n.q;
-    const el = e.currentTarget as SVGElement;
-    el.setPointerCapture(e.pointerId);
-    const at = (ev: PointerEvent, done: boolean) => onParams([[q, clampP(q, Math.round(qFromEdge(f, hzAt(local(ev).x)) * 100) / 100)]], `${n.name} Width`, done);
     const move = (ev: PointerEvent) => at(ev, false);
     const up = (ev: PointerEvent) => {
       el.removeEventListener("pointermove", move);
@@ -226,7 +223,14 @@
   }
 
   const ticks = $derived(freqTicks(plotW));
+  /** Labeled gain lines, and the small ticks between them on the right-hand ruler. */
   const gridDb = $derived(range === 30 ? [15, 10, 5, 0, -5, -10, -15] : [48, 36, 24, 12, 0, -12, -24, -36, -48]);
+  const minorDb = $derived.by(() => {
+    const step = range === 30 ? 1 : 4;
+    const out: number[] = [];
+    for (let d = BOTTOM; d <= TOP; d += step) if (!gridDb.includes(d)) out.push(d);
+    return out;
+  });
   const master = $derived(info.params.find((p) => p.key === "gain") ?? null);
   /** The table's columns, low to high. */
   const columns = $derived(placed);
@@ -248,7 +252,7 @@
 <div class="top">
   {#if master}
     <div class="master">
-      <VSlider param={master} value={paramValue(slot, master)} height={H - 70} oninput={(v) => onParams([[master, v]], "Gain", false)} oncommit={(v) => onParams([[master, v]], "Gain", true)} />
+      <VSlider param={master} value={paramValue(slot, master)} height={H - 70} scale={[40, 20, 0, -20, -40, -60, -80]} oninput={(v) => onParams([[master, v]], "Gain", false)} oncommit={(v) => onParams([[master, v]], "Gain", true)} />
     </div>
   {/if}
 <div class="eq" bind:clientWidth={w}>
@@ -259,32 +263,20 @@
       <line class="grid" class:major={t.major} x1={X(t.f)} x2={X(t.f)} y1={PAD.t} y2={PAD.t + plotH} />
       {#if t.label}<text class="lab" class:strong={t.major} x={X(t.f)} y={H - 5} text-anchor={t.f === 20 ? "start" : t.f === 20_000 ? "end" : "middle"}>{t.label}</text>{/if}
     {/each}
+    {#each minorDb as d (d)}
+      <line class="tickm" x1={PAD.l + plotW} x2={PAD.l + plotW + 3} y1={Y(d)} y2={Y(d)} />
+    {/each}
     {#each gridDb as d (d)}
       <line class="grid" class:zero={d === 0} x1={PAD.l} x2={PAD.l + plotW} y1={Y(d)} y2={Y(d)} />
-      <text class="lab" x={PAD.l + plotW + 4} y={Y(d) + 3}>{d > 0 ? `+${d}` : d}</text>
+      <line class="tickm major" x1={PAD.l + plotW} x2={PAD.l + plotW + 5} y1={Y(d)} y2={Y(d)} />
+      <text class="lab" x={PAD.l + plotW + 7} y={Y(d) + 3}>{d}</text>
     {/each}
-    <text class="lab" x={PAD.l + plotW + 4} y={H - 5}>dB</text>
+    <text class="lab" x={PAD.l + plotW + 7} y={PAD.t - 9}>dB</text>
     <clipPath id="eq-plot-{slot.id}"><rect x={PAD.l} y={PAD.t} width={plotW} height={plotH} /></clipPath>
     {#if curvePath}<path class="curve" d={curvePath} clip-path="url(#eq-plot-{slot.id})" />{/if}
 
     {#each placed as p (p.n.name)}
-      {#if p.edges && p.on}
-        {#each p.edges as ef, k (k)}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <rect
-            class="width"
-            class:on={active === p.n.name || hover === p.n.name}
-            x={X(ef) - 2.5}
-            y={p.y - 6}
-            width="5"
-            height="12"
-            onpointerdown={(e) => dragWidth(e, p.n, p.f)}
-            onpointerenter={() => (hover = p.n.name)}
-            onpointerleave={() => (hover = null)}
-          />
-        {/each}
-        <line class="span" x1={X(p.edges[0])} x2={X(p.edges[1])} y1={p.y} y2={p.y} />
-      {/if}
+      {#if p.on || !p.n.on}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <g
         class="node"
@@ -301,6 +293,7 @@
         <rect x="-5" y="-5" width="10" height="10" />
         <text y="-9" text-anchor="middle">{p.n.label}</text>
       </g>
+      {/if}
     {/each}
   </svg>
   {#if tip}<div class="tip" style:left="{tip.x}px" style:top="{tip.y}px">{tip.text}</div>{/if}
@@ -409,6 +402,10 @@
     width: 100%;
     min-width: 0;
   }
+  .cell select {
+    padding: 1px 0 1px 2px;
+    font-size: 10px;
+  }
   .band {
     min-width: 30px;
     height: 22px;
@@ -486,17 +483,11 @@
     stroke: #7d8cff;
     stroke-width: 2;
   }
-  .span {
-    stroke: rgba(255, 255, 255, 0.25);
-    stroke-dasharray: 2 2;
-    pointer-events: none;
+  .tickm {
+    stroke: rgba(255, 255, 255, 0.28);
   }
-  .width {
-    fill: rgba(255, 255, 255, 0.55);
-    cursor: ew-resize;
-  }
-  .width.on {
-    fill: #ffffff;
+  .tickm.major {
+    stroke: rgba(255, 255, 255, 0.5);
   }
   .node {
     cursor: move;
