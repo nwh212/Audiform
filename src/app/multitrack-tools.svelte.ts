@@ -255,6 +255,7 @@ export function createMultitrackTools(deps: MultitrackToolsDeps) {
       }),
       mk("multitrack.vis.show-all", "Show All Tracks", () => true, () => tracks().some((t) => t.hidden), "No tracks are hidden."),
       mk("multitrack.vis.only-audio", "Show Only Audio Tracks", () => true, () => tracks().some((t) => t.hidden), "Bus tracks always show below the audio tracks."),
+      mk("multitrack.vis.only-bus", "Show Only Bus Tracks", () => false, () => (session.current?.buses ?? []).length > 0 && tracks().some((t) => !t.hidden), "Add a bus track first, or the audio tracks are already hidden."),
       mk("multitrack.vis.only-clips", "Show Only Tracks with Clips", (t) => t.clips.length > 0),
       mk("multitrack.vis.only-selection", "Show Only Tracks with Clips in Selection", (t) => {
         const s = timeSel();

@@ -2597,3 +2597,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Clip > Bring Clip to Front and Clip > Send Clip to Back, also on the clip right-click menu, set where overlapping clips stack on their track. They use the clip `layer` change Audiform already had, so the session needs no new data. Locked clips stay where they are; with nothing to move, a notice says so. No shortcut.
 
 **Why.** From the intake list (AAE `clip-order.ts`, taken with its tests).
+
+## 2026-11-06: Altered Audio Editor intake: Show Only Bus Tracks
+
+**Decision.** Multitrack > Track Visibility > Show Only Bus Tracks hides every audio and MIDI track in one undoable step, leaving the bus tracks and the master. Show All Tracks brings them back. It is greyed out without a bus track.
+
+**Why.** From the intake list (AAE, the same one-line action).

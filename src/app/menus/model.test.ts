@@ -308,6 +308,7 @@ describe("menu model", () => {
       "edit.ripple.time-clips",
       "clip.bring-front",
       "clip.send-back",
+      "multitrack.vis.only-bus",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

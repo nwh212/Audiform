@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Show Only Bus Tracks** (Multitrack > Track Visibility) hides the other tracks so the buses are all you see.
 - **Bring Clip to Front** and **Send Clip to Back** (Clip menu and the clip right-click menu) choose which of two overlapping clips plays on top.
 - **Ripple delete in selected clips** (Edit > Ripple Delete > Time Selection in Selected Clips, Alt+Backspace) cuts the time selection out of the selected clips only and closes the gap after them.
 - **Five new effects** from Altered Audio Editor. **Expander / Gate** (Dynamics) turns quiet sound down gently or shuts it off. **Dynamics Curve** (Dynamics) draws the whole response as one curve on a graph, with 19 starting curves. **Multiband Compressor** (Dynamics) compresses low, middle and high bands on their own. **Stereo Expander** (Stereo) widens or narrows the picture while keeping the bass in the middle. **Distortion** (Amplitude) has soft clip, hard clip, tube and fold shapes with a tone control. Expander / Gate and Dynamics Curve can listen to another track as a sidechain.

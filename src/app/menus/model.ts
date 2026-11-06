@@ -239,9 +239,7 @@ export const MENUS: readonly Menu[] = [
         item("multitrack.vis.show-all", "Show All Tracks"),
         sep,
         item("multitrack.vis.only-audio", "Show Only Audio Tracks"),
-        item("multitrack.vis.only-bus", "Show Only Bus Tracks", {
-          pending: "Not built yet: bus tracks always show below the audio tracks.",
-        }),
+        item("multitrack.vis.only-bus", "Show Only Bus Tracks"),
         item("multitrack.vis.only-clips", "Show Only Tracks with Clips"),
         item(
           "multitrack.vis.only-selection",
