@@ -66,6 +66,7 @@
   import ContextMenu, { type ContextItem } from "../../app/ContextMenu.svelte";
   import EffectControls from "./EffectControls.svelte";
   import { groupShown, PHASE_CURVE } from "./phase-curve";
+  import { curveGroupShown, DYNAMICS_CURVE } from "./dynamics-curve";
   import { GRAPHED } from "./graph";
   import { clampBox, effectWindowRequest, HIDE_EFFECT_WINDOWS, portal, trialSlot, type WindowBox } from "./effect-window";
   import { dropEdit, effectMenu, ownerKey, slotOver, startSlotDrag, type SlotSpot } from "./slot-drag";
@@ -1015,6 +1016,10 @@
           {#await import("./PhaseCurveGraph.svelte") then { default: PhaseCurveGraph }}
           <PhaseCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
           {/await}
+        {:else if winSlot.effect === DYNAMICS_CURVE}
+          {#await import("./DynamicsCurveGraph.svelte") then { default: DynamicsCurveGraph }}
+          <DynamicsCurveGraph slot={winSlot} info={winInfo} onParams={(changes, label, done) => dragParams(winSlot, changes, label, done)} />
+          {/await}
         {:else if GRAPHED.has(winSlot.effect)}
           {#await import("./ResponseGraph.svelte") then { default: ResponseGraph }}
           <ResponseGraph slot={winSlot} info={winInfo} onPoint={(pf, f, pg, g, done) => dragPoint(winSlot, pf, f, pg, g, done)} />
@@ -1071,7 +1076,7 @@
         {#if !OWN_CONTROLS.has(winSlot.effect)}<EffectControls
           info={winInfo}
           value={(p) => shown(winSlot, p)}
-          shown={(g) => groupShown(winSlot.effect, winSlot, g)}
+          shown={(g) => groupShown(winSlot.effect, winSlot, g) && curveGroupShown(winSlot.effect, winSlot, g)}
           oninput={(p, v) => drag(winSlot, p, v)}
           oncommit={(p, v) => setValue(winSlot, p, v)}
         />{/if}

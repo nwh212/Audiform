@@ -10,6 +10,7 @@
 
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
 import type { EffectChainDoc, EffectSlotDoc } from "../../stores/session";
+import { DYNAMICS_CURVE_PRESETS } from "./curve-presets";
 
 export const MAX_SLOTS = 16;
 
@@ -834,6 +835,10 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
   chainP("Plosives - Close Mic, Firm", "Dynamics", [fx("plosive", { freq: 140, trigger: 4, reduction: 24, release: 120 })]),
   chainP("Plosives - Standard Mic", "Dynamics", [fx("plosive", { freq: 120, trigger: 6, reduction: 18, release: 100 })]),
   chainP("Plosives - Light Touch", "Dynamics", [fx("plosive", { freq: 100, trigger: 9, reduction: 10, release: 80 })]),
+  chainP("Quiet Parts Down, Gentle", "Dynamics", [fx("expander", { threshold: -20, ratio: 2.5 })]),
+  chainP("Quiet Parts Down, Firm", "Dynamics", [fx("expander", { threshold: -20, ratio: 5 })]),
+  // Dynamics Curve settings from Altered Audio Editor.
+  ...DYNAMICS_CURVE_PRESETS.map((p) => chainP(p.name, "Dynamics", [fx("dynamics_curve", p.params)])),
   chainP("Gate - Tight Drums", "Dynamics", [
     fx("breath_gate", { threshold: -30, attack: 0.5, hold: 20, release: 60, range: -80 }),
   ]),

@@ -40,6 +40,32 @@ pub fn compressor_info() -> EffectInfo {
     }
 }
 
+pub fn multiband_info() -> EffectInfo {
+    EffectInfo {
+        id: "altaudio.multiband",
+        name: "Multiband Compressor",
+        category: "Dynamics",
+        description:
+            "Splits the sound into low, middle and high bands and compresses each on its own, to tame boom or harshness without squashing the whole voice.",
+        params: vec![
+            num("low_freq", "Low / mid split", "Hz", 40.0, 1000.0, 200.0, 1.0).log(),
+            num("high_freq", "Mid / high split", "Hz", 1000.0, 12_000.0, 3500.0, 10.0).log(),
+            num("low_threshold", "Low threshold", "dB", -60.0, 0.0, -24.0, 0.1),
+            num("low_ratio", "Low ratio", ":1", 1.0, 20.0, 2.0, 0.1).log(),
+            num("low_makeup", "Low gain", "dB", -12.0, 12.0, 0.0, 0.1),
+            num("mid_threshold", "Mid threshold", "dB", -60.0, 0.0, -22.0, 0.1),
+            num("mid_ratio", "Mid ratio", ":1", 1.0, 20.0, 2.5, 0.1).log(),
+            num("mid_makeup", "Mid gain", "dB", -12.0, 12.0, 0.0, 0.1),
+            num("high_threshold", "High threshold", "dB", -60.0, 0.0, -26.0, 0.1),
+            num("high_ratio", "High ratio", ":1", 1.0, 20.0, 2.0, 0.1).log(),
+            num("high_makeup", "High gain", "dB", -12.0, 12.0, 0.0, 0.1),
+            num("attack", "Attack", "ms", 0.1, 200.0, 15.0, 0.1).log(),
+            num("release", "Release", "ms", 5.0, 2000.0, 200.0, 1.0).log(),
+            num("output", "Output gain", "dB", -12.0, 12.0, 0.0, 0.1),
+        ],
+    }
+}
+
 pub fn limiter_info() -> EffectInfo {
     EffectInfo {
         id: "altaudio.limiter",
@@ -121,14 +147,29 @@ pub struct Compressor {
 
 impl Compressor {
     pub fn new(p: &Params, rate: u32) -> Self {
+        Self::with(
+            [
+                p.get("threshold"),
+                p.get("ratio"),
+                p.get("knee"),
+                p.get("makeup"),
+            ],
+            [p.get("attack"), p.get("release")],
+            p.on("linked"),
+            rate,
+        )
+    }
+
+    /// From `[threshold dB, ratio, knee dB, makeup dB]` and `[attack ms, release ms]`.
+    fn with(v: [f64; 4], ms: [f64; 2], linked: bool, rate: u32) -> Self {
         Self {
-            threshold: p.get("threshold") as f32,
-            slope: 1.0 - 1.0 / p.get("ratio").max(1.0) as f32,
-            knee: p.get("knee") as f32,
-            makeup: p.get("makeup") as f32,
-            attack: coef(p.get("attack"), rate),
-            release: coef(p.get("release"), rate),
-            linked: p.on("linked"),
+            threshold: v[0] as f32,
+            slope: 1.0 - 1.0 / v[1].max(1.0) as f32,
+            knee: v[2] as f32,
+            makeup: v[3] as f32,
+            attack: coef(ms[0], rate),
+            release: coef(ms[1], rate),
+            linked,
             gr: [0.0; 2],
             rate,
         }
@@ -189,6 +230,110 @@ impl Processor for Compressor {
     }
     fn reset(&mut self) {
         self.gr = [0.0; 2];
+    }
+}
+
+// --- Multiband Compressor ---
+
+/// A Linkwitz-Riley split (two matched Butterworth sections per side), so
+/// the low and high parts add back to a flat sound.
+struct Split {
+    lo: [StereoBiquad; 2],
+    hi: [StereoBiquad; 2],
+}
+
+impl Split {
+    fn new(rate: u32, freq: f64) -> Self {
+        let q = std::f64::consts::FRAC_1_SQRT_2;
+        let lp = Coeffs::new(Shape::LowPass, rate, freq, q, 0.0);
+        let hp = Coeffs::new(Shape::HighPass, rate, freq, q, 0.0);
+        Self {
+            lo: [StereoBiquad::new(lp), StereoBiquad::new(lp)],
+            hi: [StereoBiquad::new(hp), StereoBiquad::new(hp)],
+        }
+    }
+
+    /// One frame in, (low, high) out.
+    fn run(&mut self, f: [f32; 2]) -> ([f32; 2], [f32; 2]) {
+        let mut l = f;
+        let mut h = f;
+        for b in &mut self.lo {
+            l = [b.l.run(l[0]), b.r.run(l[1])];
+        }
+        for b in &mut self.hi {
+            h = [b.l.run(h[0]), b.r.run(h[1])];
+        }
+        (l, h)
+    }
+
+    fn reset(&mut self) {
+        for b in self.lo.iter_mut().chain(self.hi.iter_mut()) {
+            b.reset();
+        }
+    }
+}
+
+pub struct Multiband {
+    first: Split,
+    /// The second split, also applied to the low band so all three bands share one phase.
+    second: Split,
+    second_low: Split,
+    bands: [Compressor; 3],
+    out: f32,
+}
+
+impl Multiband {
+    pub fn new(p: &Params, rate: u32) -> Self {
+        let ms = [p.get("attack"), p.get("release")];
+        let band = |n: &str| {
+            Compressor::with(
+                [
+                    p.get(&format!("{n}_threshold")),
+                    p.get(&format!("{n}_ratio")),
+                    6.0,
+                    p.get(&format!("{n}_makeup")),
+                ],
+                ms,
+                true,
+                rate,
+            )
+        };
+        let f1 = p.get("low_freq");
+        let f2 = p.get("high_freq").max(f1 * 1.5);
+        Self {
+            first: Split::new(rate, f1),
+            second: Split::new(rate, f2),
+            second_low: Split::new(rate, f2),
+            bands: [band("low"), band("mid"), band("high")],
+            out: db_to_gain(p.get("output")),
+        }
+    }
+}
+
+impl Processor for Multiband {
+    fn process(&mut self, buf: &mut [f32]) {
+        for f in buf.as_chunks_mut::<2>().0 {
+            let (low, rest) = self.first.run(*f);
+            let (mid, high) = self.second.run(rest);
+            let (la, lb) = self.second_low.run(low);
+            let mut parts = [[la[0] + lb[0], la[1] + lb[1]], mid, high];
+            let mut sum = [0f32; 2];
+            for (part, comp) in parts.iter_mut().zip(self.bands.iter_mut()) {
+                comp.run(part, None);
+                sum[0] += part[0];
+                sum[1] += part[1];
+            }
+            f[0] = sum[0] * self.out;
+            f[1] = sum[1] * self.out;
+        }
+    }
+    fn reset(&mut self) {
+        self.first.reset();
+        self.second.reset();
+        self.second_low.reset();
+        for b in &mut self.bands {
+            b.reset();
+        }
     }
 }
 
@@ -865,6 +1010,33 @@ mod tests {
         assert!(
             (peak(&silent) - 0.0001).abs() < 1e-6,
             "below the floor nothing moves"
+        );
+    }
+
+    #[test]
+    fn multiband_at_ratio_one_passes_sound_through_at_the_same_level() {
+        let flat = [("low_ratio", 1.0), ("mid_ratio", 1.0), ("high_ratio", 1.0)];
+        for hz in [80.0, 200.0, 1000.0, 3500.0, 9000.0] {
+            let out = run("altaudio.multiband", &flat, sine(hz, 0.3, 0.6));
+            let p = peak(&out[out.len() / 2..]);
+            assert!((p - 0.3).abs() < 0.015, "{hz} Hz came out at {p}");
+        }
+    }
+
+    #[test]
+    fn multiband_squeezes_only_the_band_that_is_loud() {
+        let set = [
+            ("low_threshold", -30.0),
+            ("low_ratio", 8.0),
+            ("mid_ratio", 1.0),
+            ("high_ratio", 1.0),
+        ];
+        let boom = run("altaudio.multiband", &set, sine(100.0, 0.5, 0.6));
+        assert!(peak(&boom[boom.len() / 2..]) < 0.3, "loud lows come down");
+        let voice = run("altaudio.multiband", &set, sine(1000.0, 0.5, 0.6));
+        assert!(
+            peak(&voice[voice.len() / 2..]) > 0.47,
+            "the middle is left alone"
         );
     }
 }

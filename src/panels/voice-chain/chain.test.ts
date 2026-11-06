@@ -32,6 +32,11 @@ import {
 
 // The ids the core's catalog has (src-tauri/src/dsp/effects).
 const KNOWN = new Set([
+  "altaudio.expander",
+  "altaudio.dynamics_curve",
+  "altaudio.multiband",
+  "altaudio.stereo-expander",
+  "altaudio.distortion",
   "altaudio.parametric_eq",
   "altaudio.hum_cut",
   "altaudio.dynamics",

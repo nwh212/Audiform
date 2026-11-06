@@ -2579,3 +2579,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Snap Selection to Zero Crossings (Waveform editor) moves each selection edge to the nearest zero crossing within 20 ms, the channels averaged (`dsp/zero.rs`, `wave_zero_crossings`). Edit > Paste with Crossfade pastes, then lets the piece before each join run on into its own file by the length asked (1 to 500 ms, at most half of either piece) and crossfades the overlap (`crossfadeSeams` in `wave-edit.ts`); undo takes the crossfade and the paste back in two steps. A copy of one channel pastes as such (the 2026-11-05 rule), and Paste with Crossfade refuses only when some channels are switched off. The always-on zero-crossing snap from AAE 0.13 is not taken yet.
 
 **Why.** From the intake list (AAE c900d03).
+
+## 2026-11-06: Altered Audio Editor intake: five new effects
+
+**Decision.** Five effects from Altered Audio Editor join the catalog: Expander / Gate and Dynamics Curve (`expander.rs`, `curve_dynamics.rs`), Multiband Compressor (in `dynamics.rs`, with its Linkwitz-Riley band split), and Stereo Expander and Distortion (`stereo_fx.rs`; AAE's Channel Mixer from the same file is left out, since Audiform has its own). Dynamics Curve comes with its graph editor (drag a point, click to add one, right-click to remove one, up to eight) and its 19 built-in curves as rack presets; the Expander brings two "Quiet Parts Down" presets. Expander / Gate and Dynamics Curve can listen to a sidechain like Dynamics and Breath Gate. Distortion sits under Amplitude beside Tube Preamp and Amp Model, and Stereo Expander under Stereo, so the menu keeps Audiform's families. Our Compressor gained AAE's `with` constructor so the multiband can build one per band.
+
+**Why.** From the intake list (item 9). The code and tests are taken as they are; each effect's own tests pass here.

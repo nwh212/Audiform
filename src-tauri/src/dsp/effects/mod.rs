@@ -16,9 +16,11 @@
 
 pub mod amp;
 pub mod center;
+pub mod curve_dynamics;
 mod dynamics;
 mod echo;
 mod eq;
+pub mod expander;
 mod filters;
 pub mod mixer;
 pub mod modulation;
@@ -31,6 +33,7 @@ mod restore;
 pub mod reverb;
 pub mod routing;
 pub mod shaped;
+pub mod stereo_fx;
 pub mod tube;
 pub mod verb;
 pub mod vocal;
@@ -48,7 +51,12 @@ pub use eq::{HumCut, ParametricEq};
 pub use restore::{find_spots, repair_spots, Spots};
 
 /// Effects with a level detector that can listen to a sidechain key.
-pub const KEYED: [&str; 2] = ["altaudio.dynamics", "altaudio.breath_gate"];
+pub const KEYED: [&str; 4] = [
+    "altaudio.dynamics",
+    "altaudio.breath_gate",
+    "altaudio.expander",
+    "altaudio.dynamics_curve",
+];
 
 /// Most effects a chain holds.
 pub const MAX_SLOTS: usize = 16;
@@ -191,10 +199,15 @@ pub fn catalog() -> Vec<EffectInfo> {
         phase::phase_info(),
         phase_curve::phase_curve_info(),
         dynamics::compressor_info(),
+        dynamics::multiband_info(),
+        curve_dynamics::info(),
         dynamics::limiter_info(),
         dynamics::gate_info(),
         dynamics::deesser_info(),
         plosive::info(),
+        expander::info(),
+        stereo_fx::expander_info(),
+        stereo_fx::distortion_info(),
         dynamics::leveler_info(),
         tube::opto_info(),
         tube::preamp_info(),
@@ -482,8 +495,13 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.parametric_eq" => Box::new(ParametricEq::new(&p, rate)),
         "altaudio.hum_cut" => Box::new(HumCut::new(&p, rate)),
         "altaudio.dynamics" => Box::new(Compressor::new(&p, rate)),
+        "altaudio.multiband" => Box::new(dynamics::Multiband::new(&p, rate)),
         "altaudio.limiter" => Box::new(Limiter::new(&p, rate)),
         "altaudio.plosive" => Box::new(plosive::Plosive::new(&p, rate)),
+        "altaudio.expander" => Box::new(expander::Expander::new(&p, rate)),
+        "altaudio.stereo-expander" => Box::new(stereo_fx::Expander::new(&p, rate)),
+        "altaudio.distortion" => Box::new(stereo_fx::Distortion::new(&p, rate)),
+        "altaudio.dynamics_curve" => Box::new(curve_dynamics::DynamicsCurve::new(&p, rate)),
         "altaudio.breath_gate" => Box::new(Gate::new(&p, rate)),
         "altaudio.deesser" => Box::new(DeEsser::new(&p, rate)),
         "altaudio.speech_leveler" => Box::new(SpeechLeveler::new(&p, rate)),
