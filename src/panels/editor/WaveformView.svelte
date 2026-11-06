@@ -24,7 +24,7 @@
   import type { TransportState, TransportStore } from "../../stores/transport";
   import { onDestroy, untrack } from "svelte";
   import { waveZoom, type WaveFile } from "../../stores/wave";
-  import { allOn, toggleChannel, waveChannels } from "./wave-channels";
+  import { allOn, soloChannel, toggleChannel, waveChannels } from "./wave-channels";
   import { appearanceTick } from "../../stores/appearance";
   import { channelLabels } from "../properties/channel-mix";
   import { laneWidths } from "../time-info/time-info";
@@ -137,6 +137,22 @@
   const channels = $derived(Math.max(1, Math.min(64, doc?.media[0]?.channels ?? 1)));
   const chNames = $derived(channelLabels(channels));
   const clips = $derived((doc?.tracks[0]?.clips ?? []).slice().sort((a, b) => a.start - b.start));
+
+  // A long press on a channel button uses that channel alone (again: every channel).
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let held = false;
+  function holdChannel(e: PointerEvent, ch: number) {
+    if (e.button !== 0) return;
+    held = false;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      held = true;
+      waveChannels.update((c) => soloChannel(c, ch));
+    }, 450);
+  }
+  function releaseChannel() {
+    clearTimeout(holdTimer);
+  }
 
   /** Moves a just-dragged selection to the nearest zero crossings (up to 20 ms away), quietly. */
   async function snapToZero(start: number, end: number) {
@@ -912,10 +928,19 @@
               class:on
               style:top="{(ch * height) / channels + (height / channels >= 24 ? 4 : 1)}px"
               aria-pressed={on}
-              title={on
+              title={`${on
                 ? `Switch the ${name} channel off: edits, effects, copy and paste then reach only the channels still on${channels === 2 ? ` (${ch === 0 ? "Up" : "Down"} picks this channel alone)` : ""}`
-                : `Switch the ${name} channel back on`}
-              onclick={() => waveChannels.update((c) => toggleChannel(c, ch))}>{label}</button
+                : `Switch the ${name} channel back on`}. Hold to use this channel alone; hold again for all.`}
+              onpointerdown={(e) => holdChannel(e, ch)}
+              onpointerup={releaseChannel}
+              onpointerleave={releaseChannel}
+              onclick={() => {
+                if (held) {
+                  held = false;
+                  return;
+                }
+                waveChannels.update((c) => toggleChannel(c, ch));
+              }}>{label}</button
             >
           {/if}
         {/each}

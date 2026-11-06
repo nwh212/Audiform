@@ -2669,3 +2669,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - The lane pointer follows a tool change at once (R, V, T, Y): the last hover is kept and checked again when the tool changes. Before, the Razor pointer appeared only after the mouse moved.
 - The plain wheel over the session's clips and track headers scrolls the tracks itself (lines and pages turned into pixels) instead of leaving it to the browser, which in the app did nothing.
 - Help > Check for Updates says "Checking for updates..." at once and shows its answer in a dialog (newest version, newer version with its page, or why it could not check). The answer was only a brief status-bar line before, which read as nothing happening.
+
+## 2026-11-06: Hold a channel button to use that channel alone
+
+**Decision.** In the Waveform editor, holding a channel's button (L, R, C, LFE and so on) for about half a second switches every other channel off; holding it again switches them all back on (`soloChannel`, already used by Up and Down on stereo files). A plain click still switches just that channel.
+
+**Why.** Asked in the test pass: on a multichannel file, picking one channel took a click on every other one.
