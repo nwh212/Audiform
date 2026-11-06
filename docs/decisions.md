@@ -2650,3 +2650,4 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 - The slope boxes use a smaller font so "24 dB" fits.
 
 **Why.** The lead found the scale hard to read and the handles out of place. Checked at 100% and 125% display scaling.
+- Follow-up the same day: the window widens from 780 to 1000 pixels (never more than 96% of the screen width), so the frequency scale has more room. The graph height is unchanged.

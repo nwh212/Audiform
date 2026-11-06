@@ -1353,9 +1353,9 @@
     &:has(:global(.pc)) {
       width: 560px;
     }
-    /* The Parametric EQ's band table needs a column per band. */
+    /* The Parametric EQ: a wide graph, so the frequency scale has room; and a column per band. */
     &:has(:global(.eqwin)) {
-      width: min(780px, 96vw);
+      width: min(1000px, 96vw);
     }
     /* A Band EQ fits its row of sliders. */
     &:has(:global(.beq)) {
