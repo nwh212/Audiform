@@ -10,6 +10,7 @@
 
 import { revealLabel } from "../lib/platform";
 import { CHAPTER_FORMATS, type ChapterFormat } from "../panels/markers/chapters";
+import { CompoundCommand } from "../commands/compound";
 import { sessionHistory } from "../stores/history";
 import { mediaPool } from "../stores/media";
 import { session } from "../stores/open-session";
@@ -167,6 +168,31 @@ export function createFileTools(deps: FileToolsDeps) {
         },
         enabled: () => !!session.path && mediaPool.size + (session.current?.media.length ?? 0) > 0,
         reason: () => (session.path ? "No audio in the session." : "Save the session first: its audio is copied into the folder beside it."),
+      }),
+      actions.register({
+        id: "files.link-media",
+        run: async () => {
+          const item = mediaPool.selectedItems()[0];
+          if (!item) return;
+          const [path] = await pickMediaFiles();
+          if (!path || path === item.path) return;
+          if (mediaPool.current.items.some((it) => it.id !== item.id && it.path.toLowerCase() === path.toLowerCase())) {
+            showNotice("That file is already in the Files panel.");
+            return;
+          }
+          const ops = (session.current?.media ?? [])
+            .filter((m) => m.path === item.path)
+            .map((m) => ({ op: "set_media" as const, media: { ...m, path, relative_path: null } }));
+          const parts = [
+            ...(ops.length ? [session.command("Link Media", { op: "batch", ops })] : []),
+            ...[mediaPool.repathCommand([{ id: item.id, path }], "Link Media")].filter((c) => c !== null),
+          ];
+          if (!parts.length) return;
+          await sessionHistory.execute(new CompoundCommand("Link Media", parts));
+          mediaPool.retry(item.id);
+        },
+        enabled: () => mediaPool.current.selected.size === 1,
+        reason: () => "Select the one file to point at a new location.",
       }),
       actions.register({
         id: "file.close-unused",

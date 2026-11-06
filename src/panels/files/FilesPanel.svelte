@@ -381,6 +381,7 @@
       item("edit.delete", selected.length > 1 ? `Remove ${selected.length} Files` : "Remove from Session"),
       item("file.close-unused", "Remove Unused Files"),
       item("file.reveal", revealLabel()),
+      item("files.link-media", "Link Media..."),
     ];
     if (failed.length > 0) {
       out.push({

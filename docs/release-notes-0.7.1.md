@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Link Media** (Files panel right-click, and the clip right-click menu for clips whose file is missing) points a moved or renamed file at its new place; the clips keep their edits.
 - **Add Retake Marker** (Edit > Markers) flags a spot to redo, numbered Retake 1, Retake 2 and so on.
 - **Markers panel picking**: Ctrl+click and Shift+click pick several markers, then Delete removes them; Delete All clears the list. Edit > Markers also has Rename Selected Marker, Delete Selected Markers and Delete All Markers.
 - **Silence Time Selection in Selected Clips** (Edit menu and the lane right-click menu) mutes part of a clip with a volume dip you can still reshape or remove, leaving the audio untouched.

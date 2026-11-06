@@ -14,6 +14,7 @@ import { linkCrossfade } from "./clip-drag";
 import type { ContextItem } from "../../app/ContextMenu.svelte";
 import { clipReversePrepare } from "../../app/core";
 import { editor, type EditorState } from "../../stores/editor";
+import { mediaPool } from "../../stores/media";
 import type { ClipChange, ClipDoc, MarkerDoc, Op, SessionDoc, TempoDoc } from "../../stores/session";
 import { addChange, nearestBar, secondsToBeats } from "../../stores/tempo";
 import { mixOf, toSpeakers } from "../properties/channel-mix";
@@ -213,6 +214,7 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
   if (ed.selectedClips.size > 0) {
     const act = (label: string, id: string): ContextItem => ({ kind: "item", label, shortcut: shortcutFor(id), disabled: !can(id), run: () => run(id) });
     items.push(
+      ...linkMediaItems(ctx),
       act("Split at Playhead", "clip.split"),
       act("Trim Start to Playhead", "clip.trim.start"),
       act("Trim End to Playhead", "clip.trim.end"),
@@ -258,6 +260,39 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
     );
   }
   return items;
+}
+
+/**
+ * "Link Media..." for the selected clips when their file could not be read: it picks that file in the
+ * Files panel and runs Link Media, so a lost file can be pointed at its new place from the clip itself.
+ * Only offered when the selected clips share one such file.
+ */
+function linkMediaItems(ctx: MenuCtx): ContextItem[] {
+  const doc = ctx.doc();
+  const ed = ctx.ed();
+  const paths = new Map((doc?.media ?? []).map((m) => [m.id, m.path]));
+  const lost = new Set<string>();
+  for (const t of doc?.tracks ?? []) {
+    for (const c of t.clips) {
+      const p = ed.selectedClips.has(c.id) ? paths.get(c.media_id) : undefined;
+      if (p && mediaPool.current.items.some((it) => it.path === p && it.status === "error")) lost.add(p);
+    }
+  }
+  if (lost.size !== 1) return [];
+  const [path] = [...lost];
+  const item = mediaPool.current.items.find((it) => it.path === path);
+  if (!item) return [];
+  return [
+    {
+      kind: "item",
+      label: "Link Media...",
+      run: () => {
+        mediaPool.setSelection([item.id]);
+        ctx.run("files.link-media");
+      },
+    },
+    { kind: "sep" },
+  ];
 }
 
 /** Reverse and Invert for the selected clips: toggles that leave the files alone. */

@@ -2621,3 +2621,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Markers > Add Retake Marker drops a cue marker named "Retake 1", "Retake 2" and so on at the playhead, in the session or in the open audio file, also while recording. AAE binds it to F9; Audiform leaves it without a shortcut until the project lead approves one.
 
 **Why.** From the intake list. A quick way to flag a flubbed line during a take and find it later in the Markers panel.
+
+## 2026-11-06: Altered Audio Editor intake: Link Media
+
+**Decision.** Link Media... on the Files panel's right-click menu points one file at a new location: the user picks the file, and the Files panel entry and every session media entry that used the old path move to the new one in a single undoable step, then the file is read again. When the selected clips share one file that could not be read, the clip right-click menu offers Link Media... at the top, which picks that file and runs the same action. A path already in the Files panel is refused.
+
+**Why.** From the intake list (AAE). A moved or renamed recording no longer means rebuilding its clips.
