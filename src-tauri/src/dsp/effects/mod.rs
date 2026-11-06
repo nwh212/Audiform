@@ -25,6 +25,7 @@ pub mod modulation;
 mod phase;
 pub mod phase_curve;
 mod pitch;
+pub mod plosive;
 pub mod print;
 mod restore;
 pub mod reverb;
@@ -193,6 +194,7 @@ pub fn catalog() -> Vec<EffectInfo> {
         dynamics::limiter_info(),
         dynamics::gate_info(),
         dynamics::deesser_info(),
+        plosive::info(),
         dynamics::leveler_info(),
         tube::opto_info(),
         tube::preamp_info(),
@@ -481,6 +483,7 @@ pub fn build(slot: &EffectSlot, rate: u32) -> Option<Box<dyn Processor>> {
         "altaudio.hum_cut" => Box::new(HumCut::new(&p, rate)),
         "altaudio.dynamics" => Box::new(Compressor::new(&p, rate)),
         "altaudio.limiter" => Box::new(Limiter::new(&p, rate)),
+        "altaudio.plosive" => Box::new(plosive::Plosive::new(&p, rate)),
         "altaudio.breath_gate" => Box::new(Gate::new(&p, rate)),
         "altaudio.deesser" => Box::new(DeEsser::new(&p, rate)),
         "altaudio.speech_leveler" => Box::new(SpeechLeveler::new(&p, rate)),

@@ -2561,3 +2561,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Loudness Match gains a Match by choice: Loudness (as before), Peak, True Peak or RMS, the last three to a level in dB (starting at -1, -1 and -18, each remembered), and a Tolerance (0 to 6 dB, remembered) under which rows start unticked. The loudness report from the core gains `rms` (both channels' average power, in dBFS) so the one measuring pass serves every choice. A row flags a change that would put the true peak over 0 dB. Loudness Match is also on the clip right-click menu.
 
 **Why.** From the intake list (AAE c900d03 and 0fef18f). AAE measured peak and RMS with its own analysis module, which Audiform does not have; adding RMS to the loudness pass does the same with no second render. True Peak is added beside AAE's Peak, since Audiform measures it anyway.
+
+## 2026-11-06: Altered Audio Editor intake: Plosive Tamer
+
+**Decision.** AAE's Plosive Tamer (`dsp/effects/plosive.rs`, id `altaudio.plosive`) comes in unchanged with its tests: a low band under the Corner frequency is followed against the voice's body (500 Hz to 3 kHz), and when it rises more than Trigger dB above it a low shelf cuts by the excess, up to Most reduction, re-aimed every 32 frames. Its three presets join the built-in Dynamics presets as Plosives - Close Mic, Firm / Standard Mic / Light Touch.
+
+**Why.** From the intake list (AAE 8f4ccc0). A high-pass filter thins every word; this acts only on pops.

@@ -39,6 +39,7 @@ const KNOWN = new Set([
   "altaudio.echo",
   "altaudio.breath_gate",
   "altaudio.deesser",
+  "altaudio.plosive",
   "altaudio.speech_leveler",
   "altaudio.gain",
   "altaudio.noise_reducer",

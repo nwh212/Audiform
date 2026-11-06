@@ -830,6 +830,10 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
   chainP("Transparent Safety Limiter", "Dynamics", [
     fx("limiter", { detect: 1, ceiling: -0.3, input_boost: 0, lookahead: 10, release: 300 }),
   ]),
+  // Plosive Tamer settings from Altered Audio Editor.
+  chainP("Plosives - Close Mic, Firm", "Dynamics", [fx("plosive", { freq: 140, trigger: 4, reduction: 24, release: 120 })]),
+  chainP("Plosives - Standard Mic", "Dynamics", [fx("plosive", { freq: 120, trigger: 6, reduction: 18, release: 100 })]),
+  chainP("Plosives - Light Touch", "Dynamics", [fx("plosive", { freq: 100, trigger: 9, reduction: 10, release: 80 })]),
   chainP("Gate - Tight Drums", "Dynamics", [
     fx("breath_gate", { threshold: -30, attack: 0.5, hold: 20, release: 60, range: -80 }),
   ]),
