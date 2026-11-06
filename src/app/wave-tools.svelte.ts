@@ -1076,6 +1076,9 @@ export function createWaveTools(deps: WaveToolsDeps) {
     get board() {
       return waveBoard;
     },
+    set board(v: WaveBoard | null) {
+      waveBoard = v;
+    },
     waveEdit,
     waveSetSelection,
     wavePlayhead,

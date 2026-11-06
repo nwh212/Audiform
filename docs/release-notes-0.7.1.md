@@ -6,6 +6,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## New
 
+- **Five clipboards** (Edit > Set Current Clipboard): keep up to five copied pieces and switch between them before pasting.
 - **Snap Selections to Zero Crossings (Always)** (Edit menu) makes every selection you drag in the Waveform editor land on zero crossings, so cuts never click.
 - **Link Media** (Files panel right-click, and the clip right-click menu for clips whose file is missing) points a moved or renamed file at its new place; the clips keep their edits.
 - **Add Retake Marker** (Edit > Markers) flags a spot to redo, numbered Retake 1, Retake 2 and so on.

@@ -96,7 +96,7 @@
   import { pluginSlots } from "./plugin-sync";
   import { exactSamples } from "../stores/exact-samples";
   import { waveChannels } from "../panels/editor/wave-channels";
-  import { oneChannelBoard } from "../panels/editor/wave-edit";
+  import { oneChannelBoard, type WaveBoard } from "../panels/editor/wave-edit";
   import { pathsIgnoreCase, PLATFORM } from "../lib/platform";
   import { SessionFiles, displayName, planOpen, usedPaths, type Choice } from "./session-files";
   import { RECENT_SLOTS } from "./menus/model";
@@ -549,6 +549,22 @@
 
   // Clipboard for clips. Lives for the app session; not the system clipboard.
   let clipBoard: ClipBoard | null = null;
+  // Five clipboards. Edit > Set Current Clipboard picks which one Copy, Cut and Paste use, so a
+  // few pieces can be kept at once. The live values (clipBoard and the Waveform editor's board)
+  // are the current slot; the others wait here.
+  const BOARDS = 5;
+  let boardNow = $state(0);
+  const clipSlots: (ClipBoard | null)[] = Array.from({ length: BOARDS }, () => null);
+  const waveSlots: (WaveBoard | null)[] = Array.from({ length: BOARDS }, () => null);
+  function setBoard(n: number) {
+    if (n === boardNow) return;
+    clipSlots[boardNow] = clipBoard;
+    waveSlots[boardNow] = waveTools.board;
+    boardNow = n;
+    clipBoard = clipSlots[n] ?? null;
+    waveTools.board = waveSlots[n] ?? null;
+    actions.invalidate();
+  }
   const timeSel = () => session.current?.view.selection ?? null;
 
   /** Runs an edit that may hit a locked clip, showing why instead of failing silently. */
@@ -2099,6 +2115,15 @@
         }),
       );
     }
+    offs.push(
+      ...Array.from({ length: BOARDS }, (_, n) =>
+        actions.register({
+          id: `edit.clipboard.${n + 1}`,
+          run: () => setBoard(n),
+          checked: () => boardNow === n,
+        }),
+      ),
+    );
     offs.push(...clipTools.register());
     offs.push(...editTools.register());
     offs.push(...multitrackTools.register());

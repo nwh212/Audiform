@@ -140,6 +140,7 @@ export const MENUS: readonly Menu[] = [
       item("edit.paste-new", "Paste to New File"),
       item("edit.mix-paste", "Mix Paste..."),
       item("edit.paste-crossfade", "Paste with Crossfade..."),
+      sub("Set Current Clipboard", [1, 2, 3, 4, 5].map((n) => item(`edit.clipboard.${n}`, `Clipboard ${n}`))),
       item("edit.delete", "Delete"),
       item("edit.crop", "Crop"),
       item("edit.snap-zero", "Snap Selection to Zero Crossings"),

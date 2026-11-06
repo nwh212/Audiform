@@ -2633,3 +2633,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Edit > Snap Selections to Zero Crossings (Always) is a toggle, off by default and remembered between runs with the other editor settings. While it is on, every selection dragged in the Waveform editor moves its edges to the nearest zero crossings (within 20 ms) as the drag ends, quietly; the one-off Snap Selection to Zero Crossings command still reports what it moved. No shortcut.
 
 **Why.** From the intake list (AAE 0.13). Finishes the zero-crossing work from earlier today.
+
+## 2026-11-06: Altered Audio Editor intake: five clipboards
+
+**Decision.** Edit > Set Current Clipboard picks one of five clipboards (Clipboard 1 to 5, a check mark on the current one). Copy, Cut and Paste in both editors use the current one, so a few pieces can be held at once; switching keeps what the others hold. The clipboards live for the app session, as the single one did, and are not the system clipboard. No shortcuts (AAE has none either).
+
+**Why.** From the intake list (AAE, same behavior).
