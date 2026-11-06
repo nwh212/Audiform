@@ -23,7 +23,8 @@
   freely). Holding a note down holds it on the instrument, and dragging it
   to other pitches plays each one. Play (or Space) hears the clip alone
   from its start, or from the last spot clicked; Loop repeats it. The lane below sets how hard each note
-  plays (Velocity) or where it sits left to right (Pan). Channel puts
+  plays (Velocity) or where it sits left to right (Pan), or a controller's moves
+  such as the sustain pedal (drag to draw, right-drag to erase). Channel puts
   notes on a MIDI channel, shown as their color, for instruments with
   several parts; new notes go on the channel picked. Tools sets, scales
   or randomizes velocity and pan, and Humanize moves notes a little
@@ -52,6 +53,7 @@
   import { midiStepListen, midiStepTake, type SeqNote } from "../../app/core";
   import { barAt, barBeats, segmentAtBeat } from "../../stores/tempo";
   import { tick } from "svelte";
+  import { CONTROLLERS, PITCH_BEND, controllerName, eraseControls, movesOf, paintControl, shapeValue, usedControllers, valueText } from "./midi-controls";
   import { beatsToSamples, CHANNEL_COLORS, GRIDS, MIN_NOTE, addNote, humanize, legato, quantize, stepChords, randomizePan, randomizeVelocity, scaleVelocity, setChannel, setPan, targetsOf, copyNotes, gridBeats, isBlackKey, moveNotes, noteName, pasteNotes, pitchRange, removeNotes, resizeNotes, resizeNotesStart, setVelocity, snap, snapDown, spanOf } from "./midi";
 
   interface Props {
@@ -154,7 +156,13 @@
   /** MIDI channel (0 to 15) new notes go on. */
   let channel = $state(0);
   /** What the lane under the roll shows and sets. */
-  let lane = $state<"velocity" | "pan">("velocity");
+  let lane = $state<string>("velocity");
+  /** The controller the lane shows ("cc64" is the sustain pedal), or null for Velocity and Pan. */
+  const ctl = $derived(lane.startsWith("cc") ? Number(lane.slice(2)) : null);
+  const ctlMoves = $derived(ctl === null ? [] : movesOf(clip.controls, ctl));
+  const ctlUsed = $derived(usedControllers(clip.controls));
+  /** The controller lane's height in pixels (it matches the CSS). */
+  const LANE_H = 60;
   /** The Tools panel, and its values. */
   let toolsOpen = $state(false);
   /** The tool in hand: Draw adds notes, Select picks them, Erase removes them. */
@@ -679,6 +687,49 @@
     window.addEventListener("pointerup", up, true);
   }
 
+  /**
+   * The controller lane: drag to draw moves (they replace the ones under
+   * the pointer), right-drag to erase. Snaps to the grid unless Alt is held.
+   */
+  function onControlDown(e: PointerEvent) {
+    if (ctl === null || (e.button !== 0 && e.button !== 2)) return;
+    e.preventDefault();
+    const id = ctl;
+    const erase = e.button === 2;
+    const el = e.currentTarget as HTMLElement;
+    let last: number | null = null;
+    const at = (ev: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      const raw = Math.max(0, (ev.clientX - r.left) / zoom);
+      const g = ev.altKey ? 0 : gridStep;
+      return { beat: g > 0 ? snapDown(raw, g) : raw, f: 1 - (ev.clientY - r.top) / r.height };
+    };
+    const set = (ev: PointerEvent) => {
+      const p = at(ev);
+      const from = last ?? p.beat;
+      const controls = erase ? eraseControls(clip.controls, id, from, p.beat) : paintControl(clip.controls, id, from, p.beat, shapeValue(id, p.f), channel);
+      clip = { ...clip, controls };
+      last = p.beat;
+    };
+    set(e);
+    const up = () => {
+      window.removeEventListener("pointermove", set, true);
+      window.removeEventListener("pointerup", up, true);
+    };
+    window.addEventListener("pointermove", set, true);
+    window.addEventListener("pointerup", up, true);
+  }
+
+  /** The controller's moves as a stepped line: each value holds until the next move. */
+  const ctlPath = $derived.by(() => {
+    const first = ctlMoves[0];
+    if (ctl === null || !first) return "";
+    const y = (v: number) => (1 - v) * (LANE_H - 4) + 2;
+    let d = `M${xOf(first.at)},${y(first.value)}`;
+    for (const m of ctlMoves.slice(1)) d += `H${xOf(m.at)}V${y(m.value)}`;
+    return d + `H${widthPx}`;
+  });
+
   const pickedVelocity = $derived(picked.size ? Math.round([...picked].reduce((s, i) => s + (clip.notes[i]?.velocity ?? 0), 0) / picked.size) : null);
 
   function done() {
@@ -788,6 +839,14 @@
         <select bind:value={lane}>
           <option value="velocity">Velocity</option>
           <option value="pan">Pan</option>
+          <optgroup label="Controllers">
+            {#each CONTROLLERS as c (c.id)}
+              <option value="cc{c.id}">{c.name}{ctlUsed.has(c.id) ? " •" : ""}</option>
+            {/each}
+            {#each [...ctlUsed].filter((u) => !CONTROLLERS.some((c) => c.id === u)).sort((a, b) => a - b) as u (u)}
+              <option value="cc{u}">{controllerName(u)} •</option>
+            {/each}
+          </optgroup>
         </select>
       </label>
       <span class="zoom" role="group" aria-label="Zoom">
@@ -925,6 +984,23 @@
           {/each}
         </div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
+        {#if ctl !== null}
+          <div
+            class="velocity controls"
+            class:pan={ctl === PITCH_BEND}
+            style:width="{widthPx}px"
+            onpointerdown={onControlDown}
+            oncontextmenu={(e) => e.preventDefault()}
+            title="{controllerName(ctl)}: drag to draw, right-drag to erase. Alt draws off the grid."
+          >
+            <svg width={widthPx} height={LANE_H} aria-hidden="true">
+              <path d={ctlPath} />
+              {#each ctlMoves as m (m.at)}
+                <circle cx={xOf(m.at)} cy={(1 - m.value) * (LANE_H - 4) + 2} r="2.5"><title>{valueText(ctl, m.value)}</title></circle>
+              {/each}
+            </svg>
+          </div>
+        {:else}
         <div class="velocity" class:pan={lane === "pan"} style:width="{widthPx}px" onpointerdown={onVelocityDown} title={lane === "pan" ? "Pan: drag a bar up (right) or down (left); the middle line is the center" : "Velocity: drag a bar up or down"}>
           {#each clip.notes as n, i (i)}
             {#if lane === "pan"}
@@ -935,6 +1011,7 @@
             {/if}
           {/each}
         </div>
+        {/if}
       </div>
     </div>
 
@@ -1303,6 +1380,22 @@
   }
   .velocity.pan {
     background: linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border-strong) calc(50% - 0.5px), var(--border-strong) calc(50% + 0.5px), transparent calc(50% + 0.5px)), var(--surface-2);
+  }
+  .velocity.controls {
+    cursor: crosshair;
+  }
+  .velocity.controls svg {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+  }
+  .velocity.controls path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+  .velocity.controls circle {
+    fill: var(--accent);
   }
   .bar.picked {
     background: var(--text);

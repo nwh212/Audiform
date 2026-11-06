@@ -28,9 +28,9 @@ use vst3::Steinberg::Vst::SymbolicSampleSizes_::kSample32;
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, Event, Event__type0, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentHandler, IComponentTrait, IConnectionPoint,
-    IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IParameterChanges,
-    NoteExpressionValueEvent, NoteOffEvent, NoteOnEvent, ParameterInfo, ProcessContext,
-    ProcessData, ProcessSetup, SpeakerArr, SpeakerArrangement,
+    IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IMidiMapping,
+    IMidiMappingTrait, IParameterChanges, NoteExpressionValueEvent, NoteOffEvent, NoteOnEvent,
+    ParameterInfo, ProcessContext, ProcessData, ProcessSetup, SpeakerArr, SpeakerArrangement,
 };
 use vst3::Steinberg::{
     kResultOk, kResultTrue, FUnknown, IBStream, IPluginBaseTrait, IPluginFactoryTrait, TUID,
@@ -88,6 +88,9 @@ pub struct Plugin {
     /// The main input's and output's speakers, by name.
     pub main_in: Vec<String>,
     pub main_out: Vec<String>,
+    /// MIDI controllers it takes (0-127, 128 aftertouch, 129 pitch bend)
+    /// and the control each one moves.
+    pub midi_map: Vec<(u8, u32)>,
     _handler: ComWrapper<Handler>,
     _host: ComWrapper<HostApp>,
     _module: Arc<Module>,
@@ -295,6 +298,10 @@ impl Plugin {
                 .as_ref()
                 .map(|c| read_params(c))
                 .unwrap_or_default();
+            let midi_map = controller
+                .as_ref()
+                .map(|c| read_midi_map(c))
+                .unwrap_or_default();
             let audio = Audio {
                 processor,
                 component: component.clone(),
@@ -325,6 +332,7 @@ impl Plugin {
                     sidechain,
                     main_in,
                     main_out,
+                    midi_map,
                     _handler: handler,
                     _host: host,
                     _module: module,
@@ -652,6 +660,23 @@ fn vst_event(n: &NoteEvent, offset: u32) -> Event {
             }
         },
     }
+}
+
+/// The MIDI controllers a plug-in maps to its controls (on its first note
+/// input, MIDI channel 1): the sustain pedal (64), the mod wheel (1),
+/// pitch bend (129) and so on. Empty when it maps none.
+unsafe fn read_midi_map(c: &ComPtr<IEditController>) -> Vec<(u8, u32)> {
+    let Some(m) = c.cast::<IMidiMapping>() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for cc in 0..130i16 {
+        let mut id = 0;
+        if m.getMidiControllerAssignment(0, 0, cc, &mut id) == kResultOk {
+            out.push((cc as u8, id));
+        }
+    }
+    out
 }
 
 unsafe fn read_params(c: &ComPtr<IEditController>) -> Vec<ParamInfo> {

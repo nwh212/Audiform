@@ -415,6 +415,9 @@ pub struct MidiPlan {
     pub notes: Vec<NotePlan>,
     /// Every note's end: (frame, pitch, channel), in order.
     pub offs: Vec<(u64, u8, u8)>,
+    /// Controller moves (sustain pedal, mod wheel, pitch bend...):
+    /// (frame, controller, value 0 to 1), in order.
+    pub controls: Vec<(u64, u8, f32)>,
 }
 
 /// What a MIDI track plays, or None when it has no instrument (silent).
@@ -446,11 +449,30 @@ fn midi_plan(t: &Track, tempo: &Tempo, out_rate: u32) -> Option<MidiPlan> {
     notes.sort_by_key(|n| n.on);
     let mut offs: Vec<(u64, u8, u8)> = notes.iter().map(|n| (n.off, n.pitch, n.channel)).collect();
     offs.sort_unstable();
+    let mut controls: Vec<(u64, u8, f32)> = t
+        .midi_clips
+        .iter()
+        .filter(|c| !c.muted)
+        .flat_map(|c| {
+            c.controls
+                .iter()
+                .filter(move |e| e.at >= 0.0 && e.at <= c.length)
+                .map(move |e| {
+                    (
+                        tempo.samples(c.start + e.at, out_rate),
+                        e.controller.min(129),
+                        e.value.clamp(0.0, 1.0),
+                    )
+                })
+        })
+        .collect();
+    controls.sort_by_key(|c| c.0);
     Some(MidiPlan {
         instrument,
         tempo: tempo.clone(),
         notes,
         offs,
+        controls,
     })
 }
 

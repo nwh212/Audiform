@@ -8,9 +8,9 @@
  * the bar the last one ends in.
  */
 
-import type { MidiTakeNote } from "./core";
+import type { MidiTakeControl, MidiTakeNote } from "./core";
 import { MIN_NOTE, samplesToBeats } from "../panels/editor/midi";
-import type { MidiClipDoc, NoteDoc, TempoDoc } from "../stores/session";
+import type { ControlDoc, MidiClipDoc, NoteDoc, TempoDoc } from "../stores/session";
 import { barAt, barStart } from "../stores/tempo";
 
 /**
@@ -26,6 +26,7 @@ export function midiTakeClip(
   punch: { start: number; end: number } | null,
   id: string,
   name: string,
+  moves: MidiTakeControl[] = [],
 ): MidiClipDoc | null {
   const placed = notes
     .map((n) => ({ n, on: at + n.start * rate, off: at + n.end * rate }))
@@ -45,5 +46,17 @@ export function midiTakeClip(
     ...(n.channel ? { channel: n.channel } : {}),
   }));
   out.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
-  return { id, name, start, length: Math.max(end - start, MIN_NOTE), notes: out };
+  const length = Math.max(end - start, MIN_NOTE);
+  // Controller moves inside the clip (sustain pedal presses and the like) come along.
+  const controls: ControlDoc[] = moves
+    .map((m) => ({ m, beat: samplesToBeats(at + m.at * rate, tempo, rate) - start }))
+    .filter((x) => x.beat >= 0 && x.beat <= length)
+    .map(({ m, beat }) => ({
+      at: beat,
+      controller: Math.min(129, Math.max(0, m.controller)),
+      value: Math.min(1, Math.max(0, m.value)),
+      ...(m.channel ? { channel: m.channel } : {}),
+    }))
+    .sort((a, b) => a.at - b.at);
+  return { id, name, start, length, notes: out, ...(controls.length ? { controls } : {}) };
 }

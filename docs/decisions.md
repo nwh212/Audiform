@@ -2698,3 +2698,16 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** When a plug-in refuses the surround layout asked for, the plug-in host now tries the other common layouts with as many speakers (7.1 "music" with side surrounds and 7.1 "cinema" with center fronts; 5.1, 6.1, 7.1.2 and 7.1.4 variants), then the plug-in's own layout when it has as many speakers, before it settles for stereo. A cinema plug-in's Lc and Rc stand in for the file's side pair, so no channel is dropped. The log says what each plug-in took ("plug-in layout: ... took L R C LFE Ls Rs Lss Rss in and ... out").
 
 **Why.** The second test pass still heard only L and R through a 7.1 plug-in. One likely cause is a plug-in that offers 7.1 in another arrangement than the one asked for. Not tried with a real surround plug-in here (the test plug-in is stereo). Separately, Waveform editor playback folds a surround file to stereo before the rack, so a plug-in there hears L and R sums while playing; Apply runs it on every channel.
+
+## 2026-11-06: MIDI controllers: the sustain pedal as controller 64, and a controller lane
+
+**Decision.** MIDI clips keep controller moves (`MidiClip.controls`: time in beats, controller 0 to 127, 128 for channel aftertouch, 129 for pitch bend, value 0 to 1, channel). Recording keeps every controller, aftertouch and pitch bend move played. Playback and live playing send them to the instrument through the controller-to-parameter map the plug-in offers (VST3 MIDI mapping), at the start of each block, with the last value before the start point sent when playback starts mid-clip. The sustain pedal goes to the instrument as controller 64 when the instrument maps it; for one that does not, Audiform holds the notes as before, and a recording then has the longer notes instead. The piano roll's bottom lane (Lane: Velocity, Pan, and now the controllers: Sustain Pedal, Mod Wheel, Expression, Volume, Pan, Breath, Sostenuto, Soft Pedal, Pitch Bend, Aftertouch, plus any other the clip uses, marked with a dot) shows each controller as a stepped line: drag to draw, right-drag to erase, Alt for off the grid. Pedals take only up or down.
+
+**Why.** The project lead: sustain in other music software is not made by stretching notes but by sending the pedal as its controller (64), and controller events should be viewable and editable in the piano roll's bottom lane with velocity and pan. Older sessions have no moves and are unchanged; the field is left out of the file when empty.
+
+## 2026-11-06: Live MIDI playing opens its output again when it stalls
+
+**Decision.** The stream that plays armed MIDI tracks live watches its own queue. When the queue stays full for half a second (the device has stopped pulling sound, for example after a recording stream on the same driver opened or closed), it opens its output stream again and logs "midi live: the output stalled; opened it again".
+
+**Why.** Reported: the instrument did not seem to play the notes played while recording MIDI. With ASIO a driver can serve only some of the streams opened on it at once, and the live player can be the one left waiting. This is a guess at the cause; not tried on hardware here.
+

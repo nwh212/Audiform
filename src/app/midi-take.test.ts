@@ -20,6 +20,18 @@ describe("recorded MIDI", () => {
     expect(c.notes[0]).toEqual({ pitch: 60, velocity: 127, start: 1, length: 1 });
     expect(c.notes[1]).toEqual({ pitch: 64, velocity: 64, start: 4.5, length: 1, channel: 2 });
   });
+  it("brings the sustain pedal along as controller moves in beats", () => {
+    const notes = [{ pitch: 60, channel: 0, velocity: 1, start: 0.5, end: 1.0 }];
+    const moves = [
+      { controller: 64, channel: 0, value: 1, at: 0.25 },
+      { controller: 64, channel: 0, value: 0, at: 1.5 },
+    ];
+    const c = midiTakeClip(notes, 0, rate, DEFAULT_TEMPO, null, "c", "Take", moves)!;
+    expect(c.controls).toEqual([
+      { at: 0.5, controller: 64, value: 1 },
+      { at: 3, controller: 64, value: 0 },
+    ]);
+  });
   it("keeps only notes starting inside a punch-in, and nothing makes no clip", () => {
     const notes = [
       { pitch: 60, channel: 0, velocity: 1, start: 0, end: 0.5 },

@@ -307,6 +307,20 @@ export interface MidiClipDoc {
   /** Clip level in dB: its notes play harder or softer by this much. */
   gain_db?: number;
   notes: NoteDoc[];
+  /** Controller moves (sustain pedal, mod wheel, pitch bend), played to the instrument. */
+  controls?: ControlDoc[];
+}
+
+/** One controller move in a MIDI clip. */
+export interface ControlDoc {
+  /** Beats from the clip's start. */
+  at: number;
+  /** 0 to 127 as in MIDI (64 is the sustain pedal), 128 channel aftertouch, 129 pitch bend. */
+  controller: number;
+  /** 0 to 1 (pitch bend: 0.5 is the middle). */
+  value: number;
+  /** MIDI channel, 0 to 15. */
+  channel?: number;
 }
 
 /** Speaker layouts a 3D Space session plays and exports in. */

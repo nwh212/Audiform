@@ -387,6 +387,7 @@ fn main_loop(out: &Out, rx: mpsc::Receiver<ToMain>) {
                                 inputs: p.main_in.clone(),
                                 outputs: p.main_out.clone(),
                                 sidechain: p.sidechain,
+                                midi_map: p.midi_map.clone(),
                             },
                         );
                         let to_audio = a.from_editor.clone();

@@ -361,6 +361,9 @@ pub struct Host {
     /// plug-in runs with its own layout.
     pub inputs: Vec<String>,
     pub outputs: Vec<String>,
+    /// MIDI controllers the plug-in takes (64 sustain, 1 mod wheel, 129
+    /// pitch bend...) and the control each one moves.
+    pub midi_map: Vec<(u8, u32)>,
     /// The settings the plug-in last reported or was given, so the same
     /// settings coming back from the session are not sent again.
     last_state: Option<String>,
@@ -450,6 +453,7 @@ impl Host {
             late_since: None,
             inputs: vec!["L".into(), "R".into()],
             outputs: vec!["L".into(), "R".into()],
+            midi_map: Vec::new(),
         };
         let load = Request::Load {
             path: found.bundle.to_string_lossy().into_owned(),
@@ -468,8 +472,10 @@ impl Host {
                 inputs,
                 outputs,
                 sidechain,
+                midi_map,
                 ..
             }) => {
+                host.midi_map = midi_map;
                 if sidechain && !found.info.sidechain {
                     super::note_sidechain(&found.info.cid);
                 }
@@ -543,6 +549,14 @@ impl Host {
     /// instruments). False (and `io` untouched) when the plug-in is gone.
     pub fn process(&mut self, changes: &[(u32, f64)], notes: &[NoteEvent], io: &mut [f32]) -> bool {
         self.process_ch(changes, notes, io, 2)
+    }
+
+    /// The control a MIDI controller moves on this plug-in, if it takes it.
+    pub fn control_for(&self, controller: u8) -> Option<u32> {
+        self.midi_map
+            .iter()
+            .find(|(c, _)| *c == controller)
+            .map(|(_, id)| *id)
     }
 
     /// Channels per frame the plug-in's audio goes in and out with:
@@ -1513,6 +1527,18 @@ impl Instrument {
             host,
             latency,
             pending,
+        }
+    }
+
+    /// A MIDI controller move (64 sustain, 1 mod wheel, 129 pitch bend...),
+    /// value 0 to 1, sent with the next block as the control the
+    /// instrument maps it to. Ignored when it maps none.
+    pub fn control(&mut self, controller: u8, value: f32) {
+        let Some(host) = &self.host else { return };
+        let id = host.lock().ok().and_then(|h| h.control_for(controller));
+        if let Some(id) = id {
+            self.pending.retain(|(p, _)| *p != id);
+            self.pending.push((id, f64::from(value.clamp(0.0, 1.0))));
         }
     }
 

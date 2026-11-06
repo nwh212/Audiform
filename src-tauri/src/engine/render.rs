@@ -474,7 +474,17 @@ impl Playing {
     /// Starts the instrument for playback from output frame `start`,
     /// primed so its first sound heard is the sound at `start`.
     fn open(midi: &MidiPlan, start: u64, rate: u32) -> Playing {
-        let inst = Instrument::start(&midi.instrument, rate, &midi.tempo);
+        let mut inst = Instrument::start(&midi.instrument, rate, &midi.tempo);
+        // Controllers as they stand at the start (a pedal already down).
+        let mut last: Vec<(u8, f32)> = Vec::new();
+        for &(f, c, v) in midi.controls.iter().take_while(|x| x.0 < start) {
+            let _ = f;
+            last.retain(|x| x.0 != c);
+            last.push((c, v));
+        }
+        for (c, v) in last {
+            inst.control(c, v);
+        }
         let chase = midi
             .notes
             .iter()
@@ -536,6 +546,11 @@ impl Playing {
         }
         // In time order; at the same frame a note ends before the next starts.
         self.events.sort_by_key(|e| (e.offset, e.on));
+        // Controller moves due in this block go with it.
+        let first = midi.controls.partition_point(|c| c.0 < from);
+        for &(_, c, v) in midi.controls[first..].iter().take_while(|c| c.0 < to) {
+            self.inst.control(c, v);
+        }
         self.inst.play(&self.events, buf);
         self.at = to;
     }

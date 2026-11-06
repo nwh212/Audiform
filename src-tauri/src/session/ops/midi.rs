@@ -104,6 +104,7 @@ mod tests {
         );
         assert_eq!(s.tracks[0].kind, TrackKind::Midi);
         let clip = MidiClip {
+            controls: Vec::new(),
             id: new_id(),
             name: "Chords".into(),
             start: 4.0,

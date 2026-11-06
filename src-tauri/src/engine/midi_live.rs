@@ -15,8 +15,11 @@
 //! - Recorded: while recording, each armed track's notes are kept with
 //!   their times, and become a MIDI clip when recording stops.
 //!
-//! The sustain pedal holds notes the way a piano's does: a key let go while
-//! it is down keeps sounding (and recording) until the pedal comes up.
+//! Controllers (the sustain pedal, mod wheel, pitch bend and the rest) go
+//! to the instrument as the controls it maps them to, and are recorded with
+//! the notes. For an instrument that takes no sustain pedal, the pedal holds
+//! notes the way a piano's does instead: a key let go while it is down keeps
+//! sounding (and recording) until the pedal comes up.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -60,12 +63,22 @@ pub enum KeyEvent {
         pitch: u8,
         channel: u8,
     },
+    /// A controller moved: 0 to 127 as in MIDI, 128 channel aftertouch,
+    /// 129 pitch bend. Value 0 to 1.
+    Control {
+        controller: u8,
+        channel: u8,
+        value: f32,
+    },
 }
 
 /// The keys down and held by the pedal on one track's input, turning raw
 /// MIDI messages into the notes that start and end.
 #[derive(Debug, Default)]
 pub struct Keys {
+    /// The instrument takes the sustain pedal itself: it is passed on as a
+    /// controller instead of holding notes here.
+    pub pass_pedal: bool,
     pedal: [bool; 16],
     /// Keys pressed and not yet let go: (pitch, channel).
     down: Vec<(u8, u8)>,
@@ -111,7 +124,15 @@ impl Keys {
                     out.push(KeyEvent::Off { pitch: a, channel });
                 }
             }
-            // Sustain pedal.
+            // Sustain pedal, for an instrument that takes it.
+            0xb0 if a == 64 && self.pass_pedal => {
+                out.push(KeyEvent::Control {
+                    controller: 64,
+                    channel,
+                    value: f32::from(b) / 127.0,
+                });
+            }
+            // Sustain pedal, held here.
             0xb0 if a == 64 => {
                 let on = b >= 64;
                 self.pedal[usize::from(channel)] = on;
@@ -136,6 +157,24 @@ impl Keys {
                     out.push(KeyEvent::Off { pitch, channel });
                 }
             }
+            // Any other controller.
+            0xb0 => out.push(KeyEvent::Control {
+                controller: a,
+                channel,
+                value: f32::from(b) / 127.0,
+            }),
+            // Channel aftertouch.
+            0xd0 => out.push(KeyEvent::Control {
+                controller: 128,
+                channel,
+                value: f32::from(a) / 127.0,
+            }),
+            // Pitch bend, 14 bits.
+            0xe0 => out.push(KeyEvent::Control {
+                controller: 129,
+                channel,
+                value: f32::from(u16::from(b) << 7 | u16::from(a)) / 16_383.0,
+            }),
             _ => {}
         }
     }
@@ -160,12 +199,23 @@ pub struct TakeNote {
     pub end: f64,
 }
 
-/// One armed track's recorded notes.
+/// A recorded controller move, with its time in seconds from the start of recording.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct TakeControl {
+    pub controller: u8,
+    pub channel: u8,
+    /// 0 to 1.
+    pub value: f32,
+    pub at: f64,
+}
+
+/// One armed track's recorded notes and controller moves.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MidiTake {
     pub track_id: Id,
     pub notes: Vec<TakeNote>,
+    pub controls: Vec<TakeControl>,
 }
 
 #[derive(Debug, Default)]
@@ -173,6 +223,7 @@ struct Capture {
     /// Notes started and not ended yet: (pitch, channel, velocity, start).
     open: Vec<(u8, u8, f32, f64)>,
     done: Vec<TakeNote>,
+    controls: Vec<TakeControl>,
 }
 
 impl Capture {
@@ -199,11 +250,22 @@ impl Capture {
                     });
                 }
             }
+            KeyEvent::Control {
+                controller,
+                channel,
+                value,
+            } => self.controls.push(TakeControl {
+                controller,
+                channel,
+                value,
+                at: t,
+            }),
         }
     }
 
-    /// The notes, every one still held ended at `t`, in order of start.
-    fn finish(mut self, t: f64) -> Vec<TakeNote> {
+    /// The notes, every one still held ended at `t`, in order of start,
+    /// and the controller moves.
+    fn finish(mut self, t: f64) -> (Vec<TakeNote>, Vec<TakeControl>) {
         for (pitch, channel, velocity, start) in self.open.drain(..) {
             self.done.push(TakeNote {
                 pitch,
@@ -214,7 +276,7 @@ impl Capture {
             });
         }
         self.done.sort_by(|a, b| a.start.total_cmp(&b.start));
-        self.done
+        (self.done, self.controls)
     }
 }
 
@@ -260,7 +322,7 @@ struct Route {
     track: LiveTrack,
     keys: Keys,
     /// Notes for the live voice, taken by the player each block.
-    queue: Arc<Mutex<Vec<NoteEvent>>>,
+    queue: Arc<Mutex<Vec<KeyEvent>>>,
     capture: Option<Capture>,
 }
 
@@ -326,7 +388,7 @@ impl Routes {
                 continue;
             }
             if let Ok(mut q) = r.queue.lock() {
-                q.extend(evs.iter().map(|e| note_event(*e)));
+                q.extend(evs.iter().copied());
             }
             if let (Some(c), Some(t)) = (r.capture.as_mut(), t) {
                 for e in &evs {
@@ -337,8 +399,9 @@ impl Routes {
     }
 }
 
-fn note_event(e: KeyEvent) -> NoteEvent {
-    match e {
+/// The note a key event plays, or None for a controller move.
+fn note_event(e: KeyEvent) -> Option<NoteEvent> {
+    Some(match e {
         KeyEvent::On {
             pitch,
             channel,
@@ -359,28 +422,37 @@ fn note_event(e: KeyEvent) -> NoteEvent {
             channel,
             pan: 0.0,
         },
-    }
+        KeyEvent::Control { .. } => return None,
+    })
 }
 
 /// A track's instrument and effects, playing live.
 struct Voice {
     track_id: Id,
     made_from: LiveTrack,
-    queue: Arc<Mutex<Vec<NoteEvent>>>,
+    queue: Arc<Mutex<Vec<KeyEvent>>>,
     host: Arc<Mutex<Host>>,
     chain: Option<ChainProcessor>,
     gains: [f32; 2],
     pending: Vec<(u32, f64)>,
     /// Notes sounding, so they can be let go when the voice goes.
     sounding: Vec<(u8, u8)>,
+    /// The instrument takes the sustain pedal (CC 64) itself.
+    takes_pedal: bool,
 }
 
 impl Voice {
-    fn start(t: &LiveTrack, queue: Arc<Mutex<Vec<NoteEvent>>>, rate: u32) -> Option<Voice> {
+    fn start(t: &LiveTrack, queue: Arc<Mutex<Vec<KeyEvent>>>, rate: u32) -> Option<Voice> {
         let slot = t.instrument.as_ref().filter(|s| s.enabled)?;
         // Copies of their own, so playback's keep playing undisturbed.
         let host = instance::dedicated(|| instance::host_for(slot, rate))?;
-        let pending = host.lock().ok()?.differing(&instance::slot_params_of(slot));
+        let (pending, takes_pedal) = {
+            let h = host.lock().ok()?;
+            (
+                h.differing(&instance::slot_params_of(slot)),
+                h.control_for(64).is_some(),
+            )
+        };
         let chain = t.chain.as_ref().and_then(|c| {
             let mut c = c.clone();
             // An effect keyed from another track has nothing to listen to here.
@@ -396,15 +468,33 @@ impl Voice {
             gains: t.gains(),
             pending,
             sounding: Vec::new(),
+            takes_pedal,
         })
     }
 
     /// Adds the next `buf.len() / 2` frames into `mix`.
     fn play(&mut self, buf: &mut [f32], mix: &mut [f32]) {
-        let notes: Vec<NoteEvent> = match self.queue.lock() {
+        let events: Vec<KeyEvent> = match self.queue.lock() {
             Ok(mut q) => std::mem::take(&mut *q),
             Err(_) => Vec::new(),
         };
+        let notes: Vec<NoteEvent> = events.iter().filter_map(|e| note_event(*e)).collect();
+        // Controller moves become the controls the instrument maps them to.
+        if events.iter().any(|e| matches!(e, KeyEvent::Control { .. })) {
+            if let Ok(h) = self.host.lock() {
+                for e in &events {
+                    if let KeyEvent::Control {
+                        controller, value, ..
+                    } = *e
+                    {
+                        if let Some(id) = h.control_for(controller) {
+                            self.pending.retain(|(p, _)| *p != id);
+                            self.pending.push((id, f64::from(value)));
+                        }
+                    }
+                }
+            }
+        }
         for n in &notes {
             if n.on {
                 self.sounding.push((n.pitch, n.channel));
@@ -442,7 +532,7 @@ impl Voice {
         let offs: Vec<NoteEvent> = self
             .sounding
             .drain(..)
-            .map(|(pitch, channel)| note_event(KeyEvent::Off { pitch, channel }))
+            .filter_map(|(pitch, channel)| note_event(KeyEvent::Off { pitch, channel }))
             .collect();
         if offs.is_empty() {
             return;
@@ -494,7 +584,7 @@ impl Player {
         let (v, s) = (voices.clone(), stop.clone());
         let thread = thread::Builder::new()
             .name("midi-live".into())
-            .spawn(move || run(producer, stream, v, s, ahead))
+            .spawn(move || run(producer, stream, v, s, ahead, rate))
             .map_err(|e| e.to_string())?;
         Ok(Player {
             voices,
@@ -514,19 +604,51 @@ impl Drop for Player {
     }
 }
 
+/// How long the speakers may stop taking the live sound before its
+/// stream is opened again.
+const STALL: Duration = Duration::from_millis(500);
+
 fn run(
     mut out: Producer<f32>,
-    stream: super::host::QuietStream,
+    mut stream: super::host::QuietStream,
     voices: Arc<Mutex<Vec<Voice>>>,
     stop: Arc<AtomicBool>,
     ahead: usize,
+    rate: u32,
 ) {
-    let capacity = out.buffer().capacity();
+    let mut capacity = out.buffer().capacity();
     let mut buf = vec![0.0f32; BLOCK * 2];
     let mut mix = vec![0.0f32; BLOCK * 2];
+    // When the speakers last took some of the queue.
+    let mut taken = Instant::now();
+    let mut last_slots = out.slots();
     while !stop.load(Ordering::SeqCst) {
-        let waiting = (capacity - out.slots()) / 2;
-        if waiting >= ahead || out.slots() < BLOCK * 2 {
+        let slots = out.slots();
+        if slots != last_slots {
+            if slots > last_slots {
+                taken = Instant::now();
+            }
+            last_slots = slots;
+        }
+        let waiting = (capacity - slots) / 2;
+        if waiting >= ahead || slots < BLOCK * 2 {
+            // The driver stopped calling this stream (on ASIO, playback
+            // starting on the same driver can do that): open it again.
+            if waiting >= ahead && taken.elapsed() > STALL {
+                taken = Instant::now();
+                match super::record::open_monitor(rate, None) {
+                    Ok((p, st)) => {
+                        drop(std::mem::replace(&mut stream, st));
+                        out = p;
+                        capacity = out.buffer().capacity();
+                        last_slots = out.slots();
+                        super::host::log("midi live: the output stalled; opened it again");
+                    }
+                    Err(e) => {
+                        super::host::log(&format!("midi live: could not reopen the output: {e}"))
+                    }
+                }
+            }
             thread::sleep(Duration::from_millis(1));
             continue;
         }
@@ -581,7 +703,7 @@ impl MidiLive {
     pub fn set(&self, tracks: Vec<LiveTrack>) -> Result<(), String> {
         let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
         // Routes: keep each track's keys and recording, update the rest.
-        let queues: Vec<(Id, Arc<Mutex<Vec<NoteEvent>>>)> = {
+        let queues: Vec<(Id, Arc<Mutex<Vec<KeyEvent>>>)> = {
             let mut r = self.routes.lock().map_err(|e| e.to_string())?;
             let mut old = std::mem::take(&mut r.list);
             let recording = r.t0.is_some();
@@ -594,7 +716,7 @@ impl MidiLive {
                             let mut evs = Vec::new();
                             x.keys.release_all(&mut evs);
                             if let Ok(mut q) = x.queue.lock() {
-                                q.extend(evs.iter().map(|e| note_event(*e)));
+                                q.extend(evs.iter().copied());
                             }
                         }
                         x.track = t.clone();
@@ -653,8 +775,17 @@ impl MidiLive {
                 Voice::start(t, q, rate)
             })
             .collect();
+        let mut pedal: Vec<(Id, bool)> = Vec::new();
         if let Ok(mut vs) = player.voices.lock() {
             vs.extend(fresh);
+            pedal = vs.iter().map(|v| (v.track_id, v.takes_pedal)).collect();
+        }
+        // An instrument that takes the sustain pedal gets it as a controller;
+        // for the others the pedal holds notes here.
+        if let Ok(mut r) = self.routes.lock() {
+            for x in &mut r.list {
+                x.keys.pass_pedal = pedal.iter().any(|(id, on)| *id == x.track.track_id && *on);
+            }
         }
         Ok(())
     }
@@ -770,10 +901,11 @@ impl MidiLive {
         Ok(r.list
             .iter_mut()
             .filter_map(|x| {
-                let notes = x.capture.take()?.finish(t);
-                (!notes.is_empty()).then_some(MidiTake {
+                let (notes, controls) = x.capture.take()?.finish(t);
+                (!notes.is_empty() || !controls.is_empty()).then_some(MidiTake {
                     track_id: x.track.track_id,
                     notes,
+                    controls,
                 })
             })
             .collect())
@@ -804,7 +936,7 @@ pub fn render_live(
             keys.feed(m, &mut evs);
         }
         if let Ok(mut q) = queue.lock() {
-            q.extend(evs.into_iter().map(note_event));
+            q.extend(evs);
         }
         mix.fill(0.0);
         v.play(&mut buf, &mut mix);
@@ -833,6 +965,64 @@ mod tests {
             k.feed(m, &mut out);
         }
         out
+    }
+
+    #[test]
+    fn an_instrument_that_takes_the_pedal_gets_it_as_a_controller() {
+        let mut k = Keys {
+            pass_pedal: true,
+            ..Keys::default()
+        };
+        let out = feed(
+            &mut k,
+            &[&[0xb0, 64, 127], &[0x90, 60, 100], &[0x80, 60, 0]],
+        );
+        assert_eq!(
+            out[0],
+            KeyEvent::Control {
+                controller: 64,
+                channel: 0,
+                value: 1.0
+            }
+        );
+        // Not held here: the note ends when the key comes up.
+        assert_eq!(
+            out[2],
+            KeyEvent::Off {
+                pitch: 60,
+                channel: 0
+            }
+        );
+    }
+
+    #[test]
+    fn controllers_aftertouch_and_pitch_bend_pass_on() {
+        let mut k = Keys::default();
+        let out = feed(&mut k, &[&[0xb2, 1, 127], &[0xd0, 0], &[0xe0, 0, 64]]);
+        assert_eq!(
+            out[0],
+            KeyEvent::Control {
+                controller: 1,
+                channel: 2,
+                value: 1.0
+            }
+        );
+        assert!(matches!(
+            out[1],
+            KeyEvent::Control {
+                controller: 128,
+                ..
+            }
+        ));
+        let KeyEvent::Control {
+            controller: 129,
+            value,
+            ..
+        } = out[2]
+        else {
+            panic!("pitch bend");
+        };
+        assert!((value - 0.5).abs() < 1e-3);
     }
 
     #[test]
@@ -929,7 +1119,7 @@ mod tests {
             },
             1.0,
         );
-        let notes = c.finish(2.0);
+        let (notes, _) = c.finish(2.0);
         assert_eq!(notes.len(), 2);
         assert_eq!(
             (notes[0].pitch, notes[0].start, notes[0].end),

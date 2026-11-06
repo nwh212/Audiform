@@ -555,6 +555,41 @@
         "keep_pitch"
       ]
     },
+    "ControlEvent": {
+      "description": "One MIDI controller move in a MIDI clip.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "Beats from the clip's start.",
+          "type": "number",
+          "format": "double"
+        },
+        "channel": {
+          "description": "MIDI channel, 0 to 15.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "controller": {
+          "description": "0 to 127 as in MIDI (64 is the sustain pedal), 128 for channel\naftertouch, 129 for pitch bend.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "value": {
+          "description": "0 to 1 (pitch bend: 0.5 is the middle).",
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "required": [
+        "at",
+        "controller",
+        "value"
+      ]
+    },
     "EffectChain": {
       "description": "A Voice Chain: an ordered list of effect slots on a clip, track,\nbus, or the master.",
       "type": "object",
@@ -1159,6 +1194,13 @@
             "string",
             "null"
           ]
+        },
+        "controls": {
+          "description": "Controller moves played with the notes: the sustain pedal (64),\nthe mod wheel (1), pitch bend (129) and so on, sent to the\ninstrument as the controls it maps them to.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ControlEvent"
+          }
         },
         "gain_db": {
           "description": "Clip level in dB: notes play harder or softer by this much (their\nvelocity is scaled), up to the hardest a note can play.",

@@ -412,6 +412,26 @@ pub struct MidiClip {
     #[serde(default, skip_serializing_if = "is_zero_db")]
     pub gain_db: f64,
     pub notes: Vec<Note>,
+    /// Controller moves played with the notes: the sustain pedal (64),
+    /// the mod wheel (1), pitch bend (129) and so on, sent to the
+    /// instrument as the controls it maps them to.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub controls: Vec<ControlEvent>,
+}
+
+/// One MIDI controller move in a MIDI clip.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ControlEvent {
+    /// Beats from the clip's start.
+    pub at: f64,
+    /// 0 to 127 as in MIDI (64 is the sustain pedal), 128 for channel
+    /// aftertouch, 129 for pitch bend.
+    pub controller: u8,
+    /// 0 to 1 (pitch bend: 0.5 is the middle).
+    pub value: f32,
+    /// MIDI channel, 0 to 15.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub channel: u8,
 }
 
 fn is_zero_db(v: &f64) -> bool {

@@ -46,6 +46,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 - **Save Audio As remembers your settings:** format, compression, bit depth, sample rate and channels carry over to the next save. Typing a name ending in .flac, .mp3 or .wav switches the format to match.
 - **Saving a session keeps unsaved Waveform edits.** If the session uses a file you edited and have not saved, saving the session saves those edits: into the file itself when it is already in the session folder, otherwise as "name (edited).wav" in the session's Audio folder, leaving the original untouched. The session, the Files list and the Waveform editor move to that copy as one undo step.
 - **Plug-ins from one maker share one process,** which saves a lot of memory on sessions with many plug-ins. If a maker's plug-ins misbehave together, untick them under Effects > Plug-in Manager > Run together.
+- **MIDI controllers and the sustain pedal.** Recording keeps the sustain pedal, mod wheel, pitch bend and every other controller you play, and playback sends them to the instrument, so the pedal sustains the way the instrument expects (as controller 64) instead of stretching notes. In the piano roll, pick a controller under Lane to see its moves under the notes: drag to draw them, right-drag to erase. Controllers a clip uses are marked with a dot.
 
 ## Faster
 
@@ -88,6 +89,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 - **.sesx import** brings the other editor's limiter in as Audiform's Limiter, at its exact ceiling (input boost and channel link estimated). Taken from Altered Audio Editor.
 - **Plug-ins that change their delay after loading** (some report one look-ahead at load and another once they run, or when a setting changes) were lined up with the old figure, so their track landed off. The new figure is now used: playback starts again at the same spot to line up, in the Waveform editor too, and Apply in the Waveform editor lets plug-ins settle before reading it. Taken from Altered Audio Editor.
 - **Vocal aligners keyed from another track line up again.** A plug-in such as VocAlign that reports a different delay once its sidechain input is on was lined up with its delay from before the key arrived, so the aligned track came out late. Audiform now measures both delays when it loads the plug-in and uses the keyed one for a slot with a key routed.
+- **Live MIDI playing that went quiet while recording.** If the stream that plays armed MIDI tracks stops being served (seen with some ASIO drivers when another stream opens), Audiform now opens it again after half a second.
 
 ## Changed
 

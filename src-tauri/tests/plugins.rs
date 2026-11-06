@@ -302,6 +302,7 @@ fn plug_ins_scan_mix_keep_settings_and_survive_crashes() {
         &Op::SetMidiClips {
             track_id: tid,
             clips: vec![MidiClip {
+                controls: Vec::new(),
                 id: new_id(),
                 name: "c".into(),
                 start: 0.25,
@@ -497,6 +498,7 @@ fn a_real_reverb_rings_on_a_midi_track() {
         &Op::SetMidiClips {
             track_id: tid,
             clips: vec![MidiClip {
+                controls: Vec::new(),
                 id: new_id(),
                 name: "c".into(),
                 start: 0.25,

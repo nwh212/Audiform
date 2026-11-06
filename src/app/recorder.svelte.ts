@@ -357,7 +357,7 @@ export function createRecorder(deps: RecorderDeps) {
       for (const k of midiTakes) {
         const track = doc.tracks.find((x) => x.id === k.trackId);
         if (!track) continue;
-        const clip = midiTakeClip(k.notes, plan.at, doc.sample_rate, doc.tempo ?? DEFAULT_TEMPO, plan.punch, uuid(), `${track.name} ${stamp()}`);
+        const clip = midiTakeClip(k.notes, plan.at, doc.sample_rate, doc.tempo ?? DEFAULT_TEMPO, plan.punch, uuid(), `${track.name} ${stamp()}`, k.controls ?? []);
         if (!clip) continue;
         const clips = [...(track.midi_clips ?? []), clip].sort((a, b) => a.start - b.start);
         ops.push({ op: "set_midi_clips", track_id: track.id, clips });

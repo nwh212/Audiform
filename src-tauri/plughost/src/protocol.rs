@@ -321,6 +321,10 @@ pub enum Message {
         /// It has a second audio input (a sidechain).
         #[serde(default)]
         sidechain: bool,
+        /// MIDI controllers it takes and the control each moves
+        /// (0-127, 128 aftertouch, 129 pitch bend).
+        #[serde(default)]
+        midi_map: Vec<(u8, u32)>,
     },
     /// Settings: base64 of the plug-in's component and controller state.
     State {

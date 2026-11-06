@@ -1052,9 +1052,20 @@ export interface MidiTakeNote {
   end: number;
 }
 
+/** A recorded controller move: `controller` 0 to 127 (64 is the sustain pedal), 128 channel aftertouch, 129 pitch bend. */
+export interface MidiTakeControl {
+  controller: number;
+  channel: number;
+  /** 0 to 1. */
+  value: number;
+  /** Seconds from the start of recording. */
+  at: number;
+}
+
 export interface MidiTake {
   trackId: string;
   notes: MidiTakeNote[];
+  controls?: MidiTakeControl[];
 }
 
 /** The MIDI inputs on this computer, by name. */
