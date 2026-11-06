@@ -491,6 +491,26 @@ fn read_rack(rack: roxmltree::Node<'_, '_>, report: &mut ImportReport) -> Effect
                 continue;
             }
         }
+        // The other editor's limiter comes across as our Limiter: its ceiling
+        // exactly, its input boost and channel link estimated.
+        if c.attribute("componentID") == Some(HARD_LIMITER_ID) && chain.slots.len() < MAX_SLOTS {
+            chain.slots.push(EffectSlot {
+                id: new_id(),
+                effect: "altaudio.limiter".into(),
+                enabled: slot.attribute("powered") != Some("false"),
+                params: hard_limiter_params(c),
+                preset: None,
+                sidechain: None,
+                plugin_state: None,
+                data: None,
+                position: u32::try_from(index)
+                    .ok()
+                    .filter(|i| (*i as usize) < MAX_SLOTS),
+                routing: None,
+            });
+            report.converted += 1;
+            continue;
+        }
         // The other editor's Parametric Equalizer comes across as our Parametric EQ.
         if c.attribute("componentID") == Some(PARAMETRIC_EQ_ID) && chain.slots.len() < MAX_SLOTS {
             let params = parametric_eq_params(c);
@@ -643,6 +663,41 @@ fn channel_map(
         sends,
         to_speakers: false,
     })
+}
+
+/// The component id of the other editor's limiter.
+const HARD_LIMITER_ID: &str = "e0b23f05-f1a7-4ef7-9b50-7ec3e3002058";
+
+/// Limiter settings from the other editor's limiter (its knobs run 0 to 1).
+/// The ceiling is exact: 1 is 0 dB and each 0.01 below it is 1 dB (its own
+/// "Limit to -6dB" preset reads 0.94). The input boost is an estimate (2/3
+/// is none, over a 30 dB span). Look-ahead and release keep our defaults
+/// until their scales are known.
+fn hard_limiter_params(c: roxmltree::Node<'_, '_>) -> std::collections::BTreeMap<String, f64> {
+    let knob = |name: &str| {
+        c.children()
+            .find(|p| p.has_tag_name("parameter") && p.attribute("name") == Some(name))
+            .and_then(|p| p.attribute("parameterValue"))
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .filter(|v| v.is_finite())
+    };
+    let mut out = std::collections::BTreeMap::new();
+    if let Some(v) = knob("Maximum Amplitude") {
+        out.insert(
+            "ceiling".to_string(),
+            (((v - 1.0) * 100.0).clamp(-60.0, 0.0) * 10.0).round() / 10.0,
+        );
+    }
+    if let Some(v) = knob("Input Boost") {
+        out.insert(
+            "input_boost".to_string(),
+            (((v - 2.0 / 3.0) * 30.0).clamp(-24.0, 24.0) * 10.0).round() / 10.0,
+        );
+    }
+    if let Some(v) = knob("Link Channels") {
+        out.insert("linked".to_string(), if v >= 0.5 { 1.0 } else { 0.0 });
+    }
+    out
 }
 
 /// The component id of the other editor's Parametric Equalizer.
@@ -2056,5 +2111,27 @@ mod tests {
         assert_eq!(report.converted, 1);
         assert_eq!(report.skipped_names, vec!["Gone".to_string()]);
         assert!(read_rack_presets("not xml <", &mut report).is_err());
+    }
+
+    #[test]
+    fn the_limiter_comes_across_with_its_exact_ceiling() {
+        // The other editor's own "Limit to -6dB" and "Limit to -3dB" presets.
+        let one = |ceiling: &str| {
+            let xml = format!(
+                r#"<component componentID="e0b23f05-f1a7-4ef7-9b50-7ec3e3002058" name="Limiter">
+                <parameter index="0" name="Maximum Amplitude" parameterValue="{ceiling}"/>
+                <parameter index="1" name="Input Boost" parameterValue="0.6666667"/>
+                <parameter index="4" name="Link Channels" parameterValue="0"/>
+            </component>"#
+            );
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            hard_limiter_params(doc.root_element())
+        };
+        assert_eq!(one("0.94")["ceiling"], -6.0);
+        assert_eq!(one("0.97")["ceiling"], -3.0);
+        assert_eq!(one("0.999")["ceiling"], -0.1);
+        let p = one("0.94");
+        assert_eq!(p["input_boost"], 0.0);
+        assert_eq!(p["linked"], 0.0);
     }
 }

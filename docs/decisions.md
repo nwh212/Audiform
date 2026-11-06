@@ -2549,3 +2549,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** A plug-in's look-ahead reported after loading is kept (`live_latency` on the host, written by the reader thread on LatencyChanged) and, once there is one, stands for both its plain and its keyed delay. Waveform editor playback re-aligns on such a change as the multitrack does, and Apply in the Waveform editor runs four blocks of silence through a throwaway copy, then waits 80 ms, before reading the chain's delay.
 
 **Why.** The first item of the intake from Altered Audio Editor 0.7 to 0.17 (surveyed 2026-11-05; the list is task 237): AAE's d6611fb. Audiform threw the reported value away, as AAE had, so plug-ins that settle on another delay played late. Adapted by hand: Audiform also has the keyed delay (2026-11-05).
+
+## 2026-11-06: Altered Audio Editor intake: the .sesx limiter
+
+**Decision.** The other editor's built-in limiter in a .sesx rack comes across as Audiform's Limiter: the ceiling exactly (1 is 0 dB, each 0.01 below is 1 dB), the input boost estimated (2/3 is none, over 30 dB), the channel link as on or off; look-ahead and release keep Audiform's defaults. AAE's rack levels (input, output, mix) were already in Audiform.
+
+**Why.** From the intake list (AAE a617d73). The project lead dropped the Waveform-editor plug-in sync fix, Duck Music Under Voice and Fill with Room Tone from the list on 2026-11-06.
