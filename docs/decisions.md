@@ -2657,3 +2657,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** In the Multitrack editor, choosing the Razor tool while it is already in use (R, or its tool strip button) goes back to the tool used before it, so R flips between the Razor and Move, Slip or Time Selection. Coming from the Waveform editor, R still just switches to the Multitrack editor with the Razor. No new shortcut; R keeps its approved meaning with a toggle.
 
 **Why.** Asked by the user: a quick cut and back without reaching for V.
+
+## 2026-11-06: Streams end on silence; live MIDI queue follows the device buffer
+
+**Decision.** Every output stream (playback, the Files panel preview, input monitoring and the live MIDI player) now writes silence for a few device buffers before it closes (`host::Hush`, `host::QuietStream`). The live MIDI player keeps at least two device buffers plus one block queued (`ahead_for`), instead of a fixed 256 frames.
+
+**Why.** Reported: after Stop, the audio "drags and glitches and keeps playing without progressing", and live MIDI was "extremely stuttery, even with 512 on ASIO". An ASIO driver keeps running while any stream is open on it (an armed MIDI track's live player, input monitoring), and it replays whatever a closed stream last left in its buffers. Closing on silence leaves silence to replay. The live player held 256 to 384 frames while a 512-frame ASIO buffer asks for 512 each callback, so it ran dry on every buffer.

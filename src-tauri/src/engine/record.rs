@@ -908,7 +908,7 @@ fn run(
     // An ASIO driver opens for one program at a time, so ASIO monitoring
     // plays on the input's own driver.
     let input_name = dev.description().ok().map(|d| d.name().to_string());
-    let mut monitor: Option<(Producer<f32>, cpal::Stream)> = None;
+    let mut monitor: Option<(Producer<f32>, crate::engine::host::QuietStream)> = None;
     if mix.is_some() {
         match open_monitor(rate, input_name.as_deref()) {
             Ok(v) => monitor = Some(v),
@@ -927,7 +927,7 @@ fn run(
                      writer: &mut Option<TakeWriter>,
                      tap: &mut LiveTap,
                      mix: &mut Option<MonitorMix>,
-                     monitor: &mut Option<(Producer<f32>, cpal::Stream)>|
+                     monitor: &mut Option<(Producer<f32>, crate::engine::host::QuietStream)>|
      -> Result<u64, String> {
         let mut frames = 0u64;
         loop {
@@ -1119,7 +1119,7 @@ fn run(
 pub(crate) fn open_monitor(
     rate: u32,
     input_name: Option<&str>,
-) -> Result<(Producer<f32>, cpal::Stream), String> {
+) -> Result<(Producer<f32>, crate::engine::host::QuietStream), String> {
     let host = crate::engine::host::host();
     // With ASIO, the one driver in use is the input and the output both.
     let _ = input_name;
@@ -1161,15 +1161,20 @@ pub(crate) fn open_monitor(
     ));
     // A second of room; the writer keeps it far emptier than that.
     let (producer, consumer) = RingBuffer::<f32>::new((rate as usize * 2).max(8192));
+    let hush = Arc::new(crate::engine::host::Hush::default());
+    let h = hush.clone();
     let stream = match format {
-        SampleFormat::F32 => build_out::<f32>(&dev, config, consumer, stereo_out),
-        SampleFormat::I16 => build_out::<i16>(&dev, config, consumer, stereo_out),
-        SampleFormat::I32 => build_out::<i32>(&dev, config, consumer, stereo_out),
-        SampleFormat::U16 => build_out::<u16>(&dev, config, consumer, stereo_out),
+        SampleFormat::F32 => build_out::<f32>(&dev, config, consumer, stereo_out, h),
+        SampleFormat::I16 => build_out::<i16>(&dev, config, consumer, stereo_out, h),
+        SampleFormat::I32 => build_out::<i32>(&dev, config, consumer, stereo_out, h),
+        SampleFormat::U16 => build_out::<u16>(&dev, config, consumer, stereo_out, h),
         other => Err(format!("Unsupported output sample format: {other}")),
     }?;
     stream.play().map_err(|e| e.to_string())?;
-    Ok((producer, stream))
+    Ok((
+        producer,
+        crate::engine::host::QuietStream::new(stream, hush),
+    ))
 }
 
 /// The monitor's output stream: the stereo mix goes to the outputs
@@ -1179,6 +1184,7 @@ fn build_out<T>(
     config: StreamConfig,
     mut consumer: Consumer<f32>,
     stereo_out: [usize; 2],
+    hush: Arc<crate::engine::host::Hush>,
 ) -> Result<cpal::Stream, String>
 where
     T: SizedSample + FromSample<f32>,
@@ -1194,6 +1200,9 @@ where
             config,
             move |data: &mut [T], _| {
                 crate::engine::host::guard_out(data, |data| {
+                    if hush.silenced(data) {
+                        return;
+                    }
                     // Audio thread: copy only. Silence when the ring runs dry.
                     for frame in data.chunks_mut(out_channels) {
                         let (l, r) = if consumer.slots() >= 2 {

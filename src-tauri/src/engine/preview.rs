@@ -34,6 +34,8 @@ const BUFFER_SECONDS: f64 = 0.5;
 #[derive(Default)]
 struct Shared {
     stop: AtomicBool,
+    /// Silence before the stream closes (see `host::Hush`).
+    hush: super::host::Hush,
     /// Decode thread reached the end of the file.
     decoded_all: AtomicBool,
     /// Device has played everything.
@@ -264,6 +266,7 @@ fn run(input: Input, shared: Arc<Shared>, ready: mpsc::Sender<Result<u32, String
     while !shared.stop.load(Ordering::SeqCst) && !shared.finished.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(15));
     }
+    shared.hush.settle();
     drop(stream);
     shared.stop.store(true, Ordering::SeqCst);
     let _ = decoder.join();
@@ -319,7 +322,11 @@ where
         .build_output_stream(
             config,
             move |out: &mut [T], _| {
-                super::host::guard_out(out, |out| fill(out, &mut consumer, &shared, channels));
+                super::host::guard_out(out, |out| {
+                    if !shared.hush.silenced(out) {
+                        fill(out, &mut consumer, &shared, channels);
+                    }
+                });
             },
             |e| super::host::log(&format!("preview stream error: {e}")),
             None,

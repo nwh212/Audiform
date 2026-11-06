@@ -25,7 +25,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 static USE_ASIO: AtomicBool = AtomicBool::new(false);
 /// The ASIO driver picked in Settings; None picks one.
@@ -265,6 +267,64 @@ pub fn sane_config(c: cpal::SupportedStreamConfig) -> cpal::SupportedStreamConfi
         )
     } else {
         c
+    }
+}
+
+/// Lets an output stream end on silence. An ASIO driver keeps running
+/// while any stream is open on it (live MIDI, input monitoring), and
+/// it replays whatever a closed stream last left in its buffers, which
+/// sounds like the audio stuttering on after Stop. So before a stream
+/// closes, its callback writes silence for a few buffers.
+#[derive(Default)]
+pub struct Hush {
+    on: AtomicBool,
+    calls: AtomicU32,
+}
+
+impl Hush {
+    /// In the output callback: true (with `out` silenced) once the
+    /// stream is closing, so the callback does nothing else.
+    pub fn silenced<T: cpal::SizedSample>(&self, out: &mut [T]) -> bool {
+        if !self.on.load(Ordering::Relaxed) {
+            return false;
+        }
+        out.fill(T::EQUILIBRIUM);
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        true
+    }
+
+    /// Starts the silence and waits until the device has taken a few
+    /// silent buffers (or a moment has passed, for a stream that has
+    /// stopped calling back). Then the stream can be dropped.
+    pub fn settle(&self) {
+        self.on.store(true, Ordering::SeqCst);
+        let t = Instant::now();
+        while self.calls.load(Ordering::Relaxed) < 3 && t.elapsed() < Duration::from_millis(400) {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+}
+
+/// An output stream that ends on silence when dropped (see [`Hush`]).
+pub struct QuietStream {
+    hush: Arc<Hush>,
+    stream: Option<cpal::Stream>,
+}
+
+impl QuietStream {
+    /// `hush` must be the one the stream's callback checks.
+    pub fn new(stream: cpal::Stream, hush: Arc<Hush>) -> Self {
+        Self {
+            hush,
+            stream: Some(stream),
+        }
+    }
+}
+
+impl Drop for QuietStream {
+    fn drop(&mut self) {
+        self.hush.settle();
+        self.stream.take();
     }
 }
 

@@ -77,6 +77,8 @@ fn bits_f32(b: u32) -> f32 {
 /// State shared with the render and audio threads.
 struct Shared {
     stop: AtomicBool,
+    /// Silence before the stream closes (see `host::Hush`).
+    hush: super::host::Hush,
     /// Output frames sent to the device.
     played: AtomicU64,
     gains: Vec<[AtomicU32; 2]>,
@@ -169,6 +171,7 @@ impl Shared {
     fn new(tracks: usize, gains: &[[f32; 2]], master: f32) -> Self {
         Self {
             stop: AtomicBool::new(false),
+            hush: super::host::Hush::default(),
             played: AtomicU64::new(0),
             gains: (0..tracks)
                 .map(|i| {
@@ -950,6 +953,7 @@ fn run(
     while !shared.stop.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(15));
     }
+    shared.hush.settle();
     drop(stream);
     let _ = render.join();
 }
@@ -1184,6 +1188,9 @@ where
             config,
             move |out: &mut [T], _| {
                 super::host::guard_out(out, |out| {
+                    if shared.hush.silenced(out) {
+                        return;
+                    }
                     mix(
                         out,
                         channels,

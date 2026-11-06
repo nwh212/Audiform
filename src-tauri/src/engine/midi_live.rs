@@ -462,9 +462,17 @@ impl Drop for Voice {
 
 /// Frames rendered at a time.
 const BLOCK: usize = 128;
-/// Frames kept waiting for the speakers: about 5 ms at 48 kHz, on top of
-/// the output's own buffer.
+/// Frames kept waiting for the speakers, at least: about 5 ms at 48 kHz.
 const AHEAD: usize = 256;
+
+/// Frames to keep waiting for a device that takes `buffer` frames per
+/// callback: two of its buffers and a block, so a callback never finds
+/// the queue short (which is heard as stutter at larger ASIO buffers).
+fn ahead_for(buffer: Option<u32>) -> usize {
+    // Without a fixed size, allow for a large shared-mode buffer.
+    let b = buffer.map_or(1024, |n| n as usize);
+    (2 * b + BLOCK).max(AHEAD)
+}
 
 /// Renders the live voices to the speakers.
 struct Player {
@@ -477,12 +485,16 @@ struct Player {
 impl Player {
     fn start(rate: u32) -> Result<Player, String> {
         let (producer, stream) = super::record::open_monitor(rate, None)?;
+        let ahead = ahead_for(match super::host::buffer_size() {
+            cpal::BufferSize::Fixed(n) => Some(n),
+            cpal::BufferSize::Default => None,
+        });
         let voices: Arc<Mutex<Vec<Voice>>> = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let (v, s) = (voices.clone(), stop.clone());
         let thread = thread::Builder::new()
             .name("midi-live".into())
-            .spawn(move || run(producer, stream, v, s))
+            .spawn(move || run(producer, stream, v, s, ahead))
             .map_err(|e| e.to_string())?;
         Ok(Player {
             voices,
@@ -504,16 +516,17 @@ impl Drop for Player {
 
 fn run(
     mut out: Producer<f32>,
-    stream: cpal::Stream,
+    stream: super::host::QuietStream,
     voices: Arc<Mutex<Vec<Voice>>>,
     stop: Arc<AtomicBool>,
+    ahead: usize,
 ) {
     let capacity = out.buffer().capacity();
     let mut buf = vec![0.0f32; BLOCK * 2];
     let mut mix = vec![0.0f32; BLOCK * 2];
     while !stop.load(Ordering::SeqCst) {
         let waiting = (capacity - out.slots()) / 2;
-        if waiting >= AHEAD || out.slots() < BLOCK * 2 {
+        if waiting >= ahead || out.slots() < BLOCK * 2 {
             thread::sleep(Duration::from_millis(1));
             continue;
         }
@@ -805,6 +818,14 @@ pub fn render_live(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_queue_covers_two_device_buffers() {
+        assert_eq!(ahead_for(Some(64)), AHEAD);
+        assert_eq!(ahead_for(Some(512)), 2 * 512 + BLOCK);
+        assert_eq!(ahead_for(Some(2048)), 2 * 2048 + BLOCK);
+        assert!(ahead_for(None) >= 2048);
+    }
 
     fn feed(k: &mut Keys, msgs: &[&[u8]]) -> Vec<KeyEvent> {
         let mut out = Vec::new();
