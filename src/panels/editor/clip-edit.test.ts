@@ -185,6 +185,21 @@ describe("rippleDeleteRange", () => {
     const doc = session([track("A", [{ ...clip("a", 50_000), locked: true }])]);
     expect(() => rippleDeleteRange(doc, ["A"], 0, 10, () => "x")).toThrow(LockedError);
   });
+
+  it("with a selection, cuts only the selected clips and still closes up what follows", () => {
+    const doc = session([track("A", [clip("sel", 0), clip("other", 10_000), clip("after", 60_000)])]);
+    const op = rippleDeleteRange(doc, ["A"], 20_000, 30_000, () => "new", new Set(["sel"]));
+    const set = (op as { ops: { op: string; changes?: { id: string; start?: number; source_out?: number }[] }[] }).ops.find((o) => o.op === "set_clips");
+    const ids = set!.changes!.map((c) => c.id);
+    expect(ids).toContain("sel");
+    expect(ids).not.toContain("other");
+    expect(set!.changes!.find((c) => c.id === "after")?.start).toBe(50_000);
+  });
+
+  it("with a selection, a locked clip that is not selected does not block the edit", () => {
+    const doc = session([track("A", [clip("sel", 0), { ...clip("other", 10_000), locked: true }])]);
+    expect(() => rippleDeleteRange(doc, ["A"], 20_000, 30_000, () => "new", new Set(["sel"]))).not.toThrow();
+  });
 });
 
 describe("rippleDeleteClips", () => {

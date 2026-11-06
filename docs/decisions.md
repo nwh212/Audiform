@@ -2585,3 +2585,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Five effects from Altered Audio Editor join the catalog: Expander / Gate and Dynamics Curve (`expander.rs`, `curve_dynamics.rs`), Multiband Compressor (in `dynamics.rs`, with its Linkwitz-Riley band split), and Stereo Expander and Distortion (`stereo_fx.rs`; AAE's Channel Mixer from the same file is left out, since Audiform has its own). Dynamics Curve comes with its graph editor (drag a point, click to add one, right-click to remove one, up to eight) and its 19 built-in curves as rack presets; the Expander brings two "Quiet Parts Down" presets. Expander / Gate and Dynamics Curve can listen to a sidechain like Dynamics and Breath Gate. Distortion sits under Amplitude beside Tube Preamp and Amp Model, and Stereo Expander under Stereo, so the menu keeps Audiform's families. Our Compressor gained AAE's `with` constructor so the multiband can build one per band.
 
 **Why.** From the intake list (item 9). The code and tests are taken as they are; each effect's own tests pass here.
+
+## 2026-11-06: Altered Audio Editor intake: ripple delete in selected clips
+
+**Decision.** Edit > Ripple Delete > Time Selection in Selected Clips (Alt+Backspace, the chord approved on 2026-10-23 and held until now) is built. It removes the time selection from the selected clips only and closes the gap on their tracks: clips that are not selected are never cut, and a locked clip that is not selected does not block the edit, but later clips on those tracks still move left. `rippleDeleteRange` gains an optional set of clips to limit the cut.
+
+**Why.** From the intake list (AAE, with its tests).

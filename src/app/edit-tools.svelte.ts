@@ -453,6 +453,19 @@ export function createEditTools(deps: EditToolsDeps) {
         reason: () => (timeSel() ? "Select a track first." : "Drag across empty space in the Editor to select a time range."),
       }),
       actions.register({
+        id: "edit.ripple.time-clips",
+        run: () => {
+          const r = timeSel();
+          const doc = session.current;
+          const picked = editor.current().selectedClips;
+          if (!r || !doc || picked.size === 0) return;
+          const tracks = doc.tracks.filter((t) => t.clips.some((c) => picked.has(c.id))).map((t) => t.id);
+          return guarded("Ripple Delete in Selected Clips", () => rippleDeleteRange(doc, tracks, r.start, r.end, uuid, picked), "Nothing to delete in that range.");
+        },
+        enabled: () => timeSel() !== null && editor.current().selectedClips.size > 0,
+        reason: () => (timeSel() ? "Select clips first." : "Drag across empty space in the Editor to select a time range."),
+      }),
+      actions.register({
         id: "edit.ripple.time-all",
         run: () => {
           const r = timeSel();

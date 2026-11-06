@@ -563,8 +563,17 @@ export class LockedError extends Error {
  * gap: clips inside are deleted, clips crossing an edge are trimmed,
  * a clip spanning the whole range is split around it, and everything
  * after moves left. Locked clips that would change throw LockedError.
+ * With `only`, clips that are not in the set are never cut: one that
+ * touches the range is left as it is, and later clips still move left.
  */
-export function rippleDeleteRange(doc: SessionDoc, trackIds: Iterable<string>, a: number, b: number, newId: () => string): Op | null {
+export function rippleDeleteRange(
+  doc: SessionDoc,
+  trackIds: Iterable<string>,
+  a: number,
+  b: number,
+  newId: () => string,
+  only?: ReadonlySet<string>,
+): Op | null {
   if (b <= a) return null;
   const media = mediaOf(doc);
   const rate = doc.sample_rate;
@@ -578,6 +587,7 @@ export function rippleDeleteRange(doc: SessionDoc, trackIds: Iterable<string>, a
     for (const c of t.clips) {
       const end = clipEnd(c, media, rate);
       if (end <= a) continue;
+      if (only && !only.has(c.id) && c.start < b) continue;
       if (c.locked) throw new LockedError();
       const m = media.get(c.media_id);
       if (c.start >= b) {
