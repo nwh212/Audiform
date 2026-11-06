@@ -997,6 +997,15 @@ export function createWaveTools(deps: WaveToolsDeps) {
         },
       }),
       ov(waveIsOpen, {
+        id: "edit.marker.retake",
+        run: async () => {
+          const d = wave.current;
+          if (!d) return;
+          const m = newMarker(uuid(), nextMarkerName(d.markers, "Retake"), wavePlayhead());
+          await waveEdit("Add Retake Marker", { op: "add_markers", markers: [m] });
+        },
+      }),
+      ov(waveIsOpen, {
         id: "edit.marker.subclip",
         run: async () => {
           const d = wave.current;

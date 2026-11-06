@@ -313,6 +313,7 @@ describe("menu model", () => {
       "edit.marker.rename",
       "edit.marker.delete",
       "edit.marker.delete-all",
+      "edit.marker.retake",
     ]);
     for (const m of MENUS) {
       for (const it of allItems(m.items)) {

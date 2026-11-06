@@ -196,6 +196,7 @@ export const MENUS: readonly Menu[] = [
       }),
       sub("Markers", [
         item("edit.marker.cue", "Add Cue Marker"),
+        item("edit.marker.retake", "Add Retake Marker"),
         item("edit.marker.subclip", "Add Subclip Marker"),
         item("edit.marker.cd-track", "Add CD Track Marker"),
         item("edit.marker.cart", "Add Cart Timer Marker"),

@@ -2615,3 +2615,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** The Markers panel picks rows: a click picks one marker and jumps there, Ctrl+click adds or removes one, Shift+click picks a run. The panel gains Delete and Delete All buttons, and Edit > Markers gains Rename Selected Marker, Delete Selected Markers and Delete All Markers. They act on the open audio file when the Waveform editor is in front, else on the session, and each is one undoable step. The pick lives in the editor store (`selectedMarkers`), apart from the clip selection. No shortcuts.
 
 **Why.** From the intake list (AAE, taken with its tests). Audiform's panel keeps its own Range button rule (it follows the time selection of whichever editor is in front).
+
+## 2026-11-06: Altered Audio Editor intake: Retake marker
+
+**Decision.** Edit > Markers > Add Retake Marker drops a cue marker named "Retake 1", "Retake 2" and so on at the playhead, in the session or in the open audio file, also while recording. AAE binds it to F9; Audiform leaves it without a shortcut until the project lead approves one.
+
+**Why.** From the intake list. A quick way to flag a flubbed line during a take and find it later in the Markers panel.

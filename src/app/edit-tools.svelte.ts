@@ -311,6 +311,16 @@ export function createEditTools(deps: EditToolsDeps) {
         enabled: () => session.current !== null,
       }),
       actions.register({
+        id: "edit.marker.retake",
+        run: async () => {
+          const doc = session.current;
+          if (!doc) return;
+          const m = newMarker(uuid(), nextMarkerName(doc.markers, "Retake"), playheadNow());
+          await session.edit("Add Retake Marker", { op: "add_markers", markers: [m] }, sessionHistory);
+        },
+        enabled: () => session.current !== null,
+      }),
+      actions.register({
         id: "edit.marker.subclip",
         run: async () => {
           const doc = session.current;
