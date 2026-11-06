@@ -2711,3 +2711,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Why.** Reported: the instrument did not seem to play the notes played while recording MIDI. With ASIO a driver can serve only some of the streams opened on it at once, and the live player can be the one left waiting. This is a guess at the cause; not tried on hardware here.
 
+
+## 2026-11-06: Version 0.8.0
+
+**Decision.** The work since 0.7.1 ships as 0.8.0 (the project lead), a minor bump for MIDI playing and recording with controllers, automation writing, the new effects and add-ons. Its notes moved from the 0.7.1 file, which is back as it was released, to `docs/release-notes-0.8.0.md`. The separation model list was surveyed and extended during this cycle (see `docs/stem-models.md`), so no separate model check was made for the bump. Known issues still open from the test pass (live MIDI while recording on ASIO, surround plug-ins during Waveform playback) are listed in the notes.
