@@ -19,7 +19,7 @@ import { addSlot, chainOf } from "../panels/voice-chain/chain";
 import { effectWindowRequest, trialSlot } from "../panels/voice-chain/effect-window";
 import { sharedCatalog } from "../stores/fx-catalog";
 import { freshCopy, isPlugin, type LastApplied, repeatName } from "./repeat-last";
-import { editor } from "../stores/editor";
+import { editor, type EditorTool } from "../stores/editor";
 import { sessionHistory } from "../stores/history";
 import { exactSamples } from "../stores/exact-samples";
 import { peaks, session, transport } from "../stores/open-session";
@@ -109,6 +109,8 @@ export function createWaveTools(deps: WaveToolsDeps) {
   };
   const NEED_WAVE_SEL = "Drag across the waveform to select audio first.";
   let waveBoard: WaveBoard | null = null;
+  /** The Multitrack tool in use before the Razor, which pressing the Razor again goes back to. */
+  let beforeRazor: EditorTool = "move";
   /**
    * The copy as it pastes into the open file: a one-channel copy from a
    * file with another number of channels (a 7.1 channel into a stereo or
@@ -617,7 +619,15 @@ export function createWaveTools(deps: WaveToolsDeps) {
               editor.setSpectralTool("time");
               return;
             }
-            if (inWave()) editor.setMode("multitrack");
+            const fromWave = inWave();
+            if (fromWave) editor.setMode("multitrack");
+            const now = editor.current().tool;
+            // Razor toggles: picking it again in the Multitrack editor goes back to the tool used before it.
+            if (t === "razor" && now === "razor" && !fromWave) {
+              editor.setTool(beforeRazor);
+              return;
+            }
+            if (t === "razor" && now !== "razor") beforeRazor = now;
             editor.setTool(t);
           },
           checked: () => (inWave() ? t === "time" && editor.current().spectralTool === "time" : editor.current().tool === t),

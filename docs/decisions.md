@@ -2651,3 +2651,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Why.** The lead found the scale hard to read and the handles out of place. Checked at 100% and 125% display scaling.
 - Follow-up the same day: the window widens from 780 to 1000 pixels (never more than 96% of the screen width), so the frequency scale has more room. The graph height is unchanged.
+
+## 2026-11-06: R toggles the Razor tool
+
+**Decision.** In the Multitrack editor, choosing the Razor tool while it is already in use (R, or its tool strip button) goes back to the tool used before it, so R flips between the Razor and Move, Slip or Time Selection. Coming from the Waveform editor, R still just switches to the Multitrack editor with the Razor. No new shortcut; R keeps its approved meaning with a toggle.
+
+**Why.** Asked by the user: a quick cut and back without reaching for V.
