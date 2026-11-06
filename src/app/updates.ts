@@ -28,17 +28,18 @@ export interface UpdateDeps {
   showError: (e: unknown) => void;
 }
 
-/** Help > Check for Updates: says what it found, and offers the release page when newer. */
+/** Help > Check for Updates: says at once that it is checking, then shows what it found in a dialog, offering the release page when newer. */
 export async function checkNow(deps: UpdateDeps): Promise<UpdateInfo | null> {
+  deps.showNotice("Checking for updates...");
   let info: UpdateInfo;
   try {
     info = await updateCheck();
   } catch (e) {
-    deps.showError(e);
+    await deps.ask("Check for Updates", `Could not check for updates: ${e instanceof Error ? e.message : String(e)}`, [{ label: "OK", value: "ok", primary: true }]);
     return null;
   }
   if (!info.newer) {
-    deps.showNotice(`Audiform ${info.current} is the newest version.`);
+    await deps.ask("Check for Updates", `You have the newest version, Audiform ${info.current}.`, [{ label: "OK", value: "ok", primary: true }]);
     return info;
   }
   const go = await deps.ask("A new version is out", `Audiform ${info.latest} is out (you have ${info.current}). Open its download page in your browser?`, [

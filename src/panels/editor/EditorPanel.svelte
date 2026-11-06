@@ -713,6 +713,8 @@
       if (e.altKey) {
         e.preventDefault();
         wheelResizeTracks(e);
+      } else if (!e.shiftKey && !e.ctrlKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        scrollTracks(e);
       }
       return;
     } else if (e.altKey && e.shiftKey) {
@@ -730,9 +732,19 @@
       // Over the ruler (and the overview above it) the wheel zooms in time;
       // Ctrl+wheel zooms anywhere.
       zoomTime();
+    } else {
+      // Over the clips and tracks the plain wheel scrolls the tracks up and
+      // down. The track scrollbar's wheel zooms them (onVbarWheel).
+      scrollTracks(e);
     }
-    // Over the clips and tracks the plain wheel scrolls the tracks up and
-    // down, which the scroller does by itself. The track scrollbar zooms them (onVbarWheel).
+  }
+
+  /** Scrolls the tracks up or down by the wheel's step (lines and pages turned into pixels). */
+  function scrollTracks(e: WheelEvent) {
+    if (!scroller) return;
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? scroller.clientHeight : 1;
+    scroller.scrollTop += e.deltaY * unit;
   }
 
   /**
@@ -835,9 +847,19 @@
     return nearest(sample, targetsFor(doc, new Set()), SNAP_PX * view.spp) ?? sample;
   }
 
-  function onLaneHover(e: PointerEvent, track: TrackDoc) {
+  /** The last hover over a lane, so a tool change (R, V, T, Y) updates the pointer without a mouse move. */
+  let lastHover: { e: PointerEvent; el: HTMLElement; track: TrackDoc } | null = null;
+  $effect(() => {
+    void ed.tool;
+    const h = lastHover;
+    if (h && h.el.isConnected) onLaneHover(h.e, h.track, h.el);
+  });
+
+  function onLaneHover(e: PointerEvent, track: TrackDoc, at?: HTMLElement) {
     if (e.buttons !== 0) return;
-    const { x, y } = laneXY(e, e.currentTarget as HTMLElement);
+    const el = at ?? (e.currentTarget as HTMLElement);
+    lastHover = { e, el, track };
+    const { x, y } = laneXY(e, el);
     if (chipAt(track, x, y)) {
       hoverCursor = "pointer";
       return;
@@ -1772,7 +1794,10 @@
         {resizeLane}
       />
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="lanes" class:dropping bind:this={lanesEl} bind:clientWidth={lanesWidth} onpointerleave={() => (razor = null)}>
+      <div class="lanes" class:dropping bind:this={lanesEl} bind:clientWidth={lanesWidth} onpointerleave={() => {
+        razor = null;
+        lastHover = null;
+      }}>
         <LaneOverlays {stretchHint} {dropGhost} {dropping} {selBox} razor={ed.tool === "razor" ? razor : null} {lanesEl} />
         {#if doc}
           {#each laneList as row (row.id)}
