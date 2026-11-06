@@ -2687,3 +2687,8 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** The lanes being written are told to the engine (`transport_set_live`, from `AutoWriter.onLive`). While a lane is written it is left out of what plays: its control (fader, pan, spot, effect setting) is heard live, and the lane's growing points do not change the playback fingerprint, so they no longer restart playback. The set changes, and playback restarts once, when a pass begins and when a Touch pass lets go; Stop clears it. The written lanes go to the session at most five times a second (they draw on screen), and a held value adds no point per step (`holdOnce`).
 
 **Why.** Reported: "writing automations lag severely". Automation edits restart playback in place so they are heard, and the writer sent a lane edit every 50 ms, so playback restarted about 20 times a second while writing, with point lists growing all the while.
+
+## 2026-11-06: Second test pass: Razor pointer and the wheel over headers
+
+- The Razor pointer still waited for a mouse move: the window's browser engine repaints the pointer only when something under the mouse changes. A tool change now also lays a transparent layer over the lanes for two frames, which makes it look the pointer up again at once.
+- The plain wheel over the track headers zooms the tracks vertically again, every open track taller or shorter evenly, as the track scrollbar's wheel does (the project lead). Over the clips it still scrolls the tracks; Alt+wheel over a header still resizes just that track.

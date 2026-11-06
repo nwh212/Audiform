@@ -59,6 +59,7 @@ Windows is the main target. Linux and macOS (Apple silicon, unsigned) builds are
 
 ## Fixed
 
+- The mouse wheel over the track headers makes every track taller or shorter together; over the clips it scrolls them.
 - **Writing automation is smooth again.** Moves are heard at once while a lane is written, without the stutter of playback restarting many times a second.
 - **Surround plug-ins get every channel** of a surround file or 3D Space track without any routing set up; before, only left and right went through unless you switched on the plug-in's own channels.
 - The Razor pointer shows as soon as you press R, without moving the mouse.

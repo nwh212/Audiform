@@ -707,14 +707,14 @@
       queueWheel(e.deltaY > 0 ? 1 : -1, 0, Math.max(0, e.clientX - left), overRuler);
     };
     if (e.clientX < left && !overRuler) {
-      // Over the track headers the wheel scrolls the tracks up and down, as
-      // over the clips. Alt+wheel makes the track under the pointer taller or
-      // shorter; the track scrollbar's wheel resizes them all.
+      // Over the track headers the wheel zooms the tracks vertically, as over
+      // the track scrollbar: every open track taller or shorter, evenly.
+      // Alt+wheel resizes only the one under the pointer.
       if (e.altKey) {
         e.preventDefault();
         wheelResizeTracks(e);
       } else if (!e.shiftKey && !e.ctrlKey && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
-        scrollTracks(e);
+        onVbarWheel(e);
       }
       return;
     } else if (e.altKey && e.shiftKey) {
@@ -849,10 +849,16 @@
 
   /** The last hover over a lane, so a tool change (R, V, T, Y) updates the pointer without a mouse move. */
   let lastHover: { e: PointerEvent; el: HTMLElement; track: TrackDoc } | null = null;
+  // The window's browser repaints the pointer only when something under the mouse changes, so a
+  // thin layer over the lanes appears for two frames: the pointer is looked up again at once.
+  let cursorNudge = $state(false);
   $effect(() => {
     void ed.tool;
     const h = lastHover;
-    if (h && h.el.isConnected) onLaneHover(h.e, h.track, h.el);
+    if (!h || !h.el.isConnected) return;
+    onLaneHover(h.e, h.track, h.el);
+    cursorNudge = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => (cursorNudge = false)));
   });
 
   function onLaneHover(e: PointerEvent, track: TrackDoc, at?: HTMLElement) {
@@ -1798,6 +1804,7 @@
         razor = null;
         lastHover = null;
       }}>
+        {#if cursorNudge}<div class="cursor-nudge" style:cursor={hoverCursor} aria-hidden="true"></div>{/if}
         <LaneOverlays {stretchHint} {dropGhost} {dropping} {selBox} razor={ed.tool === "razor" ? razor : null} {lanesEl} />
         {#if doc}
           {#each laneList as row (row.id)}
@@ -2158,6 +2165,12 @@
     display: flex;
     position: relative;
     min-height: 0;
+  }
+
+  .cursor-nudge {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
   }
 
   .scroller {
