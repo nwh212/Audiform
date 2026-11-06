@@ -45,6 +45,27 @@ export function matchRow(item: MatchItem, r: LoudnessReport, t: LoudnessTarget):
   return { ...item, measured, truePeak: r.truePeak, change, peakAfter, measurable: true, peakWarning: peakAfter > t.peak };
 }
 
+/** What a match brings each item to: a loudness target, or a level by its peak, true peak or average (RMS). */
+export type MatchBasis = "loudness" | "peak" | "truePeak" | "rms";
+
+/** Where each level match starts, in dB below full scale. */
+export const BASIS_LEVEL: Record<Exclude<MatchBasis, "loudness">, number> = { peak: -1, truePeak: -1, rms: -18 };
+
+/**
+ * The row for matching by level: the change that puts the item's peak,
+ * true peak or RMS at `level` dB. A change that would push the true peak
+ * past full scale is flagged.
+ */
+export function levelRow(item: MatchItem, basis: Exclude<MatchBasis, "loudness">, level: number, r: LoudnessReport): MatchRow {
+  const measured = basis === "peak" ? r.samplePeak : basis === "truePeak" ? r.truePeak : r.rms;
+  if (!Number.isFinite(measured) || measured <= -120) {
+    return { ...item, measured, truePeak: r.truePeak, change: 0, peakAfter: r.truePeak, measurable: false, peakWarning: false };
+  }
+  const change = Math.round((level - measured) * 10) / 10;
+  const peakAfter = Math.round((r.truePeak + change) * 10) / 10;
+  return { ...item, measured, truePeak: r.truePeak, change, peakAfter, measurable: true, peakWarning: peakAfter > 0 };
+}
+
 /** The clip gain changes for the chosen rows, as one edit. Gain stays within the clip gain limits. */
 export function matchChanges(doc: SessionDoc, rows: readonly MatchRow[]): ClipChange[] {
   const gain = new Map<string, number>();

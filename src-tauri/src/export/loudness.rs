@@ -29,6 +29,9 @@ pub struct LoudnessReport {
     pub true_peak: f64,
     /// Highest sample peak, dBFS.
     pub sample_peak: f64,
+    /// Average (RMS) level of both channels together, dBFS: a full-scale
+    /// sine reads -3.
+    pub rms: f64,
     pub seconds: f64,
     pub cancelled: bool,
 }
@@ -61,7 +64,13 @@ pub fn measure(
     .map_err(meter_err)?;
     let mut mono = EbuR128::new(1, rate, Mode::I).map_err(meter_err)?;
     let mut folded: Vec<f32> = Vec::new();
+    let (mut power, mut samples) = (0f64, 0u64);
     let r = render_mix(session, req, cancel, progress, |block| {
+        power += block
+            .iter()
+            .map(|v| f64::from(*v) * f64::from(*v))
+            .sum::<f64>();
+        samples += block.len() as u64;
         stereo.add_frames_f32(block).map_err(meter_err)?;
         folded.clear();
         folded.extend(block.as_chunks::<2>().0.iter().map(|f| (f[0] + f[1]) * 0.5));
@@ -82,6 +91,11 @@ pub fn measure(
         range: stereo.loudness_range().map_err(meter_err)?,
         true_peak: peak(&|c| stereo.true_peak(c))?,
         sample_peak: peak(&|c| stereo.sample_peak(c))?,
+        rms: if samples > 0 {
+            db((power / samples as f64).sqrt())
+        } else {
+            f64::NEG_INFINITY
+        },
         seconds: r.frames as f64 / f64::from(rate.max(1)),
         cancelled: r.cancelled,
     })
@@ -165,6 +179,8 @@ mod tests {
         );
         assert!((r.sample_peak + 6.0).abs() < 0.1, "peak {}", r.sample_peak);
         assert!(r.true_peak >= r.sample_peak - 0.01);
+        // A sine's RMS is 3 dB under its peak.
+        assert!((r.rms + 9.0).abs() < 0.1, "rms {}", r.rms);
         assert!((r.seconds - 10.0).abs() < 1e-6);
     }
 }

@@ -219,6 +219,7 @@ export function clipZoneItems(ctx: MenuCtx, z: Zone): ContextItem[] {
       act(ctx.isChecked("clip.mute") ? "Unmute Clip" : "Mute Clip", "clip.mute"),
       act(ctx.isChecked("clip.lock") ? "Unlock Position" : "Lock Position", "clip.lock"),
       act("Clip Gain...", "clip.gain"),
+      act("Loudness Match...", "fx.loudness-match"),
       act("Clip Color...", "clip.color"),
       ...clipFlipItems(ctx),
       act("Separate Stems (quick model)", "clip.separate-quick"),

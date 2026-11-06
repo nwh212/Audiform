@@ -7,7 +7,7 @@ import { targetById, type LoudnessReport } from "./loudness";
 import { matchChanges, matchItems, matchRow } from "./loudness-match";
 import type { SessionDoc } from "../stores/session";
 
-const rep = (i: number, tp: number, mono = i - 3): LoudnessReport => ({ integrated: i, integratedMono: mono, range: 5, truePeak: tp, samplePeak: tp, seconds: 60, cancelled: false });
+const rep = (i: number, tp: number, mono = i - 3): LoudnessReport => ({ integrated: i, integratedMono: mono, range: 5, truePeak: tp, samplePeak: tp, rms: i - 3, seconds: 60, cancelled: false });
 const doc = {
   tracks: [
     { id: "h", name: "Host", muted: false, clips: [{ id: "a", name: "a", gain_db: 0 }, { id: "b", name: "b", gain_db: -2 }] },
@@ -47,5 +47,23 @@ describe("loudness match", () => {
     const all = matchItems(doc, new Set());
     expect(all.mode).toBe("tracks");
     expect(all.items.map((i) => i.key)).toEqual(["h", "g"]);
+  });
+});
+
+import { levelRow } from "./loudness-match";
+
+describe("matching by level", () => {
+  const item = { key: "a", label: "A", clipIds: ["c"] };
+  const r = { integrated: -20, integratedMono: -23, range: 5, truePeak: -5.6, samplePeak: -6, rms: -21, seconds: 60, cancelled: false };
+  it("brings the peak, true peak or RMS to the level", () => {
+    expect(levelRow(item, "peak", -1, r).change).toBe(5);
+    expect(levelRow(item, "truePeak", -1, r).change).toBe(4.6);
+    const rms = levelRow(item, "rms", -18, r);
+    expect(rms.change).toBe(3);
+    expect(rms.peakAfter).toBe(-2.6);
+  });
+  it("flags a change that would clip, and leaves silence alone", () => {
+    expect(levelRow(item, "rms", -12, r).peakWarning).toBe(true);
+    expect(levelRow(item, "peak", -1, { ...r, samplePeak: Number.NEGATIVE_INFINITY }).measurable).toBe(false);
   });
 });

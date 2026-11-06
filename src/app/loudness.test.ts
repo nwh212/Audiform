@@ -11,6 +11,7 @@ const report = (integrated: number, truePeak: number, integratedMono = integrate
   range: 6,
   truePeak,
   samplePeak: truePeak - 0.2,
+  rms: integrated - 3,
   seconds: 60,
   cancelled: false,
 });
@@ -75,7 +76,7 @@ describe("broadcast regions", () => {
 });
 
 describe("predictExport", () => {
-  const rep = (integrated: number, truePeak: number) => ({ integrated, integratedMono: integrated - 3, range: 5, truePeak, samplePeak: truePeak - 0.5, seconds: 60, cancelled: false });
+  const rep = (integrated: number, truePeak: number) => ({ integrated, integratedMono: integrated - 3, range: 5, truePeak, samplePeak: truePeak - 0.5, rms: integrated - 3, seconds: 60, cancelled: false });
   const podcast = { id: "podcast-stereo", name: "Podcast", lufs: -16, mono: false, peak: -1 };
 
   it("leaves the mix alone without a target", () => {

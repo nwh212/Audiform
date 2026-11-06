@@ -24,7 +24,7 @@ import type { ActionRegistry } from "./actions";
 import type { DockController } from "./docking/dock";
 import type { ChoiceButton } from "./ChoiceDialog.svelte";
 import type { GenerateMode } from "./GenerateDialog.svelte";
-import type { MatchItem, MatchRow } from "./loudness-match";
+import type { MatchBasis, MatchItem, MatchRow } from "./loudness-match";
 import type { EffectTarget } from "../stores/session";
 import type { EffectInfo } from "./core";
 
@@ -43,8 +43,8 @@ export interface EffectsToolsDeps {
   KEY_FIREWALL_OFFERED: string;
   fxCatalog: () => EffectInfo[] | null;
   set_fxCatalog: (v: EffectInfo[] | null) => void;
-  lm: () => { mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string } | null;
-  set_lm: (v: { mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string } | null) => void;
+  lm: () => { mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string; basis: MatchBasis; level: number; tolerance: number } | null;
+  set_lm: (v: { mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string; basis: MatchBasis; level: number; tolerance: number } | null) => void;
   exporting: () => { title: string; progress: number; floating?: boolean } | null;
   set_exporting: (v: { title: string; progress: number; floating?: boolean } | null) => void;
   generateMode: () => GenerateMode | null;

@@ -2555,3 +2555,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** The other editor's built-in limiter in a .sesx rack comes across as Audiform's Limiter: the ceiling exactly (1 is 0 dB, each 0.01 below is 1 dB), the input boost estimated (2/3 is none, over 30 dB), the channel link as on or off; look-ahead and release keep Audiform's defaults. AAE's rack levels (input, output, mix) were already in Audiform.
 
 **Why.** From the intake list (AAE a617d73). The project lead dropped the Waveform-editor plug-in sync fix, Duck Music Under Voice and Fill with Room Tone from the list on 2026-11-06.
+
+## 2026-11-06: Altered Audio Editor intake: Loudness Match by peak, true peak or RMS
+
+**Decision.** Loudness Match gains a Match by choice: Loudness (as before), Peak, True Peak or RMS, the last three to a level in dB (starting at -1, -1 and -18, each remembered), and a Tolerance (0 to 6 dB, remembered) under which rows start unticked. The loudness report from the core gains `rms` (both channels' average power, in dBFS) so the one measuring pass serves every choice. A row flags a change that would put the true peak over 0 dB. Loudness Match is also on the clip right-click menu.
+
+**Why.** From the intake list (AAE c900d03 and 0fef18f). AAE measured peak and RMS with its own analysis module, which Audiform does not have; adding RMS to the loudness pass does the same with no second render. True Peak is added beside AAE's Peak, since Audiform measures it anyway.

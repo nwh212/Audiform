@@ -19,6 +19,8 @@ export interface LoudnessReport {
   range: number;
   truePeak: number;
   samplePeak: number;
+  /** Average (RMS) level of both channels together, dBFS. */
+  rms: number;
   seconds: number;
   cancelled: boolean;
 }

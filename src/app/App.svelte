@@ -57,7 +57,7 @@
   import { setMeterSpeed, type TransportStore } from "../stores/transport";
   import type { GenerateMode, GenerateValues } from "./GenerateDialog.svelte";
   import { naturalLength, stretchTo } from "../panels/editor/stretch";
-  import { matchChanges, matchItems, matchRow, type MatchItem, type MatchRow } from "./loudness-match";
+  import { BASIS_LEVEL, levelRow, matchChanges, matchItems, matchRow, type MatchBasis, type MatchItem, type MatchRow } from "./loudness-match";
   import { DEFAULT_REGION, DEFAULT_TARGET, setCustomTarget, targetById, type LoudnessReport } from "./loudness";
   import { listen } from "@tauri-apps/api/event";
   import {
@@ -715,7 +715,11 @@
 
   // Effects > Loudness Match: clip gain so each selected clip, or each track, reaches a target.
   const KEY_MATCH_TARGET = "loudness.match-target";
-  let lm = $state<{ mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string } | null>(null);
+  const KEY_MATCH_BASIS = "loudness.match-basis";
+  const KEY_MATCH_TOLERANCE = "loudness.match-tolerance";
+  const matchLevelKey = (b: MatchBasis) => `loudness.match-level.${b}`;
+  let lm = $state<{ mode: "clips" | "tracks"; items: MatchItem[]; rows: MatchRow[] | null; progress: number | null; target: string; region: string; basis: MatchBasis; level: number; tolerance: number } | null>(null);
+  const basisLevel = (b: MatchBasis) => (b === "loudness" ? 0 : prefs.number(matchLevelKey(b), BASIS_LEVEL[b]));
   let lmStop = false;
 
   function openLoudnessMatch() {
@@ -723,7 +727,9 @@
     if (!doc) return;
     const { mode, items } = matchItems(doc, editor.current().selectedClips);
     if (items.length === 0) return showNotice("There are no clips to match.");
-    lm = { mode, items, rows: null, progress: null, target: prefs.string(KEY_MATCH_TARGET, DEFAULT_TARGET), region: prefs.string(KEY_LOUD_REGION, DEFAULT_REGION) };
+    const saved = prefs.string(KEY_MATCH_BASIS, "loudness");
+    const basis: MatchBasis = saved === "peak" || saved === "truePeak" || saved === "rms" ? saved : "loudness";
+    lm = { mode, items, rows: null, progress: null, target: prefs.string(KEY_MATCH_TARGET, DEFAULT_TARGET), region: prefs.string(KEY_LOUD_REGION, DEFAULT_REGION), basis, level: basisLevel(basis), tolerance: prefs.number(KEY_MATCH_TOLERANCE, 0) };
     void measureMatch();
   }
 
@@ -747,7 +753,7 @@
           report = await loudnessCheck({ track: item.key, clipOnly: true });
         }
         if (report.cancelled || lmStop || !lm) break;
-        rows.push(matchRow(item, report, t));
+        rows.push(lm.basis === "loudness" ? matchRow(item, report, t) : levelRow(item, lm.basis, lm.level, report));
         lm = { ...lm, progress: (i + 1) / lm.items.length };
       }
       if (lm) lm = { ...lm, progress: null, rows: lmStop ? lm.rows : rows };
@@ -2508,6 +2514,24 @@
     progress={lm.progress}
     targetId={lm.target}
     region={lm.region}
+    basis={lm.basis}
+    level={lm.level}
+    tolerance={lm.tolerance}
+    onBasis={(b) => {
+      prefs.set(KEY_MATCH_BASIS, b);
+      if (lm) lm = { ...lm, basis: b, level: basisLevel(b), rows: null };
+      void measureMatch();
+    }}
+    onLevel={(db) => {
+      if (!lm || lm.basis === "loudness") return;
+      prefs.set(matchLevelKey(lm.basis), db);
+      lm = { ...lm, level: db, rows: null };
+      void measureMatch();
+    }}
+    onTolerance={(db) => {
+      prefs.set(KEY_MATCH_TOLERANCE, db);
+      if (lm) lm = { ...lm, tolerance: db };
+    }}
     onTarget={(id) => {
       prefs.set(KEY_MATCH_TARGET, id);
       if (lm) lm = { ...lm, target: id, rows: null };
