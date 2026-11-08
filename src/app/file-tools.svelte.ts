@@ -39,6 +39,7 @@ export interface FileToolsDeps {
   KEY_LOUD_REGION: string;
   exp: ReturnType<typeof createExportTools>;
   collectMedia: (sessionFile: string, everything: boolean) => Promise<number>;
+  openSaveSpace: () => void;
   plural: (n: number, one: string, many?: string) => string;
   usedMedia: () => Set<string>;
   /** Which of these files have unsaved edits in the Waveform editor. */
@@ -58,7 +59,7 @@ export interface FileToolsDeps {
 }
 
 export function createFileTools(deps: FileToolsDeps) {
-  const { actions, showNotice, showError, promptText, openPaths, importPaths, exitSafely, measureLoudness, KEY_LOUD_TARGET, KEY_LOUD_REGION, exp, collectMedia, plural, usedMedia, unsavedFiles, ask, closeWaveIfRemoved, askNewSession, pluginSync, files, KEY_CHAPTER_FORMAT, markerDoc, exportStems, loud, exporting, set_loud, set_exporting } = deps;
+  const { actions, showNotice, showError, promptText, openPaths, importPaths, exitSafely, measureLoudness, KEY_LOUD_TARGET, KEY_LOUD_REGION, exp, collectMedia, openSaveSpace, plural, usedMedia, unsavedFiles, ask, closeWaveIfRemoved, askNewSession, pluginSync, files, KEY_CHAPTER_FORMAT, markerDoc, exportStems, loud, exporting, set_loud, set_exporting } = deps;
 
 
   /**
@@ -168,6 +169,12 @@ export function createFileTools(deps: FileToolsDeps) {
         },
         enabled: () => !!session.path && mediaPool.size + (session.current?.media.length ?? 0) > 0,
         reason: () => (session.path ? "No audio in the session." : "Save the session first: its audio is copied into the folder beside it."),
+      }),
+      actions.register({
+        id: "file.save-space",
+        run: () => openSaveSpace(),
+        enabled: () => !!session.path && (session.current?.media.length ?? 0) > 0,
+        reason: () => (session.path ? "No audio in the session." : "Save the session first: Save Space works on the files in its folder."),
       }),
       actions.register({
         id: "files.link-media",

@@ -1684,6 +1684,24 @@ export interface MeasureEvent {
   line: string;
 }
 
+/** Save Space: smaller copies of `items` that sound the same; originals are untouched. */
+export function mediaSaveSpace(items: import("./save-space").SpaceItem[], options: import("./save-space").SpaceOptions): Promise<import("./save-space").SpaceOutcome[]> {
+  return invoke("media_save_space", { items, options });
+}
+
+export function mediaSaveSpaceCancel(): Promise<void> {
+  return invoke<void>("media_save_space_cancel");
+}
+
+/** Moves files to the Recycle Bin; returns those that could not be moved. */
+export function mediaTrash(paths: string[]): Promise<string[]> {
+  return invoke<string[]>("media_trash", { paths });
+}
+
+export function onSaveSpaceProgress(fn: (p: { done: number; total: number }) => void): Promise<() => void> {
+  return listen<{ done: number; total: number }>("save-space-progress", (e) => fn(e.payload));
+}
+
 export function separationMeasurePlan(): Promise<MeasurePlan[]> {
   return invoke<MeasurePlan[]>("separation_measure_plan");
 }

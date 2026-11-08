@@ -133,3 +133,90 @@ pub async fn media_copy_in(
     .await
     .map_err(|e| e.to_string())
 }
+
+/// Set to stop a Save Space run between files.
+static SAVE_SPACE_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// One file for Save Space, and whether it may become mono.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpaceItem {
+    pub path: PathBuf,
+    pub mono_ok: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct SpaceProgress {
+    done: usize,
+    total: usize,
+}
+
+/// Makes smaller copies of `items` that sound the same (see
+/// `export::space`), several at once. Progress goes out as
+/// `save-space-progress` events: `{ done, total }`. Originals are left as
+/// they are; the caller points the session at the copies.
+#[tauri::command]
+pub async fn media_save_space(
+    app: AppHandle,
+    items: Vec<SpaceItem>,
+    options: crate::export::space::Options,
+) -> Result<Vec<crate::export::space::Outcome>, String> {
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tauri::Emitter;
+    SAVE_SPACE_STOP.store(false, Ordering::Relaxed);
+    spawn_blocking(move || {
+        let total = items.len();
+        let done = AtomicUsize::new(0);
+        let out = items
+            .par_iter()
+            .map(|it| {
+                let size = std::fs::metadata(&it.path).map(|m| m.len()).unwrap_or(0);
+                let o = if SAVE_SPACE_STOP.load(Ordering::Relaxed) {
+                    crate::export::space::Outcome {
+                        from: it.path.clone(),
+                        to: None,
+                        bytes_before: size,
+                        bytes_after: size,
+                        flac: false,
+                        mono: false,
+                        channels: 0,
+                        skipped: Some("cancelled".into()),
+                    }
+                } else {
+                    crate::export::space::shrink(&it.path, options, it.mono_ok)
+                };
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                let _ = app.emit("save-space-progress", SpaceProgress { done: n, total });
+                o
+            })
+            .collect();
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn media_save_space_cancel() {
+    SAVE_SPACE_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Moves files to the Recycle Bin (the Trash elsewhere), so they can be
+/// brought back. Returns the ones that could not be moved, with the reason.
+#[tauri::command]
+pub async fn media_trash(paths: Vec<PathBuf>) -> Result<Vec<String>, String> {
+    spawn_blocking(move || {
+        paths
+            .iter()
+            .filter(|p| p.exists())
+            .filter_map(|p| {
+                trash::delete(p)
+                    .err()
+                    .map(|e| format!("{}: {e}", p.display()))
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}

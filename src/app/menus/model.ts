@@ -109,6 +109,7 @@ export const MENUS: readonly Menu[] = [
       item("file.close-all", "Close All"),
       item("file.close-unused", "Remove Unused Files"),
       item("file.collect-media", "Collect Session Media"),
+      item("file.save-space", "Save Space..."),
       item("files.track-details", "Track Details..."),
       sep,
       sub("Export", [

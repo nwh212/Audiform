@@ -15,6 +15,7 @@ pub mod loudness;
 pub mod m4a_tags;
 pub mod mixdown;
 pub mod region;
+pub mod space;
 pub mod tags;
 pub mod verify;
 pub mod wav_multi;

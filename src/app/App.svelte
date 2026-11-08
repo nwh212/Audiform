@@ -45,6 +45,7 @@
   import { editor, restoreSettings, settingsOf } from "../stores/editor";
   import { sessionEnd, setErrorSink, type ClipDoc, type Op } from "../stores/session";
   import ChoiceDialog, { type ChoiceButton } from "./ChoiceDialog.svelte";
+  import { spaceItems, spaceOps, type SpaceItem, type SpaceOutcome } from "./save-space";
   import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
   import type { SaveAudioChoice, SaveAudioInit } from "./SaveAudioDialog.svelte";
   import PromptDialog from "./PromptDialog.svelte";
@@ -109,6 +110,7 @@
     sessionResume,
     sessionForget,
     mediaCopyIn,
+    mediaTrash,
     sessionOpen,
     sessionPickOpen,
     generateAudio,
@@ -791,6 +793,8 @@
   }
 
   let colorFor = $state<{ ids: string[]; current: string | null } | null>(null);
+  /** File > Save Space while open: the files it works on. */
+  let saveSpace = $state<SpaceItem[] | null>(null);
 
   let propertiesOpen = $state(false);
 
@@ -859,6 +863,31 @@
     const parts = [...(plan.ops.length ? [session.command(label, { op: "batch", ops: plan.ops })] : []), ...[mediaPool.repathCommand(plan.pool, label)].filter((c) => c !== null)];
     if (parts.length) await sessionHistory.execute(new CompoundCommand(label, parts));
     return new Set([...plan.pool.map((p) => p.path), ...plan.ops.flatMap((o) => (o.op === "set_media" ? [o.media.path] : []))]).size;
+  }
+
+  /** Opens Save Space for the session's files inside its folder (not the Waveform editor's file with unsaved edits). */
+  function openSaveSpace() {
+    const doc = session.current;
+    const file = session.path;
+    if (!doc || !file) return;
+    const wf = waveFile.current();
+    const skip = wf && !wf.untitled && waveHistory.current.dirty ? [wf.path] : [];
+    saveSpace = spaceItems(doc, file, ignorePathCase, skip);
+  }
+
+  /** Points the session and the Files panel at Save Space's copies as one undoable step, then saves. */
+  async function applySaveSpace(outcomes: SpaceOutcome[]): Promise<boolean> {
+    const doc = session.current;
+    if (!doc) return false;
+    const ops = spaceOps(doc.media, outcomes, ignorePathCase);
+    const moved = new Map(outcomes.flatMap((o) => (o.to ? [[o.from, o.to] as [string, string]] : [])));
+    const plan = repointPlan([], mediaPool.current.items.map((it) => ({ id: it.id, path: it.path })), moved, ignorePathCase);
+    const label = "Save Space";
+    const parts = [...(ops.length ? [session.command(label, { op: "batch", ops })] : []), ...[mediaPool.repathCommand(plan.pool, label)].filter((c) => c !== null)];
+    if (parts.length) await sessionHistory.execute(new CompoundCommand(label, parts));
+    for (const p of plan.pool) mediaPool.retry(p.id);
+    await pluginSync.captureAll();
+    return await files.save();
   }
 
   /**
@@ -1880,6 +1909,7 @@
     KEY_LOUD_REGION,
     exp,
     collectMedia,
+    openSaveSpace,
     plural,
     usedMedia,
     unsavedFiles,
@@ -2370,6 +2400,12 @@
 {#if shortcutsOpen}
   {#await import("./KeyboardShortcutsDialog.svelte") then { default: KeyboardShortcutsDialog }}
   <KeyboardShortcutsDialog {keymap} onChange={saveKeymap} onClose={() => (shortcutsOpen = false)} />
+  {/await}
+{/if}
+
+{#if saveSpace}
+  {#await import("./SaveSpaceDialog.svelte") then { default: SaveSpaceDialog }}
+  <SaveSpaceDialog items={saveSpace} onApply={applySaveSpace} onTrash={(paths) => mediaTrash(paths)} onClose={() => (saveSpace = null)} {showError} />
   {/await}
 {/if}
 

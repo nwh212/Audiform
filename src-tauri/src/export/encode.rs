@@ -805,6 +805,49 @@ impl Writer {
         Ok(())
     }
 
+    /// Adds whole-number samples at the file's own depth, written as they
+    /// are with no dither or scaling: a lossless copy. FLAC and integer WAV
+    /// only, at the source's rate and channel count.
+    pub fn write_int(&mut self, interleaved: &[i32]) -> Result<(), EncodeError> {
+        if interleaved.is_empty() {
+            return Ok(());
+        }
+        if self.resample.is_some() || self.in_ch != self.out_ch {
+            return Err(EncodeError::Settings(
+                "Whole-number samples go in at the file's own rate and channels.".into(),
+            ));
+        }
+        match &mut self.inner {
+            Inner::Flac(f) => {
+                f.pending.extend_from_slice(interleaved);
+                let block = FLAC_BLOCK * f.ch;
+                let mut at = 0;
+                while f.pending.len() - at >= block {
+                    let chunk: Vec<i32> = f.pending[at..at + block].to_vec();
+                    f.encode_block(&chunk)?;
+                    at += block;
+                }
+                f.pending.drain(..at);
+            }
+            Inner::Wav { w, bits, .. } if *bits <= 24 => {
+                for &x in interleaved {
+                    match *bits {
+                        8 => w.write_sample(x as i8).map_err(werr)?,
+                        16 => w.write_sample(x as i16).map_err(werr)?,
+                        _ => w.write_sample(x).map_err(werr)?,
+                    }
+                }
+            }
+            _ => {
+                return Err(EncodeError::Settings(
+                    "Only FLAC and whole-number WAV take whole-number samples.".into(),
+                ))
+            }
+        }
+        self.frames += (interleaved.len() / self.out_ch) as u64;
+        Ok(())
+    }
+
     /// Finishes the file. Returns the frames written.
     pub fn finish(mut self) -> Result<u64, EncodeError> {
         if let Some(mut r) = self.resample.take() {

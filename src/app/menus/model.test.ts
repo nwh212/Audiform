@@ -120,6 +120,7 @@ describe("menu model", () => {
       "clip.reveal",
       "file.close-unused",
       "file.collect-media",
+      "file.save-space",
       "view.time.seconds",
       "view.time.bars",
       "wave.channel-left",
