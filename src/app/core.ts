@@ -1661,6 +1661,42 @@ export function separationCancel(): Promise<void> {
   return invoke<void>("separation_cancel");
 }
 
+/** How each model would be measured by Measure Scores, or why it cannot be. */
+export interface MeasurePlan {
+  id: string;
+  name: string;
+  category: string;
+  installed: boolean;
+  test: string | null;
+  reason: string | null;
+}
+
+export interface MeasureResult {
+  folder: string;
+  json: string;
+  /** "done", "cancelled" or "failed". */
+  status: string;
+}
+
+export interface MeasureEvent {
+  done: number;
+  total: number;
+  line: string;
+}
+
+export function separationMeasurePlan(): Promise<MeasurePlan[]> {
+  return invoke<MeasurePlan[]>("separation_measure_plan");
+}
+
+/** Measures the models on the test songs in `folder`; writes scores.json, scores.txt and run.log to a new folder. */
+export function separationMeasure(folder: string, models: string[], songs: number | null, seconds: number | null, gpu: boolean): Promise<MeasureResult> {
+  return invoke<MeasureResult>("separation_measure", { folder, models, songs, seconds, gpu, overlap: null });
+}
+
+export function onSeparationMeasure(fn: (e: MeasureEvent) => void): Promise<() => void> {
+  return listen<MeasureEvent>("separation-measure", (e) => fn(e.payload));
+}
+
 export function onSeparationProgress(fn: (p: SeparationProgress) => void): Promise<() => void> {
   return listen<SeparationProgress>("separation-progress", (e) => fn(e.payload));
 }

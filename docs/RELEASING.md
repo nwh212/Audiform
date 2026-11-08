@@ -10,7 +10,7 @@ Every update that goes out gets its own version, so a bug report can name the bu
    ```
 
    Stay on 0.x until the editor is stable for daily podcast work; 1.0.0 marks that.
-2. For a major update (a minor or major version bump), check whether a better **public** separation model has come out than the ones Audio Separation offers, per type (vocals and instrumental for now). Compare published SDR on the same test set (the Multisong set on MVSep and in ZFTurbo's pretrained list), keep only models whose weights anyone can download from their author, and note what the author says about their use. To add or replace one, update `catalog()` in `src-tauri/src/separation/mod.rs` with its download, size, SHA-256 and SDR, and record the change in `docs/decisions.md`.
+2. For a major update (a minor or major version bump), check whether a better **public** separation model has come out than the ones Audio Separation offers, per type (vocals and instrumental for now). Compare published SDR on the same test set (the Multisong set on MVSep and in ZFTurbo's pretrained list), keep only models whose weights anyone can download from their author, and note what the author says about their use. To add or replace one, update `catalog()` in `src-tauri/src/separation/mod.rs` with its download, size, SHA-256 and SDR, and record the change in `docs/decisions.md`. Then run Audio Separation > Measure Scores on the MUSDB18-HQ test songs and add the measured scores to the list.
 3. Commit and push, then make sure CI is green on `main`.
 4. Tag the same version and push the tag:
 

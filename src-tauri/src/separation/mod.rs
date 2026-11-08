@@ -14,6 +14,7 @@
 //! it; see PRIVACY.md and `download.rs`.
 
 pub mod download;
+pub mod score;
 
 use std::path::{Path, PathBuf};
 

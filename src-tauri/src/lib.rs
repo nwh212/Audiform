@@ -162,6 +162,8 @@ pub fn run() {
             commands::separation::separation_check_engine,
             commands::separation::separation_run,
             commands::separation::separation_cancel,
+            commands::separation_measure::separation_measure,
+            commands::separation_measure::separation_measure_plan,
             commands::firewall::firewall_block,
             commands::reverb::reverb_pick,
             commands::reverb::reverb_load,

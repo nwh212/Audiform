@@ -70,7 +70,7 @@ pub struct SeparatedFile {
     pub path: PathBuf,
 }
 
-fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
 
@@ -293,19 +293,7 @@ pub async fn separation_run(
             return Err(format!("{} is not downloaded.", m.name));
         }
         // An engine from before this version cannot read this version's jobs.
-        let version = {
-            let mut c = Command::new(&engine);
-            c.arg("--version").stdin(Stdio::null()).stderr(Stdio::null());
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                c.creation_flags(0x0800_0000);
-            }
-            c.output()
-                .ok()
-                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_default()
-        };
+        let version = engine_version(&engine);
         if !separation::engine_is_new_enough(&version) {
             return Err("The separation engine is out of date. Open Audio Separation and press Update next to the engine.".into());
         }
@@ -388,6 +376,23 @@ fn separate_in(
     Ok(SeparationResult { outputs })
 }
 
+/// What the engine says its version is (empty when it cannot say).
+pub(crate) fn engine_version(engine: &Path) -> String {
+    let mut c = Command::new(engine);
+    c.arg("--version")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
+    }
+    c.output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
 /// Adds what to do to engine messages that have a known cause.
 fn engine_hint(message: String) -> String {
     if message.contains("works only with Audiform") {
@@ -397,7 +402,7 @@ fn engine_hint(message: String) -> String {
     }
 }
 
-fn run_engine(
+pub(crate) fn run_engine(
     app: &AppHandle,
     engine: &Path,
     job: &Path,
@@ -522,7 +527,7 @@ fn run_engine(
 
 /// Decodes `src` and writes it as a 32-bit float WAV at `rate` with
 /// `channels`, cut or padded to `frames` when given.
-fn write_resampled(
+pub(crate) fn write_resampled(
     src: &Path,
     dest: &Path,
     channels: usize,

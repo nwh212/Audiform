@@ -18,6 +18,7 @@
   import { sizeText } from "../../app/settings/pages";
   import { bySplit, MEMO_KEY, memosOf, sdrText, splitOf } from "../../app/separation";
   import type { SeparationTools } from "../../app/separation-tools.svelte";
+  import MeasureScoresDialog from "./MeasureScoresDialog.svelte";
   import { editor } from "../../stores/editor";
   import { mediaPool } from "../../stores/media";
   import { waveFile } from "../../stores/wave";
@@ -84,6 +85,7 @@
   });
   const job = $derived(tools.job);
   let onGpu = $state(settings.current.separationDevice === "gpu");
+  let measuring = $state(false);
   $effect(() =>
     settings.subscribe((v) => {
       onGpu = v.separationDevice === "gpu";
@@ -113,6 +115,7 @@
                 <button type="button" class="link" disabled={!!job} onclick={() => void tools.checkEngine()}>{tools.engineUpdate === "current" ? "Up to date. Check again" : "Check for update"}</button>
               {/if}
               <button type="button" class="link" disabled={!!job} onclick={() => void tools.removeEngine()}>Remove</button>
+              <button type="button" class="link" disabled={!!job} title="Score the downloaded models on a test set on this computer, and save the results" onclick={() => (measuring = true)}>Measure Scores…</button>
             {:else}
               <span>About 10 MB</span>
               <button type="button" class="link" disabled={!!job || !status.engineAvailable} onclick={() => void tools.download("engine")}>Download</button>
@@ -204,6 +207,11 @@
     {/if}
   </footer>
 </div>
+
+
+{#if measuring}
+  <MeasureScoresDialog gpu={onGpu} showError={tools.showError} onClose={() => (measuring = false)} />
+{/if}
 
 <style>
   .tabs {

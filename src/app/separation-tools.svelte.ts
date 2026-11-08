@@ -347,6 +347,7 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     quick,
     separateQuick,
     cancel: () => void separationCancel(),
+    showError,
   };
 }
 

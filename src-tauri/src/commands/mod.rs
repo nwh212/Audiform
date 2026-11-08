@@ -33,6 +33,7 @@ pub mod prerender;
 pub mod record;
 pub mod reverb;
 pub mod separation;
+pub mod separation_measure;
 pub mod session;
 pub mod spectral;
 pub mod template;
