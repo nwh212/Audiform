@@ -2728,3 +2728,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Why.** The project lead asked for a space-saving option for projects that stores WAV and other large files as FLAC at full compression, and folds stereo files that are really mono. Keeping it to exact copies, checked after writing, means it can never change how a session sounds; the Recycle Bin keeps the originals recoverable, since Undo after the move points at files that are no longer there.
 
+## 2026-11-14: De-limiter model (becruily)
+
+**Decision.** Audio Separation offers becruily's BS-RoFormer De-limiter on the Denoise tab ("Restored dynamics" and "Limiting"): it undoes the limiter on a brickwalled master and gives back the dynamics. 102 MB, pinned SHA-256, CC BY-NC 4.0 as the author states. The author asks for 32-bit float input (or the input 12 dB down) so the restored peaks are not clipped; Audiform already writes the engine's input and its results as 32-bit float, so nothing extra is needed. It has no published score, and Measure Scores lists it as not measurable: no public test set pairs loud masters with their unlimited mixes.
+
+**Why.** Requested by the project lead.
+

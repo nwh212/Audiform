@@ -19,6 +19,7 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 | Center and wide (stereo field) | gilliaan's CenterWide, Mel-Band v3 and BS v3 beta | A learned split of what sits in the phantom center from what is panned off it, on its own Stereo tab. CC BY-NC-SA 4.0. |
 | Noise | Mel-Band Roformer Denoise, and the aggressive one | As before. |
 | Reverb | Reverb Remover (anvuew) | Pulls the dry sound out of a reverberant recording, GPL-3.0, 22.5 dB on the trainer's own test. |
+| Limiting on a loud master | BS-RoFormer De-limiter (becruily) | Undoes the limiter on a brickwalled track and gives back its dynamics. 102 MB. CC BY-NC 4.0. No published score: no public test measures it. Audiform feeds and keeps it in 32-bit float, as the author asks, so the restored peaks above full scale are not clipped. |
 | Bleed between stems | Mel-Band Roformer Bleed Suppressor (unwa and 97chris) | Cleans what other stems left in an instrumental. No licence stated. |
 
 ## Looked at and left out, with the reason
@@ -37,7 +38,7 @@ Audiform's Audio Separation panel downloads models on demand (see `src-tauri/src
 ## Licences in one place
 
 - Permissive: the Demucs family (MIT), ZFTurbo's checkpoints (MIT repository), Kim's Mel-Band model (MIT), chenCFD guitar (MIT), the X-LANCE fine-tunes (MIT), Bandit v2 weights (CC BY-SA 4.0).
-- Non-commercial: gilliaan's models, Sucial's chorus model, the Timbrica drum model (all CC BY-NC-SA 4.0), jaCappella (CC BY-NC 4.0).
+- Non-commercial: gilliaan's models, Sucial's chorus model, the Timbrica drum model (all CC BY-NC-SA 4.0), jaCappella and becruily's de-limiter (CC BY-NC 4.0).
 - Copyleft: anvuew's karaoke model (GPL-3.0).
 - No licence stated (all rights reserved by default; the list says so, and the user chooses): BS-RoFormer SW, becruily's guitar and karaoke models, Gabox, Gonzaluigi, the aufr33 and viperx karaoke model, the MDX23C drum model, the bleed suppressor, the duet model, rbustos89's choir models.
 

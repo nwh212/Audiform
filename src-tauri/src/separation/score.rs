@@ -181,6 +181,9 @@ pub fn plan(m: &ModelEntry) -> Result<Plan, String> {
         }
         _ => {}
     }
+    if m.id == "delimit-becruily" {
+        return Err("no public test set pairs loud masters with their unlimited mixes".into());
+    }
     if names.iter().any(|n| n.eq_ignore_ascii_case("Lead vocal")) {
         return Err("the test set has the vocals as one part, so lead and backing vocals cannot be told apart".into());
     }

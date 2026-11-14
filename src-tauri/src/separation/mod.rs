@@ -487,6 +487,33 @@ pub fn catalog() -> Vec<ModelEntry> {
             },
         },
         ModelEntry {
+            id: "delimit-becruily",
+            name: "De-limiter (restores the dynamics of a brickwalled master)",
+            category: "Denoise",
+            group: "",
+            sdr: None,
+            sdr_note: "no public score; it undoes a limiter on a loud master, which no public test set measures",
+            target_name: "Restored dynamics",
+            rest_name: "Limiting",
+            stems: &[],
+            author: "becruily",
+            page: "https://huggingface.co/becruily/bs-roformer-delimit",
+            url: "https://huggingface.co/becruily/bs-roformer-delimit/resolve/main/becruily_delimit.ckpt",
+            sha256: "c10473cc54c18d525f0514ff63dad57a47a65f26c89d7a2f262e9c61a2129d82",
+            bytes: 102_323_090,
+            licence: "CC BY-NC 4.0 (non-commercial use), as stated on the author's page.",
+            spec: || {
+                json!({
+                    "arch": "bs",
+                    "freqs_per_bands": [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+                        4,4,4,4,4,4,4,4,4,4,4,4,12,12,12,12,12,12,12,12,24,24,24,24,24,24,24,24,
+                        48,48,48,48,48,48,48,48,128,129],
+                    "sample_rate": 44100, "n_fft": 2048, "hop": 512, "win": 2048,
+                    "heads": 8, "dim_head": 64, "chunk_size": 220500, "num_overlap": 2
+                })
+            },
+        },
+        ModelEntry {
             id: "xlance-keys",
             name: "Piano and keys (single instrument)",
             category: "Instruments",
