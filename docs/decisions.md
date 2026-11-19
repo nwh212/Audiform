@@ -2734,3 +2734,7 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Why.** Requested by the project lead.
 
+## 2026-11-19: Version 1.0, the last of this codebase
+
+**Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
+
