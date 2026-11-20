@@ -1,0 +1,35 @@
+# Publishes a separation engine release (a pre-release, so it never shows
+# as Audiform's latest version) from the files kept on a branch named
+# like `engine-v1.0.0-files`. The engine's source is private and is not in
+# this repository; only its built downloads are.
+name: Engine release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Engine release tag, like engine-v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the engine files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}-files
+      - name: Check the downloads against their checksums
+        run: for f in *.zip.sha256; do sha256sum -c "$f"; done
+      - name: Publish the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          notes="Separation engine ${TAG#engine-v} for Audiform 2 (protocol 2). Audiform 2 reads audiform2-separate.json, then downloads its own build and checks its SHA-256. Audiform 1 uses engine-v0.2.0 and is not affected."
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "${TAG}-files" \
+            --prerelease --title "Separation engine ${TAG#engine-v}" --notes "$notes" \
+            *.zip *.zip.sha256 *.json
