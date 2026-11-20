@@ -12,3 +12,7 @@ Audiform 2 is a rewrite of Audiform in pure Rust. These guides carry over what A
 | [zoom-and-scroll.md](zoom-and-scroll.md) | Every zoom and scroll gesture by area, horizontal and vertical zoom, anchoring formulas, wheel weighting, follow playhead, the rendering tied to zoom |
 
 Read them as findings, not orders: where a guide says something could not be settled, it says so. Audiform 1's code is GPL-3.0-or-later; code copied from it keeps its licence and copyright lines (some files carry The GeekCast Radio Network's, from Altered Audio Editor).
+
+## Separation engine client
+
+[separation-client/](separation-client/) is the Rust crate Audiform 2 uses to download, check, start and drive the separation engine 1.0 (protocol 2). Its README lists every message and what the host program must be named for the engine to accept it. Licence: MIT OR Apache-2.0.
