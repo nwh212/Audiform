@@ -1,0 +1,17 @@
+{
+  "format": "audiform-separate",
+  "engine": "1.0.0",
+  "protocol": 2,
+  "assets": {
+    "linux-x64": {
+      "file": "audiform2-separate-linux-x64.zip",
+      "bytes": 11541226,
+      "sha256": "e72b552c51bfec35b3900bdab011c5675676324a3bb59dc70b1f5d1351659178"
+    },
+    "windows-x64": {
+      "file": "audiform2-separate-windows-x64.zip",
+      "bytes": 12470294,
+      "sha256": "30c5a036fe5b6954d0ac5b0ada4562a95b7c4ea603fe8dd54d04a940250e0708"
+    }
+  }
+}
