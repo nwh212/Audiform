@@ -2750,3 +2750,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** Desktop notifications name an icon file instead of leaving the icon to the plugin, which asks the icon theme for one named after the program. The app includes its 256 pixel icon (`src-tauri/icons/128x128@2x.png`), writes it once to its cache folder as `notification-icon.png` (rewritten only when it differs) and passes that path; if it cannot be written, the themed name `audiform` is used.
 
 **Why.** A build that is not installed (one run from the source tree) has no themed icon, so its notifications showed a generic one. A file works whether or not Audiform is installed.
+
+## 2026-11-21: Launcher entry and icons for Linux builds from source
+
+**Decision.** `scripts/linux-desktop-entry.sh install` puts Audiform's icons (32 to 512 pixels, from `src-tauri/icons`) under `~/.local/share/icons/hicolor` as `audiform` and writes `~/.local/share/applications/audiform.desktop`, which runs the release build (or `AUDIFORM_BIN`), with `Icon` and `StartupWMClass` set to `audiform`. `remove` deletes the entry only if this script wrote it (it carries a marker line) and the icons only while they still match the repo's. Current user only, no sudo. The README gains a Linux build section that mentions it.
+
+**Why.** On Wayland the desktop ignores a window's own icon and finds it through the launcher entry matching the window's app id, which is the program's name (`audiform`) while Tauri's GTK app id option stays off. Builds from source had no entry, so the taskbar showed a generic icon and the app was missing from the launcher. Release packages bring their own entry; this is for everyone else.
