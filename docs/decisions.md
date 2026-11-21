@@ -2738,3 +2738,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: Band EQ presets for 10, 20 and 30 bands
+
+**Decision.** The Band EQ's built-in presets live in `src/panels/voice-chain/band-presets.ts`. Each is written once as a curve (a few frequency and level points) and every band takes the curve's level at its centre, read evenly in octaves, the way the window's tabs carry a curve between band counts. So the 10, 20 and 30 band versions always match. The four earlier 10-band presets keep their exact settings. New ones: Sub Bass Boost, Low-End Punch, Bass Cut, Mid Lift, Mid Scoop, Presence Lift, Boxiness Cut, Air Lift, Treble Cut, Vocal Clarity, Vocal Warmth, Vocal De-Harsh, Thin Voice, Fuller, Acoustic Guitar Sparkle and Loudness, Low Volume. The 20 and 30 band versions carry the band count in their names, since presets are found by name.
+
+**Why.** Only the 10-band EQ had presets, and only four. One curve per preset keeps the three counts in step and makes a new preset one line.

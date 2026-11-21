@@ -10,6 +10,7 @@
 
 import type { EffectInfo, EffectParamInfo } from "../../app/core";
 import type { EffectChainDoc, EffectSlotDoc } from "../../stores/session";
+import { bandEqPresets } from "./band-presets";
 import { DYNAMICS_CURVE_PRESETS } from "./curve-presets";
 
 export const MAX_SLOTS = 16;
@@ -744,18 +745,8 @@ export const BUILTIN_PRESETS: ChainPreset[] = [
       b5_on: 0,
     }),
   ]),
-  chainP("Smile Curve", "EQ", [
-    fx("band_eq_10", { g01: 4, g02: 3, g03: 1, g04: 0, g05: -1, g06: -1, g07: 0, g08: 1, g09: 3, g10: 4 }),
-  ]),
-  chainP("Bass Boost", "EQ", [
-    fx("band_eq_10", { g01: 5, g02: 4, g03: 2, g04: 1 }),
-  ]),
-  chainP("Treble Lift", "EQ", [
-    fx("band_eq_10", { g07: 1, g08: 2, g09: 3, g10: 4 }),
-  ]),
-  chainP("Mud Cut", "EQ", [
-    fx("band_eq_10", { g03: -3, g04: -3, g05: -1 }),
-  ]),
+  // Band EQ: one curve per preset, for 10, 20 and 30 bands (band-presets.ts).
+  ...bandEqPresets().map((p) => chainP(p.name, p.bands === 10 ? "EQ" : `Band EQ (${p.bands} bands)`, [fx(p.effect, p.params)])),
   chainP("Low-Pass 8 kHz", "EQ", [
     fx("precision_filter", { design: 0, mode: 0, order: 1, freq: 8000 }),
   ]),
