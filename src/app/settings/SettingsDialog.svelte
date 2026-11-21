@@ -205,7 +205,7 @@
   function resetPage() {
     const def = DEFAULT_SETTINGS;
     if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades, updateCheckWeekly: def.updateCheckWeekly });
-    else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
+    else if (page === "Appearance") Object.assign(d.app, { colors: { ...NO_COLORS }, systemFont: def.systemFont });
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
     else if (page === "Playback and Recording") Object.assign(d.app, { meterYellowDb: def.meterYellowDb, meterRedDb: def.meterRedDb, meterSpeed: def.meterSpeed });
@@ -312,6 +312,8 @@
           {#if pickedTheme?.description}
             <p class="note">{pickedTheme.description}{pickedTheme.author ? ` By ${pickedTheme.author}.` : ""}</p>
           {/if}
+          <label class="row"><input type="checkbox" bind:checked={d.app.systemFont} /> Use the system font</label>
+          <p class="note">Shows the interface in your system's own font (the one set in your desktop's settings) instead of Audiform's, in every theme. Text sizes stay Audiform's.</p>
           <p class="note">Apply tries a theme while this window stays open. Your colors above still apply on top of any theme.</p>
           <div class="row">
             <button type="button" onclick={() => void openThemesFolder()}>Open Themes Folder</button>

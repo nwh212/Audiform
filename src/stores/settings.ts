@@ -40,6 +40,8 @@ export interface AppSettings {
   linkCrossfades: boolean;
   /** Once a week, ask Audiform's GitHub releases page whether a newer version is out. Off by default. */
   updateCheckWeekly: boolean;
+  /** The interface in the system's own font (your desktop's font setting) instead of the bundled ones. Off by default. */
+  systemFont: boolean;
   /** What the space bar does to a playing session. */
   colors: AppColors;
   /** System name of the output; null is the system default. */
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fadeShape: "linear",
   linkCrossfades: true,
   updateCheckWeekly: false,
+  systemFont: false,
   colors: { ...NO_COLORS },
   output: null,
   outputPair: [0, 1],
@@ -236,6 +239,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       o.fadeShape === "cosine" ? "cosine" : "linear",
     linkCrossfades: bool(o.linkCrossfades, d.linkCrossfades),
     updateCheckWeekly: bool(o.updateCheckWeekly, d.updateCheckWeekly),
+    systemFont: bool(o.systemFont, d.systemFont),
     colors: {
       wave: color(c.wave),
       playhead: color(c.playhead),
@@ -324,6 +328,9 @@ function metronomePrefs(raw: unknown): MetronomePrefs {
     subdivide: METRONOME_SUBDIVIDE.some((x) => x.value === m.subdivide) ? (m.subdivide as MetronomeSubdivide) : d.subdivide,
   };
 }
+
+/** The interface font when Use the system font is on: the desktop's own UI font. */
+export const SYSTEM_FONT = "system-ui, sans-serif";
 
 /** A saved theme id: the old names are migrated; anything that is not an id is "dark". Whether a theme with that id exists is checked when it is applied. */
 export function themeId(v: unknown): string {

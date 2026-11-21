@@ -54,6 +54,7 @@
   import type { SettingsDraft } from "./settings/pages";
   import { colorVars, meterPercent, sanitizeSettings, settings, type AppSettings } from "../stores/settings";
   import { appearanceChanged } from "../stores/appearance";
+  import { SYSTEM_FONT } from "../stores/settings";
   import { bindScrub } from "./scrub";
   import { setMeterSpeed, type TransportStore } from "../stores/transport";
   import type { GenerateMode, GenerateValues } from "./GenerateDialog.svelte";
@@ -1784,6 +1785,9 @@
     for (const [k, v] of Object.entries(colorVars(s.colors))) root.setProperty(k, v);
     root.setProperty("--meter-yellow", `${meterPercent(s.meterYellowDb)}%`);
     root.setProperty("--meter-red", `${meterPercent(s.meterRedDb)}%`);
+    // The system font, when picked, wins over the bundled fonts and any theme's (views that draw themselves read it too).
+    if (s.systemFont) root.setProperty("--font-ui", SYSTEM_FONT);
+    else root.removeProperty("--font-ui");
     // Canvas views read colors when they draw: have them draw again.
     requestAnimationFrame(() => appearanceChanged());
     setCustomTarget({ lufs: s.customLufs, peak: s.customPeak });
