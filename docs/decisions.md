@@ -2744,3 +2744,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 **Decision.** On Linux, when long work finishes while Audiform's window is in the background, the desktop shows a notification as well as the usual message at the bottom of the window: exports (mixdown, files, stems), bounce, Batch Convert and Audio Separation. It goes through Tauri's notification plugin (MIT or Apache-2.0), a dependency on Linux only, through a `desktop_notify` command that does nothing elsewhere. Settings > General > Notifications turns it off (on by default; the box is shown on Linux only). No tray icon: long work already shows its progress in the window and the notification covers its end, so a tray icon would add a dependency for nothing. The menu bar stays the app's own: on Linux a native Tauri menu is a GTK menu bar inside the window, not the desktop's global menu (which barely works for GTK apps on Wayland), and it would lose the Effects search box, type to jump, the nested plug-in lists, the reasons on disabled items and the theme's colors.
 
 **Why.** Asked for so the app fits a KDE desktop. A notification is useful when an export runs while the user does something else; in front of the window the status line is enough, so none is sent then.
+
+## 2026-11-21: Notifications carry Audiform's icon on Linux
+
+**Decision.** Desktop notifications name an icon file instead of leaving the icon to the plugin, which asks the icon theme for one named after the program. The app includes its 256 pixel icon (`src-tauri/icons/128x128@2x.png`), writes it once to its cache folder as `notification-icon.png` (rewritten only when it differs) and passes that path; if it cannot be written, the themed name `audiform` is used.
+
+**Why.** A build that is not installed (one run from the source tree) has no themed icon, so its notifications showed a generic one. A file works whether or not Audiform is installed.
