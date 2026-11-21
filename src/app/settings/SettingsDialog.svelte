@@ -22,6 +22,7 @@
   import { BROADCAST_REGIONS, targetsFor } from "../loudness";
   import { DEFAULT_SETTINGS, NO_COLORS, TIMECODE_RATES, type AppColors } from "../../stores/settings";
   import { themeColor } from "../colors";
+  import { PLATFORM } from "../../lib/platform";
   import { cleanDraft, LATER_PAGES, PAGES, sizeText, type Page, type SettingsDraft } from "./pages";
 
   interface Props {
@@ -204,7 +205,7 @@
   }
   function resetPage() {
     const def = DEFAULT_SETTINGS;
-    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades, updateCheckWeekly: def.updateCheckWeekly });
+    if (page === "General") Object.assign(d.app, { zoomStep: def.zoomStep, wheelAnchor: def.wheelAnchor, wheelZooms: def.wheelZooms, fadeShape: def.fadeShape, linkCrossfades: def.linkCrossfades, updateCheckWeekly: def.updateCheckWeekly, desktopNotifications: def.desktopNotifications });
     else if (page === "Appearance") d.app.colors = { ...NO_COLORS };
     else if (page === "Autosave") Object.assign(d.app, { autosave: def.autosave, autosaveMinutes: def.autosaveMinutes, backups: def.backups, backupCount: def.backupCount });
     else if (page === "Session Media") Object.assign(d.app, { copyMedia: def.copyMedia, mediaFolder: def.mediaFolder, collectOnSave: def.collectOnSave, leaveLibraryFiles: def.leaveLibraryFiles });
@@ -259,6 +260,13 @@
             <label><input type="checkbox" bind:checked={d.app.updateCheckWeekly} /> Check for a new version once a week</label>
             <p class="hint">Asks Audiform's releases page on GitHub which version is newest, nothing else, and never while you play or record. A newer version shows one line at the bottom of the window; nothing is downloaded until you choose to. Help &gt; Check for Updates asks at any time.</p>
           </fieldset>
+          {#if PLATFORM === "linux"}
+            <fieldset>
+              <legend>Notifications</legend>
+              <label><input type="checkbox" bind:checked={d.app.desktopNotifications} /> Tell the desktop when long work finishes</label>
+              <p class="hint">When an export, a conversion or a separation finishes while Audiform's window is in the background, your desktop shows a notification. The message at the bottom of the window shows too.</p>
+            </fieldset>
+          {/if}
           <p class="note">The Space bar plays, and stops when playing or recording.</p>
           <label class="off" title="Warnings with a 'don't ask again' box arrive with the first such warning."><input type="checkbox" disabled /> Show warnings I turned off again <span class="why">No warnings can be turned off yet.</span></label>
           <fieldset>

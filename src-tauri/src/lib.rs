@@ -28,7 +28,7 @@ pub mod settings_backup;
 pub fn run() {
     let cwd = std::env::current_dir().unwrap_or_default();
     let launch = commands::app::file_args(std::env::args().skip(1), &cwd);
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Opening a session or audio file from File Explorer while Audiform
         // runs hands it to the running window, which comes to the front,
         // instead of starting a second, empty Audiform.
@@ -88,7 +88,11 @@ pub fn run() {
             commands::addons::serve(ctx.app_handle(), request)
         })
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+    // Desktop notifications when long work finishes: Linux only (see commands::notify).
+    #[cfg(target_os = "linux")]
+    let builder = builder.plugin(tauri_plugin_notification::init());
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
             commands::updates::update_check,
@@ -106,6 +110,7 @@ pub fn run() {
             commands::themes::themes_open_dir,
             commands::themes::themes_list,
             commands::themes::themes_read,
+            commands::notify::desktop_notify,
             commands::addons::addons_dir,
             commands::addons::addons_open_dir,
             commands::addons::addons_list,

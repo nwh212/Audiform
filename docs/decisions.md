@@ -2738,3 +2738,21 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: Desktop notifications on Linux; no tray icon, menu bar stays in the window
+
+**Decision.** On Linux, when long work finishes while Audiform's window is in the background, the desktop shows a notification as well as the usual message at the bottom of the window: exports (mixdown, files, stems), bounce, Batch Convert and Audio Separation. It goes through Tauri's notification plugin (MIT or Apache-2.0), a dependency on Linux only, through a `desktop_notify` command that does nothing elsewhere. Settings > General > Notifications turns it off (on by default; the box is shown on Linux only). No tray icon: long work already shows its progress in the window and the notification covers its end, so a tray icon would add a dependency for nothing. The menu bar stays the app's own: on Linux a native Tauri menu is a GTK menu bar inside the window, not the desktop's global menu (which barely works for GTK apps on Wayland), and it would lose the Effects search box, type to jump, the nested plug-in lists, the reasons on disabled items and the theme's colors.
+
+**Why.** Asked for so the app fits a KDE desktop. A notification is useful when an export runs while the user does something else; in front of the window the status line is enough, so none is sent then.
+
+## 2026-11-21: Notifications carry Audiform's icon on Linux
+
+**Decision.** Desktop notifications name an icon file instead of leaving the icon to the plugin, which asks the icon theme for one named after the program. The app includes its 256 pixel icon (`src-tauri/icons/128x128@2x.png`), writes it once to its cache folder as `notification-icon.png` (rewritten only when it differs) and passes that path; if it cannot be written, the themed name `audiform` is used.
+
+**Why.** A build that is not installed (one run from the source tree) has no themed icon, so its notifications showed a generic one. A file works whether or not Audiform is installed.
+
+## 2026-11-21: Launcher entry and icons for Linux builds from source
+
+**Decision.** `scripts/linux-desktop-entry.sh install` puts Audiform's icons (32 to 512 pixels, from `src-tauri/icons`) under `~/.local/share/icons/hicolor` as `audiform` and writes `~/.local/share/applications/audiform.desktop`, which runs the release build (or `AUDIFORM_BIN`), with `Icon` and `StartupWMClass` set to `audiform`. `remove` deletes the entry only if this script wrote it (it carries a marker line) and the icons only while they still match the repo's. Current user only, no sudo. The README gains a Linux build section that mentions it.
+
+**Why.** On Wayland the desktop ignores a window's own icon and finds it through the launcher entry matching the window's app id, which is the program's name (`audiform`) while Tauri's GTK app id option stays off. Builds from source had no entry, so the taskbar showed a generic icon and the app was missing from the launcher. Release packages bring their own entry; this is for everyone else.

@@ -26,6 +26,7 @@ pub mod live;
 pub mod media;
 pub mod midi;
 pub mod musicfit;
+pub mod notify;
 pub mod peaks;
 pub mod plugins;
 pub mod preferences;

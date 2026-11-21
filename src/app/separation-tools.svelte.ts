@@ -23,6 +23,7 @@ import { prefs } from "../stores/prefs";
 import { session } from "../stores/open-session";
 import type { Op, TrackDoc } from "../stores/session";
 import { settings } from "../stores/settings";
+import { notifyFinished } from "./desktop-notify";
 import { waveFile } from "../stores/wave";
 import {
   onSeparationProgress,
@@ -246,7 +247,9 @@ export function createSeparationTools(deps: SeparationToolsDeps) {
     const outs = [...results.values()].flatMap((r) => r.outputs.map((o) => o.path));
     const imported = await mediaPool.importPaths(outs, sessionHistory);
     await mediaPool.whenIdle();
-    showNotice(`Separated ${results.size === 1 ? fileName([...results.keys()][0]!) : `${results.size} files`} into ${names.join(", ")}; the results are in the Files panel.`);
+    const text = `Separated ${results.size === 1 ? fileName([...results.keys()][0]!) : `${results.size} files`} into ${names.join(", ")}; the results are in the Files panel.`;
+    showNotice(text);
+    notifyFinished(text);
     if (src.kind !== "clips" || !session.current) return;
 
     const go = await ask("Add as new tracks?", `Put ${names.length === 2 ? `the ${names[0]!.toLowerCase()} and ${names[1]!.toLowerCase()}` : `the ${names.length} results`} on ${names.length === 2 ? "two" : names.length} new tracks below each clip's track? They copy that track's effects and settings.`, [

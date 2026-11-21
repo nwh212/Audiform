@@ -27,6 +27,7 @@ import type { DockController } from "./docking/dock";
 import { DEFAULT_TARGET, type LoudnessReport, targetsFor } from "./loudness";
 import { DEFAULT_FORMAT, type FormatKind, type OutputFormat, describeFormat, extensionOf, sanitizeFormat } from "./output-format";
 import { listen } from "@tauri-apps/api/event";
+import { notifyFinished } from "./desktop-notify";
 import type { ExportScopeInfo, ExportSettings } from "./ExportDialog.svelte";
 import type { PublishSettings } from "./PublishDialog.svelte";
 import { EMPTY_EPISODE, type EpisodeInfo, packageFiles, slugOf } from "./publish";
@@ -61,6 +62,11 @@ export interface ExportToolsDeps {
 
 export function createExportTools(deps: ExportToolsDeps) {
   const { actions, dock, showError, showNotice, ask, inWave, timeSel, selectedTrackDoc, exporting, setExporting, exportMix, realtimeMix, captureAll, folderBesideSession, placeFiles } = deps;
+  /** The end of long work: the message at the bottom, and the desktop told when the window is in the background. */
+  const finished = (text: string) => {
+    showNotice(text);
+    notifyFinished(text);
+  };
   // Mixdown. One export at a time, with a progress dialog.
 
 
@@ -125,11 +131,11 @@ export function createExportTools(deps: ExportToolsDeps) {
         setExporting({ title: `Exporting ${i + 1} of ${items.length}: ${m.name}`, progress: i / items.length, floating: true });
         const r = await exportMix(paths[i]!, { range: [m.position, m.position + m.duration], format });
         if (r.cancelled) {
-          showNotice(`Export stopped after ${i} of ${items.length} files.`);
+          finished(`Export stopped after ${i} of ${items.length} files.`);
           return;
         }
       }
-      showNotice(`Exported ${items.length} ${items.length === 1 ? "file" : "files"} as ${describeFormat(format, { sampleRate: doc.sample_rate, channels: 2, bitDepth: doc.bit_depth })}.`);
+      finished(`Exported ${items.length} ${items.length === 1 ? "file" : "files"} as ${describeFormat(format, { sampleRate: doc.sample_rate, channels: 2, bitDepth: doc.bit_depth })}.`);
     } finally {
       setExporting(null);
     }
@@ -339,7 +345,7 @@ export function createExportTools(deps: ExportToolsDeps) {
       actions.invalidate();
       const name = r.path.split(/[\\/]/).pop();
       const clipped = r.peak > 1 ? ` It goes above 0 dBFS (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); it is kept as float, so nothing is lost, but turn it down before saving to a fixed format.` : "";
-      showNotice(`Mixed down to ${name}, in the Files panel and open in the Waveform editor.${clipped}`);
+      finished(`Mixed down to ${name}, in the Files panel and open in the Waveform editor.${clipped}`);
     } catch (e) {
       showError(e);
     } finally {
@@ -414,9 +420,9 @@ export function createExportTools(deps: ExportToolsDeps) {
       if (target === "files-panel") {
         const imported = await mediaPool.importPaths([path], sessionHistory);
         mediaPool.setSelection(imported.ids);
-        showNotice(`Mixed down to ${name} and added it to the Files panel.${levelNote}${chapterNote}${checkNote}${clipped}`);
+        finished(`Mixed down to ${name} and added it to the Files panel.${levelNote}${chapterNote}${checkNote}${clipped}`);
       } else {
-        showNotice(`Exported ${name}.${levelNote}${chapterNote}${checkNote}${packNote}${clipped}`);
+        finished(`Exported ${name}.${levelNote}${chapterNote}${checkNote}${packNote}${clipped}`);
       }
     } catch (e) {
       showError(e);
@@ -499,7 +505,7 @@ export function createExportTools(deps: ExportToolsDeps) {
       const from = what.track ? (session.current?.tracks.findIndex((t) => t.id === what.track) ?? -1) : -1;
       await placeFiles([r.path], null, what.range[0], from >= 0 ? { index: from + 1, name: what.name } : {});
       const clipped = r.peak > 1 ? ` It goes above 0 dBFS (peak +${(20 * Math.log10(r.peak)).toFixed(1)} dB); it is kept as float, so nothing is lost.` : "";
-      showNotice(`Bounced to ${r.path.split(/[\\/]/).pop()} on a new track.${clipped}`);
+      finished(`Bounced to ${r.path.split(/[\\/]/).pop()} on a new track.${clipped}`);
     } catch (e) {
       showError(e);
     } finally {
@@ -540,12 +546,12 @@ export function createExportTools(deps: ExportToolsDeps) {
         const path = `${folder}${sep}${fileSafe(doc.name)} - ${String(i + 1).padStart(2, "0")} ${fileSafe(t.name)}.wav`;
         const r = await exportMix(path, { track: t.id });
         if (r.cancelled) {
-          showNotice(`Stem export cancelled after ${done} of ${tracks.length}.`);
+          finished(`Stem export cancelled after ${done} of ${tracks.length}.`);
           return;
         }
         done++;
       }
-      showNotice(`Exported ${done} ${done === 1 ? "stem" : "stems"} to ${folder}.`);
+      finished(`Exported ${done} ${done === 1 ? "stem" : "stems"} to ${folder}.`);
     } catch (e) {
       showError(e);
     } finally {

@@ -122,6 +122,18 @@ npm install
 npm run tauri dev
 ```
 
+## Build from source (Linux)
+
+Install Rust, Node and the system libraries: on Ubuntu or Zorin, `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf`; on Arch, `webkit2gtk-4.1 gtk3 libayatana-appindicator librsvg alsa-lib patchelf`. Then, from the repo folder:
+
+```sh
+npm install
+npm run tauri build -- --no-bundle
+scripts/linux-desktop-entry.sh install
+```
+
+The program is `src-tauri/target/release/audiform`. The last step is optional: it adds Audiform to your app launcher with its icon, for your user only, so the taskbar shows the icon too. `scripts/linux-desktop-entry.sh remove` takes it away again.
+
 ## Checks
 
 These are the same checks CI runs. Run them before every commit.
