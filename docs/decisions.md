@@ -2738,3 +2738,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: Desktop notifications on Linux; no tray icon, menu bar stays in the window
+
+**Decision.** On Linux, when long work finishes while Audiform's window is in the background, the desktop shows a notification as well as the usual message at the bottom of the window: exports (mixdown, files, stems), bounce, Batch Convert and Audio Separation. It goes through Tauri's notification plugin (MIT or Apache-2.0), a dependency on Linux only, through a `desktop_notify` command that does nothing elsewhere. Settings > General > Notifications turns it off (on by default; the box is shown on Linux only). No tray icon: long work already shows its progress in the window and the notification covers its end, so a tray icon would add a dependency for nothing. The menu bar stays the app's own: on Linux a native Tauri menu is a GTK menu bar inside the window, not the desktop's global menu (which barely works for GTK apps on Wayland), and it would lose the Effects search box, type to jump, the nested plug-in lists, the reasons on disabled items and the theme's colors.
+
+**Why.** Asked for so the app fits a KDE desktop. A notification is useful when an export runs while the user does something else; in front of the window the status line is enough, so none is sent then.

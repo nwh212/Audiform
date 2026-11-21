@@ -19,6 +19,7 @@
   import type { MediaPool } from "../../stores/media-pool";
   import type { Preferences } from "../../stores/preferences";
   import { batchPresets, BUILTIN_PRESETS, presetChain, sanitizePresets, type ChainPreset } from "../voice-chain/chain";
+  import { notifyFinished } from "../../app/desktop-notify";
   import { addRows, batchRows, conflicts, destFor, effectiveTemplate, fileName, sanitizeBatch, sanitizeLevel, shapingFor, tagsFor, type BatchRow, type BatchSettings } from "./batch";
   import BatchOutputDialog from "./BatchOutputDialog.svelte";
 
@@ -167,6 +168,7 @@
       if (r.failed) parts.push(`${r.failed} failed`);
       if (r.stopped) parts.push("stopped early");
       onNotice(`${parts.join(", ")}.`);
+      notifyFinished(`Batch Convert: ${parts.join(", ")}.`);
     } catch (e) {
       onError(e);
     } finally {

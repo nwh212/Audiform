@@ -40,6 +40,8 @@ export interface AppSettings {
   linkCrossfades: boolean;
   /** Once a week, ask Audiform's GitHub releases page whether a newer version is out. Off by default. */
   updateCheckWeekly: boolean;
+  /** On Linux: a desktop notification when long work (an export, a conversion, a separation) finishes while the window is in the background. */
+  desktopNotifications: boolean;
   /** What the space bar does to a playing session. */
   colors: AppColors;
   /** System name of the output; null is the system default. */
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fadeShape: "linear",
   linkCrossfades: true,
   updateCheckWeekly: false,
+  desktopNotifications: true,
   colors: { ...NO_COLORS },
   output: null,
   outputPair: [0, 1],
@@ -236,6 +239,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       o.fadeShape === "cosine" ? "cosine" : "linear",
     linkCrossfades: bool(o.linkCrossfades, d.linkCrossfades),
     updateCheckWeekly: bool(o.updateCheckWeekly, d.updateCheckWeekly),
+    desktopNotifications: bool(o.desktopNotifications, d.desktopNotifications),
     colors: {
       wave: color(c.wave),
       playhead: color(c.playhead),

@@ -68,6 +68,11 @@ trash = "5"
 pretty_assertions = "1"
 tempfile = "3"
 
+# Desktop notifications when long work finishes, on Linux only (Windows and
+# macOS builds stay as they were).
+[target.'cfg(target_os = "linux")'.dependencies]
+tauri-plugin-notification = "2"
+
 # The plug-in host is its own crate (it needs unsafe code, forbidden
 # here). The test plug-in under plughost/testplug stays out: it is built
 # by the plug-in tests only.

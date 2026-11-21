@@ -140,6 +140,11 @@ export function themesList(): Promise<{ fileName: string; size: number }[]> {
   return invoke<{ fileName: string; size: number }[]>("themes_list");
 }
 
+/** Shows a desktop notification from Audiform (Linux only; does nothing elsewhere). */
+export function desktopNotify(body: string): Promise<void> {
+  return invoke<void>("desktop_notify", { body });
+}
+
 /** The text of one theme file in the Themes folder. */
 export function themesRead(fileName: string): Promise<string> {
   return invoke<string>("themes_read", { fileName });
