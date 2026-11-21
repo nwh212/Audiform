@@ -2738,3 +2738,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: Use the system font (Appearance setting)
+
+**Decision.** Settings > Appearance > Use the system font (off by default) sets `--font-ui` to `system-ui, sans-serif` on the page root, so the interface and the views that draw themselves use the system's UI font in every theme, over the bundled fonts and any theme's own. Text sizes stay Audiform's, since the dense layout is tuned to them; deliberate faces (the italic "fx" mark, monospace readouts) stay as they are. No size fixes were needed: the views that draw themselves already scale by the display's pixel ratio and the rest is sized in CSS pixels, which the webview scales with the display.
+
+**Why.** Asked for so the app matches the desktop's font. On Linux the webview takes `system-ui` from GTK's font setting, so on KDE Plasma it matches the KDE font only when Plasma passes its settings to GTK (the `kde-gtk-config` package, "GTK settings sync"); without it GTK's own default is used.

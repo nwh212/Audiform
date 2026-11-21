@@ -56,3 +56,12 @@ describe("theme setting", () => {
     expect(sanitizeSettings({ unlockedThemes: "x" }).unlockedThemes).toEqual([]);
   });
 });
+
+describe("system font", () => {
+  it("is off by default and kept when on", () => {
+    expect(DEFAULT_SETTINGS.systemFont).toBe(false);
+    expect(sanitizeSettings({}).systemFont).toBe(false);
+    expect(sanitizeSettings({ systemFont: true }).systemFont).toBe(true);
+    expect(sanitizeSettings({ systemFont: "yes" }).systemFont).toBe(false);
+  });
+});
