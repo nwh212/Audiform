@@ -11,6 +11,10 @@ A theme is one file with the extension `.audtheme`. It holds a style sheet and t
 
 A file that cannot be used is listed in the same place with the reason, and the rest keep working. Themes never touch the network. Remove a theme by deleting its file; if it was in use, Audiform goes back to the Dark look.
 
+## Desktop Colors (Linux)
+
+On Linux with KDE Plasma, the Built in list also has Desktop Colors. It is not a file: Audiform reads the colors of your desktop's color scheme (from KDE's `kdeglobals`) and makes the look from them, light or dark to match. Change the scheme in your desktop's settings and Audiform follows the next time its window comes to the front. Where there is no such scheme (Windows, macOS, other Linux desktops), the theme is not listed. The id `desktop-colors` is reserved for it.
+
 ## Make a theme
 
 You do not need to write the file by hand. The Theme Maker is a web page, outside Audiform so the app stays small, at https://nwh212.github.io/Audiform/theme-maker/ (Edit > Settings > Appearance > Make a Theme opens it). It is one page with no libraries and no network calls of its own: it works just as well opened from a copy on disk, `docs/theme-maker/index.html`.

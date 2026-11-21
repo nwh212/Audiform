@@ -2738,3 +2738,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: Desktop Colors theme on Linux
+
+**Decision.** A built-in theme, Desktop Colors (id `desktop-colors`), made at run time from the desktop's color scheme instead of a file. The core reads the `[Colors:*]` entries and the accent color from KDE's `kdeglobals` (`$XDG_CONFIG_HOME`, else `~/.config`) on Linux only (`desktop_colors`); the interface maps them onto the tokens (`src/themes/desktop.ts`): Window colors for the panels, View colors for the lanes, a tint of Selection for the selected lane, the accent for focus, Negative for danger. A dark window background picks the dark base, a light one the light base. When the theme is in use, the scheme is read again each time the window comes to the front, so switching schemes (light or dark, any scheme) carries over. It is listed only where colors are found, so Windows, macOS and desktops without `kdeglobals` never see it. User theme files may not take its id.
+
+**Why.** Asked for so the app matches a KDE desktop. Reading the live scheme follows whatever the user runs, where a theme baked from one scheme would match only that one; it also covers "follow the system's light or dark setting" without a separate option. Named for what it does, not after any desktop's own theme names.

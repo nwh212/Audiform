@@ -6,6 +6,7 @@
 //! `.audtheme` files there. These commands only list the folder and read
 //! one file as text; the interface checks what is in it. No network.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -118,6 +119,91 @@ pub fn themes_read(app: AppHandle, file_name: String) -> Result<String, String> 
     read_in(&themes_path(&app)?, &file_name)
 }
 
+/// The desktop's color scheme, for the Desktop Colors theme: on Linux, the
+/// `[Colors:*]` entries and the accent color in KDE's `kdeglobals`, as
+/// "Window.BackgroundNormal" and the like to red, green and blue. Empty
+/// on other systems, or when there is no such file (other desktops).
+#[tauri::command]
+pub fn desktop_colors() -> BTreeMap<String, [u8; 3]> {
+    #[cfg(target_os = "linux")]
+    if let Some(text) = kdeglobals_path().and_then(|p| read_small(&p)) {
+        return parse_kde_colors(&text);
+    }
+    BTreeMap::new()
+}
+
+/// `kdeglobals` in the user's config folder (`$XDG_CONFIG_HOME`, else `~/.config`).
+#[cfg(target_os = "linux")]
+fn kdeglobals_path() -> Option<PathBuf> {
+    let dir = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+    Some(dir.join("kdeglobals"))
+}
+
+/// A settings file as text, if it is there and not unreasonably large.
+#[cfg(target_os = "linux")]
+fn read_small(path: &Path) -> Option<String> {
+    let mut text = String::new();
+    fs::File::open(path)
+        .ok()?
+        .take(1024 * 1024)
+        .read_to_string(&mut text)
+        .ok()?;
+    Some(text)
+}
+
+/// The colors in a `kdeglobals` file: each `[Colors:Name]` entry as
+/// "Name.Key", and `[General]`'s accent as "General.AccentColor". Colors
+/// are "r,g,b" (a fourth number, alpha, is ignored) or "#rrggbb".
+#[cfg(any(target_os = "linux", test))]
+fn parse_kde_colors(text: &str) -> BTreeMap<String, [u8; 3]> {
+    let mut out = BTreeMap::new();
+    let mut section: Option<String> = None;
+    for line in text.lines().map(str::trim) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            section = match name.strip_prefix("Colors:") {
+                Some(n) => Some(n.to_string()),
+                None if name == "General" => Some("General".to_string()),
+                None => None,
+            };
+            continue;
+        }
+        let (Some(sec), Some((key, value))) = (&section, line.split_once('=')) else {
+            continue;
+        };
+        let key = key.trim();
+        if sec == "General" && key != "AccentColor" {
+            continue;
+        }
+        if let Some(rgb) = parse_kde_color(value.trim()) {
+            out.insert(format!("{sec}.{key}"), rgb);
+        }
+    }
+    out
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_kde_color(v: &str) -> Option<[u8; 3]> {
+    if let Some(hex) = v.strip_prefix('#') {
+        if hex.len() != 6 {
+            return None;
+        }
+        let n = u32::from_str_radix(hex, 16).ok()?;
+        return Some([(n >> 16) as u8, (n >> 8) as u8, n as u8]);
+    }
+    let parts: Vec<u8> = v
+        .split(',')
+        .map(|p| p.trim().parse::<u8>())
+        .collect::<Result<_, _>>()
+        .ok()?;
+    match parts.as_slice() {
+        [r, g, b] | [r, g, b, _] => Some([*r, *g, *b]),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,5 +238,16 @@ mod tests {
         assert!(read_in(dir.path(), "sub/a.audtheme").is_err());
         assert!(read_in(dir.path(), "a.txt").is_err());
         assert!(read_in(dir.path(), "missing.audtheme").is_err());
+    }
+
+    #[test]
+    fn reads_kde_colors() {
+        let text = "[ColorEffects:Disabled]\nColor=1,2,3\n\n[Colors:Window]\nBackgroundNormal=29,38,44\nForegroundNormal = 241,236,237,255\nBroken=1,2\n\n[Colors:View]\nBackgroundNormal=#151f25\n\n[General]\nAccentColor=61,174,233\nColorScheme=Example\n\n[KDE]\nAccentColor=9,9,9\n";
+        let c = parse_kde_colors(text);
+        assert_eq!(c.get("Window.BackgroundNormal"), Some(&[29, 38, 44]));
+        assert_eq!(c.get("Window.ForegroundNormal"), Some(&[241, 236, 237]));
+        assert_eq!(c.get("View.BackgroundNormal"), Some(&[21, 31, 37]));
+        assert_eq!(c.get("General.AccentColor"), Some(&[61, 174, 233]));
+        assert_eq!(c.len(), 4);
     }
 }

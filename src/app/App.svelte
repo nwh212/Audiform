@@ -33,7 +33,7 @@
   import { ActionRegistry } from "./actions";
   import { EFFECT_FAMILIES, MENUS } from "./menus/model";
   import { watchThemeCursor } from "./theme-cursor";
-  import { applyThemeId, themeLook } from "../themes/loader";
+  import { applyThemeId, refreshDesktopTheme, themeLook } from "../themes/loader";
   import { relock } from "./unlock";
   import MenuBar, { type PopupList } from "./menus/MenuBar.svelte";
   import type { ContextItem } from "./ContextMenu.svelte";
@@ -215,6 +215,13 @@
       window.removeEventListener("error", onErr);
       window.removeEventListener("unhandledrejection", onRej);
     };
+  });
+
+  // Desktop Colors follows the desktop's scheme: look again whenever the window comes back to the front.
+  $effect(() => {
+    const onFocus = () => void refreshDesktopTheme().then((changed) => changed && appearanceChanged());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   });
 
   /** A short status bar message that clears itself. */
