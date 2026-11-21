@@ -2738,3 +2738,9 @@ The lead's workflow: record an instrumental in one session, then bounce it so th
 
 **Decision.** The work since 0.8.0 (Measure Scores, Save Space, the De-limiter model) ships as 1.0.0, the final version of Audiform built on Altered Audio Editor's code (the project lead). Development moves to Audiform 2, a rewrite in Rust. This version keeps using separation engine 0.2.x (`ENGINE_TAG` stays `engine-v0.2.0`); Audiform 2 gets a new engine (1.0, a long-running worker with its own protocol) released under its own name, so this version never picks it up and keeps working.
 
+
+## 2026-11-21: File dialogs through the desktop portal on Linux
+
+**Decision.** `tauri-plugin-dialog` is built with its `xdg-portal` feature instead of the default `gtk3`. On Linux every file dialog asks the desktop portal, so each desktop shows its own picker (KDE's on Plasma, GNOME's on GNOME), and zenity is used when no portal answers. Windows and macOS are unchanged: the features only affect the Linux backend. The app shows no plugin message boxes, so the portal backend's zenity message boxes never appear.
+
+**Why.** The GTK picker looked out of place on KDE and ignored its places and settings. Tested on KDE Plasma 6 on Wayland.
