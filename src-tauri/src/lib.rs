@@ -106,6 +106,7 @@ pub fn run() {
             commands::themes::themes_open_dir,
             commands::themes::themes_list,
             commands::themes::themes_read,
+            commands::themes::desktop_colors,
             commands::addons::addons_dir,
             commands::addons::addons_open_dir,
             commands::addons::addons_list,

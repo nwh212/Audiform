@@ -12,7 +12,9 @@
 
 import { DEFAULT_THEME_ID, validateTheme, type CanvasLook, type PointerKind, type ThemeFile } from "./validate";
 import { setThemePointers, type ResolvedPointers } from "../app/theme-cursor";
-import { themesList, themesRead } from "../app/core";
+import { desktopColors, themesList, themesRead } from "../app/core";
+import { PLATFORM } from "../lib/platform";
+import { DESKTOP_THEME_ID, desktopTheme, type DesktopColors } from "./desktop";
 
 export interface ThemeEntry extends ThemeFile {
   /** Shipped with Audiform, as opposed to found in the Themes folder. */
@@ -41,6 +43,8 @@ export interface ThemeSource {
   builtin: () => Record<string, () => Promise<string>>;
   userList: () => Promise<{ fileName: string; size: number }[]>;
   userRead: (fileName: string) => Promise<string>;
+  /** The desktop's color scheme, for the Desktop Colors theme. Left out: no such theme. */
+  desktop?: () => Promise<DesktopColors>;
 }
 
 const STYLE_ID = "audiform-theme";
@@ -52,15 +56,19 @@ function fileBase(path: string): string {
   return path.replace(/^.*\//, "");
 }
 
+/** Only Linux reads a desktop color scheme; elsewhere the theme is never offered. */
+const readDesktop = (): Promise<DesktopColors> => (PLATFORM === "linux" ? desktopColors() : Promise.resolve({}));
+
 let source: ThemeSource = {
   builtin: () => BUILTIN_FILES,
   userList: themesList,
   userRead: themesRead,
+  desktop: readDesktop,
 };
 
 /** For tests: use fake files. Pass null to go back to the real ones. */
 export function useThemeSource(s: ThemeSource | null): void {
-  source = s ?? { builtin: () => BUILTIN_FILES, userList: themesList, userRead: themesRead };
+  source = s ?? { builtin: () => BUILTIN_FILES, userList: themesList, userRead: themesRead, desktop: readDesktop };
   userCache = null;
   builtinCache.clear();
 }
@@ -116,6 +124,22 @@ async function loadUser(s: ThemeSource, builtinIds: Set<string>): Promise<{ them
   return { themes, problems };
 }
 
+/** The Desktop Colors theme, made from the desktop's scheme as it is now, or null where there is none. */
+async function loadDesktop(s: ThemeSource): Promise<ThemeEntry | null> {
+  if (!s.desktop) return null;
+  try {
+    const theme = desktopTheme(await s.desktop());
+    return theme ? { ...theme, builtin: true, file: "kdeglobals" } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ids of the built-in themes, which user files may not take. */
+function reservedIds(s: ThemeSource): Set<string> {
+  return new Set([...Object.keys(s.builtin()).map(builtinIdOf), DESKTOP_THEME_ID]);
+}
+
 /** Whether a theme may be listed and used: secret ones only after they are unlocked. */
 export function isAvailable(theme: Pick<ThemeFile, "id" | "secret">, unlocked: readonly string[]): boolean {
   return !theme.secret || unlocked.includes(theme.id);
@@ -135,9 +159,10 @@ export async function listThemes(_unlocked: readonly string[], refresh = false):
   const s = source;
   if (refresh) userCache = null;
   const built = await Promise.all(Object.entries(s.builtin()).map(([path, read]) => loadBuiltin(path, read)));
-  const builtinThemes = built.filter((b): b is ThemeEntry => !isProblem(b));
+  const desktop = await loadDesktop(s);
+  const builtinThemes = [...built.filter((b): b is ThemeEntry => !isProblem(b)), ...(desktop ? [desktop] : [])];
   const problems = built.filter(isProblem);
-  userCache ??= loadUser(s, new Set(Object.keys(s.builtin()).map(builtinIdOf)));
+  userCache ??= loadUser(s, reservedIds(s));
   const user = await userCache;
   problems.push(...user.problems);
   return {
@@ -155,13 +180,14 @@ export async function listThemes(_unlocked: readonly string[], refresh = false):
 export async function findTheme(id: string, unlocked: readonly string[]): Promise<ThemeEntry | null> {
   if (id === DEFAULT_THEME_ID) return null;
   const s = source;
+  if (id === DESKTOP_THEME_ID) return loadDesktop(s);
   const files = s.builtin();
   const path = Object.keys(files).find((p) => builtinIdOf(p) === id);
   if (path) {
     const t = await loadBuiltin(path, files[path] as () => Promise<string>);
     return !isProblem(t) && isAvailable(t, unlocked) ? t : null;
   }
-  userCache ??= loadUser(s, new Set(Object.keys(files).map(builtinIdOf)));
+  userCache ??= loadUser(s, reservedIds(s));
   const user = await userCache;
   return user.themes.find((t) => t.id === id && isAvailable(t, unlocked)) ?? null;
 }
@@ -248,4 +274,19 @@ export async function applyThemeId(id: string, unlocked: readonly string[], doc:
   if (mine !== latest) return currentId;
   installTheme(theme, doc);
   return currentId;
+}
+
+/**
+ * When Desktop Colors is in use, reads the desktop's scheme again and puts
+ * it on the page if it changed (the user switched schemes while away).
+ * Resolves to whether anything changed, so views that draw themselves can
+ * redraw.
+ */
+export async function refreshDesktopTheme(doc: Document = document): Promise<boolean> {
+  if (currentId !== DESKTOP_THEME_ID) return false;
+  const theme = await loadDesktop(source);
+  if (!theme || currentId !== DESKTOP_THEME_ID) return false;
+  if (doc.getElementById(STYLE_ID)?.textContent === resolveCss(theme)) return false;
+  installTheme(theme, doc);
+  return true;
 }

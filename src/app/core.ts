@@ -140,6 +140,11 @@ export function themesList(): Promise<{ fileName: string; size: number }[]> {
   return invoke<{ fileName: string; size: number }[]>("themes_list");
 }
 
+/** The desktop's color scheme on Linux with KDE, as "Window.BackgroundNormal" to [r, g, b]. Empty elsewhere. */
+export function desktopColors(): Promise<Record<string, [number, number, number]>> {
+  return invoke<Record<string, [number, number, number]>>("desktop_colors");
+}
+
 /** The text of one theme file in the Themes folder. */
 export function themesRead(fileName: string): Promise<string> {
   return invoke<string>("themes_read", { fileName });

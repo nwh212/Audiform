@@ -3,7 +3,8 @@
 // This file is part of Audiform, based on Altered Audio Editor.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyThemeId, findTheme, installTheme, isAvailable, listThemes, resolveCss, resolvePointers, resolveThemeId, themeLook, useThemeSource, type ThemeSource } from "./loader";
+import { applyThemeId, findTheme, installTheme, isAvailable, listThemes, refreshDesktopTheme, resolveCss, resolvePointers, resolveThemeId, themeLook, useThemeSource, type ThemeSource } from "./loader";
+import type { DesktopColors } from "./desktop";
 import { validateTheme } from "./validate";
 
 const PIXEL = "data:image/png;base64,iVBORw0KGgo=";
@@ -235,5 +236,41 @@ describe("shipped themes", () => {
     expect(phosphor?.canvasLook).toMatchObject({ pixel: true, markCursor: true });
     expect(prism?.canvasLook).toMatchObject({ markCursor: true });
     expect(analog?.canvasLook?.markCursor).toBeFalsy();
+  });
+});
+
+describe("Desktop Colors", () => {
+  const scheme = (bg: [number, number, number]): DesktopColors => ({ "Window.BackgroundNormal": bg, "Window.ForegroundNormal": [240, 240, 240] });
+
+  it("is listed with the built-in themes only when the desktop has a scheme, and keeps its id", async () => {
+    let colors: DesktopColors = scheme([20, 20, 20]);
+    useThemeSource({ ...fake({ "alpha.audtheme": file("alpha") }, { "taken.audtheme": file("desktop-colors") }), desktop: () => Promise.resolve(colors) });
+    const c = await listThemes([]);
+    expect(c.themes.map((t) => [t.id, t.builtin])).toEqual([
+      ["alpha", true],
+      ["desktop-colors", true],
+    ]);
+    expect(c.problems.map((p) => p.file)).toEqual(["taken.audtheme"]);
+    colors = {};
+    expect((await listThemes([], true)).themes.map((t) => t.id)).toEqual(["alpha"]);
+    expect(await resolveThemeId("desktop-colors", [])).toBe("dark");
+  });
+
+  it("is never offered without a desktop source", async () => {
+    useThemeSource(fake({}));
+    expect(await findTheme("desktop-colors", [])).toBeNull();
+  });
+
+  it("follows the scheme when asked to look again", async () => {
+    let colors = scheme([20, 20, 20]);
+    useThemeSource({ ...fake({}), desktop: () => Promise.resolve(colors) });
+    expect(await refreshDesktopTheme(page.asDocument)).toBe(false);
+    await applyThemeId("desktop-colors", [], page.asDocument);
+    const before = page.styles[0]!.textContent;
+    expect(await refreshDesktopTheme(page.asDocument)).toBe(false);
+    colors = scheme([40, 40, 40]);
+    expect(await refreshDesktopTheme(page.asDocument)).toBe(true);
+    expect(page.styles[0]!.textContent).not.toBe(before);
+    expect(page.styles).toHaveLength(1);
   });
 });
