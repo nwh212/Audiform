@@ -41,7 +41,10 @@ tauri-plugin-opener = "2"
 url = "2"
 pathdiff = "0.2"
 roxmltree = "0.21"
-tauri-plugin-dialog = "2"
+# On Linux, file dialogs go through the desktop's portal, so each desktop shows its own
+# picker (KDE's on Plasma, GNOME's on GNOME), with zenity when no portal answers. The
+# features only change Linux; Windows and macOS always use their own dialogs.
+tauri-plugin-dialog = { version = "2", default-features = false, features = ["xdg-portal"] }
 cpal = "0.18.2"
 rubato = "5.0.1"
 rtrb = "0.4"
